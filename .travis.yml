@@ -1,0 +1,24 @@
+language: rust
+dist: bionic
+
+cache: cargo
+rust:
+  - stable
+
+addons:
+    apt:
+        packages:
+            - libssl-dev
+
+before_script: |
+  cargo install cargo-tarpaulin
+
+script:
+  - cargo build
+  - cargo build --release
+  - cargo test
+  - cargo test --release
+
+after_success: |
+  cargo tarpaulin --out Xml
+  bash <(curl -s https://codecov.io/bash)

@@ -612,28 +612,6 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     ╘═════════════════════════════════╛
 */
 
-pub fn div_limbs_n1_n(a: &Vec<u64>, b: &Vec<u64>, rem: &mut Vec<u64>) -> u64 {
-    let d1 = (a[a.len() - 1] as u128) << BITS_PER_LIMB + a[a.len() - 2];
-    let d2 = b[b.len() - 1] as u128;
-
-    let mut q = (d1 / d2).min(u64::MAX as u128) as u64;
-    let mut t = vec!(0, q);
-
-    if comp_limbs(&t, &a) == Ordering::Greater{
-        q -= 1;
-        t = sub_limbs(&t, &b);
-    }
-
-    if comp_limbs(&t, &a) == Ordering::Greater{
-        q -= 1;
-        t = sub_limbs(&t, &b);
-    }
-
-    *rem = sub_limbs(&a, &t);
-
-    return q;
-}
-
 pub fn div_limbs_long(a: &Vec<u64>, b: &Vec<u64>, rem: Option<&mut Vec<u64>>) -> Vec<u64>{
     if a.len() < b.len() {
         if rem.is_some() {

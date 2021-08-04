@@ -8,3 +8,10 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "*"
+rand = "*"
+impl_ops = "*"
+rayon = "1.5"
+
+[dev-dependencies]
+num-traits = "*"
+num-bigint = { version = "0.4", features = ["rand"] }

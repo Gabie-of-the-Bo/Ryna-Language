@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language.svg?token=zsnBiFtqVx8k3FtzEqsQ&branch=develop)](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
+
+
 # Nessa-Language
 An imperative concept-oriented programming language with mathematical proofs.
 

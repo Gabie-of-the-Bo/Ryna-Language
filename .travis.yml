@@ -14,11 +14,8 @@ before_script: |
   cargo install cargo-tarpaulin
 
 script:
-  - cargo build
-  - cargo build --release
-  - cargo test
   - cargo test --release
 
 after_success: |
-  cargo tarpaulin --out Xml
-  bash <(curl -s https://codecov.io/bash)
+  cargo tarpaulin --timeout 10000 --out Xml
+  bash < (curl -s https://codecov.io/bash)

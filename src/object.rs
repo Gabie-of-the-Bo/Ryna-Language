@@ -10,6 +10,17 @@ use crate::number::Number;
                                                   ╘══════════════════╛
 */
 
+/*
+    ╔═════════════════════════════╗
+    ║     OBJECT TYPE ERASURE     ║
+    ╠═════════════════════════════╣
+    ║ Nessa's type system allows  ║
+    ║ the use of "gradual typing" ║
+    ║ so a type erasure object    ║
+    ║ struct and trait are needed ║
+    ╚═════════════════════════════╝
+*/
+
 trait NessaObject {
     fn get_type(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
@@ -54,6 +65,12 @@ impl Object {
     }
 }
 
+/*
+    ╒═════════════════════════════════════════════╕
+    │ Reference struct for high level indirection │
+    ╘═════════════════════════════════════════════╛
+*/
+
 struct Reference {
     inner: Rc<RefCell<dyn NessaObject>>
 }
@@ -67,6 +84,12 @@ impl Reference {
         return self.inner.as_ptr();
     }
 }
+
+/*
+    ╒════════════════════════════════════════════════╕
+    │ Basic implementations of the NessaObject trait │
+    ╘════════════════════════════════════════════════╛
+*/
 
 impl NessaObject for Reference {
     fn get_type(&self) -> usize {

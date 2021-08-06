@@ -2,10 +2,9 @@ use std::any::*;
 use std::rc::Rc;
 use std::cell::*;
 
-use std::ops::*;
-
 use crate::number::Number;
 use crate::operations::*;
+use crate::context::*;
 
 /*
                                                   ╒══════════════════╕
@@ -149,7 +148,13 @@ impl NessaObject for String {
 */
 
 impl Object {
-    pub fn apply_binary_operation(a: &Object, b: &Object, ctx: &Operations) -> Object {
+    pub fn apply_unary_operation(a: &Object, ctx: &UnaryOperator) -> Object {
+        let op = ctx.get_unary_op(a).expect("Operation not found");
+
+        return op(a);
+    }
+
+    pub fn apply_binary_operation(a: &Object, b: &Object, ctx: &BinaryOperator) -> Object {
         let op = ctx.get_binary_op(a, b).expect("Operation not found");
 
         return op(a, b);
@@ -196,18 +201,19 @@ mod tests {
 
     #[test]
     fn operators() {
-        let std_ops = standard_operations();
+        let ctx = standard_ctx();
+        let plus_op = &ctx.binary_ops[0];
 
         let number = Object::new(Number::from(10));
         let string = Object::new(String::from("Test"));
         let number_ref = number.get_ref_obj();
         let string_ref = string.get_ref_obj();
 
-        let num_num = Object::apply_binary_operation(&number, &number, &std_ops);
-        let str_str = Object::apply_binary_operation(&string, &string, &std_ops);
+        let num_num = Object::apply_binary_operation(&number, &number, &plus_op);
+        let str_str = Object::apply_binary_operation(&string, &string, &plus_op);
 
-        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, &std_ops);
-        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, &std_ops);
+        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, &plus_op);
+        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, &plus_op);
 
         assert_eq!(*num_num.get::<Number>(), Number::from(20));
         assert_eq!(*str_str.get::<String>(), String::from("TestTest"));

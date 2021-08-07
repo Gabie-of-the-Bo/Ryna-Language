@@ -30,6 +30,9 @@ pub enum Type {
     // Parametric types
     Wildcard,
     Template(usize, Vec<Type>),
+
+    // Function type
+    Function(Box<Type>, Box<Type>)
 }
 
 impl PartialEq for Type {
@@ -43,6 +46,7 @@ impl PartialEq for Type {
             (Type::And(va), Type::And(vb)) => va == vb,
             (Type::Wildcard, Type::Wildcard) => true,
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va == vb,
+            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa == fb && ta == tb,
             
             _ => false
         }
@@ -72,6 +76,8 @@ impl Type {
             (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.bindable_to(j)),
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
                                                                     va.iter().zip(vb).all(|(i, j)| i.bindable_to(j)),
+
+            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.bindable_to(fb) && ta.bindable_to(tb),
 
             _ => false
         }
@@ -168,13 +174,21 @@ mod tests {
         assert!(!string_and_number.bindable_to(&empty));
         assert!(empty.bindable_to(&empty));
 
-        let vector_number = Type::Template(vector_t.id, vec!(number));
+        let vector_number = Type::Template(vector_t.id, vec!(number.clone()));
         let vector_string = Type::Template(vector_t.id, vec!(string));
-        let vector_number_or_string = Type::Template(vector_t.id, vec!(number_or_string));
+        let vector_number_or_string = Type::Template(vector_t.id, vec!(number_or_string.clone()));
 
         assert!(vector_number.bindable_to(&vector_number));
         assert!(vector_number.bindable_to(&vector_number_or_string));
         assert!(!vector_number.bindable_to(&vector_string));
+
+        let f_number_number = Type::Function(Box::new(number.clone()), Box::new(number.clone()));
+        let f_number_or_string_number = Type::Function(Box::new(number_or_string.clone()), Box::new(number.clone()));
+
+        assert!(f_number_number.bindable_to(&f_number_number));
+        assert!(f_number_or_string_number.bindable_to(&f_number_or_string_number));
+        assert!(f_number_number.bindable_to(&f_number_or_string_number));
+        assert!(!f_number_or_string_number.bindable_to(&f_number_number));
     }
 }
 

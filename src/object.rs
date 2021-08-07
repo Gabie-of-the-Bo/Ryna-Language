@@ -4,7 +4,6 @@ use std::cell::*;
 
 use crate::number::Number;
 use crate::operations::*;
-use crate::context::*;
 
 /*
                                                   ╒══════════════════╕
@@ -26,6 +25,7 @@ use crate::context::*;
 pub trait NessaObject {
     fn get_type(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 #[derive(Clone)]
@@ -72,12 +72,34 @@ impl Object {
 
     pub fn get_ref(&self) -> Reference {
         return Reference {
-            inner: self.inner.clone()
+            inner: if self.is_ref() { self.get::<Reference>().inner.clone() } else { self.inner.clone() },
+            mutable: false
+        }
+    }
+
+    pub fn get_ref_mut(&self) -> Reference {
+        return Reference {
+            inner: if self.is_ref() { 
+                let reference = self.get::<Reference>();
+
+                assert!(reference.mutable, "Cannot take mutable reference from constant reference");
+
+                reference.inner.clone() 
+
+            } else { 
+                self.inner.clone() 
+            },
+
+            mutable: true
         }
     }
 
     pub fn get_ref_obj(&self) -> Object {
         return Object::new(self.get_ref());
+    }
+
+    pub fn get_ref_mut_obj(&self) -> Object {
+        return Object::new(self.get_ref_mut());
     }
 
     pub fn is_ref(&self) -> bool {
@@ -92,12 +114,19 @@ impl Object {
 */
 
 pub struct Reference {
-    pub inner: Rc<RefCell<dyn NessaObject>>
+    pub inner: Rc<RefCell<dyn NessaObject>>,
+    pub mutable: bool
 }
 
 impl Reference {
     pub fn get<T>(&self) -> Ref<T> where T: 'static {
         return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
+    }
+
+    pub fn get_mut<T>(&self) -> RefMut<T> where T: 'static {
+        assert!(self.mutable, "Cannot take mutable data from constant reference");
+
+        return RefMut::map(self.inner.borrow_mut(), |i| i.as_any_mut().downcast_mut::<T>().unwrap());
     }
 
     pub fn get_ptr(&self) -> *const dyn NessaObject{
@@ -119,6 +148,10 @@ impl NessaObject for Reference {
     fn as_any(&self) -> &dyn Any {
         return self;
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
 }
 
 impl NessaObject for Number {
@@ -129,6 +162,10 @@ impl NessaObject for Number {
     fn as_any(&self) -> &dyn Any {
         return self;
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
 }
 
 impl NessaObject for String {
@@ -137,6 +174,10 @@ impl NessaObject for String {
     }
 
     fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
     }
 }
@@ -171,6 +212,7 @@ impl Object {
 mod tests {
     use crate::number::Number;
     use crate::object::*;
+    use crate::context::*;
 
     #[test]
     fn object_construction() {
@@ -191,12 +233,25 @@ mod tests {
         
         assert_eq!(*number.get::<Number>(), Number::from(10));
 
-        let reference = number.get_ref_obj();
+        let reference = number.get_ref_mut_obj();
+        let ref_of_ref = reference.get_ref_obj();
 
         assert_eq!(*reference.get::<Reference>().get::<Number>(), Number::from(10));
+        assert_eq!(*ref_of_ref.get::<Reference>().get::<Number>(), Number::from(10));
 
         assert_ne!(number.get_ptr(), reference.get_ptr());
+        assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
+        assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
+        assert_ne!(reference.get::<Reference>().mutable, ref_of_ref.get::<Reference>().mutable);
         assert_eq!(number.get_ptr(), reference.get::<Reference>().get_ptr());
+        assert_eq!(number.get_ptr(), ref_of_ref.get::<Reference>().get_ptr());
+
+        let struct_ref = reference.get::<Reference>();
+        *struct_ref.get_mut::<Number>() += Number::from(5);
+
+        assert_eq!(*number.get::<Number>(), Number::from(15));
+        assert_eq!(*reference.get::<Reference>().get::<Number>(), Number::from(15));
+        assert_eq!(*ref_of_ref.get::<Reference>().get::<Number>(), Number::from(15));
     }
 
     #[test]

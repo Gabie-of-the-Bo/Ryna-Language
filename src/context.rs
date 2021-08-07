@@ -10,8 +10,10 @@ use crate::operations::*;
 #[derive(Clone)]
 pub struct NessaContext {
     pub type_templates: Vec<TypeTemplate>, 
+
     pub unary_ops: Vec<UnaryOperator>,
     pub binary_ops: Vec<BinaryOperator>,
+    pub call_ops: Vec<NaryOperator>
 }
 
 /*
@@ -23,7 +25,9 @@ pub struct NessaContext {
 pub fn standard_ctx() -> NessaContext {
     return NessaContext {
         type_templates: standard_types(),
+
         unary_ops: standard_unary_operations(),
-        binary_ops: standard_binary_operations()
+        binary_ops: standard_binary_operations(),
+        call_ops: standard_call_operations()
     };
 }

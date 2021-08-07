@@ -1209,6 +1209,21 @@ impl_op_ex!(<<= |a: &mut Number, b: &u64| { *a = &*a << b; });
 impl_op_ex!(>>= |a: &mut Number, b: &u64| { *a = &*a >> b; });
 
 /*
+    ╒══════════════════════════════╕
+    │ Number manipulation routines │
+    ╘══════════════════════════════╛
+*/
+
+impl Number {
+    pub fn negate(&mut self) {
+        match self {
+            Number::Int(n) => n.negative = !n.negative,
+            Number::Float(n) => *n *= -1_f64
+        }
+    }
+}
+
+/*
                                                   ╒═════════╕
     ============================================= │  TESTS  │ =============================================
                                                   ╘═════════╛

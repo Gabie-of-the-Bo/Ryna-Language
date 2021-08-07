@@ -276,6 +276,7 @@ mod tests {
     fn operators() {
         let ctx = standard_ctx();
         let plus_op = &ctx.binary_ops[0];
+        let negate_op = &ctx.unary_ops[0];
 
         let number = Object::new(Number::from(10));
         let string = Object::new(String::from("Test"));
@@ -293,5 +294,11 @@ mod tests {
 
         assert_eq!(*num_num_ref.get::<Number>(), *num_num.get::<Number>());
         assert_eq!(*str_str_ref.get::<String>(), *str_str.get::<String>());
+
+        let neg_num = Object::apply_unary_operation(&number, &negate_op);
+        let neg_num_ref = Object::apply_unary_operation(&number_ref, &negate_op);
+
+        assert_eq!(*neg_num.get::<Number>(), Number::from(-10));
+        assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));
     }
 }

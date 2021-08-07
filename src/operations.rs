@@ -1,6 +1,8 @@
 use crate::types::Type;
 use crate::object::Object;
 
+use crate::number::*;
+
 /*
                                                   ╒══════════════════╕
     ============================================= │  IMPLEMENTATION  │ =============================================
@@ -70,12 +72,25 @@ impl BinaryOperator {
 */
 
 pub fn standard_unary_operations() -> Vec<UnaryOperator> {
-    return vec!();
+    let mut negate = UnaryOperator {
+        id: 0,
+        representation: "-".into(),
+        operations: vec!()
+    };
+
+    negate.def_unary_op(Type::Ref(Box::new(Type::Basic(0))), |a| {
+        let n_a = &*a.deref::<Number>();
+        let mut res = n_a.clone();
+
+        res.negate();
+
+        return Object::new(res);
+    });
+
+    return vec!(negate);
 }
 
 pub fn standard_binary_operations() -> Vec<BinaryOperator> {
-    use crate::number::*;
-
     let mut plus = BinaryOperator {
         id: 0,
         representation: "+".into(),

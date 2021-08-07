@@ -22,7 +22,7 @@ pub struct NessaContext {
 
 pub fn standard_ctx() -> NessaContext {
     return NessaContext {
-        type_templates: vec!(),
+        type_templates: standard_types(),
         unary_ops: standard_unary_operations(),
         binary_ops: standard_binary_operations()
     };

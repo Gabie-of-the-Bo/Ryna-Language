@@ -4,6 +4,7 @@ use std::cell::*;
 
 use crate::number::Number;
 use crate::operations::*;
+use crate::types::Type;
 
 /*
                                                   ╒══════════════════╕
@@ -23,7 +24,11 @@ use crate::operations::*;
 */
 
 pub trait NessaObject {
-    fn get_type(&self) -> usize;
+    fn get_type_id(&self) -> usize;
+    fn get_type(&self) -> Type {
+        return Type::Basic(self.get_type_id());
+    }
+
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
@@ -40,7 +45,11 @@ impl Object {
         }
     }
 
-    pub fn get_type(&self) -> usize {
+    pub fn get_type_id(&self) -> usize {
+        return self.inner.borrow().get_type_id();
+    }
+
+    pub fn get_type(&self) -> Type {
         return self.inner.borrow().get_type();
     }
 
@@ -141,8 +150,17 @@ impl Reference {
 */
 
 impl NessaObject for Reference {
-    fn get_type(&self) -> usize {
-        return self.inner.borrow().get_type();
+    fn get_type_id(&self) -> usize {
+        return self.inner.borrow().get_type_id();
+    }
+
+    fn get_type(&self) -> Type {
+        if self.mutable {
+            return Type::MutRef(Box::new(self.inner.borrow().get_type()));
+
+        } else{
+            return Type::Ref(Box::new(self.inner.borrow().get_type()));
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -155,7 +173,7 @@ impl NessaObject for Reference {
 }
 
 impl NessaObject for Number {
-    fn get_type(&self) -> usize {
+    fn get_type_id(&self) -> usize {
         return 0;
     }
 
@@ -169,7 +187,7 @@ impl NessaObject for Number {
 }
 
 impl NessaObject for String {
-    fn get_type(&self) -> usize {
+    fn get_type_id(&self) -> usize {
         return 1;
     }
 
@@ -224,7 +242,7 @@ mod tests {
         
         assert_eq!(*string.get::<String>(), "Test".to_string());
 
-        assert_ne!(number.get_type(), string.get_type());
+        assert_ne!(number.get_type_id(), string.get_type_id());
     }
 
     #[test]

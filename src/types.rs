@@ -20,8 +20,8 @@ pub enum Type {
     Basic(usize),
 
     // References
-    Ref(usize),
-    MutRef(usize),
+    Ref(Box<Type>),
+    MutRef(Box<Type>),
 
     // Algebraic types
     Or(Vec<Type>),
@@ -37,8 +37,8 @@ impl PartialEq for Type {
         return match (self, b) {
             (Type::Empty, Type::Empty) => true,
             (Type::Basic(id_a), Type::Basic(id_b)) => id_a == id_b,
-            (Type::Ref(id_a), Type::Ref(id_b)) => id_a == id_b,
-            (Type::MutRef(id_a), Type::MutRef(id_b)) => id_a == id_b,
+            (Type::Ref(ta), Type::Ref(tb)) => ta == tb,
+            (Type::MutRef(ta), Type::MutRef(tb)) => ta == tb,
             (Type::Or(va), Type::Or(vb)) => va.iter().all(|i| vb.contains(i)) && vb.iter().all(|i| va.contains(i)),
             (Type::And(va), Type::And(vb)) => va == vb,
             (Type::Wildcard, Type::Wildcard) => true,
@@ -52,7 +52,7 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
-    fn bindable_to(&self, other: &Type) -> bool {
+    pub fn bindable_to(&self, other: &Type) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,
 
@@ -60,7 +60,11 @@ impl Type {
 
             (_, Type::Empty) => false,
 
-            (Type::MutRef(id_a), Type::Ref(id_b)) => id_a == id_b,
+            (Type::Ref(ta), Type::Ref(tb)) => ta.bindable_to(tb),
+            (Type::MutRef(ta), Type::MutRef(tb)) => ta.bindable_to(tb),
+            (Type::MutRef(ta), Type::Ref(tb)) => ta.bindable_to(tb),
+            (ta, Type::Ref(tb)) => ta.bindable_to(tb),
+            (ta, Type::MutRef(tb)) => ta.bindable_to(tb),
 
             (Type::Or(v), b) => v.iter().all(|i| i.bindable_to(b)),
             (a, Type::Or(v)) => v.iter().any(|i| a.bindable_to(i)),
@@ -118,8 +122,8 @@ mod tests {
         assert!(string.bindable_to(&string));
         assert!(!number.bindable_to(&string));
 
-        let number_ref = Type::Ref(number_t.id);
-        let number_mut = Type::MutRef(number_t.id);
+        let number_ref = Type::Ref(Box::new(number.clone()));
+        let number_mut = Type::MutRef(Box::new(number.clone()));
 
         assert!(number_ref.bindable_to(&number_ref));
         assert!(number_mut.bindable_to(&number_ref));
@@ -173,3 +177,25 @@ mod tests {
         assert!(!vector_number.bindable_to(&vector_string));
     }
 }
+
+/*
+                                                  ╒══════════════════╕
+    ============================================= │  STANDARD TYPES  │ =============================================
+                                                  ╘══════════════════╛
+*/
+
+pub fn standard_types() -> Vec<TypeTemplate> {
+    return vec!(
+        TypeTemplate {
+            id: 0,
+            name: "Number".into(),
+            params: vec!()
+        },
+
+        TypeTemplate {
+            id: 1,
+            name: "String".into(),
+            params: vec!()
+        }
+    );
+} 

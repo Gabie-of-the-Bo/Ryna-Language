@@ -537,6 +537,11 @@ fn parse_pattern(mut string: &[char]) -> Result<Pattern, String>{
         return Ok(Pattern::Str(string[1..(string.len() - 1)].iter().collect()));
     } 
 
+    // Pattern enclosed in parentheses
+    if string[0] == '(' && string[string.len() - 1] == ')' && is_enclosed_from_start(string) {
+        return parse_pattern(&string[1..(string.len() - 1)]);
+    }
+
     // Optional pattern
     if string[0] == '[' && string[string.len() - 1] == ']' && is_enclosed_from_start(string) {
         return Ok(Pattern::Optional(Box::new(parse_pattern(&string[1..(string.len() - 1)]).unwrap())));
@@ -911,5 +916,31 @@ mod tests {
         assert_eq!(pattern.matches("15.56".into()), Some(5));
         assert_eq!(pattern.matches("15.".into()), None);
         assert_eq!(pattern.matches("-56.176".into()), Some(7));
+    }
+
+    #[test]
+    fn pattern_grouping() {
+        let str_pattern = "(l d) | (d d)".parse::<Pattern>().unwrap();
+
+        let u_pattern = Pattern::Or(vec!(
+            Pattern::And(vec!(
+                Pattern::Symbol('l'),
+                Pattern::Symbol('d')
+            )),
+
+            Pattern::And(vec!(
+                Pattern::Symbol('d'),
+                Pattern::Symbol('d')
+            ))
+        ));
+
+        assert_eq!(u_pattern, str_pattern);
+
+        let pattern = u_pattern.compile();
+
+        assert_eq!(pattern.matches("k1".into()), Some(2));
+        assert_eq!(pattern.matches("90".into()), Some(2));
+        assert_eq!(pattern.matches("b2".into()), Some(2));
+        assert_eq!(pattern.matches("yy".into()), None);
     }
 }

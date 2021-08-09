@@ -12,7 +12,7 @@ use crate::number::*;
 
 pub type UnaryFunction = fn(&Object) -> Object;
 pub type BinaryFunction = fn(&Object, &Object) -> Object;
-pub type NaryFunction = fn(&[&Object]) -> Object;
+pub type NaryFunction = fn(&Object, &[&Object]) -> Object;
 
 pub type UnaryOperations = Vec<(Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(Type, BinaryFunction)>;

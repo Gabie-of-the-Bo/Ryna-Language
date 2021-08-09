@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::cell::*;
 
 use crate::number::Number;
+use crate::context::NessaContext;
 use crate::operations::*;
 use crate::types::Type;
 
@@ -207,14 +208,14 @@ impl NessaObject for String {
 */
 
 impl Object {
-    pub fn apply_unary_operation(a: &Object, ctx: &UnaryOperator) -> Object {
-        let op = ctx.get_unary_op(a).expect("Operation not found");
+    pub fn apply_unary_operation(a: &Object, id: usize, ctx: &NessaContext) -> Object {
+        let op = ctx.get_unary_operation(id, a).unwrap();
 
         return op(a);
     }
 
-    pub fn apply_binary_operation(a: &Object, b: &Object, ctx: &BinaryOperator) -> Object {
-        let op = ctx.get_binary_op(a, b).expect("Operation not found");
+    pub fn apply_binary_operation(a: &Object, b: &Object, id: usize, ctx: &NessaContext) -> Object {
+        let op = ctx.get_binary_operation(id, a, b).unwrap();
 
         return op(a, b);
     }
@@ -275,19 +276,17 @@ mod tests {
     #[test]
     fn operators() {
         let ctx = standard_ctx();
-        let plus_op = &ctx.binary_ops[0];
-        let negate_op = &ctx.unary_ops[0];
 
         let number = Object::new(Number::from(10));
         let string = Object::new(String::from("Test"));
         let number_ref = number.get_ref_obj();
         let string_ref = string.get_ref_obj();
 
-        let num_num = Object::apply_binary_operation(&number, &number, &plus_op);
-        let str_str = Object::apply_binary_operation(&string, &string, &plus_op);
+        let num_num = Object::apply_binary_operation(&number, &number, 0, &ctx);
+        let str_str = Object::apply_binary_operation(&string, &string, 0, &ctx);
 
-        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, &plus_op);
-        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, &plus_op);
+        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, 0, &ctx);
+        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, 0, &ctx);
 
         assert_eq!(*num_num.get::<Number>(), Number::from(20));
         assert_eq!(*str_str.get::<String>(), String::from("TestTest"));
@@ -295,8 +294,8 @@ mod tests {
         assert_eq!(*num_num_ref.get::<Number>(), *num_num.get::<Number>());
         assert_eq!(*str_str_ref.get::<String>(), *str_str.get::<String>());
 
-        let neg_num = Object::apply_unary_operation(&number, &negate_op);
-        let neg_num_ref = Object::apply_unary_operation(&number_ref, &negate_op);
+        let neg_num = Object::apply_unary_operation(&number, 0, &ctx);
+        let neg_num_ref = Object::apply_unary_operation(&number_ref, 0, &ctx);
 
         assert_eq!(*neg_num.get::<Number>(), Number::from(-10));
         assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));

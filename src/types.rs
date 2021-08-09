@@ -1,3 +1,5 @@
+use crate::context::NessaContext;
+
 /*
                                                   ╒══════════════════╕
     ============================================= │  IMPLEMENTATION  │ =============================================
@@ -11,7 +13,7 @@ pub struct TypeTemplate {
     pub params: Vec<String>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Type {
     // Empty type (also called void)
     Empty,
@@ -56,6 +58,24 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
+    pub fn get_name(&self, ctx: &NessaContext) -> String {
+        return match self {
+            Type::Empty => "()".into(),
+
+            Type::Basic(id) => ctx.type_templates[*id].name.clone(),
+            Type::Ref(t) => format!("&{}", t.get_name(ctx)),
+            Type::MutRef(t) => format!("&&{}", t.get_name(ctx)),
+            Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
+            Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
+
+            Type::Wildcard => "*".into(),
+
+            Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.clone(), 
+                                                       v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
+            Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
+        }
+    }
+
     pub fn bindable_to(&self, other: &Type) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,
@@ -198,18 +218,7 @@ mod tests {
                                                   ╘══════════════════╛
 */
 
-pub fn standard_types() -> Vec<TypeTemplate> {
-    return vec!(
-        TypeTemplate {
-            id: 0,
-            name: "Number".into(),
-            params: vec!()
-        },
-
-        TypeTemplate {
-            id: 1,
-            name: "String".into(),
-            params: vec!()
-        }
-    );
+pub fn standard_types(ctx: &mut NessaContext) {
+    ctx.define_type("Number".into(), vec!()).unwrap();
+    ctx.define_type("String".into(), vec!()).unwrap();
 } 

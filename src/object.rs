@@ -231,7 +231,7 @@ impl Object {
         }
 
         if ops.len() > 1 {
-            return Err(format!("Binary operation is ambiguous {} {} {}", 
+            return Err(format!("Binary operation {} {} {} is ambiguous", 
                                 a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
         }
 
@@ -250,13 +250,32 @@ impl Object {
         }
 
         if ops.len() > 1 {
-            return Err(format!("N-ary operation is ambiguous {}{}{}{}", 
+            return Err(format!("N-ary operation {}{}{}{} is ambiguous", 
                                 a.get_type().get_name(&ctx), ctx.nary_ops[id].open_rep, 
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "),
                                 ctx.nary_ops[id].close_rep));
         }
 
         return Ok(ops[0].1(a, b));
+    }
+
+    pub fn apply_function(args: &[&Object], id: usize, ctx: &NessaContext) -> Result<Object, String> {
+        let args_type = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
+        let funcs = ctx.get_function_overloads(id, &args_type);
+
+        if funcs.len() == 0 {
+            return Err(format!("Unable to find function overload for {}({})", 
+                                ctx.functions[id].name,
+                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
+        }
+
+        if funcs.len() > 1 {
+            return Err(format!("Function overload {}({}) is ambiguous", 
+                                ctx.functions[id].name,
+                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
+        }
+
+        return Ok(funcs[0].1(args));
     }
 }
 
@@ -345,5 +364,19 @@ mod tests {
         let num_cpy = Object::apply_nary_operation(&number, &[], 0, &ctx).unwrap();
 
         assert_eq!(*num_cpy.get::<Number>(), *number.get::<Number>());
+    }
+
+    #[test]
+    fn functions() {
+        let ctx = standard_ctx();
+
+        let number = Object::new(Number::from(10));
+        let number_ref = number.get_ref_obj();
+        
+        let f_num = Object::apply_function(&[&number], 0, &ctx).unwrap();
+        let f_ref = Object::apply_function(&[&number_ref], 0, &ctx).unwrap();
+
+        assert_eq!(*f_num.get::<Number>(), *f_ref.get::<Number>());
+        assert_eq!(*f_num.get::<Number>(), Number::from(11));
     }
 }

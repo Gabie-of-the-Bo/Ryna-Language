@@ -63,16 +63,8 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_unary_operation(&self, id: usize, a: &Object) -> Option<&UnaryFunction> {
-        let a_type = a.get_type();
-        
-        for (t, op) in &self.unary_ops[id].operations{
-            if a_type.bindable_to(&t) {
-                return Some(op);
-            }
-        }
-        
-        return None;
+    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, UnaryFunction)> {        
+        return self.unary_ops[id].operations.iter().filter(|(t, _)| a.bindable_to(&t)).collect::<Vec<_>>();
     }
 
     pub fn def_unary_operation(&mut self, id: usize, a: Type, f: UnaryFunction) -> Result<(), String> {
@@ -117,16 +109,10 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_binary_operation(&self, id: usize, a: &Object, b: &Object) -> Option<&BinaryFunction> {
-        let args_type = Type::And(vec!(a.get_type(), b.get_type()));
+    pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Type, BinaryFunction)> {
+        let args_type = Type::And(vec!(a, b));
 
-        for (t, op) in &self.binary_ops[id].operations{
-            if args_type.bindable_to(&t) {
-                return Some(op);
-            }
-        }
-        
-        return None;
+        return self.binary_ops[id].operations.iter().filter(|(t, _)| args_type.bindable_to(&t)).collect::<Vec<_>>();
     }
 
     pub fn def_binary_operation(&mut self, id: usize, a: Type, b: Type, f: BinaryFunction) -> Result<(), String> {

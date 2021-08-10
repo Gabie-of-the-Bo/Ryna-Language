@@ -208,16 +208,34 @@ impl NessaObject for String {
 */
 
 impl Object {
-    pub fn apply_unary_operation(a: &Object, id: usize, ctx: &NessaContext) -> Object {
-        let op = ctx.get_unary_operation(id, a).unwrap();
+    pub fn apply_unary_operation(a: &Object, id: usize, ctx: &NessaContext) -> Result<Object, String> {
+        let ops = ctx.get_unary_operations(id, a.get_type());
 
-        return op(a);
+        if ops.len() == 0 {
+            return Err(format!("Unable to find unary operation {}{}", ctx.unary_ops[id].representation, a.get_type().get_name(&ctx)));
+        }
+
+        if ops.len() > 1 {
+            return Err(format!("Unary operation {}{} is ambiguous", ctx.unary_ops[id].representation, a.get_type().get_name(&ctx)));
+        }
+
+        return Ok(ops[0].1(a));
     }
 
-    pub fn apply_binary_operation(a: &Object, b: &Object, id: usize, ctx: &NessaContext) -> Object {
-        let op = ctx.get_binary_operation(id, a, b).unwrap();
+    pub fn apply_binary_operation(a: &Object, b: &Object, id: usize, ctx: &NessaContext) -> Result<Object, String> {
+        let ops = ctx.get_binary_operations(id, a.get_type(), b.get_type());
 
-        return op(a, b);
+        if ops.len() == 0 {
+            return Err(format!("Unable to find binary operation {} {} {}", 
+                                a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
+        }
+
+        if ops.len() > 1 {
+            return Err(format!("Binary operation is ambiguous {} {} {}", 
+                                a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
+        }
+
+        return Ok(ops[0].1(a, b));
     }
 }
 
@@ -282,11 +300,11 @@ mod tests {
         let number_ref = number.get_ref_obj();
         let string_ref = string.get_ref_obj();
 
-        let num_num = Object::apply_binary_operation(&number, &number, 0, &ctx);
-        let str_str = Object::apply_binary_operation(&string, &string, 0, &ctx);
+        let num_num = Object::apply_binary_operation(&number, &number, 0, &ctx).unwrap();
+        let str_str = Object::apply_binary_operation(&string, &string, 0, &ctx).unwrap();
 
-        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, 0, &ctx);
-        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, 0, &ctx);
+        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, 0, &ctx).unwrap();
+        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, 0, &ctx).unwrap();
 
         assert_eq!(*num_num.get::<Number>(), Number::from(20));
         assert_eq!(*str_str.get::<String>(), String::from("TestTest"));
@@ -294,8 +312,8 @@ mod tests {
         assert_eq!(*num_num_ref.get::<Number>(), *num_num.get::<Number>());
         assert_eq!(*str_str_ref.get::<String>(), *str_str.get::<String>());
 
-        let neg_num = Object::apply_unary_operation(&number, 0, &ctx);
-        let neg_num_ref = Object::apply_unary_operation(&number_ref, 0, &ctx);
+        let neg_num = Object::apply_unary_operation(&number, 0, &ctx).unwrap();
+        let neg_num_ref = Object::apply_unary_operation(&number_ref, 0, &ctx).unwrap();
 
         assert_eq!(*neg_num.get::<Number>(), Number::from(-10));
         assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));

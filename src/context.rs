@@ -71,6 +71,11 @@ impl NessaContext {
                 return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                     op.representation, a.get_name(self), op.representation, t.get_name(self)));
             }
+
+            if t.bindable_to(&a) {
+                return Err(format!("Unary operation {}{} subsumes {}{}, so it cannot be defined", 
+                                    op.representation, a.get_name(self), op.representation, t.get_name(self)));
+            }
         }
 
         self.unary_ops[id].operations.push((a, f));
@@ -111,9 +116,15 @@ impl NessaContext {
         let op = &self.binary_ops[id];
 
         for (t, _) in &op.operations{ // Check subsumption
-            if and.bindable_to(&t) {
-                if let Type::And(v) = t {
+            if let Type::And(v) = t {
+                if and.bindable_to(&t) {
                     return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
+                                        a.get_name(self), op.representation, b.get_name(self), 
+                                        v[0].get_name(self), op.representation, v[1].get_name(self)));
+                }
+
+                if t.bindable_to(&and) {
+                    return Err(format!("Binary operation {} {} {} subsumes {} {} {}, so it cannot be defined", 
                                         a.get_name(self), op.representation, b.get_name(self), 
                                         v[0].get_name(self), op.representation, v[1].get_name(self)));
                 }
@@ -165,9 +176,15 @@ impl NessaContext {
         let op = &self.nary_ops[id];
 
         for (t, _) in &op.operations{ // Check subsumption
-            if and.bindable_to(&t) {
-                if let Type::And(v) = t {
+            if let Type::And(v) = t {
+                if and.bindable_to(&t) {
                     return Err(format!("Binary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
+                                        from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
+                                        v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
+                }
+
+                if t.bindable_to(&and) {
+                    return Err(format!("Binary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
                                         from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
                                         v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
                 }
@@ -197,23 +214,29 @@ mod tests {
 
         let def_1 = ctx.def_unary_operation(0, Type::Basic(1), |a| { a.clone() });
         let def_2 = ctx.def_unary_operation(0, Type::Basic(0), |a| { a.clone() });
+        let def_3 = ctx.def_unary_operation(0, Type::Wildcard, |a| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
+        assert!(def_3.is_err());
 
         let def_1 = ctx.def_binary_operation(0, Type::Basic(0), Type::Basic(1), |a, _| { a.clone() });
         let def_2 = ctx.def_binary_operation(0, Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.def_binary_operation(0, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
+        assert!(def_3.is_err());
 
         let def_1 = ctx.def_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], |a, _| { a.clone() });
         let def_2 = ctx.def_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], |a, _| { a.clone() });
         let def_3 = ctx.def_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], |a, _| { a.clone() });
+        let def_4 = ctx.def_nary_operation(0, Type::Wildcard, &[Type::Wildcard], |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());
         assert!(def_3.is_err());
+        assert!(def_4.is_err());
     }
 }
 

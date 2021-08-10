@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));
 
         // Dummy call operation
-        ctx.def_nary_operation(0, Type::Basic(0), &[], |a, _| { a.clone() }).unwrap();
+        ctx.define_nary_operation(0, Type::Basic(0), &[], |a, _| { a.clone() }).unwrap();
 
         let num_cpy = Object::apply_nary_operation(&number, &[], 0, &ctx).unwrap();
 

@@ -1,5 +1,6 @@
 use crate::types::*;
 use crate::operations::*;
+use crate::functions::*;
 
 /*
                                                   ╒══════════════════╕
@@ -13,7 +14,9 @@ pub struct NessaContext {
 
     pub unary_ops: Vec<UnaryOperator>,
     pub binary_ops: Vec<BinaryOperator>,
-    pub nary_ops: Vec<NaryOperator>
+    pub nary_ops: Vec<NaryOperator>,
+
+    pub functions: Vec<Function>
 }
 
 impl NessaContext {
@@ -66,7 +69,7 @@ impl NessaContext {
         return self.unary_ops[id].operations.iter().filter(|(t, _)| a.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn def_unary_operation(&mut self, id: usize, a: Type, f: UnaryFunction) -> Result<(), String> {
+    pub fn define_unary_operation(&mut self, id: usize, a: Type, f: UnaryFunction) -> Result<(), String> {
         let op = &self.unary_ops[id];
 
         for (t, _) in &op.operations{ // Check subsumption
@@ -109,12 +112,12 @@ impl NessaContext {
     }
 
     pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Type, BinaryFunction)> {
-        let args_type = Type::And(vec!(a, b));
+        let and = Type::And(vec!(a, b));
 
-        return self.binary_ops[id].operations.iter().filter(|(t, _)| args_type.bindable_to(&t)).collect::<Vec<_>>();
+        return self.binary_ops[id].operations.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn def_binary_operation(&mut self, id: usize, a: Type, b: Type, f: BinaryFunction) -> Result<(), String> {
+    pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, f: BinaryFunction) -> Result<(), String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
@@ -167,12 +170,12 @@ impl NessaContext {
         let mut subtypes = vec!(from);
         subtypes.extend(args.iter().cloned());
 
-        let args_type = Type::And(subtypes);
+        let and = Type::And(subtypes);
 
-        return self.nary_ops[id].operations.iter().filter(|(t, _)| args_type.bindable_to(&t)).collect::<Vec<_>>();
+        return self.nary_ops[id].operations.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn def_nary_operation(&mut self, id: usize, from: Type, args: &[Type], f: NaryFunction) -> Result<(), String> {
+    pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], f: NaryFunction) -> Result<(), String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.into_iter().cloned());
 
@@ -199,6 +202,59 @@ impl NessaContext {
 
         return Ok(());
     }
+
+    /*
+        ╒═══════════════════════╕
+        │ Function manipulation │
+        ╘═══════════════════════╛
+    */
+
+    pub fn define_function(&mut self, name: String) -> Result<(), String> {
+        for f in &self.functions {
+            if f.name == name {
+                return Err(format!("Function \"{}\" is already defined", name))
+            }
+        }
+
+        self.functions.push(Function {
+            id: self.functions.len(),
+            name: name,
+            overloads: vec!()
+        });
+
+        return Ok(());
+    }
+
+    pub fn get_function_overloads(&mut self, id: usize, args: &[Type]) -> Vec<&(Type, FunctionOverload)> {
+        let and = Type::And(args.to_vec());
+
+        return self.functions[id].overloads.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+    }
+
+    pub fn define_function_overload(&mut self, id: usize, args: &[Type], f: FunctionOverload) -> Result<(), String> {
+        let and = Type::And(args.to_vec());
+        let func = &self.functions[id];
+
+        for (t, _) in &func.overloads{ // Check subsumption
+            if let Type::And(v) = t {
+                if and.bindable_to(&t) {
+                    return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
+                                        func.name, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
+                                        func.name, v.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")));
+                }
+
+                if t.bindable_to(&and) {
+                    return Err(format!("Function overload {}({}) subsumes {}({}), so it cannot be defined", 
+                                        func.name, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
+                                        func.name, v.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")));
+                }
+            }
+        }
+
+        self.functions[id].overloads.push((and, f));
+
+        return Ok(());
+    }
 }
 
 /*
@@ -216,31 +272,44 @@ mod tests {
     fn operation_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.def_unary_operation(0, Type::Basic(1), |a| { a.clone() });
-        let def_2 = ctx.def_unary_operation(0, Type::Basic(0), |a| { a.clone() });
-        let def_3 = ctx.def_unary_operation(0, Type::Wildcard, |a| { a.clone() });
+        let def_1 = ctx.define_unary_operation(0, Type::Basic(1), |a| { a.clone() });
+        let def_2 = ctx.define_unary_operation(0, Type::Basic(0), |a| { a.clone() });
+        let def_3 = ctx.define_unary_operation(0, Type::Wildcard, |a| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.def_binary_operation(0, Type::Basic(0), Type::Basic(1), |a, _| { a.clone() });
-        let def_2 = ctx.def_binary_operation(0, Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
-        let def_3 = ctx.def_binary_operation(0, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
+        let def_1 = ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(1), |a, _| { a.clone() });
+        let def_2 = ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.define_binary_operation(0, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.def_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], |a, _| { a.clone() });
-        let def_2 = ctx.def_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], |a, _| { a.clone() });
-        let def_3 = ctx.def_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], |a, _| { a.clone() });
-        let def_4 = ctx.def_nary_operation(0, Type::Wildcard, &[Type::Wildcard], |a, _| { a.clone() });
+        let def_1 = ctx.define_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], |a, _| { a.clone() });
+        let def_2 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], |a, _| { a.clone() });
+        let def_3 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], |a, _| { a.clone() });
+        let def_4 = ctx.define_nary_operation(0, Type::Wildcard, &[Type::Wildcard], |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());
         assert!(def_3.is_err());
         assert!(def_4.is_err());
+    }
+
+    #[test]
+    fn function_subsumption() {
+        let mut ctx = standard_ctx();
+
+        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], |a| { a[0].clone() });
+        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], |a| { a[0].clone() });
+        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], |a| { a[0].clone() });
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+        assert!(def_3.is_err());
     }
 
     #[test]
@@ -280,6 +349,17 @@ mod tests {
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
     }
+
+    #[test]
+    fn function_redefinition() {
+        let mut ctx = standard_ctx();
+
+        let def_1 = ctx.define_function("abs".into());
+        let def_2 = ctx.define_function("inc".into());
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+    }
 }
 
 /*
@@ -296,6 +376,8 @@ pub fn standard_ctx() -> NessaContext {
     standard_unary_operations(&mut ctx);
     standard_binary_operations(&mut ctx);
     standard_nary_operations(&mut ctx);
+
+    standard_functions(&mut ctx);
 
     return ctx;
 }

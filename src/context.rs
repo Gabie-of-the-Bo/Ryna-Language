@@ -1,5 +1,4 @@
 use crate::types::*;
-use crate::object::*;
 use crate::operations::*;
 
 /*
@@ -164,19 +163,13 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_nary_operation(&self, id: usize, from: &Object, args: &[&Object]) -> Option<&NaryFunction> {
-        let mut subtypes = vec!(from.get_type());
-        subtypes.extend(args.iter().map(|i| i.get_type()));
+    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(Type, NaryFunction)> {
+        let mut subtypes = vec!(from);
+        subtypes.extend(args.iter().cloned());
 
         let args_type = Type::And(subtypes);
 
-        for (t, op) in &self.nary_ops[id].operations{ // Check subsumption
-            if args_type.bindable_to(&t) {
-                return Some(op);
-            }
-        }
-        
-        return None;
+        return self.nary_ops[id].operations.iter().filter(|(t, _)| args_type.bindable_to(&t)).collect::<Vec<_>>();
     }
 
     pub fn def_nary_operation(&mut self, id: usize, from: Type, args: &[Type], f: NaryFunction) -> Result<(), String> {
@@ -189,13 +182,13 @@ impl NessaContext {
         for (t, _) in &op.operations{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(&t) {
-                    return Err(format!("Binary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
+                    return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
                                         from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
                                         v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
                 }
 
                 if t.bindable_to(&and) {
-                    return Err(format!("Binary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
+                    return Err(format!("N-ary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
                                         from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
                                         v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
                 }

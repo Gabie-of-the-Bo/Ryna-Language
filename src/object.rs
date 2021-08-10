@@ -237,6 +237,27 @@ impl Object {
 
         return Ok(ops[0].1(a, b));
     }
+
+    pub fn apply_nary_operation(a: &Object, b: &[&Object], id: usize, ctx: &NessaContext) -> Result<Object, String> {
+        let args_type = b.iter().map(|i| i.get_type()).collect::<Vec<_>>();
+        let ops = ctx.get_nary_operations(id, a.get_type(), &args_type);
+
+        if ops.len() == 0 {
+            return Err(format!("Unable to find n-ary operation {}{}{}{}", 
+                                a.get_type().get_name(&ctx), ctx.nary_ops[id].open_rep, 
+                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "),
+                                ctx.nary_ops[id].close_rep));
+        }
+
+        if ops.len() > 1 {
+            return Err(format!("N-ary operation is ambiguous {}{}{}{}", 
+                                a.get_type().get_name(&ctx), ctx.nary_ops[id].open_rep, 
+                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "),
+                                ctx.nary_ops[id].close_rep));
+        }
+
+        return Ok(ops[0].1(a, b));
+    }
 }
 
 /*
@@ -293,7 +314,7 @@ mod tests {
 
     #[test]
     fn operators() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
 
         let number = Object::new(Number::from(10));
         let string = Object::new(String::from("Test"));
@@ -317,5 +338,12 @@ mod tests {
 
         assert_eq!(*neg_num.get::<Number>(), Number::from(-10));
         assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));
+
+        // Dummy call operation
+        ctx.def_nary_operation(0, Type::Basic(0), &[], |a, _| { a.clone() }).unwrap();
+
+        let num_cpy = Object::apply_nary_operation(&number, &[], 0, &ctx).unwrap();
+
+        assert_eq!(*num_cpy.get::<Number>(), *number.get::<Number>());
     }
 }

@@ -26,6 +26,12 @@ impl NessaContext {
     */
 
     pub fn define_type(&mut self, representation: String, params: Vec<String>) -> Result<(), String> {
+        for t in &self.type_templates {
+            if t.name == representation {
+                return Err(format!("Type \"{}\" is already defined", representation))
+            }
+        }
+
         self.type_templates.push(TypeTemplate {
             id: self.type_templates.len(),
             name: representation,
@@ -42,6 +48,12 @@ impl NessaContext {
     */
 
     pub fn define_unary_operator(&mut self, representation: String) -> Result<(), String> {
+        for o in &self.unary_ops {
+            if o.representation == representation {
+                return Err(format!("Unary operator \"{}\" is already defined", representation))
+            }
+        }
+
         self.unary_ops.push(UnaryOperator {
             id: self.unary_ops.len(),
             representation: representation,
@@ -90,6 +102,12 @@ impl NessaContext {
     */
 
     pub fn define_binary_operator(&mut self, representation: String) -> Result<(), String> {
+        for o in &self.binary_ops {
+            if o.representation == representation {
+                return Err(format!("Binary operator \"{}\" is already defined", representation))
+            }
+        }
+
         self.binary_ops.push(BinaryOperator {
             id: self.binary_ops.len(),
             representation: representation,
@@ -143,6 +161,13 @@ impl NessaContext {
     */
 
     pub fn define_nary_operator(&mut self, open_rep: String, close_rep: String) -> Result<(), String> {
+        for o in &self.nary_ops {
+            if o.open_rep == open_rep || o.close_rep == close_rep {
+                return Err(format!("N-ary operator \"{}{}\" has a syntax overlap with \"{}{}\", so it cannot be defined", 
+                                    open_rep, close_rep, o.open_rep, o.close_rep))
+            }
+        }
+
         self.nary_ops.push(NaryOperator {
             id: self.nary_ops.len(),
             open_rep: open_rep,
@@ -237,6 +262,44 @@ mod tests {
         assert!(def_2.is_ok());
         assert!(def_3.is_err());
         assert!(def_4.is_err());
+    }
+
+    #[test]
+    fn operator_redefinition() {
+        let mut ctx = standard_ctx();
+
+        let def_1 = ctx.define_unary_operator("~".into());
+        let def_2 = ctx.define_unary_operator("-".into());
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+
+        let def_1 = ctx.define_binary_operator("-".into());
+        let def_2 = ctx.define_binary_operator("+".into());
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+
+        let def_1 = ctx.define_nary_operator("[".into(), "]".into());
+        let def_2 = ctx.define_nary_operator("(".into(), ")".into());
+        let def_3 = ctx.define_nary_operator("{".into(), ")".into());
+        let def_4 = ctx.define_nary_operator("(".into(), "}".into());
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+        assert!(def_3.is_err());
+        assert!(def_4.is_err());
+    }
+
+    #[test]
+    fn type_redefinition() {
+        let mut ctx = standard_ctx();
+
+        let def_1 = ctx.define_type("Matrix".into(), vec!());
+        let def_2 = ctx.define_type("Number".into(), vec!());
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
     }
 }
 

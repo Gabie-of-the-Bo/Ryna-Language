@@ -1,7 +1,9 @@
 [![Build Status](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language.svg?token=zsnBiFtqVx8k3FtzEqsQ&branch=develop)](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
 
-![Nessa Logo](doc/img/logo.png)
-
+<p align="center">
+  <img src="doc/img/logo.png" width="60%">
+</p>
+  
 # What is _Nessa_?
 
 **_Nessa_** is an imperative concept-oriented programming language with mathematical proofs. Many of its ideas come from the [_ULAN Language_](https://ulan-language.herokuapp.com) (of which I'm also the author), such as the concept programming features and the complex parameter serialization capabilities.
@@ -127,7 +129,7 @@ This is a _WIP_ list of features that Nessa will have when it is released:
 
   These proofs will only be necessary when the property cannot be trivially deduced (such as the ```abs``` one). More on this will be added when the implementation begins. 
 
-* **Custom syntaxes**: You will be able to create new tokens using an internal language called _NDL_ (_Nessa Definition Language_):
+* **Custom syntaxes**: you will be able to create new tokens using an internal language called _NDL_ (_Nessa Definition Language_):
 
   ```typescript
   class Dice{
@@ -146,4 +148,32 @@ This is a _WIP_ list of features that Nessa will have when it is released:
 
   //Usage
   dice = 4D20 // Four dice of twenty sides
+  ```
+
+* **Operator and operation definitions**: you will be able to define new operators and operations using an easy syntax:
+
+  ```typescript
+  unary operator "++";
+  binary operator "<=>";
+  nary operator "`" to "´";
+  
+  (a: &Number) ++ {
+    return a + 1;
+  }
+  
+  (a: &Number) <=> (b: &Number) {
+    if a < b {
+      return -1;
+    }
+    
+    if a > b {
+      return 1;
+    }
+    
+    return 0;
+  }
+  
+  (a: &Number) `(b: &Number, c: &Number)´ {
+    return a + b * c; // This one is pretty much made up
+  }
   ```

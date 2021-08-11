@@ -65,14 +65,14 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, UnaryFunction)> {        
-        return self.unary_ops[id].operations.iter().filter(|(t, _)| a.bindable_to(&t)).collect::<Vec<_>>();
+    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, Type, UnaryFunction)> {        
+        return self.unary_ops[id].operations.iter().filter(|(t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn define_unary_operation(&mut self, id: usize, a: Type, f: UnaryFunction) -> Result<(), String> {
+    pub fn define_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
         let op = &self.unary_ops[id];
 
-        for (t, _) in &op.operations{ // Check subsumption
+        for (t, _, _) in &op.operations{ // Check subsumption
             if a.bindable_to(&t) {
                 return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                     op.representation, a.get_name(self), op.representation, t.get_name(self)));
@@ -84,7 +84,7 @@ impl NessaContext {
             }
         }
 
-        self.unary_ops[id].operations.push((a, f));
+        self.unary_ops[id].operations.push((a, ret, f));
 
         return Ok(());
     }
@@ -111,17 +111,17 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Type, BinaryFunction)> {
+    pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Type, Type, BinaryFunction)> {
         let and = Type::And(vec!(a, b));
 
-        return self.binary_ops[id].operations.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        return self.binary_ops[id].operations.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, f: BinaryFunction) -> Result<(), String> {
+    pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
-        for (t, _) in &op.operations{ // Check subsumption
+        for (t, _, _) in &op.operations{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(&t) {
                     return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
@@ -137,7 +137,7 @@ impl NessaContext {
             }
         }
 
-        self.binary_ops[id].operations.push((and, f));
+        self.binary_ops[id].operations.push((and, ret, f));
 
         return Ok(());
     }
@@ -166,23 +166,23 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(Type, NaryFunction)> {
+    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(Type, Type, NaryFunction)> {
         let mut subtypes = vec!(from);
         subtypes.extend(args.iter().cloned());
 
         let and = Type::And(subtypes);
 
-        return self.nary_ops[id].operations.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        return self.nary_ops[id].operations.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], f: NaryFunction) -> Result<(), String> {
+    pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.into_iter().cloned());
 
         let and = Type::And(subtypes);
         let op = &self.nary_ops[id];
 
-        for (t, _) in &op.operations{ // Check subsumption
+        for (t, _, _) in &op.operations{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(&t) {
                     return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
@@ -198,7 +198,7 @@ impl NessaContext {
             }
         }
 
-        self.nary_ops[id].operations.push((and, f));
+        self.nary_ops[id].operations.push((and, ret, f));
 
         return Ok(());
     }
@@ -225,17 +225,17 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_function_overloads(&self, id: usize, args: &[Type]) -> Vec<&(Type, FunctionOverload)> {
+    pub fn get_function_overloads(&self, id: usize, args: &[Type]) -> Vec<&(Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(t, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
     }
 
-    pub fn define_function_overload(&mut self, id: usize, args: &[Type], f: FunctionOverload) -> Result<(), String> {
+    pub fn define_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
 
-        for (t, _) in &func.overloads{ // Check subsumption
+        for (t, _, _) in &func.overloads{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(&t) {
                     return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
@@ -251,7 +251,7 @@ impl NessaContext {
             }
         }
 
-        self.functions[id].overloads.push((and, f));
+        self.functions[id].overloads.push((and, ret, f));
 
         return Ok(());
     }
@@ -272,26 +272,26 @@ mod tests {
     fn operation_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_unary_operation(0, Type::Basic(1), |a| { a.clone() });
-        let def_2 = ctx.define_unary_operation(0, Type::Basic(0), |a| { a.clone() });
-        let def_3 = ctx.define_unary_operation(0, Type::Wildcard, |a| { a.clone() });
+        let def_1 = ctx.define_unary_operation(0, Type::Basic(1), Type::Basic(1), |a| { a.clone() });
+        let def_2 = ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(1), |a| { a.clone() });
+        let def_3 = ctx.define_unary_operation(0, Type::Wildcard, Type::Wildcard, |a| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(1), |a, _| { a.clone() });
-        let def_2 = ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
-        let def_3 = ctx.define_binary_operation(0, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
+        let def_1 = ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_2 = ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.define_binary_operation(0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], |a, _| { a.clone() });
-        let def_2 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], |a, _| { a.clone() });
-        let def_3 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], |a, _| { a.clone() });
-        let def_4 = ctx.define_nary_operation(0, Type::Wildcard, &[Type::Wildcard], |a, _| { a.clone() });
+        let def_1 = ctx.define_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |a, _| { a.clone() });
+        let def_2 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |a, _| { a.clone() });
+        let def_4 = ctx.define_nary_operation(0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());
@@ -303,9 +303,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], |a| { a[0].clone() });
-        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], |a| { a[0].clone() });
-        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], |a| { a[0].clone() });
+        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |a| { a[0].clone() });
+        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |a| { a[0].clone() });
+        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], Type::Basic(0), |a| { a[0].clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

@@ -219,7 +219,7 @@ impl Object {
             return Err(format!("Unary operation {}{} is ambiguous", ctx.unary_ops[id].representation, a.get_type().get_name(&ctx)));
         }
 
-        return Ok(ops[0].1(a));
+        return Ok(ops[0].2(a));
     }
 
     pub fn apply_binary_operation(a: &Object, b: &Object, id: usize, ctx: &NessaContext) -> Result<Object, String> {
@@ -235,7 +235,7 @@ impl Object {
                                 a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
         }
 
-        return Ok(ops[0].1(a, b));
+        return Ok(ops[0].2(a, b));
     }
 
     pub fn apply_nary_operation(a: &Object, b: &[&Object], id: usize, ctx: &NessaContext) -> Result<Object, String> {
@@ -256,7 +256,7 @@ impl Object {
                                 ctx.nary_ops[id].close_rep));
         }
 
-        return Ok(ops[0].1(a, b));
+        return Ok(ops[0].2(a, b));
     }
 
     pub fn apply_function(args: &[&Object], id: usize, ctx: &NessaContext) -> Result<Object, String> {
@@ -275,7 +275,7 @@ impl Object {
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
         }
 
-        return Ok(funcs[0].1(args));
+        return Ok(funcs[0].2(args));
     }
 }
 
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));
 
         // Dummy call operation
-        ctx.define_nary_operation(0, Type::Basic(0), &[], |a, _| { a.clone() }).unwrap();
+        ctx.define_nary_operation(0, Type::Basic(0), &[], Type::Basic(0), |a, _| { a.clone() }).unwrap();
 
         let num_cpy = Object::apply_nary_operation(&number, &[], 0, &ctx).unwrap();
 

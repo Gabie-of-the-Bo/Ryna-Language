@@ -11,7 +11,7 @@ use crate::context::NessaContext;
 
 pub type FunctionOverload = fn(&[&Object]) -> Object;
 
-pub type FunctionOverloads = Vec<(Type, FunctionOverload)>;
+pub type FunctionOverloads = Vec<(Type, Type, FunctionOverload)>;
 
 #[derive(Clone)]
 pub struct Function {
@@ -29,7 +29,7 @@ pub struct Function {
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_function_overload(0, &[Type::Ref(Box::new(Type::Basic(0)))], |v| { 
+    ctx.define_function_overload(0, &[Type::Ref(Box::new(Type::Basic(0)))], Type::Basic(0), |v| { 
         Object::new(&*v[0].deref::<Number>() + Number::from(1)) 
     }).unwrap();
 }

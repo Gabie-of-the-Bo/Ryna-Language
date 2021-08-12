@@ -63,6 +63,7 @@ impl NessaContext {
         self.unary_ops.push(UnaryOperator {
             id: self.unary_ops.len(),
             representation: representation,
+            prefix: true,
             operations: vec!()
         });
 

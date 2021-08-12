@@ -22,6 +22,7 @@ pub type NaryOperations = Vec<(Type, Type, NaryFunction)>;
 pub struct UnaryOperator {
     pub id: usize,
     pub representation: String,
+    pub prefix: bool,
     pub operations: UnaryOperations
 }
 

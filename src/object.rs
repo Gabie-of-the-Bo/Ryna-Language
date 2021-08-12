@@ -4,7 +4,6 @@ use std::cell::*;
 
 use crate::number::Number;
 use crate::context::NessaContext;
-use crate::operations::*;
 use crate::types::Type;
 
 /*

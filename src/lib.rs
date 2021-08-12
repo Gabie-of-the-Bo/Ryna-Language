@@ -6,5 +6,6 @@ mod patterns;
 mod object;
 mod operations;
 mod functions;
+mod variables;
 mod types;
 mod context;

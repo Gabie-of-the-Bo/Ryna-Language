@@ -1,5 +1,7 @@
 use crate::types::*;
+use crate::variables::*;
 use crate::operations::*;
+use crate::object::*;
 use crate::functions::*;
 
 /*
@@ -16,7 +18,9 @@ pub struct NessaContext {
     pub binary_ops: Vec<BinaryOperator>,
     pub nary_ops: Vec<NaryOperator>,
 
-    pub functions: Vec<Function>
+    pub functions: Vec<Function>,
+
+    pub variables: Vec<Option<Variable>>
 }
 
 impl NessaContext {
@@ -255,6 +259,71 @@ impl NessaContext {
 
         return Ok(());
     }
+
+    /*
+        ╒═══════════════════════╕
+        │ Variable manipulation │
+        ╘═══════════════════════╛
+    */
+
+    pub fn define_variable(&mut self, idx: usize, name: String, var_type: Type) -> Result<(), String> {
+        let variable = self.variables.get_mut(idx).unwrap();
+
+        if variable.is_some() {
+            return Err(format!("Redefinition of variable \"{}\"", name));
+        }
+
+        *variable = Some(Variable{
+            id: idx,
+            name: name,
+            var_type: var_type,
+            value: None
+        });
+
+        return Ok(());
+    }
+
+    pub fn assign_variable(&mut self, idx: usize, value: Object) -> Result<(), String> {
+        let variable = self.variables.get_mut(idx).unwrap();
+
+        if let Some(v) = variable {
+            if value.get_type().bindable_to(&v.var_type) {
+                v.value = Some(value);
+
+                return Ok(());
+            }
+
+        } else {
+            return Err(format!("Variable with index {} is not defined", idx));
+        }
+
+        let val_type = value.get_type();
+        let var_type = self.variables[idx].as_ref().unwrap().value.as_ref().unwrap().get_type();
+
+        return Err(format!("Unable to bind value of type {} to variable of type {}", val_type.get_name(self), var_type.get_name(self)));
+    }
+
+    pub fn delete_variable(&mut self, idx: usize) -> Result<(), String> {
+        let variable = self.variables.get_mut(idx).unwrap();
+
+        if variable.is_none() {
+            return Err(format!("Variable with index {} is not defined", idx));
+        }
+
+        *variable = None;
+
+        return Ok(());
+    }
+
+    pub fn get_variable(&self, idx: usize) -> Result<&Variable, String> {
+        let variable = &self.variables[idx];
+
+        if variable.is_none() {
+            return Err(format!("Variable with index {} is not defined", idx));
+        }
+
+        return Ok(variable.as_ref().unwrap());
+    }
 }
 
 /*
@@ -267,6 +336,7 @@ impl NessaContext {
 mod tests {
     use crate::types::Type;
     use crate::context::*;
+    use crate::number::*;
 
     #[test]
     fn operation_subsumption() {
@@ -360,6 +430,47 @@ mod tests {
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
     }
+
+    #[test]
+    fn variables() {
+        let mut ctx = standard_ctx();
+
+        let def_1 = ctx.define_variable(0, "test".into(), Type::Ref(Box::new(Type::Basic(0))));
+        let def_2 = ctx.define_variable(0, "test2".into(), Type::Ref(Box::new(Type::Basic(0))));
+
+        assert!(def_1.is_ok());
+        assert!(def_2.is_err());
+
+        let assignment_1 = ctx.assign_variable(0, Object::new(Number::from(5)));
+        let assignment_2 = ctx.assign_variable(0, Object::new("Test".to_string()));
+        let assignment_3 = ctx.assign_variable(1, Object::new(Number::from(5)));
+
+        assert!(assignment_1.is_ok());
+        assert!(assignment_2.is_err());
+        assert!(assignment_3.is_err());
+
+        let get_1 = ctx.get_variable(0);
+        let get_2 = ctx.get_variable(1);
+
+        assert!(get_1.is_ok());
+        assert!(get_2.is_err());
+
+        assert_eq!(*get_1.unwrap().value.as_ref().unwrap().get::<Number>(), Number::from(5));
+
+        let delete_1 = ctx.delete_variable(0);
+        let delete_2 = ctx.delete_variable(0);
+        let delete_3 = ctx.delete_variable(1); 
+
+        assert!(delete_1.is_ok());
+        assert!(delete_2.is_err());
+        assert!(delete_3.is_err());
+
+        let get_1 = ctx.get_variable(0);
+        let get_2 = ctx.get_variable(1);
+
+        assert!(get_1.is_err());
+        assert!(get_2.is_err());
+    }
 }
 
 /*
@@ -369,7 +480,7 @@ mod tests {
 */
 
 pub fn standard_ctx() -> NessaContext {
-    let mut ctx = NessaContext::default(); 
+    let mut ctx = NessaContext::default();
 
     standard_types(&mut ctx);
 
@@ -378,6 +489,8 @@ pub fn standard_ctx() -> NessaContext {
     standard_nary_operations(&mut ctx);
 
     standard_functions(&mut ctx);
+
+    ctx.variables = vec!(None; 100); // 100 "registers" by default
 
     return ctx;
 }

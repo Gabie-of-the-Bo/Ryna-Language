@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use crate::context::NessaContext;
 
 /*
@@ -31,6 +34,7 @@ pub enum Type {
 
     // Parametric types
     Wildcard,
+    TemplateParam(usize),
     Template(usize, Vec<Type>),
 
     // Function type
@@ -47,6 +51,7 @@ impl PartialEq for Type {
             (Type::Or(va), Type::Or(vb)) => va.iter().all(|i| vb.contains(i)) && vb.iter().all(|i| va.contains(i)),
             (Type::And(va), Type::And(vb)) => va == vb,
             (Type::Wildcard, Type::Wildcard) => true,
+            (Type::TemplateParam(id_a), Type::TemplateParam(id_b)) => id_a == id_b,
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va == vb,
             (Type::Function(fa, ta), Type::Function(fb, tb)) => fa == fb && ta == tb,
             
@@ -70,6 +75,7 @@ impl Type {
 
             Type::Wildcard => "*".into(),
 
+            Type::TemplateParam(id) => format!("T_{}", id),
             Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.clone(), 
                                                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
             Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
@@ -77,6 +83,10 @@ impl Type {
     }
 
     pub fn bindable_to(&self, other: &Type) -> bool {
+        return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
+    }
+
+    pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,
 
@@ -84,22 +94,67 @@ impl Type {
 
             (_, Type::Empty) => false,
 
-            (Type::Ref(ta), Type::Ref(tb)) => ta.bindable_to(tb),
-            (Type::MutRef(ta), Type::MutRef(tb)) => ta.bindable_to(tb),
-            (Type::MutRef(ta), Type::Ref(tb)) => ta.bindable_to(tb),
-            (ta, Type::Ref(tb)) => ta.bindable_to(tb),
-            (ta, Type::MutRef(tb)) => ta.bindable_to(tb),
+            (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
+            (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
+            (Type::MutRef(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
+            (ta, Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
+            (ta, Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
 
-            (Type::Or(v), b) => v.iter().all(|i| i.bindable_to(b)),
-            (a, Type::Or(v)) => v.iter().any(|i| a.bindable_to(i)),
+            (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps)),
+            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps)),
 
-            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.bindable_to(j)),
+            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
+            
+            (Type::TemplateParam(id), b) => {
+                if let Some(t) = t_assignments.get(id) {
+                    return b == t;
+                
+                } else {
+                    t_assignments.insert(*id, b.clone());
+
+                    return b.template_cyclic_reference_check(*id, t_deps);
+                }
+            },
+
+            (b, Type::TemplateParam(id)) => {
+                if let Some(t) = t_assignments.get(id) {
+                    return b == t;
+                
+                } else {
+                    t_assignments.insert(*id, b.clone());
+
+                    return b.template_cyclic_reference_check(*id, t_deps);
+                }
+            },
+            
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
-                                                                    va.iter().zip(vb).all(|(i, j)| i.bindable_to(j)),
+                                                                    va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
 
-            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.bindable_to(fb) && ta.bindable_to(tb),
+            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.template_bindable_to(fb, t_assignments, t_deps) && ta.template_bindable_to(tb, t_assignments, t_deps),
 
             _ => false
+        }
+    }
+
+    fn template_cyclic_reference_check(&self, t_id: usize, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
+        return match self {
+            Type::Ref(t) => t.template_cyclic_reference_check(t_id, t_deps),
+            Type::MutRef(t) => t.template_cyclic_reference_check(t_id, t_deps),
+
+            Type::Or(v) => v.iter().all(|i| i.template_cyclic_reference_check(t_id, t_deps)),
+            Type::And(v) => v.iter().all(|i| i.template_cyclic_reference_check(t_id, t_deps)),
+            
+            Type::TemplateParam(id) => {
+                t_deps.entry(t_id).or_default().insert(*id);
+
+                t_id != *id && !t_deps.entry(*id).or_default().contains(&t_id)
+            },
+            
+            Type::Template(_, v) => v.iter().all(|i| i.template_cyclic_reference_check(t_id, t_deps)),
+
+            Type::Function(f, t) => f.template_cyclic_reference_check(t_id, t_deps) && t.template_cyclic_reference_check(t_id, t_deps),
+
+            _ => true
         }
     }
 }
@@ -115,7 +170,7 @@ mod tests {
     use crate::types::*;
 
     #[test]
-    fn binding() {
+    fn basic_type_binding() {
         let number_t = TypeTemplate {
             id: 0,
             name: "Number".into(),
@@ -209,6 +264,120 @@ mod tests {
         assert!(f_number_or_string_number.bindable_to(&f_number_or_string_number));
         assert!(f_number_number.bindable_to(&f_number_or_string_number));
         assert!(!f_number_or_string_number.bindable_to(&f_number_number));
+    }
+
+    #[test]
+    fn template_binding() {
+        let number_t = TypeTemplate {
+            id: 0,
+            name: "Number".into(),
+            params: vec!()
+        };
+
+        let string_t = TypeTemplate {
+            id: 1,
+            name: "String".into(),
+            params: vec!()
+        };
+
+        let bool_t = TypeTemplate {
+            id: 2,
+            name: "Bool".into(),
+            params: vec!()
+        };
+
+        let vector_t = TypeTemplate {
+            id: 3,
+            name: "Vector".into(),
+            params: vec!("T".into())
+        };
+
+        let map_t = TypeTemplate {
+            id: 3,
+            name: "Map".into(),
+            params: vec!("T".into(), "G".into())
+        };
+
+        let number = Type::Basic(number_t.id);
+        let string = Type::Basic(string_t.id);
+        let boolean = Type::Basic(bool_t.id);
+
+        let template_1 = Type::TemplateParam(0);
+        let template_2 = Type::Ref(Box::new(Type::TemplateParam(0)));
+
+        assert!(number.bindable_to(&template_1));
+        assert!(string.bindable_to(&template_1));
+        assert!(boolean.bindable_to(&template_1));
+        assert!(number.bindable_to(&template_2));
+        assert!(string.bindable_to(&template_2));
+        assert!(boolean.bindable_to(&template_2));
+        assert!(template_1.bindable_to(&template_2));
+        assert!(!template_2.bindable_to(&template_1));
+
+        let template_1 = Type::Template(vector_t.id, vec!(Type::TemplateParam(0))); 
+        let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(1))); 
+
+        let binding_1 = Type::Template(vector_t.id, vec!(number.clone()));
+        let binding_2 = Type::Template(map_t.id, vec!(number.clone(), string.clone()));
+
+        assert!(binding_1.bindable_to(&template_1));
+        assert!(binding_2.bindable_to(&template_2));
+        assert!(!binding_2.bindable_to(&template_1));
+        assert!(!binding_1.bindable_to(&template_2));
+
+        let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(0))); 
+
+        let binding_1 = Type::Template(map_t.id, vec!(number.clone(), number.clone()));
+        let binding_2 = Type::Template(map_t.id, vec!(boolean.clone(), boolean.clone()));
+        let binding_3 = Type::Template(map_t.id, vec!(number.clone(), string.clone()));
+        
+        assert!(binding_1.bindable_to(&template_1));
+        assert!(binding_2.bindable_to(&template_1));
+        assert!(!binding_3.bindable_to(&template_1));
+
+        let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))))); 
+
+        let binding_1 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(number.clone(), number.clone()))));
+        let binding_2 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), string.clone()))));
+        let binding_3 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
+        let binding_4 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(string.clone(), string.clone()))));
+        let binding_5 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
+        
+        assert!(binding_1.bindable_to(&template_1));
+        assert!(binding_2.bindable_to(&template_1));
+        assert!(binding_3.bindable_to(&template_1));
+        assert!(!binding_4.bindable_to(&template_1));
+        assert!(!binding_5.bindable_to(&template_1));
+
+        let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Wildcard)))); 
+
+        let binding_1 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(number.clone(), number.clone()))));
+        let binding_2 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), string.clone()))));
+        let binding_3 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
+        let binding_4 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(string.clone(), string.clone()))));
+        let binding_5 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
+        let binding_6 = Type::Template(map_t.id, vec!(boolean.clone(), Type::Template(map_t.id, vec!(boolean.clone(), number.clone()))));
+        
+        assert!(binding_1.bindable_to(&template_1));
+        assert!(binding_2.bindable_to(&template_1));
+        assert!(!binding_3.bindable_to(&template_1));
+        assert!(!binding_4.bindable_to(&template_1));
+        assert!(binding_5.bindable_to(&template_1));
+        assert!(binding_6.bindable_to(&template_1));
+
+        let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(1))); 
+        let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))); 
+
+        assert!(template_1.bindable_to(&template_1));
+        assert!(template_2.bindable_to(&template_2));
+        assert!(!template_1.bindable_to(&template_2));
+        assert!(!template_2.bindable_to(&template_1));
+
+        let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))))); 
+        let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(1))))); 
+
+        assert!(template_1.bindable_to(&template_2));
+        assert!(template_2.bindable_to(&template_1));
     }
 }
 

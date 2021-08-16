@@ -50,7 +50,7 @@ pub struct NaryOperator {
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into()).unwrap();
     
-    ctx.define_unary_operation(0, Type::Ref(Box::new(Type::Basic(0))), Type::Basic(0), |a| {
+    ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();
         let mut res = n_a.clone();
 
@@ -63,14 +63,14 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("+".into()).unwrap();
 
-    ctx.define_binary_operation(0, Type::Ref(Box::new(Type::Basic(0))), Type::Ref(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
+    ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
         let n_b = &*b.deref::<Number>();
 
         return Object::new(n_a + n_b);
     }).unwrap();
 
-    ctx.define_binary_operation(0, Type::Ref(Box::new(Type::Basic(1))), Type::Ref(Box::new(Type::Basic(1))), Type::Basic(1), |a, b| {
+    ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, b| {
         let n_a = &*a.deref::<String>();
         let n_b = &*b.deref::<String>();
 

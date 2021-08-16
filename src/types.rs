@@ -96,9 +96,6 @@ impl Type {
 
             (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
             (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
-            (Type::MutRef(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
-            (ta, Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
-            (ta, Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
 
             (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps)),
             (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps)),
@@ -207,7 +204,8 @@ mod tests {
         let number_mut = Type::MutRef(Box::new(number.clone()));
 
         assert!(number_ref.bindable_to(&number_ref));
-        assert!(number_mut.bindable_to(&number_ref));
+        assert!(number_mut.bindable_to(&number_mut));
+        assert!(!number_mut.bindable_to(&number_ref));
         assert!(!number_ref.bindable_to(&number_mut));
 
         let string_or_number = Type::Or(vec!(string.clone(), number.clone()));
@@ -308,10 +306,10 @@ mod tests {
         assert!(number.bindable_to(&template_1));
         assert!(string.bindable_to(&template_1));
         assert!(boolean.bindable_to(&template_1));
-        assert!(number.bindable_to(&template_2));
-        assert!(string.bindable_to(&template_2));
-        assert!(boolean.bindable_to(&template_2));
-        assert!(template_1.bindable_to(&template_2));
+        assert!(!number.bindable_to(&template_2));
+        assert!(!string.bindable_to(&template_2));
+        assert!(!boolean.bindable_to(&template_2));
+        assert!(!template_1.bindable_to(&template_2));
         assert!(!template_2.bindable_to(&template_1));
 
         let template_1 = Type::Template(vector_t.id, vec!(Type::TemplateParam(0))); 

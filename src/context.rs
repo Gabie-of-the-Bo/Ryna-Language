@@ -366,7 +366,7 @@ mod tests {
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());
-        assert!(def_3.is_err());
+        assert!(def_3.is_ok());
         assert!(def_4.is_err());
     }
 
@@ -436,8 +436,8 @@ mod tests {
     fn variables() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_variable(0, "test".into(), Type::Ref(Box::new(Type::Basic(0))));
-        let def_2 = ctx.define_variable(0, "test2".into(), Type::Ref(Box::new(Type::Basic(0))));
+        let def_1 = ctx.define_variable(0, "test".into(), Type::Basic(0));
+        let def_2 = ctx.define_variable(0, "test2".into(), Type::Basic(0));
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

@@ -336,26 +336,16 @@ mod tests {
 
         let number = Object::new(Number::from(10));
         let string = Object::new(String::from("Test"));
-        let number_ref = number.get_ref_obj();
-        let string_ref = string.get_ref_obj();
 
         let num_num = Object::apply_binary_operation(&number, &number, 0, &ctx).unwrap();
         let str_str = Object::apply_binary_operation(&string, &string, 0, &ctx).unwrap();
 
-        let num_num_ref = Object::apply_binary_operation(&number_ref, &number_ref, 0, &ctx).unwrap();
-        let str_str_ref = Object::apply_binary_operation(&string_ref, &string_ref, 0, &ctx).unwrap();
-
         assert_eq!(*num_num.get::<Number>(), Number::from(20));
         assert_eq!(*str_str.get::<String>(), String::from("TestTest"));
 
-        assert_eq!(*num_num_ref.get::<Number>(), *num_num.get::<Number>());
-        assert_eq!(*str_str_ref.get::<String>(), *str_str.get::<String>());
-
         let neg_num = Object::apply_unary_operation(&number, 0, &ctx).unwrap();
-        let neg_num_ref = Object::apply_unary_operation(&number_ref, 0, &ctx).unwrap();
 
         assert_eq!(*neg_num.get::<Number>(), Number::from(-10));
-        assert_eq!(*neg_num_ref.get::<Number>(), Number::from(-10));
 
         // Dummy call operation
         ctx.define_nary_operation(0, Type::Basic(0), &[], Type::Basic(0), |a, _| { a.clone() }).unwrap();
@@ -370,12 +360,9 @@ mod tests {
         let ctx = standard_ctx();
 
         let number = Object::new(Number::from(10));
-        let number_ref = number.get_ref_obj();
         
         let f_num = Object::apply_function(&[&number], 0, &ctx).unwrap();
-        let f_ref = Object::apply_function(&[&number_ref], 0, &ctx).unwrap();
 
-        assert_eq!(*f_num.get::<Number>(), *f_ref.get::<Number>());
         assert_eq!(*f_num.get::<Number>(), Number::from(11));
     }
 }

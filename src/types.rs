@@ -388,4 +388,7 @@ mod tests {
 pub fn standard_types(ctx: &mut NessaContext) {
     ctx.define_type("Number".into(), vec!()).unwrap();
     ctx.define_type("String".into(), vec!()).unwrap();
+    ctx.define_type("Bool".into(), vec!()).unwrap();
+    ctx.define_type("Array".into(), vec!("Inner".into())).unwrap();
+    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into())).unwrap();
 } 

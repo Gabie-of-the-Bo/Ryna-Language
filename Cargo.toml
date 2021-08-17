@@ -11,6 +11,7 @@ lazy_static = "*"
 rand = "*"
 impl_ops = "*"
 rayon = "1.5"
+pom = "*"
 
 [dev-dependencies]
 num-traits = "*"

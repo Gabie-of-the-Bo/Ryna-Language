@@ -117,6 +117,7 @@ dependencies = [
  "lazy_static",
  "num-bigint",
  "num-traits",
+ "pom",
  "rand",
  "rayon",
 ]
@@ -161,6 +162,12 @@ dependencies = [
  "hermit-abi",
  "libc",
 ]
+
+[[package]]
+name = "pom"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07e2192780e9f8e282049ff9bffcaa28171e1cb0844f49ed5374e518ae6024ec"
 
 [[package]]
 name = "ppv-lite86"

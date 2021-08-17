@@ -3,14 +3,32 @@ use pom::parser::*;
 use crate::types::Type;
 use crate::context::NessaContext;
 
+/*
+                                                  ╒══════════════════╕
+    ============================================= │  IMPLEMENTATION  │ =============================================
+                                                  ╘══════════════════╛
+*/
+
 fn spaces<'a>() -> Parser<'a, char, ()> {
     return one_of(" \t\r\n").repeat(0..).discard();
 }
 
 impl NessaContext {
+    /*
+        ╒═══════════════════╕
+        │ Auxiliary methods │
+        ╘═══════════════════╛
+    */
+
     fn get_type_id(&self, name: String) -> usize {
         return self.type_templates.iter().filter(|t| t.name == name).next().unwrap().id;
     }
+
+    /*
+        ╒═════════════════╕
+        │ Type subparsers │
+        ╘═════════════════╛
+    */
 
     fn basic_type_parser(&self) -> Parser<char, Type> {
         return is_a(|i: char| i.is_alphabetic()).repeat(1..).name("Basic type").map(move |n| Type::Basic(self.get_type_id(n.iter().collect())));
@@ -73,6 +91,12 @@ impl NessaContext {
         return res;
     }
 }
+
+/*
+                                                  ╒═════════╕
+    ============================================= │  TESTS  │ =============================================
+                                                  ╘═════════╛
+*/
 
 #[cfg(test)]
 mod tests {

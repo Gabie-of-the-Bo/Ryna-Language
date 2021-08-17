@@ -3,48 +3,72 @@ use pom::parser::*;
 use crate::types::Type;
 use crate::context::NessaContext;
 
+fn spaces<'a>() -> Parser<'a, char, ()> {
+    return one_of(" \t\r\n").repeat(0..).discard();
+}
+
 impl NessaContext {
     fn get_type_id(&self, name: String) -> usize {
         return self.type_templates.iter().filter(|t| t.name == name).next().unwrap().id;
     }
 
-    fn type_name_parser(&self) -> Parser<char, Type> {
-        return is_a(|i: char| i.is_alphabetic()).repeat(1..).map(move |n| Type::Basic(self.get_type_id(n.iter().collect())));
+    fn basic_type_parser(&self) -> Parser<char, Type> {
+        return is_a(|i: char| i.is_alphabetic()).repeat(1..).name("Basic type").map(move |n| Type::Basic(self.get_type_id(n.iter().collect())));
+    }
+
+    fn constant_reference_type_parser(&self) -> Parser<char, Type> {
+        return (sym('&') * call(move || self.type_parser(true))).name("Constant reference").map(|i| Type::Ref(Box::new(i)));
+    }
+
+    fn mutable_reference_type_parser(&self) -> Parser<char, Type> {
+        return (sym('&').repeat(2) * spaces() * call(move || self.type_parser(true))).name("Mutable reference").map(|i| Type::MutRef(Box::new(i)))
+    }
+
+    fn parametric_type_parser(&self) -> Parser<char, Type> {
+        return (self.basic_type_parser() - spaces() + (
+            sym('<') * spaces() * list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')
+        
+        )).name("Template type").map(|(i, args)| {
+            if let Type::Basic(id) = i {
+                return Type::Template(id, args);
+            }
+
+            return Type::Empty;
+        });
+    }
+
+    fn empty_type_parser(&self) -> Parser<char, Type> {
+        return (sym('(') * spaces() * sym(')')).name("Empty type").map(|_| Type::Empty);
+    }
+
+    fn wildcard_type_parser(&self) -> Parser<char, Type> {
+        return sym('*').name("Wildcard type").map(|_| Type::Wildcard);
+    }
+
+    fn and_type_parser(&self) -> Parser<char, Type> {
+        return (sym('(') * spaces() * list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces()) - spaces() * sym(')'))
+            .name("And type").map(|args| if args.len() == 1 { args[0].clone() } else { Type::And(args) });
+    }
+
+    fn or_type_parser(&self) -> Parser<char, Type> {
+        return list(call(move || self.type_parser(false)), spaces() * sym('|')  * spaces()).name("Or type")
+            .map(|args| if args.len() == 1 { args[0].clone() } else { Type::Or(args) });
     }
 
     fn type_parser(&self, include_or: bool) -> Parser<char, Type> {
-        let spaces = || one_of(" \t\r\n").repeat(0..).discard();
-
-        let mut res = (sym('&').repeat(2) * spaces() * call(move || self.type_parser(true))).name("Mutable reference").map(|i| Type::MutRef(Box::new(i)))
-                    | (sym('&') * call(move || self.type_parser(true))).name("Constant reference").map(|i| Type::Ref(Box::new(i))) 
-                    | (self.type_name_parser() - spaces() + (
-                        sym('<') * spaces() * 
-                        list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces())
-                        - spaces() * sym('>')
-                    
-                    )).name("Template type").map(|(i, args)| {
-                        if let Type::Basic(id) = i {
-                            return Type::Template(id, args);
-                        }
-
-                        return Type::Empty;
-                    })
-                    | (sym('(') * spaces() * sym(')')).name("Empty type").map(|_| Type::Empty)
-                    | (sym('(') * spaces() * 
-                        list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces())
-                        - spaces() * sym(')')
-                        
-                    ).name("And type").map(|args| if args.len() == 1 { args[0].clone() } else { Type::And(args) });
+        let mut res = self.mutable_reference_type_parser()
+                    | self.constant_reference_type_parser()
+                    | self.parametric_type_parser()
+                    | self.empty_type_parser()
+                    | self.and_type_parser();
         
         // The or case is excluded in order to properly parse types without using parentheses
         if include_or {
-            res = res | list(call(move || self.type_parser(false)), spaces() * sym('|')  * spaces())
-                        .name("Or type")
-                        .map(|args| if args.len() == 1 { args[0].clone() } else { Type::Or(args) });
+            res = res | self.or_type_parser();
         }
         
-        res = res | sym('*').name("Wildcard type").map(|_| Type::Wildcard)
-                  | self.type_name_parser().name("Basic type");
+        res = res | self.wildcard_type_parser()
+                  | self.basic_type_parser();
 
         return res;
     }

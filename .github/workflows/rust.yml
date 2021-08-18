@@ -12,10 +12,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build
-      run: cargo build --release --verbose
+      run: cargo build --release
       
     - name: Run tests
-      run: cargo test --release --verbose
+      run: cargo test --release
       
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1

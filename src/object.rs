@@ -31,11 +31,27 @@ pub trait NessaObject {
 
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn to_string(&self) -> String;
+    fn equal_to(&self, b: &dyn NessaObject) -> bool;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Object {
     inner: Rc<RefCell<dyn NessaObject>>
+}
+
+impl std::fmt::Debug for dyn NessaObject {
+    fn fmt(&self, out: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        out.write_str(self.to_string().as_str()).unwrap();
+
+        return Ok(());
+    }
+}
+
+impl PartialEq for Object {
+    fn eq(&self, b: &Object) -> bool {
+        return self.inner.borrow().equal_to(&*b.inner.borrow());
+    }
 }
 
 impl Object {
@@ -170,6 +186,21 @@ impl NessaObject for Reference {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
     }
+
+    fn to_string(&self) -> String {
+        return self.inner.borrow().to_string();
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<Reference>();
+        let tb = b.as_any().downcast_ref::<Reference>();
+
+        if ta.is_some() && tb.is_some() {
+            return ta.unwrap().inner.borrow().equal_to(&*tb.unwrap().inner.borrow());
+        }
+
+        return false;
+    }
 }
 
 impl NessaObject for Number {
@@ -184,6 +215,17 @@ impl NessaObject for Number {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
     }
+
+    fn to_string(&self) -> String {
+        return self.to_string();
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<Number>();
+        let tb = b.as_any().downcast_ref::<Number>();
+
+        return ta == tb;
+    }
 }
 
 impl NessaObject for String {
@@ -197,6 +239,42 @@ impl NessaObject for String {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
+    }
+
+    fn to_string(&self) -> String {
+        return self.clone();
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<String>();
+        let tb = b.as_any().downcast_ref::<String>();
+
+        return ta == tb;
+    }
+}
+
+impl NessaObject for bool {
+    fn get_type_id(&self) -> usize {
+        return 2;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn to_string(&self) -> String {
+        return if *self { "true".into() } else { "false".into() };
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<bool>();
+        let tb = b.as_any().downcast_ref::<bool>();
+
+        return ta == tb;
     }
 }
 

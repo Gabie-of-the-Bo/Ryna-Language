@@ -1,6 +1,8 @@
 use pom::parser::*;
 
+use crate::object::Object;
 use crate::types::Type;
+use crate::number::*;
 use crate::context::NessaContext;
 
 /*
@@ -8,6 +10,27 @@ use crate::context::NessaContext;
     ============================================= │  IMPLEMENTATION  │ =============================================
                                                   ╘══════════════════╛
 */
+
+#[derive(Debug, PartialEq)]
+pub enum NessaExpr {
+    Literal(Object),
+    Variable(String),
+
+    UnaryOperation(Box<NessaExpr>),
+    BinaryOperation(Box<NessaExpr>, Box<NessaExpr>),
+    NaryOperation(Box<NessaExpr>, Vec<NessaExpr>),
+
+    VariableDefinition(String, Type, Box<NessaExpr>),
+    FunctionDefinition(String, Type, Type, Vec<NessaExpr>),
+    PrefixOperatorDefinition(String),
+    PostfixOperatorDefinition(String),
+    BinaryOperatorDefinition(String),
+    NaryOperatorDefinition(String, String),
+
+    If(Box<NessaExpr>, Vec<NessaExpr>),
+    For(Box<NessaExpr>, Box<NessaExpr>, Vec<NessaExpr>),
+    Return(Box<NessaExpr>)
+}
 
 fn spaces<'a>() -> Parser<'a, char, ()> {
     return one_of(" \t\r\n").repeat(0..).discard();
@@ -90,6 +113,54 @@ impl NessaContext {
 
         return res;
     }
+
+    /*
+        ╒═════════════════╕
+        │ Expr subparsers │
+        ╘═════════════════╛
+    */
+
+    fn variable_name_parser(&self) -> Parser<char, String> {
+        return is_a(|i: char| i.is_alphabetic()).repeat(1..).name("Variable name").map(move |n| n.iter().collect());
+    }
+
+    fn bool_parser(&self) -> Parser<char, bool> {
+        return (seq(&['t', 'r', 'u', 'e']) | seq(&['f', 'a', 'l', 's', 'e'])).map(|i| i[0] == 't');
+    }
+
+    fn number_parser(&self) -> Parser<char, Number> {
+        return (sym('-').opt() + is_a(|i: char| i.is_digit(10)).repeat(1..)).map(|(_, i)| Number::Int(Integer::from(i.iter().collect::<String>().as_str())));
+    }
+
+    fn string_parser(&self) -> Parser<char, String> {
+        return (sym('"').discard() * not_a(|i: char| i == '"').repeat(0..) - sym('"').discard()).map(|i| i.iter().collect());
+    }
+
+    fn literal_parser(&self) -> Parser<char, NessaExpr> {
+        return self.number_parser().name("Numeric literal").map(|i| NessaExpr::Literal(Object::new(i)))
+            | self.bool_parser().name("Boolean literal").map(|i| NessaExpr::Literal(Object::new(i)))
+            | self.string_parser().name("String literal").map(|i| NessaExpr::Literal(Object::new(i)))
+    }
+
+    fn variable_parser(&self) -> Parser<char, NessaExpr> {
+        return self.variable_name_parser().map(|i| NessaExpr::Variable(i));
+    }
+
+    fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            (spaces() * seq(&['l', 'e', 't']).discard() * spaces() * self.variable_name_parser()) +
+            ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true))).opt() - spaces() - sym('=').discard() - spaces()) +
+            (call(move || self.nessa_parser())) - 
+            spaces() - sym(';')
+        
+        ).map(|((n, t), v)| NessaExpr::VariableDefinition(n, t.unwrap_or(Type::Wildcard), Box::new(v)));
+    }
+
+    fn nessa_parser(&self) -> Parser<char, NessaExpr> {
+        return self.variable_definition_parser()
+            | self.literal_parser()
+            | self.variable_parser();
+    }
 }
 
 /*
@@ -102,6 +173,7 @@ impl NessaContext {
 mod tests {
     use crate::types::*;
     use crate::context::*;
+    use crate::parser::*;
 
     #[test]
     fn type_parsing() {
@@ -156,5 +228,51 @@ mod tests {
         assert_eq!(array, Type::Template(3, vec!(Type::Basic(0))));
         assert_eq!(map, Type::Template(4, vec!(Type::Basic(0), Type::Basic(1))));
         assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(4, vec!(Type::Ref(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(1))))))));
+    }
+
+    #[test]
+    fn literal_parsing() {
+        let ctx = standard_ctx();
+
+        let number_str = "123".chars().collect::<Vec<_>>();
+        let bool_v_str = "true".chars().collect::<Vec<_>>();
+        let string_str = "\"test\"".chars().collect::<Vec<_>>();
+
+        let parser = ctx.literal_parser();
+
+        let number = parser.parse(&number_str).unwrap();
+        let bool_v = parser.parse(&bool_v_str).unwrap();
+        let string = parser.parse(&string_str).unwrap();
+
+        assert_eq!(number, NessaExpr::Literal(Object::new(Number::from(123))));
+        assert_eq!(bool_v, NessaExpr::Literal(Object::new(true)));
+        assert_eq!(string, NessaExpr::Literal(Object::new("test".to_string())));
+    }
+
+    #[test]
+    fn variable_definition_parsing() {
+        let ctx = standard_ctx();
+
+        let def_1_str = "let var: Number = a;".chars().collect::<Vec<_>>();
+        let def_2_str = "let foo: Array<Number | &String> = 5;".chars().collect::<Vec<_>>();
+        let def_3_str = "let bar = \"test\";".chars().collect::<Vec<_>>();
+        let def_4_str = "let foobar = false;".chars().collect::<Vec<_>>();
+
+        let parser = ctx.variable_definition_parser();
+
+        let def_1 = parser.parse(&def_1_str).unwrap();
+        let def_2 = parser.parse(&def_2_str).unwrap();
+        let def_3 = parser.parse(&def_3_str).unwrap();
+        let def_4 = parser.parse(&def_4_str).unwrap();
+
+        assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::Variable("a".into()))));
+        assert_eq!(def_2, NessaExpr::VariableDefinition(
+                "foo".into(), 
+                Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
+                Box::new(NessaExpr::Literal(Object::new(Number::from(5))))
+            )
+        );
+        assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
+        assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(false)))));
     }
 }

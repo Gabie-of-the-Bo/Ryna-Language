@@ -1083,6 +1083,22 @@ impl From<&Number> for String {
     ╘══════════════════════════════════════╛
 */
 
+impl From<&str> for Number{
+    fn from(string: &str) -> Self{
+        if string.contains('.') {
+            return Number::Float(string.parse().unwrap());
+        }
+
+        return Number::Int(Integer::from(string));
+    }
+}
+
+impl From<String> for Number{
+    fn from(string: String) -> Self{
+        return Number::from(string.as_str());
+    }
+}
+
 impl From<Integer> for Number{
     fn from(obj: Integer) -> Number{
         return 

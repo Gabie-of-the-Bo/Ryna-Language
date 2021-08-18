@@ -131,7 +131,8 @@ impl NessaContext {
     }
 
     fn number_parser(&self) -> Parser<char, Number> {
-        return (sym('-').opt() + is_a(|i: char| i.is_digit(10)).repeat(1..)).map(|(_, i)| Number::Int(Integer::from(i.iter().collect::<String>().as_str())));
+        return (tag("-").opt() + is_a(|i: char| i.is_digit(10)).repeat(1..))
+            .map(|(s, i)| Number::from(format!("{}{}", s.unwrap_or(""), i.iter().collect::<String>())));
     }
 
     fn string_parser(&self) -> Parser<char, String> {

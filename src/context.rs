@@ -432,7 +432,7 @@ mod tests {
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_nary_operator("[".into(), "]".into(), 0);
+        let def_1 = ctx.define_nary_operator("`".into(), "´".into(), 0);
         let def_2 = ctx.define_nary_operator("(".into(), ")".into(), 0);
         let def_3 = ctx.define_nary_operator("{".into(), ")".into(), 0);
         let def_4 = ctx.define_nary_operator("(".into(), "}".into(), 0);

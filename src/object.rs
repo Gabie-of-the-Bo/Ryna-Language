@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::cell::*;
 
 use crate::number::Number;
+use crate::operations::Operator;
 use crate::context::NessaContext;
 use crate::types::Type;
 
@@ -288,12 +289,14 @@ impl Object {
     pub fn apply_unary_operation(a: &Object, id: usize, ctx: &NessaContext) -> Result<Object, String> {
         let ops = ctx.get_unary_operations(id, a.get_type());
 
-        if ops.len() == 0 {
-            return Err(format!("Unable to find unary operation {}{}", ctx.unary_ops[id].representation, a.get_type().get_name(&ctx)));
-        }
+        if let Operator::Unary{representation: r, ..} = &ctx.unary_ops[id] {
+            if ops.len() == 0 {
+                return Err(format!("Unable to find unary operation {}{}", r, a.get_type().get_name(&ctx)));
+            }
 
-        if ops.len() > 1 {
-            return Err(format!("Unary operation {}{} is ambiguous", ctx.unary_ops[id].representation, a.get_type().get_name(&ctx)));
+            if ops.len() > 1 {
+                return Err(format!("Unary operation {}{} is ambiguous", r, a.get_type().get_name(&ctx)));
+            }
         }
 
         return Ok(ops[0].2(a));
@@ -302,14 +305,16 @@ impl Object {
     pub fn apply_binary_operation(a: &Object, b: &Object, id: usize, ctx: &NessaContext) -> Result<Object, String> {
         let ops = ctx.get_binary_operations(id, a.get_type(), b.get_type());
 
-        if ops.len() == 0 {
-            return Err(format!("Unable to find binary operation {} {} {}", 
-                                a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
-        }
+        if let Operator::Binary{representation: r, ..} = &ctx.binary_ops[id] {
+            if ops.len() == 0 {
+                return Err(format!("Unable to find binary operation {} {} {}", 
+                                    a.get_type().get_name(&ctx), r, b.get_type().get_name(&ctx)));
+            }
 
-        if ops.len() > 1 {
-            return Err(format!("Binary operation {} {} {} is ambiguous", 
-                                a.get_type().get_name(&ctx), ctx.binary_ops[id].representation, b.get_type().get_name(&ctx)));
+            if ops.len() > 1 {
+                return Err(format!("Binary operation {} {} {} is ambiguous", 
+                                    a.get_type().get_name(&ctx), r, b.get_type().get_name(&ctx)));
+            }
         }
 
         return Ok(ops[0].2(a, b));
@@ -319,18 +324,18 @@ impl Object {
         let args_type = b.iter().map(|i| i.get_type()).collect::<Vec<_>>();
         let ops = ctx.get_nary_operations(id, a.get_type(), &args_type);
 
-        if ops.len() == 0 {
-            return Err(format!("Unable to find n-ary operation {}{}{}{}", 
-                                a.get_type().get_name(&ctx), ctx.nary_ops[id].open_rep, 
-                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "),
-                                ctx.nary_ops[id].close_rep));
-        }
-
-        if ops.len() > 1 {
-            return Err(format!("N-ary operation {}{}{}{} is ambiguous", 
-                                a.get_type().get_name(&ctx), ctx.nary_ops[id].open_rep, 
-                                args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "),
-                                ctx.nary_ops[id].close_rep));
+        if let Operator::Nary{open_rep: or, close_rep: cr, ..} = &ctx.nary_ops[id] {
+            if ops.len() == 0 {
+                return Err(format!("Unable to find n-ary operation {}{}{}{}", 
+                                    a.get_type().get_name(&ctx), or, 
+                                    args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "), cr));
+            }
+    
+            if ops.len() > 1 {
+                return Err(format!("N-ary operation {}{}{}{} is ambiguous", 
+                                    a.get_type().get_name(&ctx), or, 
+                                    args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "), cr));
+            }
         }
 
         return Ok(ops[0].2(a, b));

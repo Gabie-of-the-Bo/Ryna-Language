@@ -14,9 +14,9 @@ use crate::functions::*;
 pub struct NessaContext {
     pub type_templates: Vec<TypeTemplate>, 
 
-    pub unary_ops: Vec<UnaryOperator>,
-    pub binary_ops: Vec<BinaryOperator>,
-    pub nary_ops: Vec<NaryOperator>,
+    pub unary_ops: Vec<Operator>,
+    pub binary_ops: Vec<Operator>,
+    pub nary_ops: Vec<Operator>,
 
     pub functions: Vec<Function>,
 
@@ -53,43 +53,54 @@ impl NessaContext {
         ╘═════════════════════════════╛
     */
 
-    pub fn define_unary_operator(&mut self, representation: String) -> Result<(), String> {
+    pub fn define_unary_operator(&mut self, representation: String, precedence: usize) -> Result<(), String> {
         for o in &self.unary_ops {
-            if o.representation == representation {
-                return Err(format!("Unary operator \"{}\" is already defined", representation))
+            if let Operator::Unary{representation: r, ..} = o {
+                if *r == representation {
+                    return Err(format!("Unary operator \"{}\" is already defined", representation))
+                }
             }
         }
 
-        self.unary_ops.push(UnaryOperator {
+        self.unary_ops.push(Operator::Unary {
             id: self.unary_ops.len(),
             representation: representation,
             prefix: true,
+            precedence: precedence,
             operations: vec!()
         });
 
         return Ok(());
     }
 
-    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, Type, UnaryFunction)> {        
-        return self.unary_ops[id].operations.iter().filter(|(t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
+    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, Type, UnaryFunction)> {
+        if let Operator::Unary{operations: o, ..} = &self.unary_ops[id] {
+            return o.iter().filter(|(t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
+        }
+
+        return vec!();
     }
 
     pub fn define_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
         let op = &self.unary_ops[id];
 
-        for (t, _, _) in &op.operations{ // Check subsumption
-            if a.bindable_to(&t) {
-                return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
-                                    op.representation, a.get_name(self), op.representation, t.get_name(self)));
-            }
-
-            if t.bindable_to(&a) {
-                return Err(format!("Unary operation {}{} subsumes {}{}, so it cannot be defined", 
-                                    op.representation, a.get_name(self), op.representation, t.get_name(self)));
+        if let Operator::Unary{operations: o, representation: r, ..} = op {
+            for (t, _, _) in o { // Check subsumption
+                if a.bindable_to(&t) {
+                    return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
+                                        r, a.get_name(self), r, t.get_name(self)));
+                }
+    
+                if t.bindable_to(&a) {
+                    return Err(format!("Unary operation {}{} subsumes {}{}, so it cannot be defined", 
+                                        r, a.get_name(self), r, t.get_name(self)));
+                }
             }
         }
 
-        self.unary_ops[id].operations.push((a, ret, f));
+        if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
+            o.push((a, ret, f));
+        }
 
         return Ok(());
     }
@@ -100,16 +111,19 @@ impl NessaContext {
         ╘══════════════════════════════╛
     */
 
-    pub fn define_binary_operator(&mut self, representation: String) -> Result<(), String> {
+    pub fn define_binary_operator(&mut self, representation: String, precedence: usize) -> Result<(), String> {
         for o in &self.binary_ops {
-            if o.representation == representation {
-                return Err(format!("Binary operator \"{}\" is already defined", representation))
+            if let Operator::Binary{representation: r, ..} = o {
+                if *r == representation {
+                    return Err(format!("Binary operator \"{}\" is already defined", representation))
+                }
             }
         }
 
-        self.binary_ops.push(BinaryOperator {
+        self.binary_ops.push(Operator::Binary {
             id: self.binary_ops.len(),
             representation: representation,
+            precedence: precedence,
             operations: vec!()
         });
 
@@ -119,30 +133,38 @@ impl NessaContext {
     pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Type, Type, BinaryFunction)> {
         let and = Type::And(vec!(a, b));
 
-        return self.binary_ops[id].operations.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        if let Operator::Binary{operations: o, ..} = &self.binary_ops[id] {
+            return o.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        }
+
+        return vec!();
     }
 
     pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
-        for (t, _, _) in &op.operations{ // Check subsumption
-            if let Type::And(v) = t {
-                if and.bindable_to(&t) {
-                    return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
-                                        a.get_name(self), op.representation, b.get_name(self), 
-                                        v[0].get_name(self), op.representation, v[1].get_name(self)));
-                }
+        if let Operator::Binary{operations: o, representation: r, ..} = op {
+            for (t, _, _) in o { // Check subsumption
+                if let Type::And(v) = t {
+                    if and.bindable_to(&t) {
+                        return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
+                                            a.get_name(self), r, b.get_name(self), 
+                                            v[0].get_name(self), r, v[1].get_name(self)));
+                    }
 
-                if t.bindable_to(&and) {
-                    return Err(format!("Binary operation {} {} {} subsumes {} {} {}, so it cannot be defined", 
-                                        a.get_name(self), op.representation, b.get_name(self), 
-                                        v[0].get_name(self), op.representation, v[1].get_name(self)));
+                    if t.bindable_to(&and) {
+                        return Err(format!("Binary operation {} {} {} subsumes {} {} {}, so it cannot be defined", 
+                                            a.get_name(self), r, b.get_name(self), 
+                                            v[0].get_name(self), r, v[1].get_name(self)));
+                    }
                 }
             }
         }
 
-        self.binary_ops[id].operations.push((and, ret, f));
+        if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
+            o.push((and, ret, f));
+        }
 
         return Ok(());
     }
@@ -153,18 +175,21 @@ impl NessaContext {
         ╘═════════════════════════════╛
     */
 
-    pub fn define_nary_operator(&mut self, open_rep: String, close_rep: String) -> Result<(), String> {
+    pub fn define_nary_operator(&mut self, open_rep: String, close_rep: String, precedence: usize) -> Result<(), String> {
         for o in &self.nary_ops {
-            if o.open_rep == open_rep || o.close_rep == close_rep {
-                return Err(format!("N-ary operator \"{}{}\" has a syntax overlap with \"{}{}\", so it cannot be defined", 
-                                    open_rep, close_rep, o.open_rep, o.close_rep))
+            if let Operator::Nary{open_rep: or, close_rep: cr, ..} = o {
+                if *or == open_rep || *cr == close_rep {
+                    return Err(format!("N-ary operator \"{}{}\" has a syntax overlap with \"{}{}\", so it cannot be defined", 
+                                        open_rep, close_rep, or, cr))
+                }
             }
         }
 
-        self.nary_ops.push(NaryOperator {
+        self.nary_ops.push(Operator::Nary {
             id: self.nary_ops.len(),
             open_rep: open_rep,
             close_rep: close_rep,
+            precedence: precedence,
             operations: vec!()
         });
 
@@ -177,7 +202,11 @@ impl NessaContext {
 
         let and = Type::And(subtypes);
 
-        return self.nary_ops[id].operations.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        if let Operator::Nary{operations: o, ..} = &self.nary_ops[id] {
+            return o.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        }
+
+        return vec!();
     }
 
     pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
@@ -187,23 +216,27 @@ impl NessaContext {
         let and = Type::And(subtypes);
         let op = &self.nary_ops[id];
 
-        for (t, _, _) in &op.operations{ // Check subsumption
-            if let Type::And(v) = t {
-                if and.bindable_to(&t) {
-                    return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
-                                        from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
-                                        v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
-                }
+        if let Operator::Nary{operations: o, open_rep: or, close_rep: cr, ..} = op {
+            for (t, _, _) in o { // Check subsumption
+                if let Type::And(v) = t {
+                    if and.bindable_to(&t) {
+                        return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
+                                            from.get_name(self), or, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr, 
+                                            v[0].get_name(self), or, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr));
+                    }
 
-                if t.bindable_to(&and) {
-                    return Err(format!("N-ary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
-                                        from.get_name(self), op.open_rep, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep, 
-                                        v[0].get_name(self), op.open_rep, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), op.close_rep));
+                    if t.bindable_to(&and) {
+                        return Err(format!("N-ary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
+                                            from.get_name(self), or, args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr, 
+                                            v[0].get_name(self), or, v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr));
+                    }
                 }
             }
         }
 
-        self.nary_ops[id].operations.push((and, ret, f));
+        if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
+            o.push((and, ret, f));
+        }
 
         return Ok(());
     }
@@ -387,22 +420,22 @@ mod tests {
     fn operator_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_unary_operator("~".into());
-        let def_2 = ctx.define_unary_operator("-".into());
+        let def_1 = ctx.define_unary_operator("~".into(), 0);
+        let def_2 = ctx.define_unary_operator("-".into(), 0);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_binary_operator("-".into());
-        let def_2 = ctx.define_binary_operator("+".into());
+        let def_1 = ctx.define_binary_operator("-".into(), 0);
+        let def_2 = ctx.define_binary_operator("+".into(), 0);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_nary_operator("[".into(), "]".into());
-        let def_2 = ctx.define_nary_operator("(".into(), ")".into());
-        let def_3 = ctx.define_nary_operator("{".into(), ")".into());
-        let def_4 = ctx.define_nary_operator("(".into(), "}".into());
+        let def_1 = ctx.define_nary_operator("[".into(), "]".into(), 0);
+        let def_2 = ctx.define_nary_operator("(".into(), ")".into(), 0);
+        let def_3 = ctx.define_nary_operator("{".into(), ")".into(), 0);
+        let def_4 = ctx.define_nary_operator("(".into(), "}".into(), 0);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

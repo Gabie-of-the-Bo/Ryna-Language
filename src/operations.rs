@@ -19,26 +19,39 @@ pub type BinaryOperations = Vec<(Type, Type, BinaryFunction)>;
 pub type NaryOperations = Vec<(Type, Type, NaryFunction)>;
 
 #[derive(Clone)]
-pub struct UnaryOperator {
-    pub id: usize,
-    pub representation: String,
-    pub prefix: bool,
-    pub operations: UnaryOperations
+pub enum Operator {
+    Unary {
+        id: usize,
+        representation: String,
+        prefix: bool,
+        precedence: usize,
+        operations: UnaryOperations
+    },
+
+    Binary {
+        id: usize,
+        representation: String,
+        precedence: usize,
+        operations: BinaryOperations
+    },
+
+    Nary {
+        id: usize,
+        open_rep: String, // N-ary operators are only allowed to be enclosers, such as the call operator and the multidimensional index operator
+        close_rep: String,
+        precedence: usize,
+        operations: NaryOperations
+    }
 }
 
-#[derive(Clone)]
-pub struct BinaryOperator {
-    pub id: usize,
-    pub representation: String,
-    pub operations: BinaryOperations
-}
-
-#[derive(Clone)]
-pub struct NaryOperator {
-    pub id: usize,
-    pub open_rep: String, // N-ary operators are only allowed to be enclosers, such as the call operator and the multidimensional index operator
-    pub close_rep: String,
-    pub operations: NaryOperations
+impl Operator {
+    pub fn get_precedence(&self) -> usize {
+        return match self {
+            Operator::Unary { precedence: p, .. } => *p,
+            Operator::Binary { precedence: p, .. } => *p,
+            Operator::Nary { precedence: p, .. } => *p
+        }
+    }
 }
 
 /*
@@ -48,7 +61,7 @@ pub struct NaryOperator {
 */
 
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
-    ctx.define_unary_operator("-".into()).unwrap();
+    ctx.define_unary_operator("-".into(), 100).unwrap();
     
     ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();
@@ -61,7 +74,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 }
 
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
-    ctx.define_binary_operator("+".into()).unwrap();
+    ctx.define_binary_operator("+".into(), 200).unwrap();
 
     ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
@@ -79,5 +92,5 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 }
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
-    ctx.define_nary_operator("(".into(), ")".into()).unwrap();
+    ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
 }

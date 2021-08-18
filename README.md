@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language.svg?token=zsnBiFtqVx8k3FtzEqsQ&branch=develop)](https://travis-ci.com/Gabie-of-the-Bo/Nessa-Language) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
+[![Rust](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml/badge.svg)](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
 
 <p align="center">
   <img src="doc/img/logo.png" width="60%">

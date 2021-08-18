@@ -45,6 +45,14 @@ pub enum Operator {
 }
 
 impl Operator {
+    pub fn get_id(&self) -> usize {
+        return match self {
+            Operator::Unary { id, .. } => *id,
+            Operator::Binary { id, .. } => *id,
+            Operator::Nary { id, .. } => *id
+        }
+    }
+
     pub fn get_precedence(&self) -> usize {
         return match self {
             Operator::Unary { precedence: p, .. } => *p,
@@ -61,7 +69,8 @@ impl Operator {
 */
 
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
-    ctx.define_unary_operator("-".into(), 100).unwrap();
+    ctx.define_unary_operator("-".into(), true, 100).unwrap();
+    ctx.define_unary_operator("!".into(), true, 200).unwrap();
     
     ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();
@@ -75,6 +84,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("+".into(), 200).unwrap();
+    ctx.define_binary_operator("*".into(), 150).unwrap();
 
     ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
@@ -93,4 +103,5 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
+    ctx.define_nary_operator("[".into(), "]".into(), 50).unwrap();
 }

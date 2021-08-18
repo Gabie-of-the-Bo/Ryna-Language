@@ -1063,6 +1063,21 @@ pub enum Number {
 }
 
 /*
+    ╒════════════════════════════════════╕
+    │ Conversion routines to other types │
+    ╘════════════════════════════════════╛
+*/
+
+impl From<&Number> for String {
+    fn from(n: &Number) -> String {
+        return match n {
+            Number::Int(i) => i.to_string(),
+            Number::Float(f) => f.to_string(),
+        };
+    }
+}
+
+/*
     ╒══════════════════════════════════════╕
     │ Conversion routines from other types │
     ╘══════════════════════════════════════╛

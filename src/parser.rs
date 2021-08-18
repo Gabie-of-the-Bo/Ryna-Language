@@ -1,7 +1,9 @@
+use std::collections::HashSet;
 use pom::parser::*;
 
 use crate::object::Object;
 use crate::types::Type;
+use crate::operations::Operator;
 use crate::number::*;
 use crate::context::NessaContext;
 
@@ -16,9 +18,9 @@ pub enum NessaExpr {
     Literal(Object),
     Variable(String),
 
-    UnaryOperation(Box<NessaExpr>),
-    BinaryOperation(Box<NessaExpr>, Box<NessaExpr>),
-    NaryOperation(Box<NessaExpr>, Vec<NessaExpr>),
+    UnaryOperation(usize, Box<NessaExpr>),
+    BinaryOperation(usize, Box<NessaExpr>, Box<NessaExpr>),
+    NaryOperation(usize, Box<NessaExpr>, Vec<NessaExpr>),
 
     VariableDefinition(String, Type, Box<NessaExpr>),
     FunctionDefinition(String, Type, Type, Vec<NessaExpr>),
@@ -150,10 +152,107 @@ impl NessaContext {
         return (
             (spaces() * seq(&['l', 'e', 't']).discard() * spaces() * self.variable_name_parser()) +
             ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true))).opt() - spaces() - sym('=').discard() - spaces()) +
-            (call(move || self.nessa_parser())) - 
+            (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
             spaces() - sym(';')
         
         ).map(|((n, t), v)| NessaExpr::VariableDefinition(n, t.unwrap_or(Type::Wildcard), Box::new(v)));
+    }
+
+    fn unary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
+        let op = &self.unary_ops[id];
+
+        if let Operator::Unary{id, representation: r, ..} = op {
+            return (
+                tag(r.as_str()).map(move |_| id) + 
+                spaces() *
+                call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone()))
+            
+            ).map(|(id, expr)| NessaExpr::UnaryOperation(*id, Box::new(expr)));
+        }
+
+        unreachable!();
+    }
+
+    fn binary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
+        let op = &self.binary_ops[id];
+
+        if let Operator::Binary{id, representation: r, ..} = op {
+            let mut n_ex_2 = n_ex.clone();
+            let mut b_ex_2 = b_ex.clone();
+            b_ex_2.insert(*id);
+
+            return (
+                call(move || self.nessa_expr_parser(b_ex_2.clone(), n_ex_2.clone())) +
+                spaces() *
+                tag(r.as_str()).map(move |_| id) +
+                spaces() *
+                call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone()))                
+            
+            ).map(|((a, id), b)| NessaExpr::BinaryOperation(*id, Box::new(a), Box::new(b)));
+        }
+
+        unreachable!();
+    }
+
+    fn nary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
+        let op = &self.nary_ops[id];
+
+        if let Operator::Nary{id, open_rep: or, close_rep: cr, ..} = op {
+            let b_ex_2 = b_ex.clone();
+            let mut n_ex_2 = n_ex.clone();
+            n_ex_2.insert(*id);
+
+            return (
+                call(move || self.nessa_expr_parser(b_ex_2.clone(), n_ex_2.clone())) +
+                spaces() *
+                tag(or.as_str()).map(move |_| id) +
+                spaces() *
+                list(call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone())), spaces() * sym(',') * spaces()) -
+                tag(cr.as_str()).discard()
+            
+            ).map(|((a, id), b)| NessaExpr::NaryOperation(*id, Box::new(a), b));
+        }
+
+        unreachable!();
+    }
+
+    fn operation_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
+        let mut ops = self.unary_ops.iter().chain(&self.binary_ops).chain(&self.nary_ops).collect::<Vec<_>>();
+
+        // Sort by precedence in order to iterate from the first to the last 
+        ops.sort_by(|a, b| b.get_precedence().cmp(&a.get_precedence()));
+
+        let res = ops.iter()
+            .filter(|o| match o {
+                Operator::Binary{id, ..} if b_ex.contains(id) => false,
+                Operator::Nary{id, ..} if n_ex.contains(id) => false,
+                _ => true
+            })
+            .map(|o| match o {
+                Operator::Unary{id, ..} => self.unary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
+                Operator::Binary{id, ..} => self.binary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
+                Operator::Nary{id, ..} => self.nary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
+
+                _ => unreachable!()
+            })
+            .reduce(|a, b| a | b);
+
+        if let Some(p) = res {
+            return p;
+        }
+
+        unreachable!();
+    }
+
+    fn parenthesized_expr_parser(&self) -> Parser<char, NessaExpr> {
+        return sym('(') * spaces() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(')');
+    }
+    
+    fn nessa_expr_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
+        return self.parenthesized_expr_parser()
+            | self.operation_parser(b_ex, n_ex)
+            | self.literal_parser()
+            | self.variable_parser();
     }
 
     fn nessa_parser(&self) -> Parser<char, NessaExpr> {
@@ -274,5 +373,45 @@ mod tests {
         );
         assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
         assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(false)))));
+    }
+
+    #[test]
+    fn operation_parsing() {
+        let ctx = standard_ctx();
+
+        let number_str = "-10".chars().collect::<Vec<_>>();
+        let var_str = "-!a".chars().collect::<Vec<_>>();
+        let n_var_str = "-5 + a".chars().collect::<Vec<_>>();
+        let n_call_str = "5(-b + !10)".chars().collect::<Vec<_>>();
+
+        let parser = ctx.operation_parser(HashSet::new(), HashSet::new());
+
+        let number = parser.parse(&number_str).unwrap();
+        let var = parser.parse(&var_str).unwrap();
+        let n_var = parser.parse(&n_var_str).unwrap();
+        let n_call = parser.parse(&n_call_str).unwrap();
+
+        assert_eq!(number, NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
+        assert_eq!(
+            var, 
+            NessaExpr::UnaryOperation(0, 
+            Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Variable("a".into()))))
+        ));
+        assert_eq!(n_var, NessaExpr::BinaryOperation(
+            0, 
+            Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
+            Box::new(NessaExpr::Variable("a".into()))
+        ));
+        assert_eq!(n_call, NessaExpr::NaryOperation(
+            0, 
+            Box::new(NessaExpr::Literal(Object::new(Number::from(5)))),
+            vec!(
+                NessaExpr::BinaryOperation(
+                    0, 
+                    Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Variable("b".into())))),
+                    Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
+                )
+            )
+        ));
     }
 }

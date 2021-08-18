@@ -218,7 +218,7 @@ impl NessaObject for Number {
     }
 
     fn to_string(&self) -> String {
-        return self.to_string();
+        return String::from(self);
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {

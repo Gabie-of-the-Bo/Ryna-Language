@@ -53,7 +53,7 @@ impl NessaContext {
         ╘═════════════════════════════╛
     */
 
-    pub fn define_unary_operator(&mut self, representation: String, precedence: usize) -> Result<(), String> {
+    pub fn define_unary_operator(&mut self, representation: String, prefix: bool, precedence: usize) -> Result<(), String> {
         for o in &self.unary_ops {
             if let Operator::Unary{representation: r, ..} = o {
                 if *r == representation {
@@ -65,7 +65,7 @@ impl NessaContext {
         self.unary_ops.push(Operator::Unary {
             id: self.unary_ops.len(),
             representation: representation,
-            prefix: true,
+            prefix: prefix,
             precedence: precedence,
             operations: vec!()
         });
@@ -420,8 +420,8 @@ mod tests {
     fn operator_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_unary_operator("~".into(), 0);
-        let def_2 = ctx.define_unary_operator("-".into(), 0);
+        let def_1 = ctx.define_unary_operator("~".into(), true, 0);
+        let def_2 = ctx.define_unary_operator("-".into(), true, 0);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

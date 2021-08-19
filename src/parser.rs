@@ -16,7 +16,7 @@ use crate::context::NessaContext;
 #[derive(Debug, PartialEq)]
 pub enum NessaExpr {
     Literal(Object),
-    Variable(String),
+    NameReference(String),
 
     UnaryOperation(usize, Box<NessaExpr>),
     BinaryOperation(usize, Box<NessaExpr>, Box<NessaExpr>),
@@ -123,7 +123,10 @@ impl NessaContext {
     */
 
     fn variable_name_parser(&self) -> Parser<char, String> {
-        return is_a(|i: char| i.is_alphabetic()).repeat(1..).name("Variable name").map(move |n| n.iter().collect());
+        return (
+            is_a(|i: char| i.is_alphabetic() || i == '_').repeat(1..) + 
+            is_a(|i: char| i.is_alphanumeric() || i == '_').repeat(0..)
+        ).name("Variable name").map(move |(a, b)| format!("{}{}", a.iter().collect::<String>(), b.iter().collect::<String>()));
     }
 
     fn bool_parser(&self) -> Parser<char, bool> {
@@ -146,7 +149,7 @@ impl NessaContext {
     }
 
     fn variable_parser(&self) -> Parser<char, NessaExpr> {
-        return self.variable_name_parser().map(|i| NessaExpr::Variable(i));
+        return self.variable_name_parser().map(|i| NessaExpr::NameReference(i));
     }
 
     fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -157,6 +160,18 @@ impl NessaContext {
             spaces() - sym(';')
         
         ).map(|((n, t), v)| NessaExpr::VariableDefinition(n, t.unwrap_or(Type::Wildcard), Box::new(v)));
+    }
+
+    fn function_header_parser(&self) -> Parser<char, (String, Vec<(String, Type)>)> {
+        return (spaces() * tag("fn").discard() * spaces() * self.variable_name_parser()) +
+            (
+                spaces() * sym('(').discard() * spaces() * 
+                list(
+                    self.variable_name_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
+                    spaces() * sym(',') - spaces()
+                ) - 
+                spaces() - sym(')').discard() - spaces()
+            );
     }
 
     fn unary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
@@ -233,8 +248,6 @@ impl NessaContext {
                 Operator::Unary{id, ..} => self.unary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
                 Operator::Binary{id, ..} => self.binary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
                 Operator::Nary{id, ..} => self.nary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
-
-                _ => unreachable!()
             })
             .reduce(|a, b| a | b);
 
@@ -257,9 +270,7 @@ impl NessaContext {
     }
 
     fn nessa_parser(&self) -> Parser<char, NessaExpr> {
-        return self.variable_definition_parser()
-            | self.literal_parser()
-            | self.variable_parser();
+        return self.nessa_expr_parser(HashSet::new(), HashSet::new());
     }
 }
 
@@ -365,7 +376,7 @@ mod tests {
         let def_3 = parser.parse(&def_3_str).unwrap();
         let def_4 = parser.parse(&def_4_str).unwrap();
 
-        assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::Variable("a".into()))));
+        assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference("a".into()))));
         assert_eq!(def_2, NessaExpr::VariableDefinition(
                 "foo".into(), 
                 Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
@@ -396,12 +407,12 @@ mod tests {
         assert_eq!(
             var, 
             NessaExpr::UnaryOperation(0, 
-            Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Variable("a".into()))))
+            Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::NameReference("a".into()))))
         ));
         assert_eq!(n_var, NessaExpr::BinaryOperation(
             0, 
             Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
-            Box::new(NessaExpr::Variable("a".into()))
+            Box::new(NessaExpr::NameReference("a".into()))
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(
             0, 
@@ -409,9 +420,58 @@ mod tests {
             vec!(
                 NessaExpr::BinaryOperation(
                     0, 
-                    Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Variable("b".into())))),
+                    Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::NameReference("b".into())))),
                     Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
                 )
+            )
+        ));
+    }
+
+    #[test]
+    fn function_header_parsing() {
+        let ctx = standard_ctx();
+
+        let number_header_str = "fn test(a: Number)".chars().collect::<Vec<_>>();
+        let ref_header_str = "fn test_2(arg: &Number)".chars().collect::<Vec<_>>();
+        let two_args_header_str = "fn test_3(arg_1: &Number, arg_2: String | Number)".chars().collect::<Vec<_>>();
+        let complex_args_header_str = "fn test_4(a: String | &Number, b: &Array<(Bool, Number)>, c: &&*)".chars().collect::<Vec<_>>();
+
+        let parser = ctx.function_header_parser();
+
+        let number_header = parser.parse(&number_header_str).unwrap();
+        let ref_header = parser.parse(&ref_header_str).unwrap();
+        let two_args_header = parser.parse(&two_args_header_str).unwrap();
+        let complex_args_header = parser.parse(&complex_args_header_str).unwrap();
+
+        assert_eq!(number_header, ("test".into(), vec!(("a".into(), Type::Basic(0)))));
+        assert_eq!(ref_header, ("test_2".into(), vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0)))))));
+        assert_eq!(two_args_header, (
+            "test_3".into(), 
+            vec!(
+                ("arg_1".into(), Type::Ref(Box::new(Type::Basic(0)))),
+                ("arg_2".into(), Type::Or(vec!(
+                    Type::Basic(0),
+                    Type::Basic(1)
+                )))
+            )
+        ));
+        assert_eq!(complex_args_header, (
+            "test_4".into(), 
+            vec!(
+                ("a".into(), Type::Or(vec!(
+                    Type::Ref(Box::new(Type::Basic(0))),
+                    Type::Basic(1)
+                ))),
+                ("b".into(), Type::Ref(Box::new(
+                    Type::Template(
+                        3,
+                        vec!(Type::And(vec!(
+                            Type::Basic(2),
+                            Type::Basic(0)
+                        )))
+                    ))
+                )),
+                ("c".into(), Type::MutRef(Box::new(Type::Wildcard)))
             )
         ));
     }

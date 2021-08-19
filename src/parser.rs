@@ -38,6 +38,10 @@ fn spaces<'a>() -> Parser<'a, char, ()> {
     return one_of(" \t\r\n").repeat(0..).discard();
 }
 
+fn spaces_1<'a>() -> Parser<'a, char, ()> {
+    return one_of(" \t\r\n").repeat(1..).discard();
+}
+
 impl NessaContext {
     /*
         ╒═══════════════════╕
@@ -152,9 +156,17 @@ impl NessaContext {
         return self.variable_name_parser().map(|i| NessaExpr::NameReference(i));
     }
 
+    fn return_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("return") * spaces_1() * 
+            call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - 
+            spaces() - sym(';')
+        ).map(|e| NessaExpr::Return(Box::new(e)));
+    }
+
     fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (
-            (spaces() * seq(&['l', 'e', 't']).discard() * spaces() * self.variable_name_parser()) +
+            (spaces() * tag("let").discard() * spaces_1() * self.variable_name_parser()) +
             ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true))).opt() - spaces() - sym('=').discard() - spaces()) +
             (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
             spaces() - sym(';')
@@ -163,7 +175,7 @@ impl NessaContext {
     }
 
     fn function_header_parser(&self) -> Parser<char, (String, (Vec<(String, Type)>, Type))> {
-        return (spaces() * tag("fn").discard() * spaces() * self.variable_name_parser()) +
+        return (spaces() * tag("fn").discard() * spaces_1() * self.variable_name_parser()) +
             (
                 spaces() * sym('(').discard() * spaces() * 
                 list(
@@ -275,15 +287,16 @@ impl NessaContext {
     }
     
     fn nessa_expr_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        return self.parenthesized_expr_parser()
-            | self.operation_parser(b_ex, n_ex)
+        return call(move || self.parenthesized_expr_parser())
+            | call(move || self.operation_parser(b_ex.clone(), n_ex.clone()))
             | self.literal_parser()
             | self.variable_parser();
     }
 
     fn nessa_line_parser(&self) -> Parser<char, NessaExpr> {
-        return self.variable_definition_parser()
-            | self.nessa_expr_parser(HashSet::new(), HashSet::new()) - spaces() - sym(';');
+        return call(move || self.variable_definition_parser())
+            | call(move || self.return_parser())
+            | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
 }
 
@@ -502,5 +515,70 @@ mod tests {
                 )
             )
         ));
+    }
+
+    #[test]
+    fn function_definition_parsing() {
+        let ctx = standard_ctx();
+
+        let test_1_str = "
+        fn test() -> Number {
+            let res = 5;
+            return res;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let test_2_str = "
+        fn test_2(arg: &Number) -> Number | String {
+            let r: Number = arg + 1;
+            return r;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let parser = ctx.function_definition_parser();
+
+        let test_1 = parser.parse(&test_1_str).unwrap();
+        let test_2 = parser.parse(&test_2_str).unwrap();
+
+        assert_eq!(
+            test_1,
+            NessaExpr::FunctionDefinition(
+                "test".into(),
+                vec!(),
+                Type::Basic(0),
+                vec!(
+                    NessaExpr::VariableDefinition("res".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(Number::from(5))))),
+                    NessaExpr::Return(Box::new(NessaExpr::NameReference("res".into())))
+                )
+            ) 
+        );
+        assert_eq!(
+            test_2,
+            NessaExpr::FunctionDefinition(
+                "test_2".into(),
+                vec!(
+                    (
+                        "arg".into(), 
+                        Type::Ref(Box::new(Type::Basic(0)))
+                    )
+                ),
+                Type::Or(vec!(
+                    Type::Basic(0),
+                    Type::Basic(1)
+                )),
+                vec!(
+                    NessaExpr::VariableDefinition(
+                        "r".into(), 
+                        Type::Basic(0), 
+                        Box::new(NessaExpr::BinaryOperation(
+                            0,
+                            Box::new(NessaExpr::NameReference("arg".into())),
+                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                        ))
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::NameReference("r".into())))
+                )
+            ) 
+        );
     }
 }

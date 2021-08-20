@@ -187,6 +187,10 @@ impl NessaContext {
             );
     }
 
+    fn if_header_parser(&self) -> Parser<char, NessaExpr> {
+        return spaces() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
+    }
+
     fn code_block_parser(&self) -> Parser<char, Vec<NessaExpr>> {
         return spaces() * sym('{') * spaces() *
             list(call(move || self.nessa_line_parser()), spaces()) -
@@ -196,6 +200,11 @@ impl NessaContext {
     fn function_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (self.function_header_parser() + self.code_block_parser())
             .map(|((n, (a, r)), b)| NessaExpr::FunctionDefinition(n, a, r, b))
+    }
+
+    fn if_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.if_header_parser() + self.code_block_parser())
+            .map(|(h, b)| NessaExpr::If(Box::new(h), b))
     }
 
     fn unary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
@@ -296,6 +305,7 @@ impl NessaContext {
     fn nessa_line_parser(&self) -> Parser<char, NessaExpr> {
         return call(move || self.variable_definition_parser())
             | call(move || self.return_parser())
+            | call(move || self.if_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
 }
@@ -531,6 +541,11 @@ mod tests {
         let test_2_str = "
         fn test_2(arg: &Number) -> Number | String {
             let r: Number = arg + 1;
+
+            if r + 1 {
+                return \"a\";
+            }
+
             return r;
         }
         ".chars().collect::<Vec<_>>();
@@ -575,6 +590,16 @@ mod tests {
                             Box::new(NessaExpr::NameReference("arg".into())),
                             Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
                         ))
+                    ),
+                    NessaExpr::If(
+                        Box::new(NessaExpr::BinaryOperation(
+                            0,
+                            Box::new(NessaExpr::NameReference("r".into())),
+                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                        )),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new("a".to_string()))))
+                        )
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::NameReference("r".into())))
                 )

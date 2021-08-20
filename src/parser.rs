@@ -28,6 +28,7 @@ pub enum NessaExpr {
     PostfixOperatorDefinition(String, usize),
     BinaryOperatorDefinition(String, usize),
     NaryOperatorDefinition(String, String, usize),
+    ClassDefinition(String, Vec<String>,Vec<(String, Type)>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
@@ -53,6 +54,13 @@ impl NessaContext {
         return self.type_templates.iter().filter(|t| t.name == name).next().unwrap().id;
     }
 
+    fn identifier_parser(&self) -> Parser<char, String> {
+        return (
+            is_a(|i: char| i.is_alphabetic() || i == '_').repeat(1..) + 
+            is_a(|i: char| i.is_alphanumeric() || i == '_').repeat(0..)
+        ).name("Variable name").map(move |(a, b)| format!("{}{}", a.iter().collect::<String>(), b.iter().collect::<String>()));
+    }
+
     /*
         ╒═════════════════╕
         │ Type subparsers │
@@ -60,7 +68,11 @@ impl NessaContext {
     */
 
     fn basic_type_parser(&self) -> Parser<char, Type> {
-        return is_a(|i: char| i.is_alphabetic()).repeat(1..).name("Basic type").map(move |n| Type::Basic(self.get_type_id(n.iter().collect())));
+        return self.identifier_parser().map(move |n| Type::Basic(self.get_type_id(n)));
+    }
+
+    fn template_type_parser(&self) -> Parser<char, Type> {
+        return sym('\'') * self.identifier_parser().map(move |n| Type::TemplateParamStr(n));
     }
 
     fn constant_reference_type_parser(&self) -> Parser<char, Type> {
@@ -115,6 +127,7 @@ impl NessaContext {
         }
         
         res = res | self.wildcard_type_parser()
+                  | self.template_type_parser()
                   | self.basic_type_parser();
 
         return res;
@@ -125,13 +138,6 @@ impl NessaContext {
         │ Expr subparsers │
         ╘═════════════════╛
     */
-
-    fn variable_name_parser(&self) -> Parser<char, String> {
-        return (
-            is_a(|i: char| i.is_alphabetic() || i == '_').repeat(1..) + 
-            is_a(|i: char| i.is_alphanumeric() || i == '_').repeat(0..)
-        ).name("Variable name").map(move |(a, b)| format!("{}{}", a.iter().collect::<String>(), b.iter().collect::<String>()));
-    }
 
     fn bool_parser(&self) -> Parser<char, bool> {
         return (seq(&['t', 'r', 'u', 'e']) | seq(&['f', 'a', 'l', 's', 'e'])).map(|i| i[0] == 't');
@@ -153,7 +159,7 @@ impl NessaContext {
     }
 
     fn variable_parser(&self) -> Parser<char, NessaExpr> {
-        return self.variable_name_parser().map(|i| NessaExpr::NameReference(i));
+        return self.identifier_parser().map(|i| NessaExpr::NameReference(i));
     }
 
     fn return_parser(&self) -> Parser<char, NessaExpr> {
@@ -166,7 +172,7 @@ impl NessaContext {
 
     fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (
-            (spaces() * tag("let").discard() * spaces_1() * self.variable_name_parser()) +
+            (spaces() * tag("let").discard() * spaces_1() * self.identifier_parser()) +
             ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true))).opt() - spaces() - sym('=').discard() - spaces()) +
             (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
             spaces() - sym(';')
@@ -175,16 +181,40 @@ impl NessaContext {
     }
 
     fn function_header_parser(&self) -> Parser<char, (String, (Vec<(String, Type)>, Type))> {
-        return (spaces() * tag("fn").discard() * spaces_1() * self.variable_name_parser()) +
+        return (spaces() * tag("fn").discard() * spaces_1() * self.identifier_parser()) +
             (
                 spaces() * sym('(').discard() * spaces() * 
                 list(
-                    self.variable_name_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
+                    self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
                     spaces() * sym(',') - spaces()
                 ) + 
                 (spaces() - sym(')').discard() - spaces()) *
                 spaces() * tag("->") * spaces() * call(move || self.type_parser(true))
             );
+    }
+
+    fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("class").discard() * spaces_1() * self.identifier_parser() - spaces() +
+            (
+                spaces() * sym('<') * spaces() *
+                list(self.identifier_parser(), spaces() * sym(',') * spaces()) -
+                spaces() * sym('>') * spaces()
+            ).opt() - spaces() * sym('{') * spaces() +
+            list(
+                self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - spaces() * sym(';'), 
+                spaces()
+            ) -
+            spaces() * sym('}') * spaces()
+        
+        ).map(|((n, t), a)| NessaExpr::ClassDefinition(n, t.unwrap_or_default(), a)).map(|mut c| match &mut c {
+            NessaExpr::ClassDefinition(_, temp, a) => {
+                a.into_iter().for_each(|(_, t)| t.compile_templates(&temp));
+                return c;
+            },
+
+            _ => unreachable!()
+        });
     }
 
     fn if_header_parser(&self) -> Parser<char, NessaExpr> {
@@ -237,7 +267,7 @@ impl NessaContext {
     }
 
     fn for_header_parser(&self) -> Parser<char, (String, NessaExpr)> {
-        return spaces() * tag("for").discard() * spaces_1() * self.variable_name_parser() - spaces_1() * tag("in").discard() * spaces_1() +
+        return spaces() * tag("for").discard() * spaces_1() * self.identifier_parser() - spaces_1() * tag("in").discard() * spaces_1() +
             call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
     }
 
@@ -377,6 +407,7 @@ impl NessaContext {
             | call(move || self.return_parser())
             | call(move || self.if_parser())
             | call(move || self.for_parser())
+            | call(move || self.class_definition_parser())
             | call(move || self.function_definition_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
@@ -711,5 +742,47 @@ mod tests {
         assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition("&".into(), 300));
         assert_eq!(binary, NessaExpr::BinaryOperatorDefinition("$".into(), 400));
         assert_eq!(nary, NessaExpr::NaryOperatorDefinition("`".into(), "´".into(), 500));
+    }
+
+    #[test]
+    fn class_definition_parsing() {
+        let ctx = standard_ctx();
+
+        let dice_roll_str = "
+        class DiceRoll {
+            faces: Number;
+            rolls: Number;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let sync_lists_str = "
+        class SyncLists<K, V> {
+            from: Array<'K>;
+            to: Array<'V>;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let parser = ctx.class_definition_parser();
+
+        let dice_roll = parser.parse(&dice_roll_str).unwrap();
+        let sync_lists = parser.parse(&sync_lists_str).unwrap();
+
+        assert_eq!(dice_roll, NessaExpr::ClassDefinition(
+            "DiceRoll".into(),
+            vec!(),
+            vec!(
+                ("faces".into(), Type::Basic(0)),
+                ("rolls".into(), Type::Basic(0))
+            )
+        ));
+
+        assert_eq!(sync_lists, NessaExpr::ClassDefinition(
+            "SyncLists".into(),
+            vec!("K".into(), "V".into()),
+            vec!(
+                ("from".into(), Type::Template(3, vec!(Type::TemplateParam(0)))),
+                ("to".into(), Type::Template(3, vec!(Type::TemplateParam(1))))
+            )
+        ));
     }
 }

@@ -35,6 +35,7 @@ pub enum Type {
     // Parametric types
     Wildcard,
     TemplateParam(usize),
+    TemplateParamStr(String),
     Template(usize, Vec<Type>),
 
     // Function type
@@ -75,7 +76,8 @@ impl Type {
 
             Type::Wildcard => "*".into(),
 
-            Type::TemplateParam(id) => format!("T_{}", id),
+            Type::TemplateParam(id) => format!("'T_{}", id),
+            Type::TemplateParamStr(name) => format!("'{}", name),
             Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.clone(), 
                                                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
             Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
@@ -152,6 +154,27 @@ impl Type {
             Type::Function(f, t) => f.template_cyclic_reference_check(t_id, t_deps) && t.template_cyclic_reference_check(t_id, t_deps),
 
             _ => true
+        }
+    }
+
+    pub fn compile_templates(&mut self, templates: &Vec<String>) {
+        return match self {
+            Type::Ref(t) => t.compile_templates(templates),
+            Type::MutRef(t) => t.compile_templates(templates),
+
+            Type::Or(v) => v.iter_mut().for_each(|i| i.compile_templates(templates)),
+            Type::And(v) => v.iter_mut().for_each(|i| i.compile_templates(templates)),
+            
+            Type::TemplateParamStr(name) => *self = Type::TemplateParam(templates.iter().position(|i| i == name).unwrap()),
+            
+            Type::Template(_, v) => v.iter_mut().for_each(|i| i.compile_templates(templates)),
+
+            Type::Function(f, t) => {
+                f.compile_templates(templates); 
+                t.compile_templates(templates)
+            },
+
+            _ => { }
         }
     }
 }

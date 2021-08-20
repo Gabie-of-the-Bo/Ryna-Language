@@ -30,7 +30,7 @@ pub enum NessaExpr {
     NaryOperatorDefinition(String, String),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
-    For(Box<NessaExpr>, Box<NessaExpr>, Vec<NessaExpr>),
+    For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
 }
 
@@ -191,6 +191,11 @@ impl NessaContext {
         return spaces() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
     }
 
+    fn for_header_parser(&self) -> Parser<char, (String, NessaExpr)> {
+        return spaces() * tag("for").discard() * spaces_1() * self.variable_name_parser() - spaces_1() * tag("in").discard() * spaces_1() +
+            call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
+    }
+
     fn code_block_parser(&self) -> Parser<char, Vec<NessaExpr>> {
         return spaces() * sym('{') * spaces() *
             list(call(move || self.nessa_line_parser()), spaces()) -
@@ -205,6 +210,11 @@ impl NessaContext {
     fn if_parser(&self) -> Parser<char, NessaExpr> {
         return (self.if_header_parser() + self.code_block_parser())
             .map(|(h, b)| NessaExpr::If(Box::new(h), b))
+    }
+
+    fn for_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.for_header_parser() + self.code_block_parser())
+            .map(|((i, c), b)| NessaExpr::For(i, Box::new(c), b))
     }
 
     fn unary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
@@ -306,6 +316,7 @@ impl NessaContext {
         return call(move || self.variable_definition_parser())
             | call(move || self.return_parser())
             | call(move || self.if_parser())
+            | call(move || self.for_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
 }
@@ -534,6 +545,11 @@ mod tests {
         let test_1_str = "
         fn test() -> Number {
             let res = 5;
+
+            for i in arr {
+                return 7;
+            }
+
             return res;
         }
         ".chars().collect::<Vec<_>>();
@@ -563,6 +579,13 @@ mod tests {
                 Type::Basic(0),
                 vec!(
                     NessaExpr::VariableDefinition("res".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(Number::from(5))))),
+                    NessaExpr::For(
+                        "i".into(),
+                        Box::new(NessaExpr::NameReference("arr".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(7)))))
+                        )
+                    ),
                     NessaExpr::Return(Box::new(NessaExpr::NameReference("res".into())))
                 )
             ) 

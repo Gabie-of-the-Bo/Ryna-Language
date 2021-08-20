@@ -24,10 +24,10 @@ pub enum NessaExpr {
 
     VariableDefinition(String, Type, Box<NessaExpr>),
     FunctionDefinition(String, Vec<(String, Type)>, Type, Vec<NessaExpr>),
-    PrefixOperatorDefinition(String),
-    PostfixOperatorDefinition(String),
-    BinaryOperatorDefinition(String),
-    NaryOperatorDefinition(String, String),
+    PrefixOperatorDefinition(String, usize),
+    PostfixOperatorDefinition(String, usize),
+    BinaryOperatorDefinition(String, usize),
+    NaryOperatorDefinition(String, String, usize),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
@@ -191,6 +191,51 @@ impl NessaContext {
         return spaces() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
     }
 
+    fn unary_prefix_operator_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("unary").discard() * spaces_1() * tag("prefix").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
+            self.string_parser() +
+            spaces() * sym('(') * spaces() * 
+            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
+            spaces() * sym(')') * spaces() * sym(';')
+
+        ).map(|(n, p)| NessaExpr::PrefixOperatorDefinition(n, p));
+    }
+
+    fn unary_postfix_operator_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("unary").discard() * spaces_1() * tag("postfix").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
+            self.string_parser() +
+            spaces() * sym('(') * spaces() * 
+            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
+            spaces() * sym(')') * spaces() * sym(';')
+
+        ).map(|(n, p)| NessaExpr::PostfixOperatorDefinition(n, p));
+    }
+
+    fn binary_operator_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("binary").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
+            self.string_parser() +
+            spaces() * sym('(') * spaces() * 
+            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
+            spaces() * sym(')') * spaces() * sym(';')
+
+        ).map(|(n, p)| NessaExpr::BinaryOperatorDefinition(n, p));
+    }
+
+    fn nary_operator_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            spaces() * tag("nary").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
+            tag("from").discard() * spaces_1() * self.string_parser() - spaces_1() +
+            tag("to").discard() * spaces_1() * self.string_parser() - spaces_1() +
+            spaces() * sym('(') * spaces() * 
+            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
+            spaces() * sym(')') * spaces() * sym(';')
+
+        ).map(|((o, c), p)| NessaExpr::NaryOperatorDefinition(o, c, p));
+    }
+
     fn for_header_parser(&self) -> Parser<char, (String, NessaExpr)> {
         return spaces() * tag("for").discard() * spaces_1() * self.variable_name_parser() - spaces_1() * tag("in").discard() * spaces_1() +
             call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
@@ -236,7 +281,7 @@ impl NessaContext {
         let op = &self.binary_ops[id];
 
         if let Operator::Binary{id, representation: r, ..} = op {
-            let mut n_ex_2 = n_ex.clone();
+            let n_ex_2 = n_ex.clone();
             let mut b_ex_2 = b_ex.clone();
             b_ex_2.insert(*id);
 
@@ -305,6 +350,13 @@ impl NessaContext {
         return sym('(') * spaces() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(')');
     }
     
+    fn operator_defition_parser(&self) -> Parser<char, NessaExpr> {
+        return self.unary_prefix_operator_parser()
+            | self.unary_postfix_operator_parser()
+            | self.binary_operator_parser()
+            | self.nary_operator_parser();
+    }
+
     fn nessa_expr_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
         return call(move || self.parenthesized_expr_parser())
             | call(move || self.operation_parser(b_ex.clone(), n_ex.clone()))
@@ -317,6 +369,15 @@ impl NessaContext {
             | call(move || self.return_parser())
             | call(move || self.if_parser())
             | call(move || self.for_parser())
+            | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
+    }
+
+    fn nessa_global_parser(&self) -> Parser<char, NessaExpr> {
+        return call(move || self.variable_definition_parser())
+            | call(move || self.return_parser())
+            | call(move || self.if_parser())
+            | call(move || self.for_parser())
+            | call(move || self.function_definition_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
 }
@@ -539,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    fn function_definition_parsing() {
+    fn function_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
         let test_1_str = "
@@ -628,5 +689,27 @@ mod tests {
                 )
             ) 
         );
+    }
+
+    #[test]
+    fn operator_definition_and_flow_control_parsing() {
+        let ctx = standard_ctx();
+
+        let prefix_str = "unary prefix op \"~\" (200);".chars().collect::<Vec<_>>();
+        let postfix_str = "unary postfix op \"&\" (300);".chars().collect::<Vec<_>>();
+        let binary_str = "binary op \"$\" (400);".chars().collect::<Vec<_>>();
+        let nary_str = "nary op from \"`\" to \"´\" (500);".chars().collect::<Vec<_>>();
+
+        let parser = ctx.operator_defition_parser();
+
+        let prefix = parser.parse(&prefix_str).unwrap();
+        let postfix = parser.parse(&postfix_str).unwrap();
+        let binary = parser.parse(&binary_str).unwrap();
+        let nary = parser.parse(&nary_str).unwrap();
+
+        assert_eq!(prefix, NessaExpr::PrefixOperatorDefinition("~".into(), 200));
+        assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition("&".into(), 300));
+        assert_eq!(binary, NessaExpr::BinaryOperatorDefinition("$".into(), 400));
+        assert_eq!(nary, NessaExpr::NaryOperatorDefinition("`".into(), "´".into(), 500));
     }
 }

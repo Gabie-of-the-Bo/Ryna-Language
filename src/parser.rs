@@ -30,6 +30,8 @@ pub enum NessaExpr {
     NaryOperatorDefinition(String, String, usize),
     ClassDefinition(String, Vec<String>,Vec<(String, Type)>),
 
+    PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
+
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
@@ -191,6 +193,30 @@ impl NessaContext {
                 (spaces() - sym(')').discard() - spaces()) *
                 spaces() * tag("->") * spaces() * call(move || self.type_parser(true))
             );
+    }
+
+    fn unary_prefix_operation_header_parser(&self) -> Parser<char, (((usize, String), Type), Type)> {
+        return spaces() * tag("op").discard() * spaces_1() * 
+            self.unary_ops.iter().map(|i| {
+                if let Operator::Unary{representation: r, id, ..} = i {
+                    return tag(r.as_str()).map(move |_| *id);
+                }
+
+                unreachable!();
+            }).reduce(|a, b| a | b).unwrap() - spaces() +
+            sym('(') * spaces() *
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            spaces() * sym(')') * spaces() +
+            tag("->") * spaces() * call(move || self.type_parser(true));
+    }
+
+    fn unary_prefix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.unary_prefix_operation_header_parser() + self.code_block_parser())
+            .map(|((((id, n), t), r), b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b))
+    }
+
+    fn operation_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return self.unary_prefix_operation_definition_parser();
     }
 
     fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -409,6 +435,7 @@ impl NessaContext {
             | call(move || self.for_parser())
             | call(move || self.class_definition_parser())
             | call(move || self.function_definition_parser())
+            | call(move || self.operation_definition_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
     }
 }
@@ -742,6 +769,44 @@ mod tests {
         assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition("&".into(), 300));
         assert_eq!(binary, NessaExpr::BinaryOperatorDefinition("$".into(), 400));
         assert_eq!(nary, NessaExpr::NaryOperatorDefinition("`".into(), "´".into(), 500));
+    }
+
+    #[test]
+    fn operation_definition_and_flow_control_parsing() {
+        let ctx = standard_ctx();
+
+        let test_1_str = "
+        op !(arg: Bool) -> Bool {
+            if arg {
+                return false;
+            }
+
+            return true;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let parser = ctx.unary_prefix_operation_definition_parser();
+
+        let test_1 = parser.parse(&test_1_str).unwrap();
+
+        assert_eq!(
+            test_1,
+            NessaExpr::PrefixOperationDefinition(
+                1,
+                "arg".into(),
+                Type::Basic(2),
+                Type::Basic(2),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("arg".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
+                        )
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                )
+            ) 
+        );
     }
 
     #[test]

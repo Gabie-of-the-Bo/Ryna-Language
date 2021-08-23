@@ -31,6 +31,7 @@ pub enum NessaExpr {
     ClassDefinition(String, Vec<String>,Vec<(String, Type)>),
 
     PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
+    PostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
@@ -197,7 +198,15 @@ impl NessaContext {
 
     fn unary_prefix_operation_header_parser(&self) -> Parser<char, (((usize, String), Type), Type)> {
         return spaces() * tag("op").discard() * spaces_1() * 
-            self.unary_ops.iter().map(|i| {
+            self.unary_ops.iter()
+            .filter(|i| {
+                if let Operator::Unary{prefix, ..} = i {
+                    return *prefix;
+                }
+
+                unreachable!();
+            })
+            .map(|i| {
                 if let Operator::Unary{representation: r, id, ..} = i {
                     return tag(r.as_str()).map(move |_| *id);
                 }
@@ -210,13 +219,42 @@ impl NessaContext {
             tag("->") * spaces() * call(move || self.type_parser(true));
     }
 
+    fn unary_postfix_operation_header_parser(&self) -> Parser<char, (((String, Type), usize), Type)> {
+        return spaces() * tag("op").discard() * spaces_1() * 
+            sym('(') * spaces() *
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            spaces() * sym(')') * spaces() +
+            self.unary_ops.iter()
+            .filter(|i| {
+                if let Operator::Unary{prefix, ..} = i {
+                    return !*prefix;
+                }
+
+                unreachable!();
+            })
+            .map(|i| {
+                if let Operator::Unary{representation: r, id, ..} = i {
+                    return tag(r.as_str()).map(move |_| *id);
+                }
+
+                unreachable!();
+            }).reduce(|a, b| a | b).unwrap() - spaces() +
+            tag("->") * spaces() * call(move || self.type_parser(true));
+    }
+
     fn unary_prefix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (self.unary_prefix_operation_header_parser() + self.code_block_parser())
             .map(|((((id, n), t), r), b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b))
     }
 
+    fn unary_postfix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.unary_postfix_operation_header_parser() + self.code_block_parser())
+            .map(|((((n, t), id), r), b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b))
+    }
+
     fn operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return self.unary_prefix_operation_definition_parser();
+        return self.unary_prefix_operation_definition_parser()
+            | self.unary_postfix_operation_definition_parser();
     }
 
     fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -785,9 +823,24 @@ mod tests {
         }
         ".chars().collect::<Vec<_>>();
 
-        let parser = ctx.unary_prefix_operation_definition_parser();
+        let test_2_str = "
+        op (arg: Bool)? -> Number | Bool {
+            if arg {
+                return 5;
+            }
+
+            for i in arr {
+                return i;
+            }
+
+            return true;
+        }
+        ".chars().collect::<Vec<_>>();
+
+        let parser = ctx.operation_definition_parser();
 
         let test_1 = parser.parse(&test_1_str).unwrap();
+        let test_2 = parser.parse(&test_2_str).unwrap();
 
         assert_eq!(
             test_1,
@@ -801,6 +854,35 @@ mod tests {
                         Box::new(NessaExpr::NameReference("arg".into())),
                         vec!(
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
+                        )
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                )
+            ) 
+        );
+
+        assert_eq!(
+            test_2,
+            NessaExpr::PostfixOperationDefinition(
+                2,
+                "arg".into(),
+                Type::Basic(2),
+                Type::Or(vec!(
+                    Type::Basic(0),
+                    Type::Basic(2)
+                )),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("arg".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                        )
+                    ),
+                    NessaExpr::For(
+                        "i".into(),
+                        Box::new(NessaExpr::NameReference("arr".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::NameReference("i".into())))
                         )
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))

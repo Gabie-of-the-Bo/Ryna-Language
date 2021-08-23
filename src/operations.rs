@@ -71,6 +71,7 @@ impl Operator {
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 100).unwrap();
     ctx.define_unary_operator("!".into(), true, 200).unwrap();
+    ctx.define_unary_operator("?".into(), false, 200).unwrap();
     
     ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();

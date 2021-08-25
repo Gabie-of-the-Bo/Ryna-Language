@@ -32,6 +32,7 @@ pub enum NessaExpr {
 
     PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
+    BinaryOperationDefinition(usize, (String, Type), (String, Type), Type, Vec<NessaExpr>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
@@ -143,7 +144,7 @@ impl NessaContext {
     */
 
     fn bool_parser(&self) -> Parser<char, bool> {
-        return (seq(&['t', 'r', 'u', 'e']) | seq(&['f', 'a', 'l', 's', 'e'])).map(|i| i[0] == 't');
+        return (tag("true") | tag("false")).map(|i| i == "true");
     }
 
     fn number_parser(&self) -> Parser<char, Number> {
@@ -152,7 +153,7 @@ impl NessaContext {
     }
 
     fn string_parser(&self) -> Parser<char, String> {
-        return (sym('"').discard() * not_a(|i: char| i == '"').repeat(0..) - sym('"').discard()).map(|i| i.iter().collect());
+        return (sym('"').discard() * none_of("\"").repeat(0..) - sym('"').discard()).map(|i| i.iter().collect());
     }
 
     fn literal_parser(&self) -> Parser<char, NessaExpr> {
@@ -242,6 +243,26 @@ impl NessaContext {
             tag("->") * spaces() * call(move || self.type_parser(true));
     }
 
+    fn binary_operation_header_parser(&self) -> Parser<char, (((((String, Type), usize), String), Type), Type)> {
+        return spaces() * tag("op").discard() * spaces_1() * 
+            sym('(') * spaces() *
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            spaces() * sym(')') * spaces() +
+            self.binary_ops.iter()
+            .map(|i| {
+                if let Operator::Binary{representation: r, id, ..} = i {
+                    println!("{}", id);
+                    return tag(r.as_str()).map(move |_| *id);
+                }
+
+                unreachable!();
+            }).reduce(|a, b| a | b).unwrap() - spaces() +
+            sym('(') * spaces() *
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            spaces() * sym(')') * spaces() +
+            tag("->") * spaces() * call(move || self.type_parser(true));
+    }
+
     fn unary_prefix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (self.unary_prefix_operation_header_parser() + self.code_block_parser())
             .map(|((((id, n), t), r), b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b))
@@ -252,9 +273,15 @@ impl NessaContext {
             .map(|((((n, t), id), r), b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b))
     }
 
+    fn binary_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.binary_operation_header_parser() + self.code_block_parser())
+            .map(|((((((n1, t1), id), n2), t2), r), b)| NessaExpr::BinaryOperationDefinition(id, (n1, t1), (n2, t2), r, b))
+    }
+
     fn operation_definition_parser(&self) -> Parser<char, NessaExpr> {
         return self.unary_prefix_operation_definition_parser()
-            | self.unary_postfix_operation_definition_parser();
+            | self.unary_postfix_operation_definition_parser()
+            | self.binary_operation_definition_parser();
     }
 
     fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -837,10 +864,29 @@ mod tests {
         }
         ".chars().collect::<Vec<_>>();
 
+        let test_3_str = "
+        op (a: Bool) + (b: Bool) -> Number {
+            if a {
+                if b {
+                    return 2;
+                }
+
+                return 1;
+            }
+
+            if b {
+                return 1;
+            }
+
+            return 0;
+        }
+        ".chars().collect::<Vec<_>>();
+
         let parser = ctx.operation_definition_parser();
 
         let test_1 = parser.parse(&test_1_str).unwrap();
         let test_2 = parser.parse(&test_2_str).unwrap();
+        let test_3 = parser.parse(&test_3_str).unwrap();
 
         assert_eq!(
             test_1,
@@ -886,6 +932,37 @@ mod tests {
                         )
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                )
+            ) 
+        );
+
+        assert_eq!(
+            test_3,
+            NessaExpr::BinaryOperationDefinition(
+                0,
+                ("a".into(), Type::Basic(2)),
+                ("b".into(), Type::Basic(2)),
+                Type::Basic(0),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("a".into())),
+                        vec!(
+                            NessaExpr::If(
+                                Box::new(NessaExpr::NameReference("b".into())),
+                                vec!(
+                                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(2)))))
+                                )
+                            ),
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                        )
+                    ),
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("b".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                        )
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
                 )
             ) 
         );

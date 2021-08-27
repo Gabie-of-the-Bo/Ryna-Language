@@ -35,7 +35,7 @@ pub enum NessaExpr {
     BinaryOperationDefinition(usize, (String, Type), (String, Type), Type, Vec<NessaExpr>),
     NaryOperationDefinition(usize, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
-    If(Box<NessaExpr>, Vec<NessaExpr>),
+    If(Box<NessaExpr>, Vec<NessaExpr>, Option<Vec<NessaExpr>>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
 }
@@ -348,6 +348,10 @@ impl NessaContext {
         return spaces() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
     }
 
+    fn else_header_parser(&self) -> Parser<char, ()> {
+        return spaces() * tag("else").discard() * spaces();
+    }
+
     fn unary_prefix_operator_parser(&self) -> Parser<char, NessaExpr> {
         return (
             spaces() * tag("unary").discard() * spaces_1() * tag("prefix").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
@@ -410,8 +414,8 @@ impl NessaContext {
     }
 
     fn if_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.if_header_parser() + self.code_block_parser())
-            .map(|(h, b)| NessaExpr::If(Box::new(h), b))
+        return (self.if_header_parser() + self.code_block_parser() + (self.else_header_parser() * self.code_block_parser()).opt())
+            .map(|((h, b), e)| NessaExpr::If(Box::new(h), b, e))
     }
 
     fn for_parser(&self) -> Parser<char, NessaExpr> {
@@ -798,6 +802,9 @@ mod tests {
 
             if r + 1 {
                 return \"a\";
+            
+            } else {
+                return 5;    
             }
 
             return r;
@@ -860,7 +867,10 @@ mod tests {
                         )),
                         vec!(
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new("a".to_string()))))
-                        )
+                        ),
+                        Some(vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                        ))
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::NameReference("r".into())))
                 )
@@ -961,7 +971,8 @@ mod tests {
                         Box::new(NessaExpr::NameReference("arg".into())),
                         vec!(
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
-                        )
+                        ),
+                        None
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
                 )
@@ -983,7 +994,8 @@ mod tests {
                         Box::new(NessaExpr::NameReference("arg".into())),
                         vec!(
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
-                        )
+                        ),
+                        None
                     ),
                     NessaExpr::For(
                         "i".into(),
@@ -1012,16 +1024,19 @@ mod tests {
                                 Box::new(NessaExpr::NameReference("b".into())),
                                 vec!(
                                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(2)))))
-                                )
+                                ),
+                                None
                             ),
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
-                        )
+                        ),
+                        None
                     ),
                     NessaExpr::If(
                         Box::new(NessaExpr::NameReference("b".into())),
                         vec!(
                             NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
-                        )
+                        ),
+                        None
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
                 )

@@ -81,16 +81,16 @@ impl NessaContext {
     }
 
     fn constant_reference_type_parser(&self) -> Parser<char, Type> {
-        return (sym('&') * call(move || self.type_parser(true))).name("Constant reference").map(|i| Type::Ref(Box::new(i)));
+        return (sym('&') * call(move || self.type_parser(true, true))).name("Constant reference").map(|i| Type::Ref(Box::new(i)));
     }
 
     fn mutable_reference_type_parser(&self) -> Parser<char, Type> {
-        return (sym('&').repeat(2) * spaces() * call(move || self.type_parser(true))).name("Mutable reference").map(|i| Type::MutRef(Box::new(i)))
+        return (sym('&').repeat(2) * spaces() * call(move || self.type_parser(true, true))).name("Mutable reference").map(|i| Type::MutRef(Box::new(i)))
     }
 
     fn parametric_type_parser(&self) -> Parser<char, Type> {
         return (self.basic_type_parser() - spaces() + (
-            sym('<') * spaces() * list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')
+            sym('<') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')
         
         )).name("Template type").map(|(i, args)| {
             if let Type::Basic(id) = i {
@@ -110,25 +110,35 @@ impl NessaContext {
     }
 
     fn and_type_parser(&self) -> Parser<char, Type> {
-        return (sym('(') * spaces() * list(call(move || self.type_parser(true)), spaces() * sym(',')  * spaces()) - spaces() * sym(')'))
+        return (sym('(') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym(')'))
             .name("And type").map(|args| if args.len() == 1 { args[0].clone() } else { Type::And(args) });
     }
 
-    fn or_type_parser(&self) -> Parser<char, Type> {
-        return list(call(move || self.type_parser(false)), spaces() * sym('|')  * spaces()).name("Or type")
+    fn or_type_parser(&self, include_func: bool) -> Parser<char, Type> {
+        return list(call(move || self.type_parser(false, include_func)), spaces() * sym('|')  * spaces()).name("Or type")
             .map(|args| if args.len() == 1 { args[0].clone() } else { Type::Or(args) });
     }
 
-    fn type_parser(&self, include_or: bool) -> Parser<char, Type> {
-        let mut res = self.mutable_reference_type_parser()
-                    | self.constant_reference_type_parser()
-                    | self.parametric_type_parser()
-                    | self.empty_type_parser()
-                    | self.and_type_parser();
+    fn function_type_parser(&self, include_or: bool) -> Parser<char, Type> {
+        return (call(move || self.type_parser(include_or, false)) + spaces() * tag("=>")  * spaces() * call(move || self.type_parser(include_or, true))).name("Function type")
+            .map(|(from, to)| Type::Function(Box::new(from), Box::new(to)));
+    }
+
+    fn type_parser(&self, include_or: bool, include_func: bool) -> Parser<char, Type> {
+        let mut res = if include_func {
+            self.function_type_parser(include_or) | self.mutable_reference_type_parser()
+
+        } else{ 
+            self.mutable_reference_type_parser() 
+        } 
+        | self.constant_reference_type_parser()
+        | self.parametric_type_parser()
+        | self.empty_type_parser()
+        | self.and_type_parser();
         
         // The or case is excluded in order to properly parse types without using parentheses
         if include_or {
-            res = res | self.or_type_parser();
+            res = res | self.or_type_parser(include_func);
         }
         
         res = res | self.wildcard_type_parser()
@@ -178,7 +188,7 @@ impl NessaContext {
     fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (
             (spaces() * tag("let").discard() * spaces_1() * self.identifier_parser()) +
-            ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true))).opt() - spaces() - sym('=').discard() - spaces()) +
+            ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true))).opt() - spaces() - sym('=').discard() - spaces()) +
             (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
             spaces() - sym(';')
         
@@ -190,11 +200,11 @@ impl NessaContext {
             (
                 spaces() * sym('(').discard() * spaces() * 
                 list(
-                    self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
+                    self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)), 
                     spaces() * sym(',') - spaces()
                 ) + 
                 (spaces() - sym(')').discard() - spaces()) *
-                spaces() * tag("->") * spaces() * call(move || self.type_parser(true))
+                spaces() * tag("->") * spaces() * call(move || self.type_parser(true, true))
             );
     }
 
@@ -216,15 +226,15 @@ impl NessaContext {
                 unreachable!();
             }).reduce(|a, b| a | b).unwrap() - spaces() +
             sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
             spaces() * sym(')') * spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true));
+            tag("->") * spaces() * call(move || self.type_parser(true, true));
     }
 
     fn unary_postfix_operation_header_parser(&self) -> Parser<char, (((String, Type), usize), Type)> {
         return spaces() * tag("op").discard() * spaces_1() * 
             sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
             spaces() * sym(')') * spaces() +
             self.unary_ops.iter()
             .filter(|i| {
@@ -241,13 +251,13 @@ impl NessaContext {
 
                 unreachable!();
             }).reduce(|a, b| a | b).unwrap() - spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true));
+            tag("->") * spaces() * call(move || self.type_parser(true, true));
     }
 
     fn binary_operation_header_parser(&self) -> Parser<char, (((((String, Type), usize), String), Type), Type)> {
         return spaces() * tag("op").discard() * spaces_1() * 
             sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
             spaces() * sym(')') * spaces() +
             self.binary_ops.iter()
             .map(|i| {
@@ -258,29 +268,29 @@ impl NessaContext {
                 unreachable!();
             }).reduce(|a, b| a | b).unwrap() - spaces() +
             sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
             spaces() * sym(')') * spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true));
+            tag("->") * spaces() * call(move || self.type_parser(true, true));
     }
 
     fn nary_operation_header_parser(&self) -> Parser<char, (((String, Type), (usize, Vec<(String, Type)>)), Type)> {
         return spaces() * tag("op").discard() * spaces_1() * 
             sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
             spaces() * sym(')') * spaces() +
             self.nary_ops.iter()
             .map(|i| {
                 if let Operator::Nary{open_rep: or, close_rep: cr, id, ..} = i {
                     return tag(or.as_str()).map(move |_| *id) - spaces() + 
                         list(
-                            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
+                            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)), 
                             spaces() * sym(',') * spaces()
                         ) - spaces() * tag(cr.as_str()).map(move |_| *id);
                 }
 
                 unreachable!();
             }).reduce(|a, b| a | b).unwrap() - spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true));
+            tag("->") * spaces() * call(move || self.type_parser(true, true));
     }
 
     fn unary_prefix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -319,7 +329,7 @@ impl NessaContext {
                 spaces() * sym('>') * spaces()
             ).opt() - spaces() * sym('{') * spaces() +
             list(
-                self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - spaces() * sym(';'), 
+                self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - spaces() * sym(';'), 
                 spaces()
             ) -
             spaces() * sym('}') * spaces()
@@ -563,7 +573,10 @@ mod tests {
         let map_str = "Map<Number, String>".chars().collect::<Vec<_>>();
         let map_refs_str = "&Map<&Number, &&String>".chars().collect::<Vec<_>>();
 
-        let parser = ctx.type_parser(true);
+        let basic_func_str = "Number => String".chars().collect::<Vec<_>>();
+        let complex_func_str = "(Number, Array<Bool>) => Map<Number, *>".chars().collect::<Vec<_>>();
+
+        let parser = ctx.type_parser(true, true);
         
         let wildcard = parser.parse(&wildcard_str).unwrap();
         let empty = parser.parse(&empty_str).unwrap();
@@ -596,6 +609,21 @@ mod tests {
         assert_eq!(array, Type::Template(3, vec!(Type::Basic(0))));
         assert_eq!(map, Type::Template(4, vec!(Type::Basic(0), Type::Basic(1))));
         assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(4, vec!(Type::Ref(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(1))))))));
+
+        let basic_func = parser.parse(&basic_func_str).unwrap();
+        let complex_func = parser.parse(&complex_func_str).unwrap();
+
+        assert_eq!(basic_func, Type::Function(Box::new(Type::Basic(0)), Box::new(Type::Basic(1))));
+        assert_eq!(complex_func, Type::Function(
+            Box::new(Type::And(vec!(
+                Type::Basic(0),
+                Type::Template(3, vec!(Type::Basic(2)))
+            ))), 
+            Box::new(Type::Template(4, vec!(
+                Type::Basic(0),
+                Type::Wildcard
+            )))
+        ));
     }
 
     #[test]

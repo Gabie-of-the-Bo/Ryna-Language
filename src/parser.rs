@@ -33,6 +33,7 @@ pub enum NessaExpr {
     PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
     BinaryOperationDefinition(usize, (String, Type), (String, Type), Type, Vec<NessaExpr>),
+    NaryOperationDefinition(usize, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
@@ -251,7 +252,6 @@ impl NessaContext {
             self.binary_ops.iter()
             .map(|i| {
                 if let Operator::Binary{representation: r, id, ..} = i {
-                    println!("{}", id);
                     return tag(r.as_str()).map(move |_| *id);
                 }
 
@@ -260,6 +260,26 @@ impl NessaContext {
             sym('(') * spaces() *
             self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
             spaces() * sym(')') * spaces() +
+            tag("->") * spaces() * call(move || self.type_parser(true));
+    }
+
+    fn nary_operation_header_parser(&self) -> Parser<char, (((String, Type), (usize, Vec<(String, Type)>)), Type)> {
+        return spaces() * tag("op").discard() * spaces_1() * 
+            sym('(') * spaces() *
+            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)) - 
+            spaces() * sym(')') * spaces() +
+            self.nary_ops.iter()
+            .map(|i| {
+                if let Operator::Nary{open_rep: or, close_rep: cr, id, ..} = i {
+                    return tag(or.as_str()).map(move |_| *id) - spaces() + 
+                        list(
+                            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true)), 
+                            spaces() * sym(',') * spaces()
+                        ) - spaces() * tag(cr.as_str()).map(move |_| *id);
+                }
+
+                unreachable!();
+            }).reduce(|a, b| a | b).unwrap() - spaces() +
             tag("->") * spaces() * call(move || self.type_parser(true));
     }
 
@@ -278,10 +298,16 @@ impl NessaContext {
             .map(|((((((n1, t1), id), n2), t2), r), b)| NessaExpr::BinaryOperationDefinition(id, (n1, t1), (n2, t2), r, b))
     }
 
+    fn nary_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
+        return (self.nary_operation_header_parser() + self.code_block_parser())
+            .map(|((((n, t), (id, a)), r), b)| NessaExpr::NaryOperationDefinition(id, (n, t), a, r, b))
+    }
+
     fn operation_definition_parser(&self) -> Parser<char, NessaExpr> {
         return self.unary_prefix_operation_definition_parser()
             | self.unary_postfix_operation_definition_parser()
-            | self.binary_operation_definition_parser();
+            | self.binary_operation_definition_parser()
+            | self.nary_operation_definition_parser();
     }
 
     fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -882,11 +908,18 @@ mod tests {
         }
         ".chars().collect::<Vec<_>>();
 
+        let test_4_str = "
+        op (a: Number)[b: Number, c: Number] -> Number {
+            return a + b * c;
+        }
+        ".chars().collect::<Vec<_>>();
+
         let parser = ctx.operation_definition_parser();
 
         let test_1 = parser.parse(&test_1_str).unwrap();
         let test_2 = parser.parse(&test_2_str).unwrap();
         let test_3 = parser.parse(&test_3_str).unwrap();
+        let test_4 = parser.parse(&test_4_str).unwrap();
 
         assert_eq!(
             test_1,
@@ -965,6 +998,30 @@ mod tests {
                     NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
                 )
             ) 
+        );
+
+        assert_eq!(
+            test_4,
+            NessaExpr::NaryOperationDefinition(
+                1,
+                ("a".into(), Type::Basic(0)),
+                vec!(
+                    ("b".into(), Type::Basic(0)),
+                    ("c".into(), Type::Basic(0))
+                ),
+                Type::Basic(0),
+                vec!(
+                    NessaExpr::Return(Box::new(NessaExpr::BinaryOperation(
+                        0,
+                        Box::new(NessaExpr::NameReference("a".into())),
+                        Box::new(NessaExpr::BinaryOperation(
+                            1,
+                            Box::new(NessaExpr::NameReference("b".into())),
+                            Box::new(NessaExpr::NameReference("c".into()))
+                        )
+                    )))
+                )
+            ))
         );
     }
 

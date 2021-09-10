@@ -17,6 +17,7 @@ pub type FunctionOverloads = Vec<(Type, Type, FunctionOverload)>;
 pub struct Function {
     pub id: usize,
     pub name: String,
+    pub params: Vec<String>,
     pub overloads: FunctionOverloads
 }
 
@@ -27,7 +28,7 @@ pub struct Function {
 */
 
 pub fn standard_functions(ctx: &mut NessaContext) {
-    ctx.define_function("inc".into()).unwrap();
+    ctx.define_function("inc".into(), vec!()).unwrap();
 
     ctx.define_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |v| { 
         Object::new(&*v[0].deref::<Number>() + Number::from(1)) 

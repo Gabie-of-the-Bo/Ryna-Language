@@ -20,7 +20,7 @@ pub enum NessaExpr {
 
     UnaryOperation(usize, Box<NessaExpr>),
     BinaryOperation(usize, Box<NessaExpr>, Box<NessaExpr>),
-    NaryOperation(usize, Box<NessaExpr>, Vec<NessaExpr>),
+    NaryOperation(usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
 
     VariableDefinition(String, Type, Box<NessaExpr>),
     FunctionDefinition(String, Vec<(String, Type)>, Type, Vec<NessaExpr>),
@@ -38,6 +38,49 @@ pub enum NessaExpr {
     If(Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
+}
+
+impl NessaExpr {
+    fn compile_types(&mut self, templates: &Vec<String>) {
+        match self {
+            NessaExpr::VariableDefinition(_, t, e) => {
+                t.compile_templates(templates);
+                e.compile_types(templates);
+            }
+
+            NessaExpr::UnaryOperation(_, e) => e.compile_types(templates),
+            NessaExpr::BinaryOperation(_, a, b) => {
+                a.compile_types(templates);
+                b.compile_types(templates);
+            },
+            NessaExpr::NaryOperation(_, _, a, b) => {
+                a.compile_types(templates);
+                b.iter_mut().for_each(|i| i.compile_types(templates));
+            },
+
+            NessaExpr::If(h, ib, ei, eb) => {
+                h.compile_types(templates);
+                ib.iter_mut().for_each(|i| i.compile_types(templates));
+
+                ei.iter_mut().for_each(|(ei_h, ei_b)| {
+                    ei_h.compile_types(templates); 
+                    ei_b.iter_mut().for_each(|i| i.compile_types(templates));                   
+                });
+
+                if let Some(eb_inner) = eb {
+                    eb_inner.iter_mut().for_each(|i| i.compile_types(templates));
+                }
+            }
+            NessaExpr::For(_, c, b) => {
+                c.compile_types(templates);
+                b.iter_mut().for_each(|i| i.compile_types(templates));
+            },
+
+            NessaExpr::Return(e) => e.compile_types(templates),
+
+            _ => {}
+        }
+    }
 }
 
 fn spaces<'a>() -> Parser<'a, char, ()> {
@@ -478,12 +521,13 @@ impl NessaContext {
             return (
                 call(move || self.nessa_expr_parser(b_ex_2.clone(), n_ex_2.clone())) +
                 spaces() *
+                (sym('<') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')).opt() +
                 tag(or.as_str()).map(move |_| id) +
                 spaces() *
                 list(call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone())), spaces() * sym(',') * spaces()) -
                 tag(cr.as_str()).discard()
             
-            ).map(|((a, id), b)| NessaExpr::NaryOperation(*id, Box::new(a), b));
+            ).map(|(((a, t), id), b)| NessaExpr::NaryOperation(*id, t.unwrap_or_default(), Box::new(a), b));
         }
 
         unreachable!();
@@ -692,6 +736,7 @@ mod tests {
         let var_str = "-!a".chars().collect::<Vec<_>>();
         let n_var_str = "-5 + a".chars().collect::<Vec<_>>();
         let n_call_str = "5(-b + !10)".chars().collect::<Vec<_>>();
+        let template_func_str = "funct<Number>(5)".chars().collect::<Vec<_>>();
 
         let parser = ctx.operation_parser(HashSet::new(), HashSet::new());
 
@@ -699,6 +744,7 @@ mod tests {
         let var = parser.parse(&var_str).unwrap();
         let n_var = parser.parse(&n_var_str).unwrap();
         let n_call = parser.parse(&n_call_str).unwrap();
+        let template_func = parser.parse(&template_func_str).unwrap();
 
         assert_eq!(number, NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
         assert_eq!(
@@ -713,6 +759,7 @@ mod tests {
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(
             0, 
+            vec!(),
             Box::new(NessaExpr::Literal(Object::new(Number::from(5)))),
             vec!(
                 NessaExpr::BinaryOperation(
@@ -720,6 +767,14 @@ mod tests {
                     Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::NameReference("b".into())))),
                     Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
                 )
+            )
+        ));
+        assert_eq!(template_func, NessaExpr::NaryOperation(
+            0, 
+            vec!(Type::Basic(0)),
+            Box::new(NessaExpr::NameReference("funct".into())),
+            vec!(
+                NessaExpr::Literal(Object::new(Number::from(5)))
             )
         ));
     }

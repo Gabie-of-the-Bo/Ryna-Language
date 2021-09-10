@@ -247,7 +247,7 @@ impl NessaContext {
         ╘═══════════════════════╛
     */
 
-    pub fn define_function(&mut self, name: String) -> Result<(), String> {
+    pub fn define_function(&mut self, name: String, params: Vec<String>) -> Result<(), String> {
         for f in &self.functions {
             if f.name == name {
                 return Err(format!("Function \"{}\" is already defined", name))
@@ -257,6 +257,7 @@ impl NessaContext {
         self.functions.push(Function {
             id: self.functions.len(),
             name: name,
+            params: params,
             overloads: vec!()
         });
 
@@ -458,8 +459,8 @@ mod tests {
     fn function_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_function("abs".into());
-        let def_2 = ctx.define_function("inc".into());
+        let def_1 = ctx.define_function("abs".into(), vec!());
+        let def_2 = ctx.define_function("inc".into(), vec!());
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

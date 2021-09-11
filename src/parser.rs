@@ -23,7 +23,7 @@ pub enum NessaExpr {
     NaryOperation(usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
 
     VariableDefinition(String, Type, Box<NessaExpr>),
-    FunctionDefinition(String, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    FunctionDefinition(String, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(String, usize),
     PostfixOperatorDefinition(String, usize),
     BinaryOperatorDefinition(String, usize),
@@ -53,7 +53,8 @@ impl NessaExpr {
                 a.compile_types(templates);
                 b.compile_types(templates);
             },
-            NessaExpr::NaryOperation(_, _, a, b) => {
+            NessaExpr::NaryOperation(_, t, a, b) => {
+                t.iter_mut().for_each(|i| i.compile_templates(templates));
                 a.compile_types(templates);
                 b.iter_mut().for_each(|i| i.compile_types(templates));
             },
@@ -238,8 +239,13 @@ impl NessaContext {
         ).map(|((n, t), v)| NessaExpr::VariableDefinition(n, t.unwrap_or(Type::Wildcard), Box::new(v)));
     }
 
-    fn function_header_parser(&self) -> Parser<char, (String, (Vec<(String, Type)>, Type))> {
+    fn function_header_parser(&self) -> Parser<char, ((String, Option<Vec<String>>), (Vec<(String, Type)>, Type))> {
         return (spaces() * tag("fn").discard() * spaces_1() * self.identifier_parser()) +
+            (
+                spaces() * sym('<') * spaces() *
+                list(self.identifier_parser(), spaces() * sym(',') * spaces()) -
+                spaces() * sym('>') * spaces()
+            ).opt() - spaces() +
             (
                 spaces() * sym('(').discard() * spaces() * 
                 list(
@@ -457,7 +463,15 @@ impl NessaContext {
 
     fn function_definition_parser(&self) -> Parser<char, NessaExpr> {
         return (self.function_header_parser() + self.code_block_parser())
-            .map(|((n, (a, r)), b)| NessaExpr::FunctionDefinition(n, a, r, b))
+            .map(|(((n, t), (mut a, mut r)), mut b)| {
+                let u_t = t.unwrap_or_default();
+                
+                a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));
+                r.compile_templates(&u_t);
+                b.iter_mut().for_each(|e| e.compile_types(&u_t));
+
+                NessaExpr::FunctionDefinition(n, u_t, a, r, b)
+            })
     }
 
     fn if_parser(&self) -> Parser<char, NessaExpr> {
@@ -795,10 +809,10 @@ mod tests {
         let two_args_header = parser.parse(&two_args_header_str).unwrap();
         let complex_args_header = parser.parse(&complex_args_header_str).unwrap();
 
-        assert_eq!(number_header, ("test".into(), (vec!(("a".into(), Type::Basic(0))), Type::Basic(0))));
-        assert_eq!(ref_header, ("test_2".into(), (vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0))))), Type::MutRef(Box::new(Type::Basic(0))))));
+        assert_eq!(number_header, (("test".into(), None), (vec!(("a".into(), Type::Basic(0))), Type::Basic(0))));
+        assert_eq!(ref_header, (("test_2".into(), None), (vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0))))), Type::MutRef(Box::new(Type::Basic(0))))));
         assert_eq!(two_args_header, (
-            "test_3".into(), 
+            ("test_3".into(), None),
             (
                 vec!(
                     ("arg_1".into(), Type::Ref(Box::new(Type::Basic(0)))),
@@ -814,7 +828,7 @@ mod tests {
             )
         ));
         assert_eq!(complex_args_header, (
-            "test_4".into(), 
+            ("test_4".into(), None), 
             (
                 vec!(
                     ("a".into(), Type::Or(vec!(
@@ -877,15 +891,24 @@ mod tests {
         }
         ".chars().collect::<Vec<_>>();
 
+        let test_3_str = "
+        fn test_3<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
+            let a: 'V | 'K = value + key;
+            return a;
+        }
+        ".chars().collect::<Vec<_>>();
+
         let parser = ctx.function_definition_parser();
 
         let test_1 = parser.parse(&test_1_str).unwrap();
         let test_2 = parser.parse(&test_2_str).unwrap();
+        let test_3 = parser.parse(&test_3_str).unwrap();
 
         assert_eq!(
             test_1,
             NessaExpr::FunctionDefinition(
                 "test".into(),
+                vec!(),
                 vec!(),
                 Type::Basic(0),
                 vec!(
@@ -905,6 +928,7 @@ mod tests {
             test_2,
             NessaExpr::FunctionDefinition(
                 "test_2".into(),
+                vec!(),
                 vec!(
                     (
                         "arg".into(), 
@@ -951,6 +975,33 @@ mod tests {
                         ))
                     ),
                     NessaExpr::Return(Box::new(NessaExpr::NameReference("r".into())))
+                )
+            ) 
+        );
+        assert_eq!(
+            test_3,
+            NessaExpr::FunctionDefinition(
+                "test_3".into(),
+                vec!("K".into(), "V".into()),
+                vec!(
+                    ("key".into(), Type::TemplateParam(0)),
+                    ("value".into(), Type::TemplateParam(1))
+                ),
+                Type::Template(4, vec!(Type::TemplateParam(0), Type::TemplateParam(1))),
+                vec!(
+                    NessaExpr::VariableDefinition(
+                        "a".into(), 
+                        Type::Or(vec!(
+                            Type::TemplateParam(0),
+                            Type::TemplateParam(1)
+                        )), 
+                        Box::new(NessaExpr::BinaryOperation(
+                            0,
+                            Box::new(NessaExpr::NameReference("value".into())),
+                            Box::new(NessaExpr::NameReference("key".into())),
+                        ))
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::NameReference("a".into())))
                 )
             ) 
         );

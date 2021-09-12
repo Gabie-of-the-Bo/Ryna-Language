@@ -618,7 +618,7 @@ impl NessaContext {
     }
 
     pub fn nessa_parser(&self) -> Parser<char, Vec<NessaExpr>> {
-        return list(self.nessa_global_parser(), spaces());
+        return spaces() * list(self.nessa_global_parser(), spaces()) - spaces();
     }
 }
 

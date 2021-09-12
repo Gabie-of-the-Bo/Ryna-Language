@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
 
@@ -10,6 +11,13 @@ use crate::parser::NessaExpr;
 */
 
 impl NessaContext {
+
+    /*
+        ╒══════════════════════╕
+        │ Variable compilation │
+        ╘══════════════════════╛
+    */
+
     fn compile_expr_variables(expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, usize>, curr_ctx: &mut HashMap<String, usize>) {
         match expr {
             // Compile variable references
@@ -87,6 +95,153 @@ impl NessaContext {
     pub fn compile_variables(&self, body: &mut Vec<NessaExpr>) {
         NessaContext::compile_variables_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new());
     }
+
+    /*
+        ╒══════════════════════╕
+        │ Function compilation │
+        ╘══════════════════════╛
+    */
+
+    fn get_func_name(&self, name: &String) -> Option<&Function>{
+        return self.functions.iter().filter(|i| i.name == *name).next();
+    }
+
+    fn compile_expr_function_names(&self, expr: &mut NessaExpr) {
+        match expr {
+            // Compile function name references
+            NessaExpr::NameReference(n) => {
+                if let Some(f) = self.get_func_name(n) {
+                    *expr = NessaExpr::FunctionName(f.id);
+                }
+            },
+
+            // Compile variable definitions
+            NessaExpr::VariableDefinition(_, _, e) => {
+                self.compile_expr_function_names(e);
+            },
+
+            // Compile operations
+            NessaExpr::UnaryOperation(_, e) => {
+                self.compile_expr_function_names(e);
+            }
+
+            NessaExpr::BinaryOperation(_, a, b) => {
+                self.compile_expr_function_names(a);
+                self.compile_expr_function_names(b);
+            }
+            
+            NessaExpr::NaryOperation(_, _, a, b) => {
+                self.compile_expr_function_names(a);
+                b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
+            }
+
+            // Compile flow control
+            NessaExpr::If(h, ib, ei, eb) => {
+                self.compile_expr_function_names(h);
+                ib.iter_mut().for_each(|i| self.compile_expr_function_names(i));
+
+                ei.iter_mut().for_each(|(ei_h, ei_b)| {
+                    self.compile_expr_function_names(ei_h);
+                    ei_b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
+                });
+
+                if let Some(eb_inner) = eb {
+                    eb_inner.iter_mut().for_each(|i| self.compile_expr_function_names(i));
+                }
+            }
+
+            NessaExpr::For(_, c, b) => {
+                self.compile_expr_function_names(c);
+                b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
+            }
+
+            NessaExpr::Return(e) => {
+                self.compile_expr_function_names(e);
+            }
+
+            _ => {}
+        }
+    }
+
+    fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
+        match expr {
+            // Compile variable definitions
+            NessaExpr::VariableDefinition(_, _, e) => {
+                self.compile_expr_function_calls(e)?;
+            },
+
+            // Compile operations
+            NessaExpr::UnaryOperation(_, e) => {
+                self.compile_expr_function_calls(e)?;
+            }
+
+            NessaExpr::BinaryOperation(_, a, b) => {
+                self.compile_expr_function_calls(a)?;
+                self.compile_expr_function_calls(b)?;
+            }
+            
+            // Function call
+            NessaExpr::NaryOperation(0, t, a, b) => {
+                self.compile_expr_function_calls(a)?;
+                b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
+
+                if let NessaExpr::FunctionName(id) = a.as_ref() {
+                    let f = &self.functions[*id];
+                    let f_params = &f.params;
+
+                    if f_params.len() == t.len() {
+                        *expr = NessaExpr::FunctionCall(*id, t.clone(), b.clone());
+                    
+                    } else{
+                        return Err(format!(
+                            "Unable to match type parameters for {}: <{}> <-> <{}> (lengths differ)", 
+                            f.name, 
+                            t.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
+                            f.params.join(", ")
+                        ))
+                    }
+
+                } else if !t.is_empty() {
+                    return Err("Invalid type parameters on n-ary call operation".into());
+                }
+            }
+
+            // Compile flow control
+            NessaExpr::If(h, ib, ei, eb) => {
+                self.compile_expr_function_calls(h)?;
+                ib.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
+
+                ei.iter_mut().map(|(ei_h, ei_b)| -> Result<(), String> {
+                    self.compile_expr_function_calls(ei_h)?;
+                    ei_b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
+
+                    return Ok(());
+                }).collect::<Result<_, _>>()?;
+
+                if let Some(eb_inner) = eb {
+                    eb_inner.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
+                }
+            }
+
+            NessaExpr::For(_, c, b) => {
+                self.compile_expr_function_calls(c)?;
+                b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?
+            }
+
+            NessaExpr::Return(e) => {
+                self.compile_expr_function_calls(e)?;
+            }
+
+            _ => {}
+        }
+
+        return Ok(());
+    }
+
+    pub fn compile_functions(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
+        body.iter_mut().for_each(|i| self.compile_expr_function_names(i));        
+        return body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect();        
+    }
 }
 
 /*
@@ -97,6 +252,8 @@ impl NessaContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::number::*;
+    use crate::object::*;
     use crate::parser::*;
     use crate::context::*;
     
@@ -217,5 +374,41 @@ mod tests {
         } else {
             panic!("Invalid expr type");
         }
+    }
+
+    #[test]
+    fn function_names_and_calls() {
+        let ctx = standard_ctx();
+        
+        let code_1_str = "
+        inc(5);
+        ".chars().collect::<Vec<_>>();
+        
+        let code_2_str = "
+        inc<Number>(5);
+        ".chars().collect::<Vec<_>>();
+        
+        let code_3_str = "
+        wea<Number>(5);
+        ".chars().collect::<Vec<_>>();
+
+        let parser = ctx.nessa_parser();
+
+        let mut code = parser.parse(&code_1_str).unwrap();
+        ctx.compile_functions(&mut code).unwrap();
+
+        assert_eq!(code, vec!(
+            NessaExpr::FunctionCall(0, vec!(), vec!(
+                NessaExpr::Literal(Object::new(Number::from(5)))
+            ))
+        ));
+        
+        let mut code = parser.parse(&code_2_str).unwrap();
+
+        assert!(ctx.compile_functions(&mut code).is_err());
+        
+        let mut code = parser.parse(&code_3_str).unwrap();
+
+        assert!(ctx.compile_functions(&mut code).is_err());
     }
 }

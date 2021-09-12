@@ -13,8 +13,15 @@ use crate::context::NessaContext;
                                                   ╘══════════════════╛
 */
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum NessaExpr {
+    // Compiled
+    FunctionName(usize),
+    Variable(usize),
+    CompiledVariableDefinition(usize, Type, Box<NessaExpr>),
+    FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
+
+    // Uncompiled
     Literal(Object),
     NameReference(String),
 
@@ -608,6 +615,10 @@ impl NessaContext {
             | call(move || self.function_definition_parser())
             | call(move || self.operation_definition_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
+    }
+
+    pub fn nessa_parser(&self) -> Parser<char, Vec<NessaExpr>> {
+        return list(self.nessa_global_parser(), spaces());
     }
 }
 

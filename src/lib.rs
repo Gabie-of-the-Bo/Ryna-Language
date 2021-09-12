@@ -11,3 +11,4 @@ mod types;
 mod context;
 
 mod parser;
+mod compilation;

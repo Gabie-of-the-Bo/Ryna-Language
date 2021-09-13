@@ -28,15 +28,19 @@ impl NessaExpr {
                 let ex_e = e.execute(ctx)?;
 
                 if let Some(obj) = ex_e {
-                    let obj_t = obj.get_type();
+                    ctx.define_variable(*id, n.clone(), t.clone())?;
+                    ctx.assign_variable(*id, obj)?;
 
-                    if obj_t.bindable_to(t) {
-                        ctx.define_variable(*id, n.clone(), t.clone())?;
-                        ctx.assign_variable(*id, obj)?;
+                } else{
+                    return Err("Cannot assign a non-existent value to a variable".into());
+                }
+            }
 
-                    } else {
-                        return Err(format!("Value of type {} cannot be bound to a variable of type {}", obj_t.get_name(ctx), t.get_name(ctx)));
-                    }
+            NessaExpr::CompiledVariableAssignment(id, _, e) => {
+                let ex_e = e.execute(ctx)?;
+
+                if let Some(obj) = ex_e {
+                    ctx.assign_variable(*id, obj)?;
 
                 } else{
                     return Err("Cannot assign a non-existent value to a variable".into());
@@ -102,8 +106,10 @@ impl NessaExpr {
 
                 // If execution
                 if let Type::Basic(2) = h_type {
-                    ctx.execute_nessa_program(b)?;
-                    else_execution = false;
+                    if *ex_h.get::<bool>() {
+                        ctx.execute_nessa_program(b)?;
+                        else_execution = false;
+                    }
                 
                 } else {
                     return Err(format!("Cannot evaluate value of type {} as Bool", h_type.get_name(ctx)))
@@ -115,8 +121,10 @@ impl NessaExpr {
                     let h_type = ex_h.get_type();
 
                     if let Type::Basic(2) = h_type {
-                        ctx.execute_nessa_program(ei_b)?;
-                        else_execution = false;
+                        if *ex_h.get::<bool>() {
+                            ctx.execute_nessa_program(ei_b)?;
+                            else_execution = false;
+                        }
                     
                     } else {
                         return Err(format!("Cannot evaluate value of type {} as Bool", h_type.get_name(ctx)))
@@ -124,7 +132,7 @@ impl NessaExpr {
                 }
 
                 // Else execution
-                if else_execution {
+                if else_execution && eb.is_some() {
                     ctx.execute_nessa_program(eb.as_ref().unwrap())?;
                 }
             }
@@ -272,9 +280,16 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let v_0 = 5;
-            let v_1 = 3 + 4;
-            let v_2 = inc(inc(2));
+            let a = 0;
+            let b = 0;
+
+            if true {
+                a = 1;
+            }
+
+            if false {
+                b = 1;
+            }
         ".chars().collect::<Vec<_>>();
 
         let mut code;
@@ -287,5 +302,19 @@ mod tests {
         }
 
         ctx.execute_nessa_program(&code).unwrap();
+
+        assert_eq!(*ctx.get_variable(0).unwrap(), Variable {
+            id: 0,
+            name: "a".into(),
+            value: Some(Object::new(Number::from(1))),
+            var_type: Type::Wildcard 
+        });
+
+        assert_eq!(*ctx.get_variable(1).unwrap(), Variable {
+            id: 1,
+            name: "b".into(),
+            value: Some(Object::new(Number::from(0))),
+            var_type: Type::Wildcard 
+        });
     }
 }

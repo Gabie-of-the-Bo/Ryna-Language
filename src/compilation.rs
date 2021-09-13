@@ -22,7 +22,7 @@ impl NessaContext {
         match expr {
             // Compile variable references
             NessaExpr::NameReference(n) if ctx_idx.contains_key(n) => {
-                *expr = NessaExpr::Variable(*ctx_idx.get(n).unwrap());
+                *expr = NessaExpr::Variable(*ctx_idx.get(n).unwrap(), n.clone());
             },
 
             // Compile variable definitions
@@ -33,7 +33,7 @@ impl NessaContext {
 
                 NessaContext::compile_expr_variables(e, registers, ctx_idx, curr_ctx);
 
-                *expr = NessaExpr::CompiledVariableDefinition(idx, t.clone(), e.clone());
+                *expr = NessaExpr::CompiledVariableDefinition(idx, n.clone(), t.clone(), e.clone());
             },
 
             // Compile operations
@@ -116,7 +116,7 @@ impl NessaContext {
             },
 
             // Compile variable definitions
-            NessaExpr::VariableDefinition(_, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) => {
                 self.compile_expr_function_names(e);
             },
 
@@ -166,7 +166,7 @@ impl NessaContext {
     fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
             // Compile variable definitions
-            NessaExpr::VariableDefinition(_, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) => {
                 self.compile_expr_function_calls(e)?;
             },
 
@@ -242,6 +242,13 @@ impl NessaContext {
         body.iter_mut().for_each(|i| self.compile_expr_function_names(i));        
         return body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect();        
     }
+
+    pub fn compile(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
+        self.compile_variables(body);
+        self.compile_functions(body)?;
+
+        return Ok(());
+    }
 }
 
 /*
@@ -277,18 +284,18 @@ mod tests {
         let mut code = parser.parse(&code_str).unwrap();
         ctx.compile_variables(&mut code);
 
-        if let NessaExpr::CompiledVariableDefinition(idx, _, _) = code[0] {
+        if let NessaExpr::CompiledVariableDefinition(idx, _, _, _) = code[0] {
             assert_eq!(idx, 0);
             
         } else {
             panic!("Invalid expr type");
         }
 
-        if let NessaExpr::CompiledVariableDefinition(idx, _, e) = &code[1] {
+        if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &code[1] {
             assert_eq!(*idx, 1);
 
             if let NessaExpr::UnaryOperation(_, e2) = e.as_ref() {
-                if let NessaExpr::Variable(idx) = e2.as_ref() {
+                if let NessaExpr::Variable(idx, _) = e2.as_ref() {
                     assert_eq!(*idx, 0);
                     
                 } else {
@@ -301,10 +308,10 @@ mod tests {
         }
 
         if let NessaExpr::If(_, b, _, _) = &code[2] {
-            if let NessaExpr::CompiledVariableDefinition(idx, _, e) = &b[0] {
+            if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &b[0] {
                 assert_eq!(*idx, 2);
 
-                if let NessaExpr::Variable(idx) = e.as_ref() {
+                if let NessaExpr::Variable(idx, _) = e.as_ref() {
                     assert_eq!(*idx, 0);
                     
                 } else {
@@ -315,18 +322,18 @@ mod tests {
                 panic!("Invalid expr type");
             }
 
-            if let NessaExpr::CompiledVariableDefinition(idx, _, e) = &b[1] {
+            if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &b[1] {
                 assert_eq!(*idx, 3);
 
                 if let NessaExpr::BinaryOperation(_, a, b) = e.as_ref() {
-                    if let NessaExpr::Variable(idx) = a.as_ref() {
+                    if let NessaExpr::Variable(idx, _) = a.as_ref() {
                         assert_eq!(*idx, 2);
                         
                     } else {
                         panic!("Invalid expr type");
                     }
 
-                    if let NessaExpr::Variable(idx) = b.as_ref() {
+                    if let NessaExpr::Variable(idx, _) = b.as_ref() {
                         assert_eq!(*idx, 1);
                         
                     } else {
@@ -345,25 +352,25 @@ mod tests {
             panic!("Invalid expr type");
         }
 
-        if let NessaExpr::CompiledVariableDefinition(idx, _, e) = &code[3] {
+        if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &code[3] {
             assert!(*idx == 2 || *idx == 3);
 
             if let NessaExpr::NaryOperation(_, _, a, b) = e.as_ref() {
-                if let NessaExpr::Variable(idx) = a.as_ref() {
+                if let NessaExpr::Variable(idx, _) = a.as_ref() {
                     assert_eq!(*idx, 0);
                     
                 } else {
                     panic!("Invalid expr type");
                 }
                 
-                if let NessaExpr::Variable(idx) = b[0] {
+                if let NessaExpr::Variable(idx, _) = b[0] {
                     assert_eq!(idx, 1);
                     
                 } else {
                     panic!("Invalid expr type");
                 }
                 
-                if let NessaExpr::Variable(idx) = b[1] {
+                if let NessaExpr::Variable(idx, _) = b[1] {
                     assert_eq!(idx, 0);
                     
                 } else {

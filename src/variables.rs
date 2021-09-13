@@ -7,7 +7,7 @@ use crate::types::Type;
                                                   ╘══════════════════╛
 */
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Variable{
     pub id: usize,
     pub name: String,

@@ -131,6 +131,14 @@ impl Object {
     pub fn is_ref(&self) -> bool {
         return self.inner.borrow().as_any().type_id() == TypeId::of::<Reference>();
     }
+
+    pub fn to_string(&self) -> String {
+        return self.inner.borrow().to_string();
+    }
+
+    pub fn empty() -> Object {
+        return Object::new(());
+    }
 }
 
 /*
@@ -274,6 +282,35 @@ impl NessaObject for bool {
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
         let ta = self.as_any().downcast_ref::<bool>();
         let tb = b.as_any().downcast_ref::<bool>();
+
+        return ta == tb;
+    }
+}
+
+impl NessaObject for () {
+    fn get_type_id(&self) -> usize {
+        return 0;
+    }
+
+    fn get_type(&self) -> Type {
+        return Type::Empty;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn to_string(&self) -> String {
+        return "()".into();
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<()>();
+        let tb = b.as_any().downcast_ref::<()>();
 
         return ta == tb;
     }

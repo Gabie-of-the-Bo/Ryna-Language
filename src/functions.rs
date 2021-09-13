@@ -41,4 +41,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
         return Object::empty();
     }).unwrap();
+
+    ctx.define_function("deref".into(), vec!("T".into())).unwrap();
+
+    ctx.define_function_overload(2, &[Type::Ref(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |v| {
+        return v[0].deref_obj();
+    }).unwrap();
 }

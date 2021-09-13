@@ -92,6 +92,12 @@ impl Object {
         return a;
     }
 
+    pub fn deref_obj(&self) -> Object {
+        return Object {
+            inner: self.get::<Reference>().inner.clone()
+        }    
+    }
+
     pub fn get<T>(&self) -> Ref<T> where T: 'static {
         return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
     }

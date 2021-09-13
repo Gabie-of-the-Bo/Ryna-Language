@@ -177,6 +177,24 @@ impl Type {
             _ => { }
         }
     }
+
+    pub fn sub_templates(&self, args: Vec<Type>, ctx: &NessaContext) -> Type {
+        if let Type::Template(id, params) = self {
+            let new_p = params.iter().map(|i| {
+                if let Type::TemplateParam(t_id) = i {
+                    return args[*t_id].clone();
+
+                } else{
+                    return i.clone();
+                }
+
+            }).collect::<Vec<_>>();
+
+            return Type::Template(*id, new_p);
+        }
+
+        unreachable!();
+    }
 }
 
 /*

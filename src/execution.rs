@@ -1,3 +1,4 @@
+use crate::types::Type;
 use crate::object::Object;
 use crate::parser::NessaExpr;
 use crate::context::NessaContext;
@@ -91,6 +92,35 @@ impl NessaExpr {
                                         .expect("Cannot apply an operation to a non-existent value");
 
                 return Ok(Some(Object::apply_function(&args.iter().collect::<Vec<_>>(), *id, ctx)?));
+            }
+
+            NessaExpr::If(h, b, ei, eb) => {
+                let mut else_execution = true;
+
+                let ex_h = h.execute(ctx)?.expect("Cannot evaluate non-existent expression");
+                let h_type = ex_h.get_type();
+
+                // If execution
+                if let Type::Basic(2) = h_type {
+                    ctx.execute_nessa_program(b)?;
+                    else_execution = false;
+                }
+
+                // Else ifs execution
+                for (ei_h, ei_b) in ei {
+                    let ex_h = ei_h.execute(ctx)?.expect("Cannot evaluate non-existent expression");
+                    let h_type = ex_h.get_type();
+
+                    if let Type::Basic(2) = h_type {
+                        ctx.execute_nessa_program(ei_b)?;
+                        else_execution = false;
+                    }
+                }
+
+                // Else execution
+                if else_execution {
+                    ctx.execute_nessa_program(eb.as_ref().unwrap())?;
+                }
             }
 
             _ => {}

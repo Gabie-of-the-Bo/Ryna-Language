@@ -66,9 +66,15 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::For(_, c, b) => {
+            NessaExpr::For(i, c, b) => {
+                let idx = registers.pop().unwrap();
+                ctx_idx.entry(i.clone()).or_insert(idx);
+                curr_ctx.entry(i.clone()).or_insert(idx);
+
                 NessaContext::compile_expr_variables(c, registers, ctx_idx, curr_ctx);
                 NessaContext::compile_variables_ctx(b, registers, ctx_idx);
+
+                *expr = NessaExpr::CompiledFor(idx, i.clone(), c.clone(), b.clone());
             }
 
             NessaExpr::Return(e) => {
@@ -150,7 +156,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::For(_, c, b) => {
+            NessaExpr::CompiledFor(_, _, c, b) => {
                 self.compile_expr_function_names(c);
                 b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
             }
@@ -223,7 +229,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::For(_, c, b) => {
+            NessaExpr::CompiledFor(_, _, c, b) => {
                 self.compile_expr_function_calls(c)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?
             }
@@ -242,6 +248,12 @@ impl NessaContext {
         body.iter_mut().for_each(|i| self.compile_expr_function_names(i));        
         return body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect();        
     }
+
+    /*
+        ╒══════════════════╕
+        │ Full compilation │
+        ╘══════════════════╛
+    */
 
     pub fn compile(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
         self.compile_variables(body);

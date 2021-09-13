@@ -20,6 +20,7 @@ pub enum NessaExpr {
     Variable(usize, String),
     CompiledVariableDefinition(usize, String, Type, Box<NessaExpr>),
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
+    CompiledFor(usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
     // Uncompiled
     Literal(Object),
@@ -30,6 +31,7 @@ pub enum NessaExpr {
     NaryOperation(usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
 
     VariableDefinition(String, Type, Box<NessaExpr>),
+    VariableAssignment(String, Box<NessaExpr>),
     FunctionDefinition(String, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(String, usize),
     PostfixOperatorDefinition(String, usize),
@@ -234,6 +236,16 @@ impl NessaContext {
             call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - 
             spaces() - sym(';')
         ).map(|e| NessaExpr::Return(Box::new(e)));
+    }
+
+    fn variable_assignment_parser(&self) -> Parser<char, NessaExpr> {
+        return (
+            (spaces() * self.identifier_parser()) -
+            (spaces() - sym('=').discard() - spaces()) +
+            (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
+            spaces() - sym(';')
+        
+        ).map(|(n, v)| NessaExpr::VariableAssignment(n, Box::new(v)));
     }
 
     fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
@@ -600,6 +612,7 @@ impl NessaContext {
 
     fn nessa_line_parser(&self) -> Parser<char, NessaExpr> {
         return call(move || self.variable_definition_parser())
+            | call(move || self.variable_assignment_parser())
             | call(move || self.return_parser())
             | call(move || self.if_parser())
             | call(move || self.for_parser())
@@ -608,6 +621,7 @@ impl NessaContext {
 
     fn nessa_global_parser(&self) -> Parser<char, NessaExpr> {
         return call(move || self.variable_definition_parser())
+            | call(move || self.variable_assignment_parser())
             | call(move || self.return_parser())
             | call(move || self.if_parser())
             | call(move || self.for_parser())
@@ -892,7 +906,7 @@ mod tests {
                 return \"a\";
             
             } else if arg + 2 {
-                return 7;    
+                r = r + 1;    
             
             } else {
                 return 5;    
@@ -977,7 +991,14 @@ mod tests {
                                     Box::new(NessaExpr::Literal(Object::new(Number::from(2))))
                                 ),
                                 vec!(
-                                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(7)))))
+                                    NessaExpr::VariableAssignment(
+                                        "r".into(),
+                                        Box::new(NessaExpr::BinaryOperation(
+                                            0,
+                                            Box::new(NessaExpr::NameReference("r".into())),
+                                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                                        ))
+                                    )
                                 )
                             )
                         ),

@@ -104,6 +104,9 @@ impl NessaExpr {
                 if let Type::Basic(2) = h_type {
                     ctx.execute_nessa_program(b)?;
                     else_execution = false;
+                
+                } else {
+                    return Err(format!("Cannot evaluate value of type {} as Bool", h_type.get_name(ctx)))
                 }
 
                 // Else ifs execution
@@ -114,12 +117,36 @@ impl NessaExpr {
                     if let Type::Basic(2) = h_type {
                         ctx.execute_nessa_program(ei_b)?;
                         else_execution = false;
+                    
+                    } else {
+                        return Err(format!("Cannot evaluate value of type {} as Bool", h_type.get_name(ctx)))
                     }
                 }
 
                 // Else execution
                 if else_execution {
                     ctx.execute_nessa_program(eb.as_ref().unwrap())?;
+                }
+            }
+
+            NessaExpr::CompiledFor(id, n, c, b) => {
+                let ex_c = c.execute(ctx)?.expect("Cannot evaluate non-existent expression");
+                let c_type = ex_c.get_type();
+
+                if let Type::Template(3, _) = c_type {
+                    let arr = &*ex_c.get::<Vec<Object>>();
+
+                    for el in arr {
+                        ctx.define_variable(*id, n.clone(), Type::Wildcard)?;
+                        ctx.assign_variable(*id, el.get_ref_obj())?;
+
+                        ctx.execute_nessa_program(b)?;
+                        
+                        ctx.delete_variable(*id)?;
+                    }
+                
+                } else {
+                    return Err(format!("Value of type {} is not iterable", c_type.get_name(ctx)))
                 }
             }
 
@@ -238,5 +265,27 @@ mod tests {
             value: Some(Object::new(Number::from(4))),
             var_type: Type::Wildcard 
         });
+    }
+
+    #[test]
+    fn flow_control() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            let v_0 = 5;
+            let v_1 = 3 + 4;
+            let v_2 = inc(inc(2));
+        ".chars().collect::<Vec<_>>();
+
+        let mut code;
+
+        {
+            let parser = ctx.nessa_parser();
+            code = parser.parse(&code_str).unwrap();
+
+            ctx.compile(&mut code).unwrap();
+        }
+
+        ctx.execute_nessa_program(&code).unwrap();
     }
 }

@@ -287,6 +287,35 @@ impl NessaObject for bool {
     }
 }
 
+impl NessaObject for Vec<Object> {
+    fn get_type_id(&self) -> usize {
+        return 3;
+    }
+
+    fn get_type(&self) -> Type {
+        return Type::Template(3, vec!(Type::Wildcard));
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn to_string(&self) -> String {
+        return format!("{{{}}}", self.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<Vec<Object>>();
+        let tb = b.as_any().downcast_ref::<Vec<Object>>();
+
+        return ta == tb;
+    }
+}
+
 impl NessaObject for () {
     fn get_type_id(&self) -> usize {
         return 0;

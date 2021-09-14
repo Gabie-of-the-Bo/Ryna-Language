@@ -17,7 +17,12 @@ impl NessaExpr {
                 let var = ctx.get_variable(*id)?;
 
                 if let Some(obj) = &var.value {
-                    return Ok(Some(obj.get_ref_mut_obj()));
+                    if let Type::Ref(_) = &var.var_type {
+                        return Ok(Some(obj.get_ref_obj()));
+                    
+                    } else {
+                        return Ok(Some(obj.get_ref_mut_obj()));
+                    }
 
                 } else{
                     return Err(format!("Value not present in register with id={} ({})", id, n))
@@ -88,14 +93,14 @@ impl NessaExpr {
                 }                
             }
 
-            NessaExpr::FunctionCall(id, _, a) => {
+            NessaExpr::FunctionCall(id, t, a) => {
                 let args = a.into_iter().map(|i| i.execute(ctx))
                                         .collect::<Result<Vec<_>, _>>()?
                                         .into_iter()
                                         .collect::<Option<Vec<_>>>()
                                         .expect("Cannot apply an operation to a non-existent value");
 
-                return Ok(Some(Object::apply_function(&args.iter().collect::<Vec<_>>(), *id, ctx)?));
+                return Ok(Some(Object::apply_function(&args.iter().collect::<Vec<_>>(), &t, *id, ctx)?));
             }
 
             NessaExpr::If(h, b, ei, eb) => {
@@ -138,14 +143,19 @@ impl NessaExpr {
             }
 
             NessaExpr::CompiledFor(id, n, c, b) => {
-                let ex_c = c.execute(ctx)?.expect("Cannot evaluate non-existent expression");
+                let mut ex_c = c.execute(ctx)?.expect("Cannot evaluate non-existent expression");
+
+                if ex_c.is_ref() {
+                    ex_c = ex_c.deref_obj();
+                }
+
                 let c_type = ex_c.get_type();
 
                 if let Type::Template(3, _) = c_type {
-                    let arr = &*ex_c.get::<Vec<Object>>();
+                    let arr = &*ex_c.get::<(Type, Vec<Object>)>();
 
-                    for el in arr {
-                        ctx.define_variable(*id, n.clone(), Type::Wildcard)?;
+                    for el in &arr.1 {
+                        ctx.define_variable(*id, n.clone(), Type::Ref(Box::new(arr.0.clone())))?;
                         ctx.assign_variable(*id, el.get_ref_obj())?;
 
                         ctx.execute_nessa_program(b)?;
@@ -290,6 +300,17 @@ mod tests {
             if false {
                 b = 1;
             }
+
+            let array: Array<Number> = arr<Number>();
+
+            push<Number>(array, 5);
+            push<Number>(array, 10);
+
+            let array_2: Array<&Number> = arr<&Number>();
+            
+            for e in array {
+                push<&Number>(array_2, e);
+            }
         ".chars().collect::<Vec<_>>();
 
         let mut code;
@@ -315,6 +336,32 @@ mod tests {
             name: "b".into(),
             value: Some(Object::new(Number::from(0))),
             var_type: Type::Wildcard 
+        });
+
+        assert_eq!(*ctx.get_variable(2).unwrap(), Variable {
+            id: 2,
+            name: "array".into(),
+            value: Some(Object::new((
+                Type::Basic(0), 
+                vec!(
+                    Object::new(Number::from(5)),
+                    Object::new(Number::from(10))
+                )
+            ))),
+            var_type: Type::Template(3, vec!(Type::Basic(0))) 
+        });
+
+        assert_eq!(*ctx.get_variable(3).unwrap(), Variable {
+            id: 3,
+            name: "array_2".into(),
+            value: Some(Object::new((
+                Type::Ref(Box::new(Type::Basic(0))), 
+                vec!(
+                    Object::new(Number::from(5)).get_ref_obj(),
+                    Object::new(Number::from(10)).get_ref_obj()
+                )
+            ))),
+            var_type: Type::Template(3, vec!(Type::Ref(Box::new(Type::Basic(0))))) 
         });
     }
 }

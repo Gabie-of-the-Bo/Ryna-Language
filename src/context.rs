@@ -408,9 +408,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |a| { a[0].clone() });
-        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |a| { a[0].clone() });
-        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], Type::Basic(0), |a| { a[0].clone() });
+        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

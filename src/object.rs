@@ -293,13 +293,13 @@ impl NessaObject for bool {
     }
 }
 
-impl NessaObject for Vec<Object> {
+impl NessaObject for (Type, Vec<Object>) {
     fn get_type_id(&self) -> usize {
         return 3;
     }
 
     fn get_type(&self) -> Type {
-        return Type::Template(3, vec!(Type::Wildcard));
+        return Type::Template(3, vec!(self.0.clone()));
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -311,7 +311,7 @@ impl NessaObject for Vec<Object> {
     }
 
     fn to_string(&self) -> String {
-        return format!("{{{}}}", self.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
+        return format!("{{{}}}", self.1.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
@@ -413,7 +413,7 @@ impl Object {
         return Ok(ops[0].2(a, b));
     }
 
-    pub fn apply_function(args: &[&Object], id: usize, ctx: &NessaContext) -> Result<Object, String> {
+    pub fn apply_function(args: &[&Object], templates: &[Type], id: usize, ctx: &NessaContext) -> Result<Object, String> {
         let args_type = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
         let funcs = ctx.get_function_overloads(id, &args_type);
 
@@ -429,7 +429,7 @@ impl Object {
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
         }
 
-        return Ok(funcs[0].2(args));
+        return Ok(funcs[0].2(templates, args));
     }
 }
 
@@ -516,7 +516,7 @@ mod tests {
 
         let number = Object::new(Number::from(10));
         
-        let f_num = Object::apply_function(&[&number], 0, &ctx).unwrap();
+        let f_num = Object::apply_function(&[&number], &[], 0, &ctx).unwrap();
 
         assert_eq!(*f_num.get::<Number>(), Number::from(11));
     }

@@ -88,6 +88,10 @@ impl Type {
         return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
     }
 
+    pub fn bindable_to_template(&self, other: &Type, templates: &[Type]) -> bool {
+        return self.template_bindable_to(other, &mut templates.iter().cloned().enumerate().collect(), &mut HashMap::new());
+    }
+
     pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,

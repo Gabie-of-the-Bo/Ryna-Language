@@ -264,10 +264,10 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_function_overloads(&self, id: usize, args: &[Type]) -> Vec<&(Type, Type, FunctionOverload)> {
+    pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
     }
 
     pub fn define_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {

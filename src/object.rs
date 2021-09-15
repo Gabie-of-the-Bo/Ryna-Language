@@ -415,17 +415,29 @@ impl Object {
 
     pub fn apply_function(args: &[&Object], templates: &[Type], id: usize, ctx: &NessaContext) -> Result<Object, String> {
         let args_type = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
-        let funcs = ctx.get_function_overloads(id, &args_type);
+        let funcs = ctx.get_function_overloads(id, templates, &args_type);
 
         if funcs.len() == 0 {
-            return Err(format!("Unable to find function overload for {}({})", 
+            return Err(format!("Unable to find function overload for {}{}({})", 
                                 ctx.functions[id].name,
+                                if templates.len() > 0 {
+                                    format!("<{}>", templates.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "))
+
+                                } else{
+                                    "".into()
+                                },
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
         }
 
         if funcs.len() > 1 {
-            return Err(format!("Function overload {}({}) is ambiguous", 
+            return Err(format!("Function overload {}{}({}) is ambiguous", 
                                 ctx.functions[id].name,
+                                if templates.len() > 0 {
+                                    format!("<{}>", templates.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", "))
+
+                                } else{
+                                    "".into()
+                                },
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
         }
 

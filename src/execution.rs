@@ -309,7 +309,7 @@ mod tests {
             let array_2: Array<&Number> = arr<&Number>();
             
             for e in array {
-                push<&Number>(array_2, e);
+                array_2.push<&Number>(e);
             }
         ".chars().collect::<Vec<_>>();
 

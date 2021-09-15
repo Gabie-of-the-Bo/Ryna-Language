@@ -199,9 +199,20 @@ impl NessaContext {
                 self.compile_expr_function_calls(e)?;
             }
 
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::BinaryOperation(id, a, b) => {
                 self.compile_expr_function_calls(a)?;
                 self.compile_expr_function_calls(b)?;
+
+                // Member function calls
+                if *id == 2 {
+                    if let NessaExpr::FunctionCall(f_id, t, args) = b.as_ref() {
+                        // Append first operand to the function's arguments 
+                        let mut new_args = vec!(a.as_ref().clone());
+                        new_args.extend(args.iter().cloned());
+
+                        *expr = NessaExpr::FunctionCall(*f_id, t.clone(), new_args);
+                    }
+                }
             }
             
             // Function call

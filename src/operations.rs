@@ -85,7 +85,6 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("+".into(), 200).unwrap();
-    ctx.define_binary_operator("*".into(), 150).unwrap();
 
     ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
@@ -100,6 +99,9 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
         return Object::new(format!("{}{}", n_a, n_b));
     }).unwrap();
+
+    ctx.define_binary_operator("*".into(), 150).unwrap();
+    ctx.define_binary_operator(".".into(), 1000).unwrap();
 }
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {

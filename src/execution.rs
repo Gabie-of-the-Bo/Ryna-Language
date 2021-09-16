@@ -112,7 +112,7 @@ impl NessaExpr {
                 // If execution
                 if let Type::Basic(2) = h_type {
                     if *ex_h.get::<bool>() {
-                        ctx.execute_nessa_program(b)?;
+                        ctx.execute_nessa_module(b)?;
                         else_execution = false;
                     }
                 
@@ -127,7 +127,7 @@ impl NessaExpr {
 
                     if let Type::Basic(2) = h_type {
                         if *ex_h.get::<bool>() {
-                            ctx.execute_nessa_program(ei_b)?;
+                            ctx.execute_nessa_module(ei_b)?;
                             else_execution = false;
                         }
                     
@@ -138,7 +138,7 @@ impl NessaExpr {
 
                 // Else execution
                 if else_execution && eb.is_some() {
-                    ctx.execute_nessa_program(eb.as_ref().unwrap())?;
+                    ctx.execute_nessa_module(eb.as_ref().unwrap())?;
                 }
             }
 
@@ -158,7 +158,7 @@ impl NessaExpr {
                         ctx.define_variable(*id, n.clone(), Type::Ref(Box::new(arr.0.clone())))?;
                         ctx.assign_variable(*id, el.get_ref_obj())?;
 
-                        ctx.execute_nessa_program(b)?;
+                        ctx.execute_nessa_module(b)?;
                         
                         ctx.delete_variable(*id)?;
                     }
@@ -176,12 +176,80 @@ impl NessaExpr {
 }
 
 impl NessaContext {
-    fn execute_nessa_program(&mut self, program: &Vec<NessaExpr>) -> Result<(), String> {
+    fn define_module_operators(&mut self, code: &String) -> Result<(), String> {
+        let ops;
+
+        {
+            let code_chars = code.chars().collect::<Vec<_>>();
+            let parser = self.nessa_operators_parser().cache();
+            ops = parser.parse(&code_chars).unwrap();
+        }
+
+        for i in ops {
+            match i {
+                NessaExpr::PrefixOperatorDefinition(n, p) => self.define_unary_operator(n.clone(), true, p)?,
+                NessaExpr::PostfixOperatorDefinition(n, p) => self.define_unary_operator(n.clone(), false, p)?,
+                NessaExpr::BinaryOperatorDefinition(n, p) => self.define_binary_operator(n.clone(), p)?,
+                NessaExpr::NaryOperatorDefinition(o, c, p) => self.define_nary_operator(o.clone(), c.clone(), p)?,
+
+                _ => {}
+            }
+        }
+
+        return Ok(());
+    }
+    fn define_module_operations(&mut self, code: &String) -> Result<(), String> {
+        let ops;
+
+        {
+            let code_chars = code.chars().collect::<Vec<_>>();
+            let parser = self.nessa_operations_parser().cache();
+            ops = parser.parse(&code_chars).unwrap();
+        }
+
+        for i in ops {
+            // TODO: create functions from bodies
+            match i {
+                NessaExpr::PrefixOperationDefinition(id, _a, t, r, _) => self.define_unary_operation(id, t, r, |a| a.clone())?,
+                NessaExpr::PostfixOperationDefinition(id, _a, t, r, _) => self.define_unary_operation(id, t, r, |a| a.clone())?,
+                NessaExpr::BinaryOperationDefinition(id, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, ta, tb, r, |a, _| a.clone())?,
+                NessaExpr::NaryOperationDefinition(id, (_a, ta), v, r, _) => self.define_nary_operation(id, ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, |a, _| a.clone())?,
+
+                _ => {}
+            }
+        }
+
+        return Ok(());
+    }
+
+    fn parse_nessa_module(&mut self, code: &String) -> Vec<NessaExpr> {
+        let res;
+
+        {
+            let code_chars = code.chars().collect::<Vec<_>>();
+            let parser = self.nessa_parser().cache();
+            res = parser.parse(&code_chars).unwrap();
+        }
+
+        return res;
+    }
+    
+    fn execute_nessa_module(&mut self, program: &Vec<NessaExpr>) -> Result<(), String> {
         for expr in program {
             expr.execute(self)?;
         }
 
         return Ok(());
+    }
+
+    fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
+        self.define_module_operators(&code)?;
+        self.define_module_operations(&code)?;
+
+        let mut lines = self.parse_nessa_module(&code);
+        self.compile(&mut lines)?;
+        
+        return self.execute_nessa_module(&lines);
     }
 }
 
@@ -207,18 +275,9 @@ mod tests {
             let v_0 = 0;
             let v_1: Bool = true;
             let v_2: String = \"test\";
-        ".chars().collect::<Vec<_>>();
+        ".to_string();
 
-        let mut code;
-
-        {
-            let parser = ctx.nessa_parser();
-            code = parser.parse(&code_str).unwrap();
-
-            ctx.compile(&mut code).unwrap();
-        }
-
-        ctx.execute_nessa_program(&code).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(*ctx.get_variable(0).unwrap(), Variable {
             id: 0,
@@ -250,18 +309,9 @@ mod tests {
             let v_0 = 5;
             let v_1 = 3 + 4;
             let v_2 = inc(inc(2));
-        ".chars().collect::<Vec<_>>();
+        ".to_string();
 
-        let mut code;
-
-        {
-            let parser = ctx.nessa_parser();
-            code = parser.parse(&code_str).unwrap();
-
-            ctx.compile(&mut code).unwrap();
-        }
-
-        ctx.execute_nessa_program(&code).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(*ctx.get_variable(0).unwrap(), Variable {
             id: 0,
@@ -304,25 +354,16 @@ mod tests {
             let array: Array<Number> = arr<Number>();
 
             push<Number>(array, 5);
-            push<Number>(array, 10);
+            array.push<Number>(10);
 
             let array_2: Array<&Number> = arr<&Number>();
             
             for e in array {
-                array_2.push<&Number>(e);
+                array_2.e.push<&Number>();
             }
-        ".chars().collect::<Vec<_>>();
+        ".to_string();
 
-        let mut code;
-
-        {
-            let parser = ctx.nessa_parser();
-            code = parser.parse(&code_str).unwrap();
-
-            ctx.compile(&mut code).unwrap();
-        }
-
-        ctx.execute_nessa_program(&code).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(*ctx.get_variable(0).unwrap(), Variable {
             id: 0,
@@ -363,5 +404,40 @@ mod tests {
             ))),
             var_type: Type::Template(3, vec!(Type::Ref(Box::new(Type::Basic(0))))) 
         });
+    }
+
+    #[test]
+    fn operator_definitions() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            unary prefix op \"~\" (200);
+
+            op ~(arg: &&Number) -> &&Number {
+                return arg;
+            }
+
+            let a = 3;
+            let b = ~a;
+
+            binary op \"·\" (300);
+
+            op (a: &&Number) · (b: &&Number) -> &&Number {
+                return a + b;
+            }
+
+            let c = a · b;
+
+            nary op from \"`\" to \"´\" (500);
+
+            op (a: &&Number)`b: &&Number, c: &&Number´ -> &&Number {
+                return a · b + ~c;
+            }
+
+            let d = a`b, c´;
+        ".to_string();
+
+        ctx.define_module_operators(&code_str).unwrap();
+        ctx.define_module_operations(&code_str).unwrap();
     }
 }

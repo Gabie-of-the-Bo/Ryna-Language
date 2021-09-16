@@ -597,7 +597,7 @@ impl NessaContext {
         return sym('(') * spaces() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(')');
     }
     
-    fn operator_defition_parser(&self) -> Parser<char, NessaExpr> {
+    pub fn operator_definition_parser(&self) -> Parser<char, NessaExpr> {
         return self.unary_prefix_operator_parser()
             | self.unary_postfix_operator_parser()
             | self.binary_operator_parser()
@@ -628,8 +628,17 @@ impl NessaContext {
             | call(move || self.for_parser())
             | call(move || self.class_definition_parser())
             | call(move || self.function_definition_parser())
+            | call(move || self.operator_definition_parser())
             | call(move || self.operation_definition_parser())
             | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
+    }
+
+    pub fn nessa_operators_parser(&self) -> Parser<char, Vec<NessaExpr>> {
+        return (call(move || spaces() * self.operator_definition_parser() - spaces()) | any().map(|_| NessaExpr::Literal(Object::empty()))).repeat(0..) - end();
+    }
+
+    pub fn nessa_operations_parser(&self) -> Parser<char, Vec<NessaExpr>> {
+        return (call(move || spaces() * self.operation_definition_parser() - spaces()) | any().map(|_| NessaExpr::Literal(Object::empty()))).repeat(0..) - end();
     }
 
     pub fn nessa_parser(&self) -> Parser<char, Vec<NessaExpr>> {
@@ -1049,7 +1058,7 @@ mod tests {
         let binary_str = "binary op \"$\" (400);".chars().collect::<Vec<_>>();
         let nary_str = "nary op from \"`\" to \"´\" (500);".chars().collect::<Vec<_>>();
 
-        let parser = ctx.operator_defition_parser();
+        let parser = ctx.operator_definition_parser();
 
         let prefix = parser.parse(&prefix_str).unwrap();
         let postfix = parser.parse(&postfix_str).unwrap();

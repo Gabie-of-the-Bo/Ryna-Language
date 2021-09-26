@@ -1159,6 +1159,70 @@ impl NessaContext {
         )(input);
     }
 
+    fn class_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("class"),
+                multispace1,
+                |input| self.identifier_parser(input),
+                multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
+                tag("{"),
+                multispace0,
+                separated_list0(
+                    multispace0,
+                    map(
+                        tuple((
+                            |input| self.identifier_parser(input),
+                            map(
+                                opt(
+                                    map(
+                                        tuple((
+                                            multispace0,
+                                            tag(":"),
+                                            multispace0,
+                                            |input| self.type_parser(input),
+                                            multispace0
+                                        )),
+                                        |(_, _, _, t, _)| t
+                                    )
+                                ),
+                                |t| t.unwrap_or(Type::Wildcard)
+                            ),
+                            multispace0,
+                            tag(";")
+                        )),
+                        |(a, b, _, _)| (a, b)
+                    )
+                ),
+                multispace0,
+                tag("}")
+            )),
+            |(_, _, n, _, t, _, _, mut f, _, _)| {
+                let u_t = t.unwrap_or_default();
+
+                f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
+
+                NessaExpr::ClassDefinition(n, u_t, f)
+            }
+        )(input);
+    }
+
     fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
         return alt((
             |input| self.operation_parser(input, bi, nary, cache_bin, cache_nary, cache),
@@ -1192,6 +1256,7 @@ impl NessaContext {
             |input| self.function_definition_parser(input),
             |input| self.operator_definition_parser(input),
             |input| self.operation_definition_parser(input),
+            |input| self.class_definition_parser(input),
             |input| terminated(|input| self.nessa_expr_parser(input), tuple((multispace0, tag(";"))))(input)
         ))(input);
     }
@@ -1810,5 +1875,41 @@ mod tests {
                 )
             ))
         );
+    }
+
+    #[test]
+    fn class_definition_parsing() {
+        let ctx = standard_ctx();
+
+        let dice_roll_str = "class DiceRoll {
+            faces: Number;
+            rolls: Number;
+        }";
+
+        let sync_lists_str = "class SyncLists<K, V> {
+            from: Array<'K>;
+            to: Array<'V>;
+        }";
+
+        let (_, dice_roll) = ctx.class_definition_parser(dice_roll_str).unwrap();
+        let (_, sync_lists) = ctx.class_definition_parser(sync_lists_str).unwrap();
+
+        assert_eq!(dice_roll, NessaExpr::ClassDefinition(
+            "DiceRoll".into(),
+            vec!(),
+            vec!(
+                ("faces".into(), Type::Basic(0)),
+                ("rolls".into(), Type::Basic(0))
+            )
+        ));
+
+        assert_eq!(sync_lists, NessaExpr::ClassDefinition(
+            "SyncLists".into(),
+            vec!("K".into(), "V".into()),
+            vec!(
+                ("from".into(), Type::Template(3, vec!(Type::TemplateParam(0)))),
+                ("to".into(), Type::Template(3, vec!(Type::TemplateParam(1))))
+            )
+        ));
     }
 }

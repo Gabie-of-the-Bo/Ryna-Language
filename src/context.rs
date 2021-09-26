@@ -17,6 +17,7 @@ pub struct NessaContext {
     pub unary_ops: Vec<Operator>,
     pub binary_ops: Vec<Operator>,
     pub nary_ops: Vec<Operator>,
+    pub sorted_ops: Vec<Operator>,
 
     pub functions: Vec<Function>,
 
@@ -62,13 +63,20 @@ impl NessaContext {
             }
         }
 
-        self.unary_ops.push(Operator::Unary {
+        let op = Operator::Unary {
             id: self.unary_ops.len(),
             representation: representation,
             prefix: prefix,
             precedence: precedence,
             operations: vec!()
-        });
+        };
+
+        self.unary_ops.push(op.clone());
+
+        match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
+            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Err(pos) => self.sorted_ops.insert(pos, op)
+        }
 
         return Ok(());
     }
@@ -120,12 +128,19 @@ impl NessaContext {
             }
         }
 
-        self.binary_ops.push(Operator::Binary {
+        let op = Operator::Binary {
             id: self.binary_ops.len(),
             representation: representation,
             precedence: precedence,
             operations: vec!()
-        });
+        };
+
+        self.binary_ops.push(op.clone());
+
+        match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
+            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Err(pos) => self.sorted_ops.insert(pos, op)
+        }
 
         return Ok(());
     }
@@ -185,13 +200,20 @@ impl NessaContext {
             }
         }
 
-        self.nary_ops.push(Operator::Nary {
+        let op = Operator::Nary {
             id: self.nary_ops.len(),
             open_rep: open_rep,
             close_rep: close_rep,
             precedence: precedence,
             operations: vec!()
-        });
+        };
+
+        self.nary_ops.push(op.clone());
+
+        match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
+            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Err(pos) => self.sorted_ops.insert(pos, op)
+        }
 
         return Ok(());
     }

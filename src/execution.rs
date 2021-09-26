@@ -177,13 +177,7 @@ impl NessaExpr {
 
 impl NessaContext {
     fn define_module_operators(&mut self, code: &String) -> Result<(), String> {
-        let ops;
-
-        {
-            let code_chars = code.chars().collect::<Vec<_>>();
-            let parser = self.nessa_operators_parser().cache();
-            ops = parser.parse(&code_chars).unwrap();
-        }
+        let ops = self.nessa_operators_parser(code).unwrap().1;
 
         for i in ops {
             match i {
@@ -199,13 +193,7 @@ impl NessaContext {
         return Ok(());
     }
     fn define_module_operations(&mut self, code: &String) -> Result<(), String> {
-        let ops;
-
-        {
-            let code_chars = code.chars().collect::<Vec<_>>();
-            let parser = self.nessa_operations_parser().cache();
-            ops = parser.parse(&code_chars).unwrap();
-        }
+        let ops = self.nessa_operations_parser(code).unwrap().1;
 
         for i in ops {
             // TODO: create functions from bodies
@@ -223,15 +211,7 @@ impl NessaContext {
     }
 
     fn parse_nessa_module(&mut self, code: &String) -> Vec<NessaExpr> {
-        let res;
-
-        {
-            let code_chars = code.chars().collect::<Vec<_>>();
-            let parser = self.nessa_parser().cache();
-            res = parser.parse(&code_chars).unwrap();
-        }
-
-        return res;
+        return self.nessa_parser(code).unwrap().1;
     }
     
     fn execute_nessa_module(&mut self, program: &Vec<NessaExpr>) -> Result<(), String> {
@@ -245,6 +225,8 @@ impl NessaContext {
     fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         self.define_module_operators(&code)?;
         self.define_module_operations(&code)?;
+
+        println!("{} = {} + {} + {}", self.sorted_ops.len(), self.unary_ops.len(), self.binary_ops.len(), self.nary_ops.len());
 
         let mut lines = self.parse_nessa_module(&code);
         self.compile(&mut lines)?;
@@ -421,6 +403,8 @@ mod tests {
             let b = ~a;
 
             binary op \"·\" (300);
+            binary op \"$\" (300);
+            binary op \"@\" (300);
 
             op (a: &&Number) · (b: &&Number) -> &&Number {
                 return a + b;
@@ -437,7 +421,6 @@ mod tests {
             let d = a`b, c´;
         ".to_string();
 
-        ctx.define_module_operators(&code_str).unwrap();
-        ctx.define_module_operations(&code_str).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
     }
 }

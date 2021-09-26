@@ -1,10 +1,21 @@
-use std::collections::HashSet;
-use pom::parser::*;
+use std::collections::HashMap;
 
-use crate::object::Object;
-use crate::types::Type;
+use nom::{
+    IResult,
+    combinator::{map, opt, eof},
+    bytes::complete::{take_while, take_while1, tag},
+    sequence::{tuple, delimited, terminated},
+    branch::alt,
+    character::complete::{multispace0, multispace1},
+    multi::{separated_list0, separated_list1}
+};
+
+use bit_set::BitSet;
+
 use crate::operations::Operator;
-use crate::number::*;
+use crate::object::Object;
+use crate::number::Number;
+use crate::types::Type;
 use crate::context::NessaContext;
 
 /*
@@ -51,7 +62,7 @@ pub enum NessaExpr {
 }
 
 impl NessaExpr {
-    fn compile_types(&mut self, templates: &Vec<String>) {
+    pub fn compile_types(&mut self, templates: &Vec<String>) {
         match self {
             NessaExpr::VariableDefinition(_, t, e) => {
                 t.compile_templates(templates);
@@ -94,30 +105,25 @@ impl NessaExpr {
     }
 }
 
-fn spaces<'a>() -> Parser<'a, char, ()> {
-    return one_of(" \t\r\n").repeat(0..).discard();
-}
-
-fn spaces_1<'a>() -> Parser<'a, char, ()> {
-    return one_of(" \t\r\n").repeat(1..).discard();
-}
-
 impl NessaContext {
     /*
         ╒═══════════════════╕
         │ Auxiliary methods │
         ╘═══════════════════╛
     */
-
+    
     fn get_type_id(&self, name: String) -> usize {
         return self.type_templates.iter().filter(|t| t.name == name).next().unwrap().id;
     }
 
-    fn identifier_parser(&self) -> Parser<char, String> {
-        return (
-            is_a(|i: char| i.is_alphabetic() || i == '_').repeat(1..) + 
-            is_a(|i: char| i.is_alphanumeric() || i == '_').repeat(0..)
-        ).name("Variable name").map(move |(a, b)| format!("{}{}", a.iter().collect::<String>(), b.iter().collect::<String>()));
+    fn identifier_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
+        return map(
+            tuple((
+                take_while1(|c: char| c == '_' || c.is_alphabetic()),
+                take_while(|c: char| c == '_' || c.is_alphanumeric())
+            )),
+            |(a, b)| format!("{}{}", a, b)
+        )(input);
     }
 
     /*
@@ -126,80 +132,157 @@ impl NessaContext {
         ╘═════════════════╛
     */
 
-    fn basic_type_parser(&self) -> Parser<char, Type> {
-        return self.identifier_parser().map(move |n| Type::Basic(self.get_type_id(n)));
+    fn wildcard_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(tag("*"), |_| Type::Wildcard)(input);
     }
 
-    fn template_type_parser(&self) -> Parser<char, Type> {
-        return sym('\'') * self.identifier_parser().map(move |n| Type::TemplateParamStr(n));
+    fn empty_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(tag("()"), |_| Type::Empty)(input);
     }
 
-    fn constant_reference_type_parser(&self) -> Parser<char, Type> {
-        return (sym('&') * call(move || self.type_parser(true, true))).name("Constant reference").map(|i| Type::Ref(Box::new(i)));
+    fn basic_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(|input| self.identifier_parser(input), |n| Type::Basic(self.get_type_id(n)))(input);
     }
 
-    fn mutable_reference_type_parser(&self) -> Parser<char, Type> {
-        return (sym('&').repeat(2) * spaces() * call(move || self.type_parser(true, true))).name("Mutable reference").map(|i| Type::MutRef(Box::new(i)))
+    fn template_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(
+            tuple((
+                tag("'"),
+                |input| self.identifier_parser(input)
+            )), 
+            |(_, n)| Type::TemplateParamStr(n)
+        )(input);
     }
 
-    fn parametric_type_parser(&self) -> Parser<char, Type> {
-        return (self.basic_type_parser() - spaces() + (
-            sym('<') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')
-        
-        )).name("Template type").map(|(i, args)| {
-            if let Type::Basic(id) = i {
-                return Type::Template(id, args);
-            }
-
-            return Type::Empty;
-        });
+    fn constant_reference_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(
+            tuple((
+                tag("&"),
+                |input| self.type_parser(input)
+            )), 
+            |(_, t)| Type::Ref(Box::new(t))
+        )(input);
     }
 
-    fn empty_type_parser(&self) -> Parser<char, Type> {
-        return (sym('(') * spaces() * sym(')')).name("Empty type").map(|_| Type::Empty);
+    fn mutable_reference_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(
+            tuple((
+                tag("&&"),
+                |input| self.type_parser(input)
+            )), 
+            |(_, t)| Type::MutRef(Box::new(t))
+        )(input);
     }
 
-    fn wildcard_type_parser(&self) -> Parser<char, Type> {
-        return sym('*').name("Wildcard type").map(|_| Type::Wildcard);
+    fn or_type_parser<'a>(&self, input: &'a str, func: bool) -> IResult<&'a str, Type> {
+        return map(
+            separated_list1(
+                tuple((multispace0, tag("|"), multispace0)), 
+                |input| self.type_parser_wrapper(input, func, false)
+            ),
+            |t| if t.len() > 1 { Type::Or(t) } else { t[0].clone() }
+        )(input);
     }
 
-    fn and_type_parser(&self) -> Parser<char, Type> {
-        return (sym('(') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym(')'))
-            .name("And type").map(|args| if args.len() == 1 { args[0].clone() } else { Type::And(args) });
+    fn and_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(
+            delimited(
+                tag("("),
+                separated_list1(
+                    tuple((multispace0, tag(","), multispace0)), 
+                    |input| self.type_parser(input)
+                ),
+                tag(")")
+            ),
+            |t| if t.len() > 1 { Type::And(t) } else { t[0].clone() }
+        )(input);
     }
 
-    fn or_type_parser(&self, include_func: bool) -> Parser<char, Type> {
-        return list(call(move || self.type_parser(false, include_func)), spaces() * sym('|')  * spaces()).name("Or type")
-            .map(|args| if args.len() == 1 { args[0].clone() } else { Type::Or(args) });
+    fn parametric_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return map(
+            tuple((
+                |input| self.identifier_parser(input),
+                multispace0,
+                tag("<"),
+                multispace0,
+                separated_list1(
+                    tuple((multispace0, tag(","), multispace0)), 
+                    |input| self.type_parser(input)
+                ),
+                multispace0,
+                tag(">")
+            )),
+            |(n, _, _, _, t, _, _)| Type::Template(self.get_type_id(n), t)
+        )(input);
     }
 
-    fn function_type_parser(&self, include_or: bool) -> Parser<char, Type> {
-        return (call(move || self.type_parser(include_or, false)) + spaces() * tag("=>")  * spaces() * call(move || self.type_parser(include_or, true))).name("Function type")
-            .map(|(from, to)| Type::Function(Box::new(from), Box::new(to)));
+    fn function_type_parser<'a>(&self, input: &'a str, or: bool) -> IResult<&'a str, Type> {
+        return map(
+            tuple((
+                |input| self.type_parser_wrapper(input, false, or),
+                multispace0,
+                tag("=>"),
+                multispace0,
+                |input| self.type_parser_wrapper(input, false, or)
+            )),
+            |(f, _, _, _, t)| Type::Function(Box::new(f), Box::new(t))
+        )(input);
     }
 
-    fn type_parser(&self, include_or: bool, include_func: bool) -> Parser<char, Type> {
-        let mut res = if include_func {
-            self.function_type_parser(include_or) | self.mutable_reference_type_parser()
+    fn type_parser_wrapper<'a>(&self, input: &'a str, func: bool, or: bool) -> IResult<&'a str, Type> {
+        return match (func, or) {
+            (true, true) => alt((
+                |input| self.function_type_parser(input, or),
+                |input| self.empty_type_parser(input),
+                |input| self.wildcard_type_parser(input),
+                |input| self.mutable_reference_type_parser(input),
+                |input| self.constant_reference_type_parser(input),
+                |input| self.parametric_type_parser(input),
+                |input| self.and_type_parser(input),
+                |input| self.or_type_parser(input, func),
+                |input| self.template_type_parser(input),
+                |input| self.basic_type_parser(input)
+            ))(input),
 
-        } else{ 
-            self.mutable_reference_type_parser() 
-        } 
-        | self.constant_reference_type_parser()
-        | self.parametric_type_parser()
-        | self.empty_type_parser()
-        | self.and_type_parser();
-        
-        // The or case is excluded in order to properly parse types without using parentheses
-        if include_or {
-            res = res | self.or_type_parser(include_func);
-        }
-        
-        res = res | self.wildcard_type_parser()
-                  | self.template_type_parser()
-                  | self.basic_type_parser();
+            (false, true) => alt((
+                |input| self.empty_type_parser(input),
+                |input| self.wildcard_type_parser(input),
+                |input| self.mutable_reference_type_parser(input),
+                |input| self.constant_reference_type_parser(input),
+                |input| self.parametric_type_parser(input),
+                |input| self.and_type_parser(input),
+                |input| self.or_type_parser(input, func),
+                |input| self.template_type_parser(input),
+                |input| self.basic_type_parser(input)
+            ))(input),
 
-        return res;
+            (true, false) => alt((
+                |input| self.function_type_parser(input, or),
+                |input| self.empty_type_parser(input),
+                |input| self.wildcard_type_parser(input),
+                |input| self.mutable_reference_type_parser(input),
+                |input| self.constant_reference_type_parser(input),
+                |input| self.parametric_type_parser(input),
+                |input| self.and_type_parser(input),
+                |input| self.template_type_parser(input),
+                |input| self.basic_type_parser(input)
+            ))(input),
+            
+            (false, false) => alt((
+                |input| self.empty_type_parser(input),
+                |input| self.wildcard_type_parser(input),
+                |input| self.mutable_reference_type_parser(input),
+                |input| self.constant_reference_type_parser(input),
+                |input| self.parametric_type_parser(input),
+                |input| self.and_type_parser(input),
+                |input| self.template_type_parser(input),
+                |input| self.basic_type_parser(input)
+            ))(input),
+        };
+    }
+
+    fn type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
+        return self.type_parser_wrapper(input, true, true);
     }
 
     /*
@@ -208,441 +291,955 @@ impl NessaContext {
         ╘═════════════════╛
     */
 
-    fn bool_parser(&self) -> Parser<char, bool> {
-        return (tag("true") | tag("false")).map(|i| i == "true");
+    fn bool_parser<'a>(&self, input: &'a str) -> IResult<&'a str, bool> {
+        return alt((
+            map(tag("true"), |_| true),
+            map(tag("false"), |_| false),
+        ))(input);
     }
 
-    fn number_parser(&self) -> Parser<char, Number> {
-        return (tag("-").opt() + is_a(|i: char| i.is_digit(10)).repeat(1..))
-            .map(|(s, i)| Number::from(format!("{}{}", s.unwrap_or(""), i.iter().collect::<String>())));
+    fn number_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Number> {
+        return map(
+            tuple((
+                opt(tag("-")),
+                take_while1(|c: char| c.is_digit(10)),
+                opt(tuple((
+                    tag("."),
+                    take_while1(|c: char| c.is_digit(10))
+                )))
+            )),
+            |(s, n, d)| Number::from(format!("{}{}{}", s.unwrap_or_default(), n, d.unwrap_or_default().1).as_str())
+        )(input);
     }
 
-    fn string_parser(&self) -> Parser<char, String> {
-        return (sym('"').discard() * none_of("\"").repeat(0..) - sym('"').discard()).map(|i| i.iter().collect());
+    fn string_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
+        return map(
+            delimited(
+                tag("\""), 
+                take_while(|c| c != '\"'), 
+                tag("\"")
+            ),
+            String::from
+        )(input);
+    }
+    
+    fn literal_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            alt((
+                map(|input| self.bool_parser(input), |b| Object::new(b)),
+                map(|input| self.number_parser(input), |n| Object::new(n)),
+                map(|input| self.string_parser(input), |s| Object::new(s))
+            )),
+            |o| NessaExpr::Literal(o)
+        )(input);
+    }
+    
+    fn variable_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            |input| self.identifier_parser(input),
+            NessaExpr::NameReference
+        )(input);
+    }
+    
+    fn unary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag(rep),
+                multispace0,
+                |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+            )),
+            |(_, _, e)| NessaExpr::UnaryOperation(id, Box::new(e))
+        )(input);
+    }
+    
+    fn binary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = cache_bin.get(&input.len()) {
+            return match r {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            };
+       
+        } else{
+            let mut bi_cpy = bi.clone();
+            bi_cpy.insert(id);
+    
+            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, cache_bin, cache_nary, cache)?;
+    
+            let res = map(
+                tuple((
+                    multispace0,
+                    tag(rep),
+                    multispace0,
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+                )),
+                |(_, _, _, b)| NessaExpr::BinaryOperation(id, Box::new(a.clone()), Box::new(b))
+            )(input);
+
+            cache_bin.insert(input.len(), match &res {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            });
+
+            return res;
+        }
+    }
+    
+    fn nary_operation_parser<'a>(&self, input: &'a str, id: usize, open: &str, close: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = cache_nary.get(&input.len()) {
+            return match r {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            };
+       
+        } else{
+            let mut nary_cpy = nary.clone();
+            nary_cpy.insert(id);
+    
+            let (input, a) = self.nessa_expr_parser_wrapper(input, bi, &nary_cpy, cache_bin, cache_nary, cache)?;
+    
+            let res = map(
+                tuple((
+                    multispace0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                multispace0,
+                                separated_list1(
+                                    tuple((multispace0, tag(","), multispace0)), 
+                                    |input| self.type_parser(input)
+                                ),
+                                multispace0,
+                                tag(">"),
+                                multispace0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    tag(open),
+                    multispace0,
+                    separated_list0(
+                        tuple((multispace0, tag(","), multispace0)),
+                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+                    ),
+                    multispace0,
+                    tag(close)
+                )),
+                |(_, t, _, _, b, _, _)| NessaExpr::NaryOperation(id, t.unwrap_or_default(), Box::new(a.clone()), b)
+            )(input);
+
+            cache_nary.insert(input.len(), match &res {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            });
+
+            return res;
+        }
+    }
+    
+    fn get_bi_bitset(&self) -> BitSet {
+        return BitSet::with_capacity(self.binary_ops.len());
+    }
+    
+    fn get_n_bitset(&self) -> BitSet {
+        return BitSet::with_capacity(self.nary_ops.len());
     }
 
-    fn literal_parser(&self) -> Parser<char, NessaExpr> {
-        return self.number_parser().name("Numeric literal").map(|i| NessaExpr::Literal(Object::new(i)))
-            | self.bool_parser().name("Boolean literal").map(|i| NessaExpr::Literal(Object::new(i)))
-            | self.string_parser().name("String literal").map(|i| NessaExpr::Literal(Object::new(i)))
-    }
+    fn operation_parser<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = cache.get(&(input.len(), bi.clone(), nary.clone())) {
+            return match r {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            };
+       
+        } else{
+            for o in self.sorted_ops.iter().rev() {
+                if let Operator::Unary{id, representation, ..} = o {
+                    let res = self.unary_operation_parser(input, *id, representation, bi, nary, cache_bin, cache_nary, cache);
+    
+                    if res.is_ok() {
+                        cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                            Ok(a) => Ok(a.clone()),
+                            Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+                        });
 
-    fn variable_parser(&self) -> Parser<char, NessaExpr> {
-        return self.identifier_parser().map(|i| NessaExpr::NameReference(i));
-    }
+                        return res;
+                    }
+                    
+                } else if let Operator::Binary{id, representation, ..} = o {
+                    if !bi.contains(*id) {
+                        let res = self.binary_operation_parser(input, *id, representation, bi, nary, cache_bin, cache_nary, cache);
+    
+                        if res.is_ok() {
+                            cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                                Ok(a) => Ok(a.clone()),
+                                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+                            });
 
-    fn return_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("return") * spaces_1() * 
-            call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - 
-            spaces() - sym(';')
-        ).map(|e| NessaExpr::Return(Box::new(e)));
-    }
+                            return res;
+                        }   
+                    }
+    
+                } else if let Operator::Nary{id, open_rep, close_rep, ..} = o {
+                    if !nary.contains(*id) {
+                        let res = self.nary_operation_parser(input, *id, open_rep, close_rep, bi, nary, cache_bin, cache_nary, cache);
+    
+                        if res.is_ok() {
+                            cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                                Ok(a) => Ok(a.clone()),
+                                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+                            });
 
-    fn variable_assignment_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            (spaces() * self.identifier_parser()) -
-            (spaces() - sym('=').discard() - spaces()) +
-            (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
-            spaces() - sym(';')
-        
-        ).map(|(n, v)| NessaExpr::VariableAssignment(n, Box::new(v)));
-    }
-
-    fn variable_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            (spaces() * tag("let").discard() * spaces_1() * self.identifier_parser()) +
-            ((spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true))).opt() - spaces() - sym('=').discard() - spaces()) +
-            (call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()))) - 
-            spaces() - sym(';')
-        
-        ).map(|((n, t), v)| NessaExpr::VariableDefinition(n, t.unwrap_or(Type::Wildcard), Box::new(v)));
-    }
-
-    fn function_header_parser(&self) -> Parser<char, ((String, Option<Vec<String>>), (Vec<(String, Type)>, Type))> {
-        return (spaces() * tag("fn").discard() * spaces_1() * self.identifier_parser()) +
-            (
-                spaces() * sym('<') * spaces() *
-                list(self.identifier_parser(), spaces() * sym(',') * spaces()) -
-                spaces() * sym('>') * spaces()
-            ).opt() - spaces() +
-            (
-                spaces() * sym('(').discard() * spaces() * 
-                list(
-                    self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)), 
-                    spaces() * sym(',') - spaces()
-                ) + 
-                (spaces() - sym(')').discard() - spaces()) *
-                spaces() * tag("->") * spaces() * call(move || self.type_parser(true, true))
-            );
-    }
-
-    fn unary_prefix_operation_header_parser(&self) -> Parser<char, (((usize, String), Type), Type)> {
-        return spaces() * tag("op").discard() * spaces_1() * 
-            self.unary_ops.iter()
-            .filter(|i| {
-                if let Operator::Unary{prefix, ..} = i {
-                    return *prefix;
+                            return res;
+                        }   
+                    }
+    
+                } else{
+                    unreachable!();
                 }
+            }
 
-                unreachable!();
-            })
-            .map(|i| {
-                if let Operator::Unary{representation: r, id, ..} = i {
-                    return tag(r.as_str()).map(move |_| *id);
-                }
-
-                unreachable!();
-            }).reduce(|a, b| a | b).unwrap() - spaces() +
-            sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
-            spaces() * sym(')') * spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true, true));
+            cache.insert((input.len(), bi.clone(), nary.clone()), Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt))));
+    
+            return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+        }
+    }
+    
+    fn variable_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("let"),
+                multispace0,
+                |input| self.identifier_parser(input),
+                multispace0,
+                opt(
+                    tuple((
+                        tag(":"),
+                        multispace0,
+                        |input| self.type_parser(input),
+                        multispace0
+                    ))
+                ),
+                tag("="),
+                multispace0,
+                |input| self.nessa_expr_parser(input),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, n, _, t, _, _, e, _, _)| NessaExpr::VariableDefinition(n, t.unwrap_or(("", "", Type::Wildcard, "")).2, Box::new(e))
+        )(input);
+    }
+    
+    fn variable_assignment_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.identifier_parser(input),
+                multispace0,
+                tag("="),
+                multispace0,
+                |input| self.nessa_expr_parser(input),
+                multispace0,
+                tag(";")
+            )),
+            |(n, _, _, _, e, _, _)| NessaExpr::VariableAssignment(n, Box::new(e))
+        )(input);
+    }
+    
+    fn return_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("return"),
+                multispace0,
+                |input| self.nessa_expr_parser(input),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, e, _, _)| NessaExpr::Return(Box::new(e))
+        )(input);
+    }
+    
+    fn if_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("if"),
+                multispace1,
+                |input| self.nessa_expr_parser(input)
+            )),
+            |(_, _, e)| e
+        )(input);
+    }
+    
+    fn else_if_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("else"),
+                multispace1,
+                tag("if"),
+                multispace1,
+                |input| self.nessa_expr_parser(input)
+            )),
+            |(_, _, _, _, e)| e
+        )(input);
+    }
+    
+    fn if_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.if_header_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+                separated_list0(
+                    multispace0,
+                    map(
+                        tuple((
+                            multispace0,
+                            |input| self.else_if_header_parser(input),
+                            multispace0,
+                            |input| self.code_block_parser(input)
+                        )),
+                        |(_, eih, _, eib)| (eih, eib)
+                    )
+                ),
+                opt(
+                    map(
+                        tuple((
+                            multispace0,
+                            tag("else"),
+                            multispace0,
+                            |input| self.code_block_parser(input)
+                        )),
+                        |(_, _, _, e)| e   
+                    )
+                )
+            )),
+            |(ih, _, ib, ei, e)| NessaExpr::If(Box::new(ih), ib, ei, e)
+        )(input);
+    }
+    
+    fn for_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (String, NessaExpr)> {
+        return map(
+            tuple((
+                tag("for"),
+                multispace1,
+                |input| self.identifier_parser(input),
+                multispace1,
+                tag("in"),
+                multispace1,
+                |input| self.nessa_expr_parser(input)
+            )),
+            |(_, _, n, _, _, _, e)| (n, e)
+        )(input);
+    }
+    
+    fn for_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.for_header_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((n, c), _, b)| NessaExpr::For(n, Box::new(c), b)
+        )(input);
     }
 
-    fn unary_postfix_operation_header_parser(&self) -> Parser<char, (((String, Type), usize), Type)> {
-        return spaces() * tag("op").discard() * spaces_1() * 
-            sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
-            spaces() * sym(')') * spaces() +
-            self.unary_ops.iter()
-            .filter(|i| {
-                if let Operator::Unary{prefix, ..} = i {
-                    return !*prefix;
-                }
-
-                unreachable!();
-            })
-            .map(|i| {
-                if let Operator::Unary{representation: r, id, ..} = i {
-                    return tag(r.as_str()).map(move |_| *id);
-                }
-
-                unreachable!();
-            }).reduce(|a, b| a | b).unwrap() - spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true, true));
+    fn function_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (String, Option<Vec<String>>, Vec<(String, Type)>, Type)> {
+        return map(
+            tuple((
+                tag("fn"),
+                multispace1,
+                |input| self.identifier_parser(input),
+                multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
+                multispace0,
+                tag("("),
+                multispace0,
+                separated_list0(
+                    tuple((multispace0, tag(","), multispace0)), 
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    ))
+                ),
+                multispace0,
+                tag(")"),
+                multispace0,
+                tag("->"),
+                multispace0,
+                |input| self.type_parser(input)
+            )),
+            |(_, _, n, _, t, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
+        )(input);
     }
 
-    fn binary_operation_header_parser(&self) -> Parser<char, (((((String, Type), usize), String), Type), Type)> {
-        return spaces() * tag("op").discard() * spaces_1() * 
-            sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
-            spaces() * sym(')') * spaces() +
-            self.binary_ops.iter()
-            .map(|i| {
-                if let Operator::Binary{representation: r, id, ..} = i {
-                    return tag(r.as_str()).map(move |_| *id);
-                }
-
-                unreachable!();
-            }).reduce(|a, b| a | b).unwrap() - spaces() +
-            sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
-            spaces() * sym(')') * spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true, true));
-    }
-
-    fn nary_operation_header_parser(&self) -> Parser<char, (((String, Type), (usize, Vec<(String, Type)>)), Type)> {
-        return spaces() * tag("op").discard() * spaces_1() * 
-            sym('(') * spaces() *
-            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - 
-            spaces() * sym(')') * spaces() +
-            self.nary_ops.iter()
-            .map(|i| {
-                if let Operator::Nary{open_rep: or, close_rep: cr, id, ..} = i {
-                    return tag(or.as_str()).map(move |_| *id) - spaces() + 
-                        list(
-                            self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)), 
-                            spaces() * sym(',') * spaces()
-                        ) - spaces() * tag(cr.as_str()).map(move |_| *id);
-                }
-
-                unreachable!();
-            }).reduce(|a, b| a | b).unwrap() - spaces() +
-            tag("->") * spaces() * call(move || self.type_parser(true, true));
-    }
-
-    fn unary_prefix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.unary_prefix_operation_header_parser() + self.code_block_parser())
-            .map(|((((id, n), t), r), b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b))
-    }
-
-    fn unary_postfix_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.unary_postfix_operation_header_parser() + self.code_block_parser())
-            .map(|((((n, t), id), r), b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b))
-    }
-
-    fn binary_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.binary_operation_header_parser() + self.code_block_parser())
-            .map(|((((((n1, t1), id), n2), t2), r), b)| NessaExpr::BinaryOperationDefinition(id, (n1, t1), (n2, t2), r, b))
-    }
-
-    fn nary_operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.nary_operation_header_parser() + self.code_block_parser())
-            .map(|((((n, t), (id, a)), r), b)| NessaExpr::NaryOperationDefinition(id, (n, t), a, r, b))
-    }
-
-    fn operation_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return self.unary_prefix_operation_definition_parser()
-            | self.unary_postfix_operation_definition_parser()
-            | self.binary_operation_definition_parser()
-            | self.nary_operation_definition_parser();
-    }
-
-    fn class_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("class").discard() * spaces_1() * self.identifier_parser() - spaces() +
-            (
-                spaces() * sym('<') * spaces() *
-                list(self.identifier_parser(), spaces() * sym(',') * spaces()) -
-                spaces() * sym('>') * spaces()
-            ).opt() - spaces() * sym('{') * spaces() +
-            list(
-                self.identifier_parser() + spaces() * sym(':').discard() * spaces() * call(move || self.type_parser(true, true)) - spaces() * sym(';'), 
-                spaces()
-            ) -
-            spaces() * sym('}') * spaces()
-        
-        ).map(|((n, t), a)| NessaExpr::ClassDefinition(n, t.unwrap_or_default(), a)).map(|mut c| match &mut c {
-            NessaExpr::ClassDefinition(_, temp, a) => {
-                a.into_iter().for_each(|(_, t)| t.compile_templates(&temp));
-                return c;
-            },
-
-            _ => unreachable!()
-        });
-    }
-
-    fn if_header_parser(&self) -> Parser<char, NessaExpr> {
-        return spaces() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
-    }
-
-    fn if_else_header_parser(&self) -> Parser<char, NessaExpr> {
-        return spaces() * tag("else").discard() * spaces_1() * tag("if").discard() * spaces_1() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
-    }
-
-    fn else_header_parser(&self) -> Parser<char, ()> {
-        return spaces() * tag("else").discard() * spaces();
-    }
-
-    fn unary_prefix_operator_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("unary").discard() * spaces_1() * tag("prefix").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
-            self.string_parser() +
-            spaces() * sym('(') * spaces() * 
-            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
-            spaces() * sym(')') * spaces() * sym(';')
-
-        ).map(|(n, p)| NessaExpr::PrefixOperatorDefinition(n, p));
-    }
-
-    fn unary_postfix_operator_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("unary").discard() * spaces_1() * tag("postfix").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
-            self.string_parser() +
-            spaces() * sym('(') * spaces() * 
-            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
-            spaces() * sym(')') * spaces() * sym(';')
-
-        ).map(|(n, p)| NessaExpr::PostfixOperatorDefinition(n, p));
-    }
-
-    fn binary_operator_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("binary").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
-            self.string_parser() +
-            spaces() * sym('(') * spaces() * 
-            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
-            spaces() * sym(')') * spaces() * sym(';')
-
-        ).map(|(n, p)| NessaExpr::BinaryOperatorDefinition(n, p));
-    }
-
-    fn nary_operator_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            spaces() * tag("nary").discard() * spaces_1() * tag("op").discard() * spaces_1() * 
-            tag("from").discard() * spaces_1() * self.string_parser() - spaces_1() +
-            tag("to").discard() * spaces_1() * self.string_parser() - spaces_1() +
-            spaces() * sym('(') * spaces() * 
-            is_a(|i: char| i.is_digit(10)).repeat(1..).map(|i| i.iter().collect::<String>().parse().unwrap()) - 
-            spaces() * sym(')') * spaces() * sym(';')
-
-        ).map(|((o, c), p)| NessaExpr::NaryOperatorDefinition(o, c, p));
-    }
-
-    fn for_header_parser(&self) -> Parser<char, (String, NessaExpr)> {
-        return spaces() * tag("for").discard() * spaces_1() * self.identifier_parser() - spaces_1() * tag("in").discard() * spaces_1() +
-            call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new()));
-    }
-
-    fn code_block_parser(&self) -> Parser<char, Vec<NessaExpr>> {
-        return spaces() * sym('{') * spaces() *
-            list(call(move || self.nessa_line_parser()), spaces()) -
-            spaces() - sym('}') - spaces();
-    }
-
-    fn function_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.function_header_parser() + self.code_block_parser())
-            .map(|(((n, t), (mut a, mut r)), mut b)| {
+    fn function_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.function_header_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((n, t, mut a, mut r), _, mut b)| {
                 let u_t = t.unwrap_or_default();
-                
+
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
                 NessaExpr::FunctionDefinition(n, u_t, a, r, b)
-            })
+            }
+        )(input);
     }
 
-    fn if_parser(&self) -> Parser<char, NessaExpr> {
-        return (
-            self.if_header_parser() + self.code_block_parser() + 
-            (self.if_else_header_parser() + self.code_block_parser()).repeat(0..) +
-            (self.else_header_parser() * self.code_block_parser()).opt()
-        
-        ).map(|(((h, w), b), e)| NessaExpr::If(Box::new(h), w, b, e))
+    fn prefix_operator_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("unary"),
+                multispace1,
+                tag("prefix"),
+                multispace1,
+                tag("op"),
+                multispace1,
+                |input| self.string_parser(input),
+                multispace0,
+                map(
+                    delimited(
+                        tuple((tag("("), multispace0)),
+                        take_while1(|c: char| c.is_digit(10)),
+                        tuple((multispace0, tag(")")))
+                    ),
+                    |s: &str| s.parse::<usize>().unwrap()
+                ),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PrefixOperatorDefinition(n, p)
+        )(input);
     }
 
-    fn for_parser(&self) -> Parser<char, NessaExpr> {
-        return (self.for_header_parser() + self.code_block_parser())
-            .map(|((i, c), b)| NessaExpr::For(i, Box::new(c), b))
+    fn postfix_operator_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("unary"),
+                multispace1,
+                tag("postfix"),
+                multispace1,
+                tag("op"),
+                multispace1,
+                |input| self.string_parser(input),
+                multispace0,
+                map(
+                    delimited(
+                        tuple((tag("("), multispace0)),
+                        take_while1(|c: char| c.is_digit(10)),
+                        tuple((multispace0, tag(")")))
+                    ),
+                    |s: &str| s.parse::<usize>().unwrap()
+                ),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PostfixOperatorDefinition(n, p)
+        )(input);
     }
 
-    fn unary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        let op = &self.unary_ops[id];
+    fn binary_operator_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("binary"),
+                multispace1,
+                tag("op"),
+                multispace1,
+                |input| self.string_parser(input),
+                multispace0,
+                map(
+                    delimited(
+                        tuple((tag("("), multispace0)),
+                        take_while1(|c: char| c.is_digit(10)),
+                        tuple((multispace0, tag(")")))
+                    ),
+                    |s: &str| s.parse::<usize>().unwrap()
+                ),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, _, _, n, _, p, _, _)| NessaExpr::BinaryOperatorDefinition(n, p)
+        )(input);
+    }
 
-        if let Operator::Unary{id, representation: r, ..} = op {
-            return (
-                tag(r.as_str()).map(move |_| id) + 
-                spaces() *
-                call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone()))
+    fn nary_operator_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("nary"),
+                multispace1,
+                tag("op"),
+                multispace1,
+                tag("from"),
+                multispace1,
+                |input| self.string_parser(input),
+                multispace1,
+                tag("to"),
+                multispace1,
+                |input| self.string_parser(input),
+                multispace0,
+                map(
+                    delimited(
+                        tuple((tag("("), multispace0)),
+                        take_while1(|c: char| c.is_digit(10)),
+                        tuple((multispace0, tag(")")))
+                    ),
+                    |s: &str| s.parse::<usize>().unwrap()
+                ),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, _, _, _, _, f, _, _, _, t, _, p, _, _)| NessaExpr::NaryOperatorDefinition(f, t, p)
+        )(input);
+    }
+
+    fn operator_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return alt((
+            |input| self.prefix_operator_definition_parser(input),
+            |input| self.postfix_operator_definition_parser(input),
+            |input| self.binary_operator_definition_parser(input),
+            |input| self.nary_operator_definition_parser(input)
+        ))(input)
+    }
+
+    fn prefix_operator_parser<'a>(&self, input: &'a str) -> IResult<&'a str, usize> {
+        for o in &self.unary_ops {
+            if let Operator::Unary{id, representation, prefix, ..} = o {
+                if *prefix {
+                    let res = map(tag(representation.as_str()), |_| *id)(input);
+
+                    if res.is_ok() {
+                        return res;
+                    }
+                }
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
+
+    fn postfix_operator_parser<'a>(&self, input: &'a str) -> IResult<&'a str, usize> {
+        for o in &self.unary_ops {
+            if let Operator::Unary{id, representation, prefix, ..} = o {
+                if !*prefix {
+                    let res = map(tag(representation.as_str()), |_| *id)(input);
+
+                    if res.is_ok() {
+                        return res;
+                    }
+                }
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
+
+    fn binary_operator_parser<'a>(&self, input: &'a str) -> IResult<&'a str, usize> {
+        for o in &self.binary_ops {
+            if let Operator::Binary{id, representation, ..} = o {
+                let res = map(tag(representation.as_str()), |_| *id)(input);
+
+                if res.is_ok() {
+                    return res;
+                }
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
+
+    fn nary_operator_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, Vec<(String, Type)>)> {
+        for o in &self.nary_ops {
+            if let Operator::Nary{id, open_rep, close_rep, ..} = o {
+                let res = map(
+                    tuple((
+                        tag(open_rep.as_str()),
+                        multispace0,
+                        separated_list0(
+                            tuple((multispace0, tag(","), multispace0)), 
+                            tuple((
+                                |input| self.identifier_parser(input),
+                                map(
+                                    opt(
+                                        map(
+                                            tuple((
+                                                multispace0,
+                                                tag(":"),
+                                                multispace0,
+                                                |input| self.type_parser(input),
+                                                multispace0
+                                            )),
+                                            |(_, _, _, t, _)| t
+                                        )
+                                    ),
+                                    |t| t.unwrap_or(Type::Wildcard)
+                                )
+                            ))
+                        ),
+                        multispace0,
+                        tag(close_rep.as_str())
+                    )),
+                    |(_, _, a, _, _)| (*id, a)
+                )(input);
+
+                if res.is_ok() {
+                    return res;
+                }
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
+
+    fn prefix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, String, Type, Type)> {
+        return map(
+            tuple((
+                tag("op"),
+                multispace1,
+                |input| self.prefix_operator_parser(input),
+                multispace0,
+                delimited(
+                    tuple((tag("("), multispace0)),
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    )),
+                    tuple((multispace0, tag(")")))
+                ),
+                multispace0,
+                tag("->"),
+                multispace0,
+                |input| self.type_parser(input)
+            )),
+            |(_, _, id, _, (n, t), _, _, _, r)| (id, n, t, r)
+        )(input);
+    }
+
+    fn postfix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, String, Type, Type)> {
+        return map(
+            tuple((
+                tag("op"),
+                multispace1,
+                delimited(
+                    tuple((tag("("), multispace0)),
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    )),
+                    tuple((multispace0, tag(")")))
+                ),
+                multispace0,
+                |input| self.postfix_operator_parser(input),
+                multispace0,
+                tag("->"),
+                multispace0,
+                |input| self.type_parser(input)
+            )),
+            |(_, _, (n, t), _, id, _, _, _, r)| (id, n, t, r)
+        )(input);
+    }
+
+    fn binary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, (String, Type), (String, Type), Type)> {
+        return map(
+            tuple((
+                tag("op"),
+                multispace1,
+                delimited(
+                    tuple((tag("("), multispace0)),
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    )),
+                    tuple((multispace0, tag(")")))
+                ),
+                multispace0,
+                |input| self.binary_operator_parser(input),
+                multispace0,
+                delimited(
+                    tuple((tag("("), multispace0)),
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    )),
+                    tuple((multispace0, tag(")")))
+                ),
+                multispace0,
+                tag("->"),
+                multispace0,
+                |input| self.type_parser(input)
+            )),
+            |(_, _, a, _, id, _, b, _, _, _, r)| (id, a, b, r)
+        )(input);
+    }
+
+    fn nary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, (String, Type), Vec<(String, Type)>, Type)> {
+        return map(
+            tuple((
+                tag("op"),
+                multispace1,
+                delimited(
+                    tuple((tag("("), multispace0)),
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    )),
+                    tuple((multispace0, tag(")")))
+                ),
+                multispace0,
+                |input| self.nary_operator_parser(input),
+                multispace0,
+                tag("->"),
+                multispace0,
+                |input| self.type_parser(input)
+            )),
+            |(_, _, a, _, (id, b), _, _, _, r)| (id, a, b, r)
+        )(input);
+    }
+
+    fn prefix_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.prefix_operation_header_definition_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((id, n, t, r), _, b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b)
+        )(input);
+    }
+
+    fn postfix_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.postfix_operation_header_definition_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((id, n, t, r), _, b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b)
+        )(input);
+    }
+
+    fn binary_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.binary_operation_header_definition_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((id, a1, a2, r), _, b)| NessaExpr::BinaryOperationDefinition(id, a1, a2, r, b)
+        )(input);
+    }
+
+    fn nary_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.nary_operation_header_definition_parser(input),
+                multispace0,
+                |input| self.code_block_parser(input),
+            )),
+            |((id, a1, a2, r), _, b)| NessaExpr::NaryOperationDefinition(id, a1, a2, r, b)
+        )(input);
+    }
+
+    fn operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return alt((
+            |input| self.prefix_operation_definition_parser(input),
+            |input| self.postfix_operation_definition_parser(input),
+            |input| self.binary_operation_definition_parser(input),
+            |input| self.nary_operation_definition_parser(input)
+        ))(input);
+    }
+
+    fn code_block_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        return delimited(
+            tuple((tag("{"), multispace0)),
+            separated_list0(multispace0, |input| self.nessa_line_parser(input)),
+            tuple((multispace0, tag("}")))
+        )(input);
+    }
+
+    fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        return alt((
+            |input| self.operation_parser(input, bi, nary, cache_bin, cache_nary, cache),
+            |input| self.literal_parser(input),
+            |input| self.variable_parser(input)
+        ))(input);
+    }
+
+    fn nessa_expr_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return self.nessa_expr_parser_wrapper(input, &self.get_bi_bitset(), &self.get_n_bitset(), &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new());
+    }
+
+    fn nessa_line_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return alt((
+            |input| self.variable_definition_parser(input),
+            |input| self.variable_assignment_parser(input),
+            |input| self.return_parser(input),
+            |input| self.for_parser(input),
+            |input| self.if_parser(input),
+            |input| terminated(|input| self.nessa_expr_parser(input), tuple((multispace0, tag(";"))))(input)
+        ))(input);
+    }
+
+    fn nessa_global_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return alt((
+            |input| self.variable_definition_parser(input),
+            |input| self.variable_assignment_parser(input),
+            |input| self.return_parser(input),
+            |input| self.for_parser(input),
+            |input| self.if_parser(input),
+            |input| self.function_definition_parser(input),
+            |input| self.operator_definition_parser(input),
+            |input| self.operation_definition_parser(input),
+            |input| terminated(|input| self.nessa_expr_parser(input), tuple((multispace0, tag(";"))))(input)
+        ))(input);
+    }
+
+    pub fn nessa_operators_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.operator_definition_parser(input) {
+                input = i;
+                ops.push(o);
             
-            ).map(|(id, expr)| NessaExpr::UnaryOperation(*id, Box::new(expr)));
+            } else {
+                let mut chars = input.chars();
+                chars.next();
+
+                input = chars.as_str();
+            }
         }
 
-        unreachable!();
+        return Ok(("", ops));
     }
 
-    fn binary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        let op = &self.binary_ops[id];
+    pub fn nessa_operations_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        let mut ops = vec!();
 
-        if let Operator::Binary{id, representation: r, ..} = op {
-            let n_ex_2 = n_ex.clone();
-            let mut b_ex_2 = b_ex.clone();
-            b_ex_2.insert(*id);
-
-            return (
-                call(move || self.nessa_expr_parser(b_ex_2.clone(), n_ex_2.clone())) +
-                spaces() *
-                tag(r.as_str()).map(move |_| id) +
-                spaces() *
-                call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone()))                
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.operation_definition_parser(input) {
+                input = i;
+                ops.push(o);
             
-            ).map(|((a, id), b)| NessaExpr::BinaryOperation(*id, Box::new(a), Box::new(b)));
+            } else {
+                let mut chars = input.chars();
+                chars.next();
+
+                input = chars.as_str();
+            }
         }
 
-        unreachable!();
+        return Ok(("", ops));
     }
 
-    fn nary_operation_parser(&self, id: usize, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        let op = &self.nary_ops[id];
-
-        if let Operator::Nary{id, open_rep: or, close_rep: cr, ..} = op {
-            let b_ex_2 = b_ex.clone();
-            let mut n_ex_2 = n_ex.clone();
-            n_ex_2.insert(*id);
-
-            return (
-                call(move || self.nessa_expr_parser(b_ex_2.clone(), n_ex_2.clone())) +
-                spaces() *
-                (sym('<') * spaces() * list(call(move || self.type_parser(true, true)), spaces() * sym(',')  * spaces()) - spaces() * sym('>')).opt() +
-                tag(or.as_str()).map(move |_| id) +
-                spaces() *
-                list(call(move || self.nessa_expr_parser(b_ex.clone(), n_ex.clone())), spaces() * sym(',') * spaces()) -
-                tag(cr.as_str()).discard()
-            
-            ).map(|(((a, t), id), b)| NessaExpr::NaryOperation(*id, t.unwrap_or_default(), Box::new(a), b));
-        }
-
-        unreachable!();
-    }
-
-    fn operation_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        let mut ops = self.unary_ops.iter().chain(&self.binary_ops).chain(&self.nary_ops).collect::<Vec<_>>();
-
-        // Sort by precedence in order to iterate from the first to the last 
-        ops.sort_by(|a, b| b.get_precedence().cmp(&a.get_precedence()));
-
-        let res = ops.iter()
-            .filter(|o| match o {
-                Operator::Binary{id, ..} if b_ex.contains(id) => false,
-                Operator::Nary{id, ..} if n_ex.contains(id) => false,
-                _ => true
-            })
-            .map(|o| match o {
-                Operator::Unary{id, ..} => self.unary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
-                Operator::Binary{id, ..} => self.binary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
-                Operator::Nary{id, ..} => self.nary_operation_parser(*id, b_ex.clone(), n_ex.clone()),
-            })
-            .reduce(|a, b| a | b);
-
-        if let Some(p) = res {
-            return p;
-        }
-
-        unreachable!();
-    }
-
-    fn parenthesized_expr_parser(&self) -> Parser<char, NessaExpr> {
-        return sym('(') * spaces() * call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(')');
-    }
-    
-    pub fn operator_definition_parser(&self) -> Parser<char, NessaExpr> {
-        return self.unary_prefix_operator_parser()
-            | self.unary_postfix_operator_parser()
-            | self.binary_operator_parser()
-            | self.nary_operator_parser();
-    }
-
-    fn nessa_expr_parser(&self, b_ex: HashSet<usize>, n_ex: HashSet<usize>) -> Parser<char, NessaExpr> {
-        return call(move || self.parenthesized_expr_parser())
-            | call(move || self.operation_parser(b_ex.clone(), n_ex.clone()))
-            | self.literal_parser()
-            | self.variable_parser();
-    }
-
-    fn nessa_line_parser(&self) -> Parser<char, NessaExpr> {
-        return call(move || self.variable_definition_parser())
-            | call(move || self.variable_assignment_parser())
-            | call(move || self.return_parser())
-            | call(move || self.if_parser())
-            | call(move || self.for_parser())
-            | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
-    }
-
-    fn nessa_global_parser(&self) -> Parser<char, NessaExpr> {
-        return call(move || self.variable_definition_parser())
-            | call(move || self.variable_assignment_parser())
-            | call(move || self.return_parser())
-            | call(move || self.if_parser())
-            | call(move || self.for_parser())
-            | call(move || self.class_definition_parser())
-            | call(move || self.function_definition_parser())
-            | call(move || self.operator_definition_parser())
-            | call(move || self.operation_definition_parser())
-            | call(move || self.nessa_expr_parser(HashSet::new(), HashSet::new())) - spaces() - sym(';');
-    }
-
-    pub fn nessa_operators_parser(&self) -> Parser<char, Vec<NessaExpr>> {
-        return (call(move || spaces() * self.operator_definition_parser() - spaces()) | any().map(|_| NessaExpr::Literal(Object::empty()))).repeat(0..) - end();
-    }
-
-    pub fn nessa_operations_parser(&self) -> Parser<char, Vec<NessaExpr>> {
-        return (call(move || spaces() * self.operation_definition_parser() - spaces()) | any().map(|_| NessaExpr::Literal(Object::empty()))).repeat(0..) - end();
-    }
-
-    pub fn nessa_parser(&self) -> Parser<char, Vec<NessaExpr>> {
-        return spaces() * list(self.nessa_global_parser(), spaces()) - spaces() - end();
+    pub fn nessa_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        return delimited(
+            multispace0,
+            separated_list0(multispace0, |input| self.nessa_global_parser(input)),
+            tuple((multispace0, eof))
+        )(input);
     }
 }
 
@@ -657,66 +1254,66 @@ mod tests {
     use crate::types::*;
     use crate::context::*;
     use crate::parser::*;
+    use crate::object::*;
+    use crate::number::*;
 
     #[test]
     fn type_parsing() {
         let ctx = standard_ctx();
 
-        let wildcard_str = "*".chars().collect::<Vec<_>>();
-        let empty_str = "()".chars().collect::<Vec<_>>();
+        let wildcard_str = "*";
+        let empty_str = "()";
 
-        let number_str = "Number".chars().collect::<Vec<_>>();
-        let number_ref_str = "&Number".chars().collect::<Vec<_>>();
-        let string_mut_str = "&&String".chars().collect::<Vec<_>>();
-        let wildcard_mut_str = "&&*".chars().collect::<Vec<_>>();
+        let number_str = "Number";
+        let number_ref_str = "&Number";
+        let string_mut_str = "&&String";
+        let wildcard_mut_str = "&&*";
 
-        let or_str = "Number | &&String".chars().collect::<Vec<_>>();
-        let and_str = "(Number, &&String, &Bool)".chars().collect::<Vec<_>>();
-        let and_one_str = "(Number)".chars().collect::<Vec<_>>();
+        let or_str = "Number | &&String";
+        let and_str = "(Number, &&String, &Bool)";
+        let and_one_str = "(Number)";
 
-        let array_str = "Array<Number>".chars().collect::<Vec<_>>();
-        let map_str = "Map<Number, String>".chars().collect::<Vec<_>>();
-        let map_refs_str = "&Map<&Number, &&String>".chars().collect::<Vec<_>>();
+        let array_str = "Array<Number>";
+        let map_str = "Map<Number, String>";
+        let map_refs_str = "&Map<&Number, &&String>";
 
-        let basic_func_str = "Number => String".chars().collect::<Vec<_>>();
-        let complex_func_str = "(Number, Array<Bool>) => Map<Number, *>".chars().collect::<Vec<_>>();
+        let basic_func_str = "Number => String";
+        let complex_func_str = "(Number, Array<Bool>) => Map<Number, *>";
 
-        let parser = ctx.type_parser(true, true);
-        
-        let wildcard = parser.parse(&wildcard_str).unwrap();
-        let empty = parser.parse(&empty_str).unwrap();
+        let (_, wildcard) = ctx.type_parser(wildcard_str).unwrap();
+        let (_, empty) = ctx.type_parser(empty_str).unwrap();
 
         assert_eq!(wildcard, Type::Wildcard);
         assert_eq!(empty, Type::Empty);
 
-        let number = parser.parse(&number_str).unwrap();
-        let number_ref = parser.parse(&number_ref_str).unwrap();
-        let string_mut = parser.parse(&string_mut_str).unwrap();
-        let wildcard_mut = parser.parse(&wildcard_mut_str).unwrap();
+        let (_, number) = ctx.type_parser(number_str).unwrap();
+        let (_, number_ref) = ctx.type_parser(number_ref_str).unwrap();
+        let (_, string_mut) = ctx.type_parser(string_mut_str).unwrap();
+        let (_, wildcard_mut) = ctx.type_parser(wildcard_mut_str).unwrap();
 
         assert_eq!(number, Type::Basic(0));
         assert_eq!(number_ref, Type::Ref(Box::new(Type::Basic(0))));
         assert_eq!(string_mut, Type::MutRef(Box::new(Type::Basic(1))));
         assert_eq!(wildcard_mut, Type::MutRef(Box::new(Type::Wildcard)));
 
-        let or = parser.parse(&or_str).unwrap();
-        let and = parser.parse(&and_str).unwrap();
-        let and_one = parser.parse(&and_one_str).unwrap();
+        let (_, or) = ctx.type_parser(or_str).unwrap();
+        let (_, and) = ctx.type_parser(and_str).unwrap();
+        let (_, and_one) = ctx.type_parser(and_one_str).unwrap();
 
         assert_eq!(or, Type::Or(vec!(Type::Basic(0), Type::MutRef(Box::new(Type::Basic(1))))));
         assert_eq!(and, Type::And(vec!(Type::Basic(0), Type::MutRef(Box::new(Type::Basic(1))), Type::Ref(Box::new(Type::Basic(2))))));
         assert_eq!(and_one, Type::Basic(0));
 
-        let array = parser.parse(&array_str).unwrap();
-        let map = parser.parse(&map_str).unwrap();
-        let map_refs = parser.parse(&map_refs_str).unwrap();
+        let (_, array) = ctx.type_parser(array_str).unwrap();
+        let (_, map) = ctx.type_parser(map_str).unwrap();
+        let (_, map_refs) = ctx.type_parser(map_refs_str).unwrap();
 
         assert_eq!(array, Type::Template(3, vec!(Type::Basic(0))));
         assert_eq!(map, Type::Template(4, vec!(Type::Basic(0), Type::Basic(1))));
         assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(4, vec!(Type::Ref(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(1))))))));
-
-        let basic_func = parser.parse(&basic_func_str).unwrap();
-        let complex_func = parser.parse(&complex_func_str).unwrap();
+        
+        let (_, basic_func) = ctx.type_parser(basic_func_str).unwrap();
+        let (_, complex_func) = ctx.type_parser(complex_func_str).unwrap();
 
         assert_eq!(basic_func, Type::Function(Box::new(Type::Basic(0)), Box::new(Type::Basic(1))));
         assert_eq!(complex_func, Type::Function(
@@ -735,15 +1332,13 @@ mod tests {
     fn literal_parsing() {
         let ctx = standard_ctx();
 
-        let number_str = "123".chars().collect::<Vec<_>>();
-        let bool_v_str = "true".chars().collect::<Vec<_>>();
-        let string_str = "\"test\"".chars().collect::<Vec<_>>();
+        let number_str = "123";
+        let bool_v_str = "true";
+        let string_str = "\"test\"";
 
-        let parser = ctx.literal_parser();
-
-        let number = parser.parse(&number_str).unwrap();
-        let bool_v = parser.parse(&bool_v_str).unwrap();
-        let string = parser.parse(&string_str).unwrap();
+        let (_, number) = ctx.literal_parser(number_str).unwrap();
+        let (_, bool_v) = ctx.literal_parser(bool_v_str).unwrap();
+        let (_, string) = ctx.literal_parser(string_str).unwrap();
 
         assert_eq!(number, NessaExpr::Literal(Object::new(Number::from(123))));
         assert_eq!(bool_v, NessaExpr::Literal(Object::new(true)));
@@ -754,17 +1349,15 @@ mod tests {
     fn variable_definition_parsing() {
         let ctx = standard_ctx();
 
-        let def_1_str = "let var: Number = a;".chars().collect::<Vec<_>>();
-        let def_2_str = "let foo: Array<Number | &String> = 5;".chars().collect::<Vec<_>>();
-        let def_3_str = "let bar = \"test\";".chars().collect::<Vec<_>>();
-        let def_4_str = "let foobar = false;".chars().collect::<Vec<_>>();
+        let def_1_str = "let var: Number = a;";
+        let def_2_str = "let foo: Array<Number | &String> = 5;";
+        let def_3_str = "let bar = \"test\";";
+        let def_4_str = "let foobar = false;";
 
-        let parser = ctx.variable_definition_parser();
-
-        let def_1 = parser.parse(&def_1_str).unwrap();
-        let def_2 = parser.parse(&def_2_str).unwrap();
-        let def_3 = parser.parse(&def_3_str).unwrap();
-        let def_4 = parser.parse(&def_4_str).unwrap();
+        let (_, def_1) = ctx.variable_definition_parser(def_1_str).unwrap();
+        let (_, def_2) = ctx.variable_definition_parser(def_2_str).unwrap();
+        let (_, def_3) = ctx.variable_definition_parser(def_3_str).unwrap();
+        let (_, def_4) = ctx.variable_definition_parser(def_4_str).unwrap();
 
         assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference("a".into()))));
         assert_eq!(def_2, NessaExpr::VariableDefinition(
@@ -781,19 +1374,17 @@ mod tests {
     fn operation_parsing() {
         let ctx = standard_ctx();
 
-        let number_str = "-10".chars().collect::<Vec<_>>();
-        let var_str = "-!a".chars().collect::<Vec<_>>();
-        let n_var_str = "-5 + a".chars().collect::<Vec<_>>();
-        let n_call_str = "5(-b + !10)".chars().collect::<Vec<_>>();
-        let template_func_str = "funct<Number>(5)".chars().collect::<Vec<_>>();
+        let number_str = "-10";
+        let var_str = "-!a";
+        let n_var_str = "-5 + a";
+        let n_call_str = "5(-b + !10)";
+        let template_func_str = "funct<Number>(5)";
 
-        let parser = ctx.operation_parser(HashSet::new(), HashSet::new());
-
-        let number = parser.parse(&number_str).unwrap();
-        let var = parser.parse(&var_str).unwrap();
-        let n_var = parser.parse(&n_var_str).unwrap();
-        let n_call = parser.parse(&n_call_str).unwrap();
-        let template_func = parser.parse(&template_func_str).unwrap();
+        let (_, number) = ctx.nessa_expr_parser(number_str).unwrap();
+        let (_, var) = ctx.nessa_expr_parser(var_str).unwrap();
+        let (_, n_var) = ctx.nessa_expr_parser(n_var_str).unwrap();
+        let (_, n_call) = ctx.nessa_expr_parser(n_call_str).unwrap();
+        let (_, template_func) = ctx.nessa_expr_parser(template_func_str).unwrap();
 
         assert_eq!(number, NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
         assert_eq!(
@@ -832,61 +1423,57 @@ mod tests {
     fn function_header_parsing() {
         let ctx = standard_ctx();
 
-        let number_header_str = "fn test(a: Number) -> Number".chars().collect::<Vec<_>>();
-        let ref_header_str = "fn test_2(arg: &Number) -> &&Number".chars().collect::<Vec<_>>();
-        let two_args_header_str = "fn test_3(arg_1: &Number, arg_2: String | Number) -> Number | String".chars().collect::<Vec<_>>();
-        let complex_args_header_str = "fn test_4(a: String | &Number, b: &Array<(Bool, Number)>, c: &&*) -> Map<Number, String>".chars().collect::<Vec<_>>();
+        let number_header_str = "fn test(a: Number) -> Number";
+        let ref_header_str = "fn test_2(arg: &Number) -> &&Number";
+        let two_args_header_str = "fn test_3(arg_1: &Number, arg_2: String | Number) -> Number | String";
+        let complex_args_header_str = "fn test_4(a: String | &Number, b: &Array<(Bool, Number)>, c: &&*) -> Map<Number, String>";
 
-        let parser = ctx.function_header_parser();
+        let (_, number_header) = ctx.function_header_parser(number_header_str).unwrap();
+        let (_, ref_header) = ctx.function_header_parser(ref_header_str).unwrap();
+        let (_, two_args_header) = ctx.function_header_parser(two_args_header_str).unwrap();
+        let (_, complex_args_header) = ctx.function_header_parser(complex_args_header_str).unwrap();
 
-        let number_header = parser.parse(&number_header_str).unwrap();
-        let ref_header = parser.parse(&ref_header_str).unwrap();
-        let two_args_header = parser.parse(&two_args_header_str).unwrap();
-        let complex_args_header = parser.parse(&complex_args_header_str).unwrap();
-
-        assert_eq!(number_header, (("test".into(), None), (vec!(("a".into(), Type::Basic(0))), Type::Basic(0))));
-        assert_eq!(ref_header, (("test_2".into(), None), (vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0))))), Type::MutRef(Box::new(Type::Basic(0))))));
+        assert_eq!(number_header, ("test".into(), None, vec!(("a".into(), Type::Basic(0))), Type::Basic(0)));
+        assert_eq!(ref_header, ("test_2".into(), None, vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0))))), Type::MutRef(Box::new(Type::Basic(0)))));
         assert_eq!(two_args_header, (
-            ("test_3".into(), None),
-            (
-                vec!(
-                    ("arg_1".into(), Type::Ref(Box::new(Type::Basic(0)))),
-                    ("arg_2".into(), Type::Or(vec!(
-                        Type::Basic(0),
-                        Type::Basic(1)
-                    )))
-                ),
-                Type::Or(vec!(
+            "test_3".into(), 
+            None,
+            vec!(
+                ("arg_1".into(), Type::Ref(Box::new(Type::Basic(0)))),
+                ("arg_2".into(), Type::Or(vec!(
                     Type::Basic(0),
                     Type::Basic(1)
-                ))
-            )
+                )))
+            ),
+            Type::Or(vec!(
+                Type::Basic(0),
+                Type::Basic(1)
+            ))
         ));
         assert_eq!(complex_args_header, (
-            ("test_4".into(), None), 
-            (
+            "test_4".into(), 
+            None, 
+            vec!(
+                ("a".into(), Type::Or(vec!(
+                    Type::Ref(Box::new(Type::Basic(0))),
+                    Type::Basic(1)
+                ))),
+                ("b".into(), Type::Ref(Box::new(
+                    Type::Template(
+                        3,
+                        vec!(Type::And(vec!(
+                            Type::Basic(2),
+                            Type::Basic(0)
+                        )))
+                    ))
+                )),
+                ("c".into(), Type::MutRef(Box::new(Type::Wildcard)))
+            ),
+            Type::Template(
+                4,
                 vec!(
-                    ("a".into(), Type::Or(vec!(
-                        Type::Ref(Box::new(Type::Basic(0))),
-                        Type::Basic(1)
-                    ))),
-                    ("b".into(), Type::Ref(Box::new(
-                        Type::Template(
-                            3,
-                            vec!(Type::And(vec!(
-                                Type::Basic(2),
-                                Type::Basic(0)
-                            )))
-                        ))
-                    )),
-                    ("c".into(), Type::MutRef(Box::new(Type::Wildcard)))
-                ),
-                Type::Template(
-                    4,
-                    vec!(
-                        Type::Basic(0),
-                        Type::Basic(1)
-                    )
+                    Type::Basic(0),
+                    Type::Basic(1)
                 )
             )
         ));
@@ -896,8 +1483,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
-        let test_1_str = "
-        fn test() -> Number {
+        let test_1_str = "fn test() -> Number {
             let res = 5;
 
             for i in arr {
@@ -905,11 +1491,9 @@ mod tests {
             }
 
             return res;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let test_2_str = "
-        fn test_2(arg: &Number) -> Number | String {
+        let test_2_str = "fn test_2(arg: &Number) -> Number | String {
             let r: Number = arg + 1;
 
             if r + 1 {
@@ -923,21 +1507,16 @@ mod tests {
             }
 
             return r;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let test_3_str = "
-        fn test_3<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
+        let test_3_str = "fn test_3<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
             let a: 'V | 'K = value + key;
             return a;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let parser = ctx.function_definition_parser();
-
-        let test_1 = parser.parse(&test_1_str).unwrap();
-        let test_2 = parser.parse(&test_2_str).unwrap();
-        let test_3 = parser.parse(&test_3_str).unwrap();
+        let (_, test_1) = ctx.function_definition_parser(test_1_str).unwrap();
+        let (_, test_2) = ctx.function_definition_parser(test_2_str).unwrap();
+        let (_, test_3) = ctx.function_definition_parser(test_3_str).unwrap();
 
         assert_eq!(
             test_1,
@@ -959,6 +1538,7 @@ mod tests {
                 )
             ) 
         );
+
         assert_eq!(
             test_2,
             NessaExpr::FunctionDefinition(
@@ -1053,17 +1633,15 @@ mod tests {
     fn operator_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
-        let prefix_str = "unary prefix op \"~\" (200);".chars().collect::<Vec<_>>();
-        let postfix_str = "unary postfix op \"&\" (300);".chars().collect::<Vec<_>>();
-        let binary_str = "binary op \"$\" (400);".chars().collect::<Vec<_>>();
-        let nary_str = "nary op from \"`\" to \"´\" (500);".chars().collect::<Vec<_>>();
+        let prefix_str = "unary prefix op \"~\" (200);";
+        let postfix_str = "unary postfix op \"&\" (300);";
+        let binary_str = "binary op \"$\" (400);";
+        let nary_str = "nary op from \"`\" to \"´\" (500);";
 
-        let parser = ctx.operator_definition_parser();
-
-        let prefix = parser.parse(&prefix_str).unwrap();
-        let postfix = parser.parse(&postfix_str).unwrap();
-        let binary = parser.parse(&binary_str).unwrap();
-        let nary = parser.parse(&nary_str).unwrap();
+        let (_, prefix) = ctx.operator_definition_parser(prefix_str).unwrap();
+        let (_, postfix) = ctx.operator_definition_parser(postfix_str).unwrap();
+        let (_, binary) = ctx.operator_definition_parser(binary_str).unwrap();
+        let (_, nary) = ctx.operator_definition_parser(nary_str).unwrap();
 
         assert_eq!(prefix, NessaExpr::PrefixOperatorDefinition("~".into(), 200));
         assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition("&".into(), 300));
@@ -1075,18 +1653,15 @@ mod tests {
     fn operation_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
-        let test_1_str = "
-        op !(arg: Bool) -> Bool {
+        let test_1_str = "op !(arg: Bool) -> Bool {
             if arg {
                 return false;
             }
 
             return true;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let test_2_str = "
-        op (arg: Bool)? -> Number | Bool {
+        let test_2_str = "op (arg: Bool)? -> Number | Bool {
             if arg {
                 return 5;
             }
@@ -1096,11 +1671,9 @@ mod tests {
             }
 
             return true;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let test_3_str = "
-        op (a: Bool) + (b: Bool) -> Number {
+        let test_3_str = "op (a: Bool) + (b: Bool) -> Number {
             if a {
                 if b {
                     return 2;
@@ -1114,21 +1687,16 @@ mod tests {
             }
 
             return 0;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let test_4_str = "
-        op (a: Number)[b: Number, c: Number] -> Number {
+        let test_4_str = "op (a: Number)[b: Number, c: Number] -> Number {
             return a + b * c;
-        }
-        ".chars().collect::<Vec<_>>();
+        }";
 
-        let parser = ctx.operation_definition_parser();
-
-        let test_1 = parser.parse(&test_1_str).unwrap();
-        let test_2 = parser.parse(&test_2_str).unwrap();
-        let test_3 = parser.parse(&test_3_str).unwrap();
-        let test_4 = parser.parse(&test_4_str).unwrap();
+        let (_, test_1) = ctx.operation_definition_parser(test_1_str).unwrap();
+        let (_, test_2) = ctx.operation_definition_parser(test_2_str).unwrap();
+        let (_, test_3) = ctx.operation_definition_parser(test_3_str).unwrap();
+        let (_, test_4) = ctx.operation_definition_parser(test_4_str).unwrap();
 
         assert_eq!(
             test_1,
@@ -1242,47 +1810,5 @@ mod tests {
                 )
             ))
         );
-    }
-
-    #[test]
-    fn class_definition_parsing() {
-        let ctx = standard_ctx();
-
-        let dice_roll_str = "
-        class DiceRoll {
-            faces: Number;
-            rolls: Number;
-        }
-        ".chars().collect::<Vec<_>>();
-
-        let sync_lists_str = "
-        class SyncLists<K, V> {
-            from: Array<'K>;
-            to: Array<'V>;
-        }
-        ".chars().collect::<Vec<_>>();
-
-        let parser = ctx.class_definition_parser();
-
-        let dice_roll = parser.parse(&dice_roll_str).unwrap();
-        let sync_lists = parser.parse(&sync_lists_str).unwrap();
-
-        assert_eq!(dice_roll, NessaExpr::ClassDefinition(
-            "DiceRoll".into(),
-            vec!(),
-            vec!(
-                ("faces".into(), Type::Basic(0)),
-                ("rolls".into(), Type::Basic(0))
-            )
-        ));
-
-        assert_eq!(sync_lists, NessaExpr::ClassDefinition(
-            "SyncLists".into(),
-            vec!("K".into(), "V".into()),
-            vec!(
-                ("from".into(), Type::Template(3, vec!(Type::TemplateParam(0)))),
-                ("to".into(), Type::Template(3, vec!(Type::TemplateParam(1))))
-            )
-        ));
     }
 }

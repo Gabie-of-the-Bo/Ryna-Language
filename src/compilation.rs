@@ -319,10 +319,9 @@ mod tests {
             }
 
             let v_4 = v_0[v_1, v_0];
-        ".chars().collect::<Vec<_>>();
+        ";
 
-        let parser = ctx.nessa_parser();
-        let mut code = parser.parse(&code_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(code_str).unwrap();
         ctx.compile_variables(&mut code).unwrap();
 
         if let NessaExpr::CompiledVariableDefinition(idx, _, _, _) = code[0] {
@@ -430,19 +429,17 @@ mod tests {
         
         let code_1_str = "
         inc(5);
-        ".chars().collect::<Vec<_>>();
+        ";
         
         let code_2_str = "
         inc<Number>(5);
-        ".chars().collect::<Vec<_>>();
+        ";
         
         let code_3_str = "
         wea<Number>(5);
-        ".chars().collect::<Vec<_>>();
+        ";
 
-        let parser = ctx.nessa_parser();
-
-        let mut code = parser.parse(&code_1_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(code_1_str).unwrap();
         ctx.compile_functions(&mut code).unwrap();
 
         assert_eq!(code, vec!(
@@ -451,11 +448,11 @@ mod tests {
             ))
         ));
         
-        let mut code = parser.parse(&code_2_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(code_2_str).unwrap();
 
         assert!(ctx.compile_functions(&mut code).is_err());
         
-        let mut code = parser.parse(&code_3_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(code_3_str).unwrap();
 
         assert!(ctx.compile_functions(&mut code).is_err());
     }

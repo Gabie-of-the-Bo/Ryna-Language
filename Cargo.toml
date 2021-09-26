@@ -11,7 +11,11 @@ lazy_static = "*"
 rand = "*"
 impl_ops = "*"
 rayon = "1.5"
-pom = "*"
+bit-set = "*"
+nom = "7"
+
+[profile.release]
+debug = true
 
 [dev-dependencies]
 num-traits = "*"

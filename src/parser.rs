@@ -341,18 +341,47 @@ impl NessaContext {
         )(input);
     }
     
-    fn unary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn prefix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag(rep),
                 multispace0,
-                |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+                |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
             )),
             |(_, _, e)| NessaExpr::UnaryOperation(id, Box::new(e))
         )(input);
     }
     
-    fn binary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn postfix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = cache_post.get(&input.len()) {
+            return match r {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            };
+       
+        } else{
+            let mut post_cpy = post.clone();
+            post_cpy.insert(id);
+    
+            let res = map(
+                tuple((
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, cache),
+                    multispace0,
+                    tag(rep)
+                )),
+                |(e, _, _)| NessaExpr::UnaryOperation(id, Box::new(e))
+            )(input);
+
+            cache_post.insert(input.len(), match &res {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+            });
+
+            return res;
+        }
+    }
+    
+    fn binary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
         if let Some(r) = cache_bin.get(&input.len()) {
             return match r {
                 Ok(a) => Ok(a.clone()),
@@ -363,14 +392,14 @@ impl NessaContext {
             let mut bi_cpy = bi.clone();
             bi_cpy.insert(id);
     
-            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, cache_bin, cache_nary, cache)?;
+            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, post, cache_bin, cache_nary, cache_post, cache)?;
     
             let res = map(
                 tuple((
                     multispace0,
                     tag(rep),
                     multispace0,
-                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
                 )),
                 |(_, _, _, b)| NessaExpr::BinaryOperation(id, Box::new(a.clone()), Box::new(b))
             )(input);
@@ -384,7 +413,7 @@ impl NessaContext {
         }
     }
     
-    fn nary_operation_parser<'a>(&self, input: &'a str, id: usize, open: &str, close: &str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn nary_operation_parser<'a>(&self, input: &'a str, id: usize, open: &str, close: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
         if let Some(r) = cache_nary.get(&input.len()) {
             return match r {
                 Ok(a) => Ok(a.clone()),
@@ -395,7 +424,7 @@ impl NessaContext {
             let mut nary_cpy = nary.clone();
             nary_cpy.insert(id);
     
-            let (input, a) = self.nessa_expr_parser_wrapper(input, bi, &nary_cpy, cache_bin, cache_nary, cache)?;
+            let (input, a) = self.nessa_expr_parser_wrapper(input, bi, &nary_cpy, post, cache_bin, cache_nary, cache_post, cache)?;
     
             let res = map(
                 tuple((
@@ -420,7 +449,7 @@ impl NessaContext {
                     multispace0,
                     separated_list0(
                         tuple((multispace0, tag(","), multispace0)),
-                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, cache_bin, cache_nary, cache)
+                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
                     ),
                     multispace0,
                     tag(close)
@@ -444,9 +473,13 @@ impl NessaContext {
     fn get_n_bitset(&self) -> BitSet {
         return BitSet::with_capacity(self.nary_ops.len());
     }
+    
+    fn get_unary_bitset(&self) -> BitSet {
+        return BitSet::with_capacity(self.unary_ops.len());
+    }
 
-    fn operation_parser<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
-        if let Some(r) = cache.get(&(input.len(), bi.clone(), nary.clone())) {
+    fn operation_parser<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = cache.get(&(input.len(), bi.clone(), nary.clone(), post.clone())) {
             return match r {
                 Ok(a) => Ok(a.clone()),
                 Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
@@ -454,11 +487,21 @@ impl NessaContext {
        
         } else{
             for o in self.sorted_ops.iter().rev() {
-                if let Operator::Unary{id, representation, ..} = o {
-                    let res = self.unary_operation_parser(input, *id, representation, bi, nary, cache_bin, cache_nary, cache);
+                if let Operator::Unary{id, representation, prefix, ..} = o {
+                    let res = if *prefix {
+                         self.prefix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+
+                    } else{
+                        if !post.contains(*id) {
+                            self.postfix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                        
+                        } else {
+                            continue;
+                        }
+                    };
     
                     if res.is_ok() {
-                        cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                        cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
                             Ok(a) => Ok(a.clone()),
                             Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
                         });
@@ -468,10 +511,10 @@ impl NessaContext {
                     
                 } else if let Operator::Binary{id, representation, ..} = o {
                     if !bi.contains(*id) {
-                        let res = self.binary_operation_parser(input, *id, representation, bi, nary, cache_bin, cache_nary, cache);
+                        let res = self.binary_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache);
     
                         if res.is_ok() {
-                            cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
                                 Ok(a) => Ok(a.clone()),
                                 Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
                             });
@@ -482,10 +525,10 @@ impl NessaContext {
     
                 } else if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                     if !nary.contains(*id) {
-                        let res = self.nary_operation_parser(input, *id, open_rep, close_rep, bi, nary, cache_bin, cache_nary, cache);
+                        let res = self.nary_operation_parser(input, *id, open_rep, close_rep, bi, nary, post, cache_bin, cache_nary, cache_post, cache);
     
                         if res.is_ok() {
-                            cache.insert((input.len(), bi.clone(), nary.clone()), match &res {
+                            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
                                 Ok(a) => Ok(a.clone()),
                                 Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
                             });
@@ -499,7 +542,7 @@ impl NessaContext {
                 }
             }
 
-            cache.insert((input.len(), bi.clone(), nary.clone()), Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt))));
+            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt))));
     
             return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
         }
@@ -1223,16 +1266,20 @@ impl NessaContext {
         )(input);
     }
 
-    fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
         return alt((
-            |input| self.operation_parser(input, bi, nary, cache_bin, cache_nary, cache),
+            |input| self.operation_parser(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache),
             |input| self.literal_parser(input),
             |input| self.variable_parser(input)
         ))(input);
     }
 
     fn nessa_expr_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
-        return self.nessa_expr_parser_wrapper(input, &self.get_bi_bitset(), &self.get_n_bitset(), &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new());
+        return self.nessa_expr_parser_wrapper(
+            input, 
+            &self.get_bi_bitset(), &self.get_n_bitset(), &self.get_unary_bitset(), 
+            &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new()
+        );
     }
 
     fn nessa_line_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
@@ -1441,7 +1488,7 @@ mod tests {
 
         let number_str = "-10";
         let var_str = "-!a";
-        let n_var_str = "-5 + a";
+        let n_var_str = "-5 + a?";
         let n_call_str = "5(-b + !10)";
         let template_func_str = "funct<Number>(5)";
 
@@ -1460,7 +1507,7 @@ mod tests {
         assert_eq!(n_var, NessaExpr::BinaryOperation(
             0, 
             Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
-            Box::new(NessaExpr::NameReference("a".into()))
+            Box::new(NessaExpr::UnaryOperation(2, Box::new(NessaExpr::NameReference("a".into())))),
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(
             0, 

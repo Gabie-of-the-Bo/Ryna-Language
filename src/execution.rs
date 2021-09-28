@@ -399,8 +399,14 @@ mod tests {
                 return arg;
             }
 
+            unary postfix op \"¡\" (300);
+
+            op (arg: &&Number)¡ -> &&Number {
+                return arg;
+            }
+
             let a = 3;
-            let b = ~a;
+            let b = ~a¡;
 
             binary op \"·\" (300);
             binary op \"$\" (300);

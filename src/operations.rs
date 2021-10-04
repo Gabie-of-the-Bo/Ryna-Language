@@ -87,7 +87,21 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("+".into(), 200).unwrap();
 
     ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
+        let n_a = &*a.get::<Number>();
+        let n_b = &*b.get::<Number>();
+
+        return Object::new(n_a + n_b);
+    }).unwrap();
+
+    ctx.define_binary_operation(0, Type::MutRef(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
+        let n_b = &*b.deref::<Number>();
+
+        return Object::new(n_a + n_b);
+    }).unwrap();
+
+    ctx.define_binary_operation(0, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
+        let n_a = &*a.get::<Number>();
         let n_b = &*b.deref::<Number>();
 
         return Object::new(n_a + n_b);
@@ -100,8 +114,26 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         return Object::new(format!("{}{}", n_a, n_b));
     }).unwrap();
 
+    ctx.define_binary_operator("-".into(), 200).unwrap();
+
+    ctx.define_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(2), |a, b| {
+        let n_a = &*a.deref::<Number>();
+        let n_b = &*b.get::<Number>();
+
+        return Object::new(n_a - n_b);
+    }).unwrap();
+
     ctx.define_binary_operator("*".into(), 150).unwrap();
     ctx.define_binary_operator(".".into(), 1000).unwrap();
+
+    ctx.define_binary_operator("<".into(), 2000).unwrap();
+
+    ctx.define_binary_operation(4, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(2), |a, b| {
+        let n_a = &*a.get::<Number>();
+        let n_b = &*b.deref::<Number>();
+
+        return Object::new(n_a < n_b);
+    }).unwrap();
 }
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {

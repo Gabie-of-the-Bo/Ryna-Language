@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use nom::{
     IResult,
-    combinator::{map, opt, eof},
+    combinator::{map, map_res, opt, eof},
     bytes::complete::{take_while, take_while1, tag},
     sequence::{tuple, delimited, terminated},
     branch::alt,
@@ -34,6 +34,8 @@ pub enum NessaExpr {
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
+    CompiledFunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
+
     // Uncompiled
     Literal(Object),
     NameReference(String),
@@ -44,7 +46,7 @@ pub enum NessaExpr {
 
     VariableDefinition(String, Type, Box<NessaExpr>),
     VariableAssignment(String, Box<NessaExpr>),
-    FunctionDefinition(String, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    FunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(String, usize),
     PostfixOperatorDefinition(String, usize),
     BinaryOperatorDefinition(String, usize),
@@ -112,8 +114,12 @@ impl NessaContext {
         ╘═══════════════════╛
     */
     
-    fn get_type_id(&self, name: String) -> usize {
-        return self.type_templates.iter().filter(|t| t.name == name).next().unwrap().id;
+    fn get_type_id(&self, name: String) -> Result<usize, String> {
+        return self.type_templates.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No type with name {}", name));
+    }
+    
+    fn get_function_id(&self, name: String) -> usize {
+        return self.functions.iter().filter(|t| t.name == name).next().unwrap().id;
     }
 
     fn identifier_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
@@ -141,7 +147,7 @@ impl NessaContext {
     }
 
     fn basic_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
-        return map(|input| self.identifier_parser(input), |n| Type::Basic(self.get_type_id(n)))(input);
+        return map_res(|input| self.identifier_parser(input), |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input);
     }
 
     fn template_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
@@ -199,7 +205,7 @@ impl NessaContext {
     }
 
     fn parametric_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
-        return map(
+        return map_res(
             tuple((
                 |input| self.identifier_parser(input),
                 multispace0,
@@ -212,7 +218,7 @@ impl NessaContext {
                 multispace0,
                 tag(">")
             )),
-            |(n, _, _, _, t, _, _)| Type::Template(self.get_type_id(n), t)
+            |(n, _, _, _, t, _, _)| Result::<_, String>::Ok(Type::Template(self.get_type_id(n)?, t))
         )(input);
     }
 
@@ -423,8 +429,12 @@ impl NessaContext {
         } else{
             let mut nary_cpy = nary.clone();
             nary_cpy.insert(id);
+
+            // Comparison operators
+            let mut bi_no_cmp = bi.clone();
+            bi_no_cmp.insert(4);
     
-            let (input, a) = self.nessa_expr_parser_wrapper(input, bi, &nary_cpy, post, cache_bin, cache_nary, cache_post, cache)?;
+            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, cache)?;
     
             let res = map(
                 tuple((
@@ -757,7 +767,7 @@ impl NessaContext {
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
-                NessaExpr::FunctionDefinition(n, u_t, a, r, b)
+                NessaExpr::FunctionDefinition(self.get_function_id(n), u_t, a, r, b)
             }
         )(input);
     }
@@ -1327,6 +1337,25 @@ impl NessaContext {
         return Ok(("", ops));
     }
 
+    pub fn nessa_function_headers_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.function_header_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else {
+                let mut chars = input.chars();
+                chars.next();
+
+                input = chars.as_str();
+            }
+        }
+
+        return Ok(("", ops));
+    }
+
     pub fn nessa_operations_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
         let mut ops = vec!();
 
@@ -1595,7 +1624,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
-        let test_1_str = "fn test() -> Number {
+        let test_1_str = "fn inc() -> Number {
             let res = 5;
 
             for i in arr {
@@ -1605,7 +1634,7 @@ mod tests {
             return res;
         }";
 
-        let test_2_str = "fn test_2(arg: &Number) -> Number | String {
+        let test_2_str = "fn inc(arg: &Number) -> Number | String {
             let r: Number = arg + 1;
 
             if r + 1 {
@@ -1621,7 +1650,7 @@ mod tests {
             return r;
         }";
 
-        let test_3_str = "fn test_3<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
+        let test_3_str = "fn inc<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
             let a: 'V | 'K = value + key;
             return a;
         }";
@@ -1633,7 +1662,7 @@ mod tests {
         assert_eq!(
             test_1,
             NessaExpr::FunctionDefinition(
-                "test".into(),
+                0,
                 vec!(),
                 vec!(),
                 Type::Basic(0),
@@ -1654,7 +1683,7 @@ mod tests {
         assert_eq!(
             test_2,
             NessaExpr::FunctionDefinition(
-                "test_2".into(),
+                0,
                 vec!(),
                 vec!(
                     (
@@ -1715,7 +1744,7 @@ mod tests {
         assert_eq!(
             test_3,
             NessaExpr::FunctionDefinition(
-                "test_3".into(),
+                0,
                 vec!("K".into(), "V".into()),
                 vec!(
                     ("key".into(), Type::TemplateParam(0)),
@@ -1742,7 +1771,7 @@ mod tests {
     }
 
     #[test]
-    fn operator_definition_and_flow_control_parsing() {
+    fn operator_definition_parsing() {
         let ctx = standard_ctx();
 
         let prefix_str = "unary prefix op \"~\" (200);";
@@ -1914,7 +1943,7 @@ mod tests {
                         0,
                         Box::new(NessaExpr::NameReference("a".into())),
                         Box::new(NessaExpr::BinaryOperation(
-                            1,
+                            2,
                             Box::new(NessaExpr::NameReference("b".into())),
                             Box::new(NessaExpr::NameReference("c".into()))
                         )

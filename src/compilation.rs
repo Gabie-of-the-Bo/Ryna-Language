@@ -66,15 +66,15 @@ impl NessaContext {
             // Compile flow control
             NessaExpr::If(h, ib, ei, eb) => {
                 NessaContext::compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
-                NessaContext::compile_variables_ctx(ib, registers, ctx_idx)?;
+                NessaContext::compile_variables_ctx(ib, registers, ctx_idx, &vec!())?;
 
                 for (ei_h, ei_b) in ei {
                     NessaContext::compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
-                    NessaContext::compile_variables_ctx(ei_b, registers, ctx_idx)?;
+                    NessaContext::compile_variables_ctx(ei_b, registers, ctx_idx, &vec!())?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    NessaContext::compile_variables_ctx(eb_inner, registers, ctx_idx)?;
+                    NessaContext::compile_variables_ctx(eb_inner, registers, ctx_idx, &vec!())?;
                 }
             }
 
@@ -84,7 +84,7 @@ impl NessaContext {
                 curr_ctx.entry(i.clone()).or_insert(idx);
 
                 NessaContext::compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
-                NessaContext::compile_variables_ctx(b, registers, ctx_idx)?;
+                NessaContext::compile_variables_ctx(b, registers, ctx_idx, &vec!())?;
 
                 *expr = NessaExpr::CompiledFor(idx, i.clone(), c.clone(), b.clone());
             }
@@ -99,25 +99,35 @@ impl NessaContext {
         return Ok(());
     }
     
-    fn compile_variables_ctx(body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, usize>) -> Result<(), String> {
+    fn compile_variables_ctx(body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, usize>, args: &Vec<String>) -> Result<usize, String> {
         let mut curr_ctx = HashMap::new();
+
+        for n in args {
+            let idx = registers.pop().unwrap();
+            ctx_idx.entry(n.clone()).or_insert(idx);
+            curr_ctx.entry(n.clone()).or_insert(idx);
+        }
 
         // Compile each expression sequentially
         for e in body {
             NessaContext::compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
         }
 
+        let mut max_var = 0;
+
         // Free the registers inside the context
         curr_ctx.into_iter().for_each(|(n, i)| {
             ctx_idx.remove(&n);
             registers.push(i);
+
+            max_var = max_var.max(i + 1); // Maximum register
         });
 
-        return Ok(());
+        return Ok(max_var);
     }
 
-    pub fn compile_variables(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
-        return NessaContext::compile_variables_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new());
+    pub fn compile_variables(&self, body: &mut Vec<NessaExpr>, args: &Vec<String>) -> Result<usize, String> {
+        return NessaContext::compile_variables_ctx(body, &mut (0..self.variables.borrow().len()).rev().collect(), &mut HashMap::new(), args);
     }
 
     /*
@@ -204,7 +214,7 @@ impl NessaContext {
                 self.compile_expr_function_calls(b)?;
 
                 // Member function calls
-                if *id == 2 {
+                if *id == 3 {
                     if let NessaExpr::FunctionCall(f_id, t, args) = b.as_ref() {
                         // Append first operand to the function's arguments 
                         let mut new_args = vec!(a.as_ref().clone());
@@ -273,9 +283,28 @@ impl NessaContext {
         return Ok(());
     }
 
+    fn compile_expr_function_bodies(&self, expr: &mut NessaExpr) -> Result<(), String> {
+        match expr {
+            // Compile variable definitions
+            NessaExpr::FunctionDefinition(id, t, a, r, b) => {
+                let args = a.iter().map(|(n, _)| n).cloned().collect();
+                let max_var = self.compile(b, &args)?;
+
+                *expr = NessaExpr::CompiledFunctionDefinition(*id, t.clone(), a.clone(), r.clone(), b.clone(), max_var);
+            }
+
+            _ => {}
+        }
+
+        return Ok(());
+    }
+
     pub fn compile_functions(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
-        body.iter_mut().for_each(|i| self.compile_expr_function_names(i));        
-        return body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect();        
+        body.iter_mut().for_each(|i| self.compile_expr_function_names(i));    
+        body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;   
+        body.iter_mut().map(|i| self.compile_expr_function_bodies(i)).collect::<Result<_, _>>()?;   
+
+        return Ok(());
     }
 
     /*
@@ -284,11 +313,11 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
-    pub fn compile(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
-        self.compile_variables(body)?;
+    pub fn compile(&self, body: &mut Vec<NessaExpr>, args: &Vec<String>) -> Result<usize, String> {
+        let max_register = self.compile_variables(body, args)?;
         self.compile_functions(body)?;
 
-        return Ok(());
+        return Ok(max_register);
     }
 }
 
@@ -322,7 +351,7 @@ mod tests {
         ";
 
         let (_, mut code) = ctx.nessa_parser(code_str).unwrap();
-        ctx.compile_variables(&mut code).unwrap();
+        ctx.compile_variables(&mut code, &vec!()).unwrap();
 
         if let NessaExpr::CompiledVariableDefinition(idx, _, _, _) = code[0] {
             assert_eq!(idx, 0);

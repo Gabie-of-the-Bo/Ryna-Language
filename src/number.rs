@@ -52,9 +52,10 @@ impl PartialOrd for Integer{
 impl Ord for Integer{
     fn cmp(&self, b: &Integer) -> Ordering{
         return match (self.negative, b.negative){
-            (true, true) => comp_limbs(&self.limbs, &b.limbs),
-            (false, false) => comp_limbs(&b.limbs, &self.limbs),
-            (sa, sb) => sb.cmp(&sa)
+            (false, false) => comp_limbs(&self.limbs, &b.limbs),
+            (true, true) => comp_limbs(&b.limbs, &self.limbs),
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater
         }
     }
 }
@@ -1060,6 +1061,31 @@ impl Integer{
 pub enum Number {
     Int(Integer),
     Float(f64)
+}
+
+/*
+    ╒═════════════════════╕
+    │ Comparison routines │
+    ╘═════════════════════╛
+*/
+
+impl Eq for Number {}
+
+impl PartialOrd for Number {
+    fn partial_cmp(&self, other: &Number) -> Option<std::cmp::Ordering> {
+        return match (self, other) {
+            (Number::Int(a), Number::Int(b)) => Some(a.cmp(b)),
+            (Number::Float(a), Number::Float(b)) => a.partial_cmp(b),
+            (Number::Int(a), Number::Float(b)) => a.to_f64().partial_cmp(b),
+            (Number::Float(a), Number::Int(b)) => a.partial_cmp(&b.to_f64())
+        }
+    }
+}
+
+impl Ord for Number {
+    fn cmp(&self, other: &Number) -> std::cmp::Ordering {
+        return self.partial_cmp(other).unwrap();
+    }
 }
 
 /*

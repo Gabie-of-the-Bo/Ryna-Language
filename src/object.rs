@@ -413,7 +413,7 @@ impl Object {
         return Ok(ops[0].2(a, b));
     }
 
-    pub fn apply_function(args: &[&Object], templates: &[Type], id: usize, ctx: &NessaContext) -> Result<Object, String> {
+    pub fn apply_function(args: &[&Object], templates: &[Type], id: usize, ctx: &NessaContext, var_offset: usize) -> Result<Object, String> {
         let args_type = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
         let funcs = ctx.get_function_overloads(id, templates, &args_type);
 
@@ -441,7 +441,7 @@ impl Object {
                                 args_type.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")));
         }
 
-        return Ok(funcs[0].2(templates, args));
+        return Ok(funcs[0].2.call(ctx, templates, args, var_offset));
     }
 }
 
@@ -528,7 +528,7 @@ mod tests {
 
         let number = Object::new(Number::from(10));
         
-        let f_num = Object::apply_function(&[&number], &[], 0, &ctx).unwrap();
+        let f_num = Object::apply_function(&[&number], &[], 0, &ctx, 0).unwrap();
 
         assert_eq!(*f_num.get::<Number>(), Number::from(11));
     }

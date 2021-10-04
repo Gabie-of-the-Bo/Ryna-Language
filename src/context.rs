@@ -1,3 +1,5 @@
+use std::cell::{RefCell, Ref};
+
 use crate::types::*;
 use crate::variables::*;
 use crate::operations::*;
@@ -10,7 +12,7 @@ use crate::functions::*;
                                                   ╘══════════════════╛
 */
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct NessaContext {
     pub type_templates: Vec<TypeTemplate>, 
 
@@ -21,7 +23,7 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub variables: Vec<Option<Variable>>
+    pub variables: RefCell<Vec<Option<Variable>>>
 }
 
 impl NessaContext {
@@ -292,6 +294,10 @@ impl NessaContext {
         return self.functions[id].overloads.iter().filter(|(t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
     }
 
+    pub fn define_native_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: fn(&[Type], &[&Object]) -> Object) -> Result<(), String> {
+        return self.define_function_overload(id, args, ret, FunctionOverload::Native(f));
+    }
+
     pub fn define_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
@@ -323,8 +329,9 @@ impl NessaContext {
         ╘═══════════════════════╛
     */
 
-    pub fn define_variable(&mut self, idx: usize, name: String, var_type: Type) -> Result<(), String> {
-        let variable = self.variables.get_mut(idx).unwrap();
+    pub fn define_variable(&self, idx: usize, name: String, var_type: Type) -> Result<(), String> {
+        let mut var_ref = self.variables.borrow_mut();
+        let variable = var_ref.get_mut(idx).unwrap();
 
         if variable.is_some() {
             return Err(format!("Redefinition of variable \"{}\"", name));
@@ -340,8 +347,9 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn assign_variable(&mut self, idx: usize, value: Object) -> Result<(), String> {
-        let variable = self.variables.get_mut(idx).unwrap();
+    pub fn assign_variable(&self, idx: usize, value: Object) -> Result<(), String> {
+        let mut var_ref = self.variables.borrow_mut();
+        let variable = var_ref.get_mut(idx).unwrap();
 
         if let Some(v) = variable {
             if value.get_type().bindable_to(&v.var_type) {
@@ -355,13 +363,14 @@ impl NessaContext {
         }
 
         let val_type = value.get_type();
-        let var_type = self.variables[idx].as_ref().unwrap().value.as_ref().unwrap().get_type();
+        let var_type = var_ref[idx].as_ref().unwrap().value.as_ref().unwrap().get_type();
 
         return Err(format!("Unable to bind value of type {} to variable of type {}", val_type.get_name(self), var_type.get_name(self)));
     }
 
-    pub fn delete_variable(&mut self, idx: usize) -> Result<(), String> {
-        let variable = self.variables.get_mut(idx).unwrap();
+    pub fn delete_variable(&self, idx: usize) -> Result<(), String> {
+        let mut var_ref = self.variables.borrow_mut();
+        let variable = var_ref.get_mut(idx).unwrap();
 
         if variable.is_none() {
             return Err(format!("Variable with index {} is not defined", idx));
@@ -372,14 +381,14 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_variable(&self, idx: usize) -> Result<&Variable, String> {
-        let variable = &self.variables[idx];
+    pub fn get_variable(&self, idx: usize) -> Result<Ref<Variable>, String> {
+        let variable = self.variables.borrow();
 
-        if variable.is_none() {
+        if variable[idx].is_none() {
             return Err(format!("Variable with index {} is not defined", idx));
         }
 
-        return Ok(variable.as_ref().unwrap());
+        return Ok(Ref::map(variable, |v| v[idx].as_ref().unwrap()));
     }
 }
 
@@ -430,9 +439,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
-        let def_2 = ctx.define_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
-        let def_3 = ctx.define_function_overload(0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_1 = ctx.define_native_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_2 = ctx.define_native_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_3 = ctx.define_native_function_overload(0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
@@ -547,7 +556,7 @@ pub fn standard_ctx() -> NessaContext {
 
     standard_functions(&mut ctx);
 
-    ctx.variables = vec!(None; 100); // 100 "registers" by default
+    ctx.variables = RefCell::new(vec!(None; 10000)); // 100 "registers" by default
 
     return ctx;
 }

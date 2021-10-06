@@ -116,7 +116,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("-".into(), 200).unwrap();
 
-    ctx.define_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(2), |a, b| {
+    ctx.define_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
         let n_b = &*b.get::<Number>();
 

@@ -28,7 +28,7 @@ use crate::context::NessaContext;
 pub enum NessaExpr {
     // Compiled
     FunctionName(usize),
-    Variable(usize, String),
+    Variable(usize, String, Type),
     CompiledVariableDefinition(usize, String, Type, Box<NessaExpr>),
     CompiledVariableAssignment(usize, String, Box<NessaExpr>),
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),

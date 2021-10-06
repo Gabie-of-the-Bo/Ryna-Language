@@ -413,9 +413,9 @@ impl Object {
         return Ok(ops[0].2(a, b));
     }
 
-    pub fn apply_function(args: &[&Object], templates: &[Type], id: usize, ctx: &NessaContext, var_offset: usize) -> Result<Object, String> {
+    pub fn apply_function(args: Vec<Object>, templates: Vec<Type>, id: usize, ctx: &NessaContext, var_offset: usize) -> Result<Object, String> {
         let args_type = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
-        let funcs = ctx.get_function_overloads(id, templates, &args_type);
+        let funcs = ctx.get_function_overloads(id, &templates, &args_type);
 
         if funcs.len() == 0 {
             return Err(format!("Unable to find function overload for {}{}({})", 
@@ -520,16 +520,5 @@ mod tests {
         let num_cpy = Object::apply_nary_operation(&number, &[], 0, &ctx).unwrap();
 
         assert_eq!(*num_cpy.get::<Number>(), *number.get::<Number>());
-    }
-
-    #[test]
-    fn functions() {
-        let ctx = standard_ctx();
-
-        let number = Object::new(Number::from(10));
-        
-        let f_num = Object::apply_function(&[&number], &[], 0, &ctx, 0).unwrap();
-
-        assert_eq!(*f_num.get::<Number>(), Number::from(11));
     }
 }

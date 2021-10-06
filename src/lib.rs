@@ -7,10 +7,10 @@ mod patterns;
 mod object;
 mod operations;
 mod functions;
-mod variables;
 mod types;
 mod context;
 
 mod parser;
+mod inference;
 mod compilation;
 mod execution;

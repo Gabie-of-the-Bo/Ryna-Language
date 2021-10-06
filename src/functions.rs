@@ -11,7 +11,7 @@ use crate::parser::NessaExpr;
 */
 
 pub enum FunctionOverload {
-    Native(fn(&[Type], &[&Object]) -> Object),
+    Native(fn(Vec<Type>, Vec<Object>) -> Object),
     Nessa(Vec<NessaExpr>, Vec<(String, Type)>, usize)
 }
 

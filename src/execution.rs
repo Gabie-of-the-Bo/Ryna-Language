@@ -12,12 +12,6 @@ use crate::compilation::CompiledNessaExpr;
                                                   ╘══════════════════╛
 */
 
-impl FunctionOverload {
-    pub fn call(&self, _ctx: &NessaContext, _templates: Vec<Type>, _args: Vec<Object>, _var_offset: usize) -> Object {
-        unimplemented!();
-    }
-}
-
 impl NessaContext {
     fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         let compiled_code = self.parse_and_compile(code)?;
@@ -96,7 +90,7 @@ impl NessaContext {
                 }, 
 
                 NativeFunctionCall(func_id, ov_id) => {
-                    if let (Type::And(v), _, FunctionOverload::Native(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let (Type::And(v), _, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {
@@ -116,7 +110,7 @@ impl NessaContext {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2(&obj));
+                        // stack.push(operations[*ov_id].2(&obj));
 
                         ip += 1;
                     
@@ -130,7 +124,7 @@ impl NessaContext {
                         let a = stack.pop().unwrap();
                         let b = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2(&a, &b));
+                        stack.push(operations[*ov_id].2.unwrap()(&a, &b));
                         
                         ip += 1;
                     
@@ -140,13 +134,15 @@ impl NessaContext {
                 }
 
                 NaryOperatorCall(op_id, ov_id) => {
-                    if let Operator::Binary{operations, ..} = &self.binary_ops[*op_id] {
+                    if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
+                        /*
                         let a = stack.pop().unwrap();
                         let b = stack.pop().unwrap();
 
                         stack.push(operations[*ov_id].2(&a, &b));
 
                         ip += 1;
+                        */
                     
                     } else {
                         unreachable!();

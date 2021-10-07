@@ -90,6 +90,10 @@ impl NessaContext {
         return vec!();
     }
 
+    pub fn define_native_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: fn(&Object) -> Object) -> Result<(), String> {
+        return self.define_unary_operation(id, a, ret, Some(f));
+    }
+
     pub fn define_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
         let op = &self.unary_ops[id];
 
@@ -154,6 +158,10 @@ impl NessaContext {
         }
 
         return vec!();
+    }
+
+    pub fn define_native_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: fn(&Object, &Object) -> Object) -> Result<(), String> {
+        return self.define_binary_operation(id, a, b, ret, Some(f));
     }
 
     pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
@@ -232,6 +240,10 @@ impl NessaContext {
         return vec!();
     }
 
+    pub fn define_native_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: fn(&Object, &[&Object]) -> Object) -> Result<(), String> {
+        return self.define_nary_operation(id, from, args, ret, Some(f));
+    }
+
     pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.into_iter().cloned());
@@ -294,7 +306,7 @@ impl NessaContext {
     }
 
     pub fn define_native_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: fn(Vec<Type>, Vec<Object>) -> Object) -> Result<(), String> {
-        return self.define_function_overload(id, args, ret, FunctionOverload::Native(f));
+        return self.define_function_overload(id, args, ret, Some(f));
     }
 
     pub fn define_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
@@ -339,26 +351,26 @@ mod tests {
     fn operation_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_unary_operation(0, Type::Basic(1), Type::Basic(1), |a| { a.clone() });
-        let def_2 = ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(1), |a| { a.clone() });
-        let def_3 = ctx.define_unary_operation(0, Type::Wildcard, Type::Wildcard, |a| { a.clone() });
+        let def_1 = ctx.define_native_unary_operation(0, Type::Basic(1), Type::Basic(1), |a| { a.clone() });
+        let def_2 = ctx.define_native_unary_operation(0, Type::Basic(0), Type::Basic(1), |a| { a.clone() });
+        let def_3 = ctx.define_native_unary_operation(0, Type::Wildcard, Type::Wildcard, |a| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
-        let def_2 = ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
-        let def_3 = ctx.define_binary_operation(0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
+        let def_1 = ctx.define_native_binary_operation(0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_2 = ctx.define_native_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.define_native_binary_operation(0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |a, _| { a.clone() });
-        let def_2 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |a, _| { a.clone() });
-        let def_3 = ctx.define_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |a, _| { a.clone() });
-        let def_4 = ctx.define_nary_operation(0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |a, _| { a.clone() });
+        let def_1 = ctx.define_native_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |a, _| { a.clone() });
+        let def_2 = ctx.define_native_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |a, _| { a.clone() });
+        let def_3 = ctx.define_native_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |a, _| { a.clone() });
+        let def_4 = ctx.define_native_nary_operation(0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |a, _| { a.clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());

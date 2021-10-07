@@ -10,10 +10,7 @@ use crate::parser::NessaExpr;
                                                   ╘══════════════════╛
 */
 
-pub enum FunctionOverload {
-    Native(fn(Vec<Type>, Vec<Object>) -> Object),
-    Nessa(Vec<NessaExpr>, Vec<(String, Type)>, usize)
-}
+pub type FunctionOverload = Option<fn(Vec<Type>, Vec<Object>) -> Object>;
 
 pub type FunctionOverloads = Vec<(Type, Type, FunctionOverload)>;
 

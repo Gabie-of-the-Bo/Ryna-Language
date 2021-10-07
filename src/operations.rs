@@ -10,9 +10,9 @@ use crate::number::*;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunction = fn(&Object) -> Object;
-pub type BinaryFunction = fn(&Object, &Object) -> Object;
-pub type NaryFunction = fn(&Object, &[&Object]) -> Object;
+pub type UnaryFunction = Option<fn(&Object) -> Object>;
+pub type BinaryFunction = Option<fn(&Object, &Object) -> Object>;
+pub type NaryFunction = Option<fn(&Object, &[&Object]) -> Object>;
 
 pub type UnaryOperations = Vec<(Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(Type, Type, BinaryFunction)>;
@@ -73,7 +73,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("!".into(), true, 200).unwrap();
     ctx.define_unary_operator("?".into(), false, 150).unwrap();
     
-    ctx.define_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
+    ctx.define_native_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();
         let mut res = n_a.clone();
 
@@ -86,28 +86,28 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("+".into(), 200).unwrap();
 
-    ctx.define_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
+    ctx.define_native_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.get::<Number>();
         let n_b = &*b.get::<Number>();
 
         return Object::new(n_a + n_b);
     }).unwrap();
 
-    ctx.define_binary_operation(0, Type::MutRef(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
+    ctx.define_native_binary_operation(0, Type::MutRef(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
         let n_b = &*b.deref::<Number>();
 
         return Object::new(n_a + n_b);
     }).unwrap();
 
-    ctx.define_binary_operation(0, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
+    ctx.define_native_binary_operation(0, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
         let n_a = &*a.get::<Number>();
         let n_b = &*b.deref::<Number>();
 
         return Object::new(n_a + n_b);
     }).unwrap();
 
-    ctx.define_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, b| {
+    ctx.define_native_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, b| {
         let n_a = &*a.deref::<String>();
         let n_b = &*b.deref::<String>();
 
@@ -116,7 +116,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("-".into(), 200).unwrap();
 
-    ctx.define_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(0), |a, b| {
+    ctx.define_native_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(0), |a, b| {
         let n_a = &*a.deref::<Number>();
         let n_b = &*b.get::<Number>();
 
@@ -128,7 +128,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("<".into(), 2000).unwrap();
 
-    ctx.define_binary_operation(4, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(2), |a, b| {
+    ctx.define_native_binary_operation(4, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(2), |a, b| {
         let n_a = &*a.get::<Number>();
         let n_b = &*b.deref::<Number>();
 

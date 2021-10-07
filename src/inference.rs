@@ -5,13 +5,15 @@ use crate::operations::*;
 use crate::types::Type;
 
 impl NessaContext {
-    pub fn get_first_unary_op(&self, id: usize, arg_type: Type) -> Option<(usize, Type)> {
+    pub fn get_first_unary_op(&self, id: usize, arg_type: Type) -> Option<(usize, Type, bool)> {
         let t = Type::And(vec!(arg_type));
 
+        let mut native = false;
+
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
-            for (i, (a, r, _)) in operations.iter().enumerate() {
+            for (i, (a, r, f)) in operations.iter().enumerate() {
                 if t.bindable_to(&a) { // Take first that matches
-                    return Some((i, r.clone()));
+                    return Some((i, r.clone(), f.is_some()));
                 }
             }
         }
@@ -19,13 +21,30 @@ impl NessaContext {
         return None;
     }
 
-    pub fn get_first_binary_op(&self, id: usize, a_type: Type, b_type: Type) -> Option<(usize, Type)> {
+    pub fn get_first_binary_op(&self, id: usize, a_type: Type, b_type: Type) -> Option<(usize, Type, bool)> {
         let t = Type::And(vec!(a_type, b_type));
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
-            for (i, (a, r, _)) in operations.iter().enumerate() {
+            for (i, (a, r, f)) in operations.iter().enumerate() {
                 if t.bindable_to(&a) { // Take first that matches
-                    return Some((i, r.clone()));
+                    return Some((i, r.clone(), f.is_some()));
+                }
+            }
+        }
+
+        return None;
+    }
+
+    pub fn get_first_nary_op(&self, id: usize, a_type: Type, b_type: Vec<Type>) -> Option<(usize, Type, bool)> {
+        let mut arg_types = vec!(a_type.clone());
+        arg_types.extend(b_type.iter().cloned());
+
+        let t = Type::And(arg_types);
+
+        if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
+            for (i, (a, r, f)) in operations.iter().enumerate() {
+                if t.bindable_to(&a) { // Take first that matches
+                    return Some((i, r.clone(), f.is_some()));
                 }
             }
         }
@@ -36,15 +55,9 @@ impl NessaContext {
     pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>) -> Option<(usize, Type, bool)> {
         let t = Type::And(arg_type);
 
-        let mut native = false;
-
         for (i, (a, r, f)) in self.functions[id].overloads.iter().enumerate() {
             if t.bindable_to(&a) { // Take first that matches
-                if let FunctionOverload::Native(_) = f {
-                    native = true;
-                }
-
-                return Some((i, r.clone(), native));
+                return Some((i, r.clone(), f.is_some()));
             }
         }
 
@@ -64,7 +77,7 @@ impl NessaContext {
             NessaExpr::UnaryOperation(id, a) => {
                 let args_type = self.infer_type(a)?;
 
-                let (_, r) = self.get_first_unary_op(*id, args_type).unwrap();
+                let (_, r, _) = self.get_first_unary_op(*id, args_type).unwrap();
 
                 return Some(r.clone());
             },
@@ -73,7 +86,7 @@ impl NessaContext {
                 let a_type = self.infer_type(a)?;
                 let b_type = self.infer_type(b)?;
 
-                let (_, r) = self.get_first_binary_op(*id, a_type, b_type).unwrap();
+                let (_, r, _) = self.get_first_binary_op(*id, a_type, b_type).unwrap();
 
                 return Some(r.clone());
             },

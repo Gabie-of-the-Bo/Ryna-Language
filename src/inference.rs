@@ -6,13 +6,9 @@ use crate::types::Type;
 
 impl NessaContext {
     pub fn get_first_unary_op(&self, id: usize, arg_type: Type) -> Option<(usize, Type, bool)> {
-        let t = Type::And(vec!(arg_type));
-
-        let mut native = false;
-
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             for (i, (a, r, f)) in operations.iter().enumerate() {
-                if t.bindable_to(&a) { // Take first that matches
+                if arg_type.bindable_to(&a) { // Take first that matches
                     return Some((i, r.clone(), f.is_some()));
                 }
             }
@@ -87,6 +83,15 @@ impl NessaContext {
                 let b_type = self.infer_type(b)?;
 
                 let (_, r, _) = self.get_first_binary_op(*id, a_type, b_type).unwrap();
+
+                return Some(r.clone());
+            },
+
+            NessaExpr::NaryOperation(id, _, a, b) => {
+                let a_type = self.infer_type(a)?;
+                let b_type = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
+
+                let (_, r, _) = self.get_first_nary_op(*id, a_type, b_type).unwrap();
 
                 return Some(r.clone());
             },

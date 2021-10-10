@@ -356,8 +356,8 @@ mod tests {
                 return arg;
             }
 
-            let a = 3;
-            let b = ~a¡;
+            let a: Number = 3;
+            let b: &&Number = ~a¡;
 
             binary op \"·\" (300);
             binary op \"$\" (300);
@@ -367,18 +367,18 @@ mod tests {
                 return a + b;
             }
 
-            let c = a · b;
+            let c: &&Number = a · b;
 
             nary op from \"`\" to \"´\" (500);
 
             op (a: &&Number)`b: &&Number, c: &&Number´ -> &&Number {
-                return a · b + ~c;
+                return a · b · ~c;
             }
 
             let d = a`b, c´;
         ".to_string();
 
-        // ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
     }
 
     #[test]

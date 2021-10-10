@@ -15,12 +15,8 @@ use crate::compilation::CompiledNessaExpr;
 impl NessaContext {
     fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         let compiled_code = self.parse_and_compile(code)?;
-
-        for i in &compiled_code {
-            println!("{:?}", i);
-        }
         
-        return self.execute_compiled_code(&compiled_code);
+        return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
 }
 
@@ -248,8 +244,7 @@ mod tests {
             let a = test(100);
         ";
 
-        let compiled_code = ctx.parse_and_compile(&code_str.into()).unwrap();
-        ctx.execute_compiled_code(&compiled_code).unwrap();
+        ctx.parse_and_execute_nessa_module(&code_str.into()).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5050))));
     }

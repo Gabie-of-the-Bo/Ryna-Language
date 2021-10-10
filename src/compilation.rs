@@ -385,8 +385,31 @@ pub enum CompiledNessaExpr {
     Halt
 }
 
+pub struct NessaInstruction {
+    pub instruction: CompiledNessaExpr,
+    pub comment: String
+}
+
+impl From<CompiledNessaExpr> for NessaInstruction {
+    fn from(obj: CompiledNessaExpr) -> NessaInstruction {
+        return NessaInstruction {
+            instruction: obj,
+            comment: String::new()
+        };
+    }
+}
+
+impl NessaInstruction {
+    pub fn new(instruction: CompiledNessaExpr, comment: String) -> NessaInstruction {
+        return NessaInstruction {
+            instruction: instruction,
+            comment: comment
+        }
+    }
+}
+
 impl NessaContext{
-    pub fn compiled_form(&self, lines: &Vec<NessaExpr>, max_register: usize) -> Result<Vec<CompiledNessaExpr>, String> {
+    pub fn compiled_form(&self, lines: &Vec<NessaExpr>, max_register: usize) -> Result<Vec<NessaInstruction>, String> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize), usize> = HashMap::new();
         let mut unary: HashMap<(usize, usize), usize> = HashMap::new();
@@ -470,38 +493,97 @@ impl NessaContext{
             }
         }
 
-        let mut res = vec!(CompiledNessaExpr::Jump(program_size));
+        let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Jump(program_size)));
 
         // Define functions
         for (j, expr) in lines.iter().enumerate() {
             match expr {
-                NessaExpr::CompiledFunctionDefinition(_, _, a, _, b, _) => {
+                NessaExpr::CompiledFunctionDefinition(id, _, a, r, b, _) => {
                     // Store parameters
                     for i in 0..a.len(){
-                        res.push(CompiledNessaExpr::StoreVariable(i));
+                        if i == 0 {
+                            let comment = format!(
+                                "fn {}({}) -> {}",
+                                self.functions[*id].name,
+                                a.iter().map(|(_, t)| t.get_name(self)).collect::<Vec<_>>().join(", "),
+                                r.get_name(self)
+                            );
+
+                            res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+
+                        } else {
+                            res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                        }
                     }
     
                     res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
                 },
 
-                NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, b, _) |
-                NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, b, _) => {
+                NessaExpr::CompiledPrefixOperationDefinition(id, _, t, r, b, _) |
+                NessaExpr::CompiledPostfixOperationDefinition(id, _, t, r, b, _) => {
+                    let mut rep = String::new();
+                    let mut is_prefix = false;
+
+                    if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                        rep = representation.clone();
+                        is_prefix = *prefix;
+                    }
+
                     // Store parameter
-                    res.push(CompiledNessaExpr::StoreVariable(0));
+                    let comment;
+
+                    if is_prefix {
+                        comment = format!("op {}({}) -> {}", rep, t.get_name(self), r.get_name(self));
+
+                    } else {
+                        comment = format!("op ({}){} -> {}", t.get_name(self), rep, r.get_name(self));
+                    }
+                    
+                    res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
                     res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
                 },
 
-                NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, b, _) => {
+                NessaExpr::CompiledBinaryOperationDefinition(id, (_, t1), (_, t2), r, b, _) => {
                     // Store parameter
-                    res.push(CompiledNessaExpr::StoreVariable(0));
-                    res.push(CompiledNessaExpr::StoreVariable(1));
+                    let mut rep = String::new();
+
+                    if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                        rep = representation.clone();
+                    }
+
+                    let comment = format!("op ({}) {} ({}) -> {}", t1.get_name(self), rep, t2.get_name(self), r.get_name(self));
+
+                    res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(1)));
                     res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
                 },
 
-                NessaExpr::CompiledNaryOperationDefinition(_, _, a, _, b, _) => {
+                NessaExpr::CompiledNaryOperationDefinition(id, (_, t), a, r, b, _) => {
                     // Store parameters
+                    let mut o_rep = String::new();
+                    let mut c_rep = String::new();
+
+                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                        o_rep = open_rep.clone();
+                        c_rep = close_rep.clone();
+                    }
+
                     for i in 0..=a.len(){
-                        res.push(CompiledNessaExpr::StoreVariable(i));
+                        if i == 0 {
+                            let comment = format!(
+                                "op ({}){}{}{} -> {}", 
+                                t.get_name(self),
+                                o_rep, 
+                                a.iter().map(|(_, t)| t.get_name(self)).collect::<Vec<_>>().join(", "), 
+                                c_rep,
+                                r.get_name(self)
+                            );
+
+                            res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+
+                        } else {
+                            res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                        }
                     }
     
                     res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
@@ -520,11 +602,19 @@ impl NessaContext{
                 NessaExpr::CompiledBinaryOperationDefinition(..) |
                 NessaExpr::CompiledNaryOperationDefinition(..) => {},
 
-                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, max_register)?)
+                _ => {
+                    let mut program = self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, max_register)?;
+
+                    if let Some(NessaInstruction{comment, ..}) = program.first_mut() {
+                        *comment = "Start of the program".into();
+                    } 
+
+                    res.extend(program);
+                }
             }
         }
 
-        res.push(CompiledNessaExpr::Halt);
+        res.push(NessaInstruction::new(CompiledNessaExpr::Halt, "End of the program".into()));
 
         return Ok(res);
     }
@@ -566,13 +656,13 @@ impl NessaContext{
         binary: &HashMap<(usize, usize), usize>, 
         nary: &HashMap<(usize, usize), usize>, 
         max_register: usize
-    ) -> Result<Vec<CompiledNessaExpr>, String> {
+    ) -> Result<Vec<NessaInstruction>, String> {
         return match expr {
-            NessaExpr::Literal(obj) => Ok(vec!(CompiledNessaExpr::Literal(obj.clone()))),
-            NessaExpr::Variable(id, _, _) => Ok(vec!(CompiledNessaExpr::GetVariable(*id))), 
+            NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
+            NessaExpr::Variable(id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
             NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
-                res.push(CompiledNessaExpr::StoreVariable(*id));
+                res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
 
                 Ok(res)
             },
@@ -583,11 +673,11 @@ impl NessaContext{
                 let (ov_id, _, native) = self.get_first_unary_op(*id, t).unwrap();
 
                 if native {
-                    res.push(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id)));
 
                 } else {
                     let pos = unary.get(&(*id, ov_id)).unwrap();
-                    res.push(CompiledNessaExpr::Call(*pos, max_register));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                 }
 
                 Ok(res)
@@ -602,11 +692,11 @@ impl NessaContext{
                 let (ov_id, _, native) = self.get_first_binary_op(*id, a_t, b_t).unwrap();
 
                 if native {
-                    res.push(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id)));
 
                 } else {
                     let pos = binary.get(&(*id, ov_id)).unwrap();
-                    res.push(CompiledNessaExpr::Call(*pos, max_register));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                 }
 
                 Ok(res)
@@ -626,11 +716,11 @@ impl NessaContext{
                 let (ov_id, _, native) = self.get_first_nary_op(*id, a_t, b_t).unwrap();
 
                 if native {
-                    res.push(CompiledNessaExpr::NaryOperatorCall(*id, ov_id));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id)));
 
                 } else {
                     let pos = nary.get(&(*id, ov_id)).unwrap();
-                    res.push(CompiledNessaExpr::Call(*pos, max_register));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                 }
 
                 Ok(res)
@@ -639,7 +729,7 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, max_register)?;
                 let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, max_register)?;
 
-                res.push(CompiledNessaExpr::ConditionalRelativeJump(if_body.len() + 1));
+                res.push(NessaInstruction::from(CompiledNessaExpr::ConditionalRelativeJump(if_body.len() + 1)));
                 res.extend(if_body);
 
                 for (h, b) in ei {
@@ -647,7 +737,7 @@ impl NessaContext{
 
                     let elif_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
 
-                    res.push(CompiledNessaExpr::ConditionalRelativeJump(elif_body.len() + 1));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::ConditionalRelativeJump(elif_body.len() + 1)));
                     res.extend(elif_body);
                 }
 
@@ -659,7 +749,7 @@ impl NessaContext{
             },
             NessaExpr::Return(e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
-                res.push(CompiledNessaExpr::Return);
+                res.push(NessaInstruction::from(CompiledNessaExpr::Return));
 
                 Ok(res)
             },
@@ -674,11 +764,11 @@ impl NessaContext{
                 let (ov_id, _, native) = self.get_first_function_overload(*id, args_types).unwrap();
 
                 if native {
-                    res.push(CompiledNessaExpr::NativeFunctionCall(*id, ov_id));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id)));
 
                 } else {
                     let pos = functions.get(&(*id, ov_id)).unwrap();
-                    res.push(CompiledNessaExpr::Call(*pos, max_register));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                 }
 
                 Ok(res)
@@ -694,7 +784,7 @@ impl NessaContext{
         binary: &HashMap<(usize, usize), usize>, 
         nary: &HashMap<(usize, usize), usize>, 
         max_register: usize
-    ) -> Result<Vec<CompiledNessaExpr>, String> {
+    ) -> Result<Vec<NessaInstruction>, String> {
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, max_register)).flat_map(|i| i.unwrap()).collect());
     }
 
@@ -763,7 +853,7 @@ impl NessaContext{
         return self.nessa_parser(code).unwrap().1;
     }
 
-    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<CompiledNessaExpr>, String> {
+    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, String> {
         self.define_module_operators(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;

@@ -436,7 +436,7 @@ impl NessaContext {
 
             // Comparison operators
             let mut bi_no_cmp = bi.clone();
-            bi_no_cmp.insert(4);
+            bi_no_cmp.insert(6);
     
             let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, cache)?;
     

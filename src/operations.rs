@@ -83,57 +83,134 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     }).unwrap();
 }
 
+macro_rules! define_binary_native_op {
+    ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |a, b| {
+            let $a = &*a.get::<$unwrap_type>();
+            let $b = &*b.get::<$unwrap_type>();
+    
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_binary_native_op_deref_l {
+    ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |a, b| {
+            let $a = &*a.deref::<$unwrap_type>();
+            let $b = &*b.get::<$unwrap_type>();
+    
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_binary_native_op_deref_r {
+    ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |a, b| {
+            let $a = &*a.get::<$unwrap_type>();
+            let $b = &*b.deref::<$unwrap_type>();
+    
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_binary_native_op_deref {
+    ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |a, b| {
+            let $a = &*a.deref::<$unwrap_type>();
+            let $b = &*b.deref::<$unwrap_type>();
+    
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_binary_native_op_combinations {
+    ($ctx: ident, $id: expr, $base_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        let base_ref = Type::Ref(Box::new($base_type.clone()));
+        let base_mut = Type::MutRef(Box::new($base_type.clone()));
+        
+        define_binary_native_op!($ctx, $id, $base_type, $base_type, $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref_l!($ctx, $id, base_ref.clone(), $base_type, $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref_r!($ctx, $id, $base_type, base_ref.clone(), $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref_l!($ctx, $id, base_mut.clone(), $base_type, $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref_r!($ctx, $id, $base_type, base_mut.clone(), $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref!($ctx, $id, base_ref.clone(), base_ref.clone(), $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref!($ctx, $id, base_ref.clone(), base_mut.clone(), $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref!($ctx, $id, base_mut.clone(), base_mut.clone(), $return_type, $unwrap_type, $a, $b, $result);
+        define_binary_native_op_deref!($ctx, $id, base_mut.clone(), base_ref.clone(), $return_type, $unwrap_type, $a, $b, $result);
+    };
+}
+
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
+    
+    /*
+        ╒═════════════════════════════╕
+        │ Basic arithmetic operations │
+        ╘═════════════════════════════╛
+    */
+
     ctx.define_binary_operator("+".into(), 200).unwrap();
 
-    ctx.define_native_binary_operation(0, Type::Basic(0), Type::Basic(0), Type::Basic(0), |a, b| {
-        let n_a = &*a.get::<Number>();
-        let n_b = &*b.get::<Number>();
-
-        return Object::new(n_a + n_b);
-    }).unwrap();
-
-    ctx.define_native_binary_operation(0, Type::MutRef(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
-        let n_a = &*a.deref::<Number>();
-        let n_b = &*b.deref::<Number>();
-
-        return Object::new(n_a + n_b);
-    }).unwrap();
-
-    ctx.define_native_binary_operation(0, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), |a, b| {
-        let n_a = &*a.get::<Number>();
-        let n_b = &*b.deref::<Number>();
-
-        return Object::new(n_a + n_b);
-    }).unwrap();
-
-    ctx.define_native_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |a, b| {
-        let n_a = &*a.deref::<String>();
-        let n_b = &*b.deref::<String>();
-
-        return Object::new(format!("{}{}", n_a, n_b));
-    }).unwrap();
+    define_binary_native_op_combinations!(ctx, 0, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 + arg_2);
+    define_binary_native_op_combinations!(ctx, 0, Type::Basic(1), Type::Basic(1), String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
 
     ctx.define_binary_operator("-".into(), 200).unwrap();
 
-    ctx.define_native_binary_operation(1, Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(0), Type::Basic(0), |a, b| {
-        let n_a = &*a.deref::<Number>();
-        let n_b = &*b.get::<Number>();
-
-        return Object::new(n_a - n_b);
-    }).unwrap();
+    define_binary_native_op_combinations!(ctx, 1, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 - arg_2);
 
     ctx.define_binary_operator("*".into(), 150).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 2, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 * arg_2);
+
+    ctx.define_binary_operator("/".into(), 150).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 3, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 / arg_2);
+
+    ctx.define_binary_operator("%".into(), 150).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 4, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 % arg_2);
+
+    /*
+        ╒══════════════════════╕
+        │ Ancillary operations │
+        ╘══════════════════════╛
+    */
+
     ctx.define_binary_operator(".".into(), 1000).unwrap();
+
+    /*
+        ╒═══════════════════════╕
+        │ Comparison operations │
+        ╘═══════════════════════╛
+    */
 
     ctx.define_binary_operator("<".into(), 2000).unwrap();
 
-    ctx.define_native_binary_operation(4, Type::Basic(0), Type::MutRef(Box::new(Type::Basic(0))), Type::Basic(2), |a, b| {
-        let n_a = &*a.get::<Number>();
-        let n_b = &*b.deref::<Number>();
+    define_binary_native_op_combinations!(ctx, 6, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 < arg_2);
 
-        return Object::new(n_a < n_b);
-    }).unwrap();
+    ctx.define_binary_operator(">".into(), 2000).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 7, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 > arg_2);
+
+    ctx.define_binary_operator("<=".into(), 2000).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 8, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 <= arg_2);
+
+    ctx.define_binary_operator(">=".into(), 2000).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 9, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 >= arg_2);
+
+    ctx.define_binary_operator("==".into(), 2000).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 10, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 == arg_2);
+
+    ctx.define_binary_operator("!=".into(), 2000).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 11, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 != arg_2);
+
 }
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {

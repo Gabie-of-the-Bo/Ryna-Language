@@ -164,69 +164,6 @@ mod tests {
     use crate::number::*;
     use crate::object::*;
     use crate::context::*;
-    
-
-    #[test]
-    fn compiled_code() {
-        use crate::compilation::CompiledNessaExpr::*;
-
-        let mut ctx = standard_ctx();
-
-        let code = vec!(
-            Literal(Object::new(true)),
-            StoreVariable(0),
-            Halt
-        );
-
-        ctx.execute_compiled_code(&code).unwrap();
-
-        assert_eq!(ctx.variables[0], Some(Object::new(true)));
-
-        let code = vec!(
-            Literal(Object::new(Number::from(4))),
-            Call(4, 0),
-            StoreVariable(0),
-            Halt,
-            NativeFunctionCall(0, 0),
-            Return
-        );
-
-        ctx.execute_compiled_code(&code).unwrap();
-
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5))));
-
-        let code = vec!(
-            // Load the first value (100) 
-            Literal(Object::new(Number::from(100))),
-            // Call the recursive function
-            Call(4, 0),
-            StoreVariable(0),
-            Halt,
-
-            // Store the input as a variable
-            StoreVariable(0),
-            // If 0 < the variable
-            GetVariable(0),
-            Literal(Object::new(Number::from(0))),
-            BinaryOperatorCall(4, 0),
-            ConditionalRelativeJump(8),
-            // Return 0 if it's not the case
-            GetVariable(0),
-            Literal(Object::new(Number::from(1))),
-            GetVariable(0),
-            BinaryOperatorCall(1, 0),
-            Call(4, 1),
-            BinaryOperatorCall(0, 2),
-            Return,
-            // Call recursively if it is
-            Literal(Object::new(Number::from(0))),
-            Return
-        );
-
-        ctx.execute_compiled_code(&code).unwrap();
-
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5050))));
-    }
 
     #[test]
     fn compilation_and_execution() {

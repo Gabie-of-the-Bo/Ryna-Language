@@ -226,7 +226,7 @@ impl NessaContext {
                 self.compile_expr_function_calls(b)?;
 
                 // Member function calls
-                if *id == 3 {
+                if *id == 5 {
                     if let NessaExpr::FunctionCall(f_id, t, args) = b.as_ref() {
                         // Append first operand to the function's arguments 
                         let mut new_args = vec!(a.as_ref().clone());

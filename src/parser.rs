@@ -463,7 +463,7 @@ impl NessaContext {
                     multispace0,
                     separated_list0(
                         tuple((multispace0, tag(","), multispace0)),
-                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                        |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, cache)
                     ),
                     multispace0,
                     tag(close)

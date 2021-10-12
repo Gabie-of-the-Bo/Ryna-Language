@@ -364,6 +364,18 @@ mod tests {
 
                 return 0;
             }
+        
+            fn test_8(a: Number) -> Number {
+                if a == 1 {
+                    return 1;
+
+                } else if a % 2 == 0 {
+                    return test_8(a / 2) + 1;
+
+                } else {
+                    return test_8(a * 3 + 1) + 1;
+                }
+            }
 
             let v_1 = test_1();
             let v_2 = test_2();
@@ -372,6 +384,7 @@ mod tests {
             let v_5 = test_5(2, 4);
             let v_6 = test_6(9);
             let v_7 = test_7(10);
+            let v_8 = test_8(100);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -383,5 +396,6 @@ mod tests {
         assert_eq!(ctx.variables[4], Some(Object::new(Number::from(6)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[5], Some(Object::new(Number::from(9)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[6], Some(Object::new(Number::from(55))));
+        assert_eq!(ctx.variables[7], Some(Object::new(Number::from(26))));
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::cell::RefCell;
 
 use nom::{
     IResult,
@@ -109,6 +110,27 @@ impl NessaExpr {
             _ => {}
         }
     }
+}
+
+type ParserCache<'a> = HashMap<usize, IResult<&'a str, NessaExpr>>;
+type OperatorCache<'a> = RefCell<HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>>;
+
+fn get_from_cache<'a>(cache: &OperatorCache<'a>, input: &'a str, key: (usize, BitSet, BitSet, BitSet)) -> Option<IResult<&'a str, NessaExpr>> {
+    if let Some(r) = cache.borrow().get(&key) {
+        return Some(match r {
+            Ok(a) => Ok(a.clone()),
+            Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+        });
+    }
+
+    return None;
+}
+
+fn store_in_cache<'a>(cache: &OperatorCache<'a>, input: &'a str, key: (usize, BitSet, BitSet, BitSet), value: &IResult<&'a str, NessaExpr>) {
+    cache.borrow_mut().insert(key, match value {
+        Ok(a) => Ok(a.clone()),
+        Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
+    });
 }
 
 impl NessaContext {
@@ -351,18 +373,18 @@ impl NessaContext {
         )(input);
     }
     
-    fn prefix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn prefix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag(rep),
                 multispace0,
-                |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
             )),
             |(_, _, e)| NessaExpr::UnaryOperation(id, Box::new(e))
         )(input);
     }
     
-    fn postfix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn postfix_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         if let Some(r) = cache_post.get(&input.len()) {
             return match r {
                 Ok(a) => Ok(a.clone()),
@@ -375,7 +397,7 @@ impl NessaContext {
     
             let res = map(
                 tuple((
-                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, cache),
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache),
                     multispace0,
                     tag(rep)
                 )),
@@ -391,7 +413,7 @@ impl NessaContext {
         }
     }
     
-    fn binary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn binary_operation_parser<'a>(&self, input: &'a str, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         if let Some(r) = cache_bin.get(&input.len()) {
             return match r {
                 Ok(a) => Ok(a.clone()),
@@ -402,14 +424,14 @@ impl NessaContext {
             let mut bi_cpy = bi.clone();
             bi_cpy.insert(id);
     
-            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, post, cache_bin, cache_nary, cache_post, cache)?;
+            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, post, cache_bin, cache_nary, cache_post, op_cache)?;
     
             let res = map(
                 tuple((
                     multispace0,
                     tag(rep),
                     multispace0,
-                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
                 )),
                 |(_, _, _, b)| NessaExpr::BinaryOperation(id, Box::new(a.clone()), Box::new(b))
             )(input);
@@ -423,7 +445,7 @@ impl NessaContext {
         }
     }
     
-    fn nary_operation_parser<'a>(&self, input: &'a str, id: usize, open: &str, close: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn nary_operation_parser<'a>(&self, input: &'a str, id: usize, open: &str, close: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         if let Some(r) = cache_nary.get(&input.len()) {
             return match r {
                 Ok(a) => Ok(a.clone()),
@@ -438,7 +460,7 @@ impl NessaContext {
             let mut bi_no_cmp = bi.clone();
             bi_no_cmp.insert(6);
     
-            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, cache)?;
+            let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, op_cache)?;
     
             let res = map(
                 tuple((
@@ -463,7 +485,7 @@ impl NessaContext {
                     multispace0,
                     separated_list0(
                         tuple((multispace0, tag(","), multispace0)),
-                        |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, cache)
+                        |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
                     ),
                     multispace0,
                     tag(close)
@@ -492,22 +514,23 @@ impl NessaContext {
         return BitSet::with_capacity(self.unary_ops.len());
     }
 
-    fn operation_parser<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
-        if let Some(r) = cache.get(&(input.len(), bi.clone(), nary.clone(), post.clone())) {
-            return match r {
-                Ok(a) => Ok(a.clone()),
-                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
-            };
+    fn operation_parser<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
+        if let Some(r) = get_from_cache(op_cache, input, (input.len(), bi.clone(), nary.clone(), post.clone())) {
+            return r;
        
         } else{
+            let mut post_cpy = post.clone();
+            let mut bi_cpy = bi.clone();
+            let mut nary_cpy = nary.clone();
+
             for o in self.sorted_ops.iter().rev() {
                 if let Operator::Unary{id, representation, prefix, ..} = o {
                     let res = if *prefix {
-                         self.prefix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                         self.prefix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
 
                     } else{
                         if !post.contains(*id) {
-                            self.postfix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache)
+                            self.postfix_operation_parser(input, *id, representation, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache)
                         
                         } else {
                             continue;
@@ -515,40 +538,40 @@ impl NessaContext {
                     };
     
                     if res.is_ok() {
-                        cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
-                            Ok(a) => Ok(a.clone()),
-                            Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
-                        });
+                        store_in_cache(op_cache, input, (input.len(), bi.clone(), nary.clone(), post.clone()), &res);
 
                         return res;
+                    
+                    } else if !*prefix{
+                        post_cpy.insert(*id);
                     }
                     
                 } else if let Operator::Binary{id, representation, ..} = o {
                     if !bi.contains(*id) {
-                        let res = self.binary_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, cache);
+                        let res = self.binary_operation_parser(input, *id, representation, &bi_cpy, nary, post, cache_bin, cache_nary, cache_post, op_cache);
     
                         if res.is_ok() {
-                            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
-                                Ok(a) => Ok(a.clone()),
-                                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
-                            });
+                            store_in_cache(op_cache, input, (input.len(), bi_cpy.clone(), nary.clone(), post.clone()), &res);
 
                             return res;
-                        }   
+                            
+                        } else {
+                            bi_cpy.insert(*id);
+                        }
                     }
     
                 } else if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                     if !nary.contains(*id) {
-                        let res = self.nary_operation_parser(input, *id, open_rep, close_rep, bi, nary, post, cache_bin, cache_nary, cache_post, cache);
+                        let res = self.nary_operation_parser(input, *id, open_rep, close_rep, bi, &nary_cpy, post, cache_bin, cache_nary, cache_post, op_cache);
     
                         if res.is_ok() {
-                            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), match &res {
-                                Ok(a) => Ok(a.clone()),
-                                Err(_) => Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)))
-                            });
+                            store_in_cache(op_cache, input, (input.len(), bi.clone(), nary.clone(), post.clone()), &res);
 
                             return res;
-                        }   
+                        
+                        } else {
+                            nary_cpy.insert(*id);
+                        }
                     }
     
                 } else{
@@ -556,13 +579,13 @@ impl NessaContext {
                 }
             }
 
-            cache.insert((input.len(), bi.clone(), nary.clone(), post.clone()), Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt))));
+            store_in_cache(op_cache, input, (input.len(), bi.clone(), nary.clone(), post.clone()), &Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt))));
     
             return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
         }
     }
     
-    fn variable_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn variable_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag("let"),
@@ -579,7 +602,7 @@ impl NessaContext {
                 ),
                 tag("="),
                 multispace0,
-                |input| self.nessa_expr_parser(input),
+                |input| self.nessa_expr_parser(input, op_cache),
                 multispace0,
                 tag(";")
             )),
@@ -587,14 +610,14 @@ impl NessaContext {
         )(input);
     }
     
-    fn variable_assignment_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn variable_assignment_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.identifier_parser(input),
                 multispace0,
                 tag("="),
                 multispace0,
-                |input| self.nessa_expr_parser(input),
+                |input| self.nessa_expr_parser(input, op_cache),
                 multispace0,
                 tag(";")
             )),
@@ -602,12 +625,12 @@ impl NessaContext {
         )(input);
     }
     
-    fn return_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn return_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag("return"),
                 multispace0,
-                |input| self.nessa_expr_parser(input),
+                |input| self.nessa_expr_parser(input, op_cache),
                 multispace0,
                 tag(";")
             )),
@@ -615,44 +638,44 @@ impl NessaContext {
         )(input);
     }
     
-    fn if_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn if_header_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag("if"),
                 multispace1,
-                |input| self.nessa_expr_parser(input)
+                |input| self.nessa_expr_parser(input, op_cache)
             )),
             |(_, _, e)| e
         )(input);
     }
     
-    fn else_if_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn else_if_header_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 tag("else"),
                 multispace1,
                 tag("if"),
                 multispace1,
-                |input| self.nessa_expr_parser(input)
+                |input| self.nessa_expr_parser(input, op_cache)
             )),
             |(_, _, _, _, e)| e
         )(input);
     }
     
-    fn if_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn if_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
-                |input| self.if_header_parser(input),
+                |input| self.if_header_parser(input, op_cache),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
                 separated_list0(
                     multispace0,
                     map(
                         tuple((
                             multispace0,
-                            |input| self.else_if_header_parser(input),
+                            |input| self.else_if_header_parser(input, op_cache),
                             multispace0,
-                            |input| self.code_block_parser(input)
+                            |input| self.code_block_parser(input, op_cache)
                         )),
                         |(_, eih, _, eib)| (eih, eib)
                     )
@@ -663,7 +686,7 @@ impl NessaContext {
                             multispace0,
                             tag("else"),
                             multispace0,
-                            |input| self.code_block_parser(input)
+                            |input| self.code_block_parser(input, op_cache)
                         )),
                         |(_, _, _, e)| e   
                     )
@@ -673,7 +696,7 @@ impl NessaContext {
         )(input);
     }
     
-    fn for_header_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (String, NessaExpr)> {
+    fn for_header_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, (String, NessaExpr)> {
         return map(
             tuple((
                 tag("for"),
@@ -682,18 +705,18 @@ impl NessaContext {
                 multispace1,
                 tag("in"),
                 multispace1,
-                |input| self.nessa_expr_parser(input)
+                |input| self.nessa_expr_parser(input, op_cache)
             )),
             |(_, _, n, _, _, _, e)| (n, e)
         )(input);
     }
     
-    fn for_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn for_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
-                |input| self.for_header_parser(input),
+                |input| self.for_header_parser(input, op_cache),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((n, c), _, b)| NessaExpr::For(n, Box::new(c), b)
         )(input);
@@ -757,12 +780,12 @@ impl NessaContext {
         )(input);
     }
 
-    fn function_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn function_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.function_header_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((n, t, mut a, mut r), _, mut b)| {
                 let u_t = t.unwrap_or_default();
@@ -1155,63 +1178,63 @@ impl NessaContext {
         )(input);
     }
 
-    fn prefix_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn prefix_operation_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.prefix_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((id, n, t, r), _, b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b)
         )(input);
     }
 
-    fn postfix_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn postfix_operation_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.postfix_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((id, n, t, r), _, b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b)
         )(input);
     }
 
-    fn binary_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn binary_operation_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.binary_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((id, a1, a2, r), _, b)| NessaExpr::BinaryOperationDefinition(id, a1, a2, r, b)
         )(input);
     }
 
-    fn nary_operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn nary_operation_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
                 |input| self.nary_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input),
+                |input| self.code_block_parser(input, op_cache),
             )),
             |((id, a1, a2, r), _, b)| NessaExpr::NaryOperationDefinition(id, a1, a2, r, b)
         )(input);
     }
 
-    fn operation_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn operation_definition_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
-            |input| self.prefix_operation_definition_parser(input),
-            |input| self.postfix_operation_definition_parser(input),
-            |input| self.binary_operation_definition_parser(input),
-            |input| self.nary_operation_definition_parser(input)
+            |input| self.prefix_operation_definition_parser(input, op_cache),
+            |input| self.postfix_operation_definition_parser(input, op_cache),
+            |input| self.binary_operation_definition_parser(input, op_cache),
+            |input| self.nary_operation_definition_parser(input, op_cache)
         ))(input);
     }
 
-    fn code_block_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+    fn code_block_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, Vec<NessaExpr>> {
         return delimited(
             tuple((tag("{"), multispace0)),
-            separated_list0(multispace0, |input| self.nessa_line_parser(input)),
+            separated_list0(multispace0, |input| self.nessa_line_parser(input, op_cache)),
             tuple((multispace0, tag("}")))
         )(input);
     }
@@ -1280,45 +1303,45 @@ impl NessaContext {
         )(input);
     }
 
-    fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_nary: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache_post: &mut HashMap<usize, IResult<&'a str, NessaExpr>>, cache: &mut HashMap<(usize, BitSet, BitSet, BitSet), IResult<&'a str, NessaExpr>>) -> IResult<&'a str, NessaExpr> {
+    fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
-            |input| self.operation_parser(input, bi, nary, post, cache_bin, cache_nary, cache_post, cache),
+            |input| self.operation_parser(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache),
             |input| self.literal_parser(input),
             |input| self.variable_parser(input)
         ))(input);
     }
 
-    fn nessa_expr_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn nessa_expr_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return self.nessa_expr_parser_wrapper(
             input, 
             &self.get_bi_bitset(), &self.get_n_bitset(), &self.get_unary_bitset(), 
-            &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new()
+            &mut HashMap::new(), &mut HashMap::new(), &mut HashMap::new(), op_cache
         );
     }
 
-    fn nessa_line_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn nessa_line_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
-            |input| self.variable_definition_parser(input),
-            |input| self.variable_assignment_parser(input),
-            |input| self.return_parser(input),
-            |input| self.for_parser(input),
-            |input| self.if_parser(input),
-            |input| terminated(|input| self.nessa_expr_parser(input), tuple((multispace0, tag(";"))))(input)
+            |input| self.variable_definition_parser(input, op_cache),
+            |input| self.variable_assignment_parser(input, op_cache),
+            |input| self.return_parser(input, op_cache),
+            |input| self.for_parser(input, op_cache),
+            |input| self.if_parser(input, op_cache),
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), tuple((multispace0, tag(";"))))(input)
         ))(input);
     }
 
-    fn nessa_global_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+    fn nessa_global_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
-            |input| self.variable_definition_parser(input),
-            |input| self.variable_assignment_parser(input),
-            |input| self.return_parser(input),
-            |input| self.for_parser(input),
-            |input| self.if_parser(input),
-            |input| self.function_definition_parser(input),
+            |input| self.variable_definition_parser(input, op_cache),
+            |input| self.variable_assignment_parser(input, op_cache),
+            |input| self.return_parser(input, op_cache),
+            |input| self.for_parser(input, op_cache),
+            |input| self.if_parser(input, op_cache),
+            |input| self.function_definition_parser(input, op_cache),
             |input| self.operator_definition_parser(input),
-            |input| self.operation_definition_parser(input),
+            |input| self.operation_definition_parser(input, op_cache),
             |input| self.class_definition_parser(input),
-            |input| terminated(|input| self.nessa_expr_parser(input), tuple((multispace0, tag(";"))))(input)
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), tuple((multispace0, tag(";"))))(input)
         ))(input);
     }
 
@@ -1364,7 +1387,7 @@ impl NessaContext {
         let mut ops = vec!();
 
         while input.len() > 0 {
-            if let Ok((i, o)) = self.operation_definition_parser(input) {
+            if let Ok((i, o)) = self.operation_definition_parser(input, &RefCell::default()) {
                 input = i;
                 ops.push(o);
             
@@ -1382,7 +1405,7 @@ impl NessaContext {
     pub fn nessa_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
         return delimited(
             multispace0,
-            separated_list0(multispace0, |input| self.nessa_global_parser(input)),
+            separated_list0(multispace0, |input| self.nessa_global_parser(input, &RefCell::default())),
             tuple((multispace0, eof))
         )(input);
     }
@@ -1499,10 +1522,10 @@ mod tests {
         let def_3_str = "let bar = \"test\";";
         let def_4_str = "let foobar = false;";
 
-        let (_, def_1) = ctx.variable_definition_parser(def_1_str).unwrap();
-        let (_, def_2) = ctx.variable_definition_parser(def_2_str).unwrap();
-        let (_, def_3) = ctx.variable_definition_parser(def_3_str).unwrap();
-        let (_, def_4) = ctx.variable_definition_parser(def_4_str).unwrap();
+        let (_, def_1) = ctx.variable_definition_parser(def_1_str, &RefCell::default()).unwrap();
+        let (_, def_2) = ctx.variable_definition_parser(def_2_str, &RefCell::default()).unwrap();
+        let (_, def_3) = ctx.variable_definition_parser(def_3_str, &RefCell::default()).unwrap();
+        let (_, def_4) = ctx.variable_definition_parser(def_4_str, &RefCell::default()).unwrap();
 
         assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference("a".into()))));
         assert_eq!(def_2, NessaExpr::VariableDefinition(
@@ -1525,11 +1548,11 @@ mod tests {
         let n_call_str = "5(-b + !10)";
         let template_func_str = "funct<Number>(5)";
 
-        let (_, number) = ctx.nessa_expr_parser(number_str).unwrap();
-        let (_, var) = ctx.nessa_expr_parser(var_str).unwrap();
-        let (_, n_var) = ctx.nessa_expr_parser(n_var_str).unwrap();
-        let (_, n_call) = ctx.nessa_expr_parser(n_call_str).unwrap();
-        let (_, template_func) = ctx.nessa_expr_parser(template_func_str).unwrap();
+        let (_, number) = ctx.nessa_expr_parser(number_str, &RefCell::default()).unwrap();
+        let (_, var) = ctx.nessa_expr_parser(var_str, &RefCell::default()).unwrap();
+        let (_, n_var) = ctx.nessa_expr_parser(n_var_str, &RefCell::default()).unwrap();
+        let (_, n_call) = ctx.nessa_expr_parser(n_call_str, &RefCell::default()).unwrap();
+        let (_, template_func) = ctx.nessa_expr_parser(template_func_str, &RefCell::default()).unwrap();
 
         assert_eq!(number, NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
         assert_eq!(
@@ -1659,9 +1682,9 @@ mod tests {
             return a;
         }";
 
-        let (_, test_1) = ctx.function_definition_parser(test_1_str).unwrap();
-        let (_, test_2) = ctx.function_definition_parser(test_2_str).unwrap();
-        let (_, test_3) = ctx.function_definition_parser(test_3_str).unwrap();
+        let (_, test_1) = ctx.function_definition_parser(test_1_str, &RefCell::default()).unwrap();
+        let (_, test_2) = ctx.function_definition_parser(test_2_str, &RefCell::default()).unwrap();
+        let (_, test_3) = ctx.function_definition_parser(test_3_str, &RefCell::default()).unwrap();
 
         assert_eq!(
             test_1,
@@ -1838,10 +1861,10 @@ mod tests {
             return a + b * c;
         }";
 
-        let (_, test_1) = ctx.operation_definition_parser(test_1_str).unwrap();
-        let (_, test_2) = ctx.operation_definition_parser(test_2_str).unwrap();
-        let (_, test_3) = ctx.operation_definition_parser(test_3_str).unwrap();
-        let (_, test_4) = ctx.operation_definition_parser(test_4_str).unwrap();
+        let (_, test_1) = ctx.operation_definition_parser(test_1_str, &RefCell::default()).unwrap();
+        let (_, test_2) = ctx.operation_definition_parser(test_2_str, &RefCell::default()).unwrap();
+        let (_, test_3) = ctx.operation_definition_parser(test_3_str, &RefCell::default()).unwrap();
+        let (_, test_4) = ctx.operation_definition_parser(test_4_str, &RefCell::default()).unwrap();
 
         assert_eq!(
             test_1,

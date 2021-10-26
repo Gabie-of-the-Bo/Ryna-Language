@@ -242,21 +242,8 @@ impl NessaContext {
                 self.compile_expr_function_calls(a)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
 
-                if let NessaExpr::FunctionName(id) = a.as_ref() {
-                    let f = &self.functions[*id];
-                    let f_params = &f.params;
-
-                    if f_params.len() == t.len() {
-                        *expr = NessaExpr::FunctionCall(*id, t.clone(), b.clone());
-                    
-                    } else{
-                        return Err(format!(
-                            "Unable to match type parameters for {}: <{}> <-> <{}> (lengths differ)", 
-                            f.name, 
-                            t.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
-                            f.params.join(", ")
-                        ))
-                    }
+                if let NessaExpr::FunctionName(id) = a.as_ref() {                    
+                    *expr = NessaExpr::FunctionCall(*id, t.clone(), b.clone());
 
                 } else if !t.is_empty() {
                     return Err("Invalid type parameters on n-ary call operation".into());
@@ -929,7 +916,7 @@ impl NessaContext{
         let ops = self.nessa_function_headers_parser(code).unwrap().1;
 
         for i in ops {
-            self.define_function(i.0, i.1.unwrap_or_default())?;
+            self.define_function(i.0)?;
         }
 
         return Ok(());
@@ -1144,7 +1131,7 @@ mod tests {
         
         let (_, mut code) = ctx.nessa_parser(code_2_str).unwrap();
 
-        assert!(ctx.compile_functions(&mut code).is_err());
+        assert!(ctx.compile_functions(&mut code).is_ok());
         
         let (_, mut code) = ctx.nessa_parser(code_3_str).unwrap();
 

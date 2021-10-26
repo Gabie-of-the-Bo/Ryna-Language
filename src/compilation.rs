@@ -409,6 +409,111 @@ impl NessaInstruction {
 }
 
 impl NessaContext{
+    fn add_function_instance(map: &mut HashMap<usize, Vec<Vec<Type>>>, id: usize, args: &Vec<Type>){
+        let curr = map.entry(id).or_default();
+
+        for i in curr.iter() {
+            if i == args {
+                return;
+            }
+        }
+
+        curr.push(args.clone());
+    }
+
+    fn merge_function_instances(a: &mut HashMap<usize, Vec<Vec<Type>>>, b: HashMap<usize, Vec<Vec<Type>>>){
+        for (id, inst) in b {
+            for args in inst {
+                NessaContext::add_function_instance(a, id, &args);
+            }
+        }
+    }
+
+    pub fn get_templated_function_instances(&self, expr: &NessaExpr) -> HashMap<usize, Vec<Vec<Type>>> {
+        return match expr {
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, e) | 
+            NessaExpr::UnaryOperation(_, e) |
+            NessaExpr::Return(e) => self.get_templated_function_instances(e), 
+
+            NessaExpr::BinaryOperation(_, a, b) => {
+                let mut res = self.get_templated_function_instances(a);
+
+                NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(b));
+
+                res
+            }
+
+            NessaExpr::NaryOperation(_, _, a, b) => {
+                let mut res = self.get_templated_function_instances(a);
+
+                for arg in b {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(arg));
+                }
+
+                res
+            }
+
+            NessaExpr::If(i, ib, ei, eb) => {
+                let mut res = self.get_templated_function_instances(i);
+
+                for line in ib {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                }
+
+                for (ei_h, ei_b) in ei {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(ei_h));
+
+                    for line in ei_b {
+                        NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                    }
+                }
+
+                if let Some(b) = eb {
+                    for line in b {
+                        NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                    }
+                }
+
+                res
+            }
+
+            NessaExpr::CompiledFor(_, _, c, b) => {
+                let mut res = self.get_templated_function_instances(c);
+
+                for line in b {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                }
+
+                res
+            }
+
+            NessaExpr::FunctionCall(id, t, args) => {
+                let mut res = HashMap::new();
+
+                NessaContext::add_function_instance(&mut res, *id, t);
+
+                for arg in args {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(arg));
+                }
+
+                res
+            }
+
+            _ => HashMap::new()
+        }
+    }
+
+    pub fn get_templated_function_instances_module(&self, lines: &Vec<NessaExpr>) -> HashMap<usize, Vec<Vec<Type>>> {
+        let mut res = HashMap::new();
+
+        for line in lines {
+            NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+        }
+
+        return res;
+    }
+
     pub fn compiled_form(&self, lines: &Vec<NessaExpr>, max_register: usize) -> Result<Vec<NessaInstruction>, String> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize), usize> = HashMap::new();
@@ -418,22 +523,33 @@ impl NessaContext{
 
         let mut registers: HashMap<usize, usize> = HashMap::new();
 
+        let function_instances = self.get_templated_function_instances_module(lines);
+
         // Define function indexes
         for (j, expr) in lines.iter().enumerate() {
             match expr {
                 NessaExpr::CompiledFunctionDefinition(id, _, a, _, b, v) => {
-                    let and = Type::And(a.iter().map(|(_, t)| t).cloned().collect());
+                    if let Some(usages) = function_instances.get(id) {
+                        for ov in usages {
+                            if ov.is_empty() {
+                                let and = Type::And(a.iter().map(|(_, t)| t).cloned().collect());
 
-                    // Find function overload id
-                    for (i, (i_t, _, _)) in self.functions[*id].overloads.iter().enumerate() {
-                        if *i_t == and {
-                            functions.entry((*id, i)).or_insert(program_size);
-                            registers.insert(j, *v);
-                            break;
+                                // Find function overload id
+                                for (i, (i_t, _, _)) in self.functions[*id].overloads.iter().enumerate() {
+                                    if *i_t == and {
+                                        functions.entry((*id, i)).or_insert(program_size);
+                                        registers.insert(j, *v);
+                                        break;
+                                    }
+                                }
+                
+                                program_size += self.compiled_form_body_size(b) + a.len();
+
+                            } else {
+                                unimplemented!();
+                            }
                         }
                     }
-    
-                    program_size += self.compiled_form_body_size(b) + a.len();
                 },
                 
                 NessaExpr::CompiledPrefixOperationDefinition(id, _, t, _, b, v) |
@@ -753,22 +869,25 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::FunctionCall(id, _, a) => {
+            NessaExpr::FunctionCall(id, t, a) => {
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
                     res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, max_register)?);
                 }
-
+                
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
                 let (ov_id, _, native) = self.get_first_function_overload(*id, args_types).unwrap();
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id)));
 
-                } else {
+                } else if t.is_empty() {
                     let pos = functions.get(&(*id, ov_id)).unwrap();
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
+                
+                } else {
+                    unimplemented!()
                 }
 
                 Ok(res)

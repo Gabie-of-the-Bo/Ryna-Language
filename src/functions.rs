@@ -71,4 +71,15 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             return Object::empty();
         }
     ).unwrap();
+
+    ctx.define_function("iterator".into(), vec!("T".into())).unwrap();
+
+    ctx.define_native_function_overload(
+        5, 
+        &[Type::Ref(Box::new(Type::Template(5, vec!(Type::TemplateParam(0))))), Type::TemplateParam(0)], 
+        Type::Empty, 
+        |t, v| {
+            return Object::new((t[0].clone(), v[0].get::<Reference>().clone(), 0));
+        }
+    ).unwrap();
 }

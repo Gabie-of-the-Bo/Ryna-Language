@@ -153,10 +153,18 @@ impl Object {
     ╘═════════════════════════════════════════════╛
 */
 
+#[derive(Clone)]
 pub struct Reference {
     pub inner: Rc<RefCell<dyn NessaObject>>,
     pub mutable: bool
 }
+
+impl PartialEq for Reference {
+    fn eq(&self, b: &Reference) -> bool {
+        return self.get_ptr() == b.get_ptr();
+    }
+}
+
 
 impl Reference {
     pub fn get<T>(&self) -> Ref<T> where T: 'static {
@@ -317,6 +325,35 @@ impl NessaObject for (Type, Vec<Object>) {
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
         let ta = self.as_any().downcast_ref::<Vec<Object>>();
         let tb = b.as_any().downcast_ref::<Vec<Object>>();
+
+        return ta == tb;
+    }
+}
+
+impl NessaObject for (Type, Reference, usize) {
+    fn get_type_id(&self) -> usize {
+        return 5;
+    }
+
+    fn get_type(&self) -> Type {
+        return Type::Template(5, vec!(self.0.clone()));
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn to_string(&self) -> String {
+        return format!("ArrayIterator(index = {})", self.2);
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<(Type, Reference, usize)>();
+        let tb = b.as_any().downcast_ref::<(Type, Reference, usize)>();
 
         return ta == tb;
     }

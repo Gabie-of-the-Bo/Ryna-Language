@@ -364,7 +364,7 @@ pub enum CompiledNessaExpr {
     Call(usize, usize),
     Return,
 
-    NativeFunctionCall(usize, usize),
+    NativeFunctionCall(usize, usize, Vec<Type>),
     UnaryOperatorCall(usize, usize),
     BinaryOperatorCall(usize, usize),
     NaryOperatorCall(usize, usize),
@@ -867,7 +867,7 @@ impl NessaContext{
                 let (ov_id, _, native) = self.get_first_function_overload(*id, args_types).unwrap();
 
                 if native {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
 
                 } else if t.is_empty() {
                     let pos = functions.get(&(*id, ov_id)).unwrap();

@@ -85,7 +85,7 @@ impl NessaContext {
                     offset = prev_offset;
                 }, 
 
-                NativeFunctionCall(func_id, ov_id) => {
+                NativeFunctionCall(func_id, ov_id, type_args) => {
                     if let (Type::And(v), _, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
@@ -93,7 +93,7 @@ impl NessaContext {
                             args.push(stack.pop().unwrap());
                         }
 
-                        stack.push(f(vec!(), args));
+                        stack.push(f(type_args, args));
 
                         ip += 1;
                     
@@ -164,6 +164,7 @@ mod tests {
     use crate::number::*;
     use crate::object::*;
     use crate::context::*;
+    use crate::types::*;
 
     #[test]
     fn compilation_and_execution() {
@@ -225,33 +226,25 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let a = 0;
-            let b = 0;
-
-            if true {
-                a = 1;
-            }
-
-            if false {
-                b = 1;
-            }
-
             let array: Array<Number> = arr<Number>();
+            array.push<Number>(5);
 
-            push<Number>(array, 5);
-            array.push<Number>(10);
-
-            let array_2: Array<&Number> = arr<&Number>();
+            let iter: ArrayIterator<&&Number> = array.iterator<Number>();
+            let ended_1: Bool = iter.is_consumed();
             
-            for e in array {
-                array_2.e.push<&Number>();
-            }
+            let elem: &&Number = iter.next<&&Number>();
+            let ended_2: Bool = iter.is_consumed();
         ".to_string();
 
-        /*
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(1))));
+        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!()))));
+        assert_eq!(ctx.variables[1], Some(Object::new((Type::MutRef(Box::new(Type::Basic(0))), ctx.variables[0].as_ref().unwrap().get_ref_mut(), 1))));
+        assert_eq!(ctx.variables[2], Some(Object::new(false)));
+        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(5)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[4], Some(Object::new(true)));
+
+        /*
         assert_eq!(ctx.variables[1], Some(Object::new(Number::from(0))));
         assert_eq!(ctx.variables[2], Some(Object::new((
             Type::Basic(0), 

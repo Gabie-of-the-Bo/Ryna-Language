@@ -211,7 +211,12 @@ impl NessaObject for Reference {
     }
 
     fn to_string(&self) -> String {
-        return self.inner.borrow().to_string();
+        if self.mutable {
+            return format!("&&{}", self.inner.borrow().to_string());
+
+        } else {
+            return format!("&{}", self.inner.borrow().to_string());
+        }
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {

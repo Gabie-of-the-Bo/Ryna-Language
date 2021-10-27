@@ -10,14 +10,13 @@ use crate::parser::NessaExpr;
                                                   ╘══════════════════╛
 */
 
-pub type FunctionOverload = Option<fn(Vec<Type>, Vec<Object>) -> Object>;
+pub type FunctionOverload = Option<fn(&Vec<Type>, Vec<Object>) -> Object>;
 
 pub type FunctionOverloads = Vec<(Type, Type, FunctionOverload)>;
 
 pub struct Function {
     pub id: usize,
     pub name: String,
-    //pub params: Vec<String>,
     pub overloads: FunctionOverloads
 }
 
@@ -76,10 +75,70 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         5, 
-        &[Type::Ref(Box::new(Type::Template(5, vec!(Type::TemplateParam(0))))), Type::TemplateParam(0)], 
-        Type::Empty, 
+        &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
+        Type::Template(5, vec!(Type::MutRef(Box::new(Type::TemplateParam(0))))), 
+        |t, v| {
+            return Object::new((Type::MutRef(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0));
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        5, 
+        &[Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
+        Type::Template(5, vec!(Type::Ref(Box::new(Type::TemplateParam(0))))), 
+        |t, v| {
+            return Object::new((Type::Ref(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0));
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        5, 
+        &[Type::Template(3, vec!(Type::TemplateParam(0)))], 
+        Type::Template(5, vec!(Type::TemplateParam(0))), 
         |t, v| {
             return Object::new((t[0].clone(), v[0].get::<Reference>().clone(), 0));
+        }
+    ).unwrap();
+
+    ctx.define_function("next".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        6, 
+        &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::TemplateParam(0)))))], 
+        Type::TemplateParam(0), 
+        |t, v| {
+            let reference = v[0].get::<Reference>();
+            let mut iterator = reference.get_mut::<(Type, Reference, usize)>();
+
+            let item;
+
+            {
+                let array = &iterator.1.get::<(Type, Vec<Object>)>().1;
+
+                item = match t[0] {
+                    Type::MutRef(_) => array[iterator.2].get_ref_mut_obj(),
+                    Type::Ref(_) => array[iterator.2].get_ref_obj(),
+                    _ => array[iterator.2].clone(),
+                };
+            }
+
+            iterator.2 += 1;
+
+            return item;
+        }
+    ).unwrap();
+
+    ctx.define_function("is_consumed".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        7, 
+        &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::Wildcard))))], 
+        Type::Basic(2), 
+        |_, v| {
+            let reference = v[0].get::<Reference>();
+            let iterator = reference.get::<(Type, Reference, usize)>();
+
+            return Object::new(iterator.2 >= iterator.1.get::<(Type, Vec<Object>)>().1.len());
         }
     ).unwrap();
 }

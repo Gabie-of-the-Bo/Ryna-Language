@@ -88,6 +88,13 @@ impl Type {
         return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
     }
 
+    pub fn bindable_to_subtitutions(&self, other: &Type) -> (bool, HashMap<usize, Type>) {
+        let mut assignments = HashMap::new();
+        let res = self.template_bindable_to(other, &mut assignments, &mut HashMap::new());
+
+        return (res, assignments);
+    }
+
     pub fn bindable_to_template(&self, other: &Type, templates: &[Type]) -> bool {
         return self.template_bindable_to(other, &mut templates.iter().cloned().enumerate().collect(), &mut HashMap::new());
     }
@@ -182,22 +189,17 @@ impl Type {
         }
     }
 
-    pub fn sub_templates(&self, args: Vec<Type>, ctx: &NessaContext) -> Type {
-        if let Type::Template(id, params) = self {
-            let new_p = params.iter().map(|i| {
-                if let Type::TemplateParam(t_id) = i {
-                    return args[*t_id].clone();
-
-                } else{
-                    return i.clone();
-                }
-
-            }).collect::<Vec<_>>();
-
-            return Type::Template(*id, new_p);
-        }
-
-        unreachable!();
+    pub fn sub_templates(&self, args: &HashMap<usize, Type>) -> Type {
+        return match self {
+            Type::Ref(t) => Type::Ref(Box::new(t.sub_templates(args))),
+            Type::MutRef(t) => Type::MutRef(Box::new(t.sub_templates(args))),
+            Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_templates(args)).collect()),
+            Type::And(t) => Type::And(t.iter().map(|i| i.sub_templates(args)).collect()),
+            Type::Function(f, t) => Type::Function(Box::new(f.sub_templates(args)), Box::new(t.sub_templates(args))),
+            Type::TemplateParam(id) => args.get(id).unwrap_or(self).clone(),
+            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates(args)).collect()),
+            _ => self.clone()
+        };
     }
 }
 

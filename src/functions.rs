@@ -12,7 +12,7 @@ use crate::parser::NessaExpr;
 
 pub type FunctionOverload = Option<fn(&Vec<Type>, Vec<Object>) -> Object>;
 
-pub type FunctionOverloads = Vec<(Type, Type, FunctionOverload)>;
+pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
 pub struct Function {
     pub id: usize,
@@ -29,13 +29,13 @@ pub struct Function {
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |_, v| { 
+    ctx.define_native_function_overload(0, 0, &[Type::Basic(0)], Type::Basic(0), |_, v| { 
         Object::new(&*v[0].deref::<Number>() + Number::from(1)) 
     }).unwrap();
 
     ctx.define_function("print".into()).unwrap();
 
-    ctx.define_native_function_overload(1, &[Type::Wildcard], Type::Empty, |_, v| { 
+    ctx.define_native_function_overload(1, 0, &[Type::Wildcard], Type::Empty, |_, v| { 
         println!("{}", v[0].to_string());
 
         return Object::empty();
@@ -43,7 +43,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(2, &[Type::Ref(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, v| {
+    ctx.define_native_function_overload(2, 1, &[Type::Ref(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, v| {
         return v[0].deref_obj();
     }).unwrap();
 
@@ -51,6 +51,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         3, 
+        1,
         &[], 
         Type::Template(3, vec!(Type::TemplateParam(0))), 
         |t, _| Object::new((t[0].clone(), vec!()))
@@ -60,6 +61,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         4, 
+        1,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))), Type::TemplateParam(0)], 
         Type::Empty, 
         |_, v| {
@@ -75,6 +77,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         5, 
+        1,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
         Type::Template(5, vec!(Type::MutRef(Box::new(Type::TemplateParam(0))))), 
         |t, v| {
@@ -84,6 +87,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         5, 
+        1,
         &[Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
         Type::Template(5, vec!(Type::Ref(Box::new(Type::TemplateParam(0))))), 
         |t, v| {
@@ -93,6 +97,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         5, 
+        1,
         &[Type::Template(3, vec!(Type::TemplateParam(0)))], 
         Type::Template(5, vec!(Type::TemplateParam(0))), 
         |t, v| {
@@ -104,6 +109,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         6, 
+        1,
         &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::TemplateParam(0)))))], 
         Type::TemplateParam(0), 
         |t, v| {
@@ -132,6 +138,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         7, 
+        1,
         &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::Wildcard))))], 
         Type::Basic(2), 
         |_, v| {

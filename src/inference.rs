@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
-use crate::functions::*;
 use crate::operations::*;
 use crate::types::Type;
 
@@ -48,16 +49,35 @@ impl NessaContext {
         return None;
     }
 
-    pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>) -> Option<(usize, Type, bool)> {
+    pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>) -> Option<(usize, Type, bool, Vec<Type>)> {
         let t = Type::And(arg_type);
 
-        for (i, (a, r, f)) in self.functions[id].overloads.iter().enumerate() {
-            if t.bindable_to(&a) { // Take first that matches
-                return Some((i, r.clone(), f.is_some()));
+        for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
+            if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+                let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                return Some((i, r.sub_templates(&subs), f.is_some(), t_args));
             }
         }
 
         return None;
+    }
+
+    pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {
+        if let Some((_, it_type, _, _)) = self.get_first_function_overload(5, vec!(container_type.clone())) {
+            return Ok(it_type.clone());
+        }
+
+        return Err(format!("Unable to infer iterator type from container of type {}", container_type.get_name(self)));
+    }
+
+    pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<Type, String> {
+        let it_mut = Type::MutRef(Box::new(iterator_type.clone()));
+
+        if let Some((_, r, _, _)) = self.get_first_function_overload(6, vec!(it_mut.clone())) {
+            return Ok(r);
+        }
+
+        return Err(format!("Unable to infer element type from iterator of type {}", iterator_type.get_name(self)));
     }
 
     pub fn infer_type(&self, expr: &NessaExpr) -> Option<Type> {
@@ -99,7 +119,7 @@ impl NessaContext {
             NessaExpr::FunctionCall(id, _, args) => {
                 let arg_types = args.iter().map(|i| self.infer_type(i).unwrap()).collect::<Vec<_>>();
 
-                let (_, r, _) = self.get_first_function_overload(*id, arg_types).unwrap();
+                let (_, r, _, _) = self.get_first_function_overload(*id, arg_types).unwrap();
 
                 return Some(r.clone());
             },

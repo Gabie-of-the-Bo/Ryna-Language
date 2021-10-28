@@ -298,21 +298,21 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(Type, Type, FunctionOverload)> {
+    pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(usize, Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
     }
 
-    pub fn define_native_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, Vec<Object>) -> Object) -> Result<(), String> {
-        return self.define_function_overload(id, args, ret, Some(f));
+    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, Vec<Object>) -> Object) -> Result<(), String> {
+        return self.define_function_overload(id, templates, args, ret, Some(f));
     }
 
-    pub fn define_function_overload(&mut self, id: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
+    pub fn define_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
 
-        for (t, _, _) in &func.overloads{ // Check subsumption
+        for (_, t, _, _) in &func.overloads{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(&t) {
                     return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
@@ -328,7 +328,7 @@ impl NessaContext {
             }
         }
 
-        self.functions[id].overloads.push((and, ret, f));
+        self.functions[id].overloads.push((templates, and, ret, f));
 
         return Ok(());
     }
@@ -381,9 +381,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_function_overload(0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
-        let def_2 = ctx.define_native_function_overload(0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
-        let def_3 = ctx.define_native_function_overload(0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_1 = ctx.define_native_function_overload(0, 0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

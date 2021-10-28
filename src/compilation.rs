@@ -28,7 +28,7 @@ impl NessaContext {
         ╘══════════════════════╛
     */
 
-    fn compile_expr_variables(expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), String> {
+    fn compile_expr_variables(&self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), String> {
         match expr {
             // Compile variable references
             NessaExpr::NameReference(n) if ctx_idx.contains_key(n) => {
@@ -38,7 +38,10 @@ impl NessaContext {
 
             NessaExpr::VariableAssignment(n, e) if ctx_idx.contains_key(n) => {
                 if ctx_idx.contains_key(n) {
+                    self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+
                     let (idx, _) = ctx_idx.get(n).unwrap();
+
                     *expr = NessaExpr::CompiledVariableAssignment(*idx, n.clone(), e.clone());
                 
                 } else {
@@ -52,57 +55,61 @@ impl NessaContext {
                 ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
                 curr_ctx.entry(n.clone()).or_insert(idx);
 
-                NessaContext::compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
 
                 *expr = NessaExpr::CompiledVariableDefinition(idx, n.clone(), t.clone(), e.clone());
             },
 
             // Compile operations
             NessaExpr::UnaryOperation(_, e) => {
-                NessaContext::compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
             }
 
             NessaExpr::BinaryOperation(_, a, b) => {
-                NessaContext::compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
-                NessaContext::compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
             }
             
             NessaExpr::NaryOperation(_, _, a, b) => {
-                NessaContext::compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
 
                 for i in b {
-                    NessaContext::compile_expr_variables(i, registers, ctx_idx, curr_ctx)?
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?
                 }
             }
 
             // Compile flow control
             NessaExpr::If(h, ib, ei, eb) => {
-                NessaContext::compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
-                NessaContext::compile_variables_ctx(ib, registers, ctx_idx, &vec!())?;
+                self.compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
+                self.compile_variables_ctx(ib, registers, ctx_idx, &vec!())?;
 
                 for (ei_h, ei_b) in ei {
-                    NessaContext::compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
-                    NessaContext::compile_variables_ctx(ei_b, registers, ctx_idx, &vec!())?;
+                    self.compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
+                    self.compile_variables_ctx(ei_b, registers, ctx_idx, &vec!())?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    NessaContext::compile_variables_ctx(eb_inner, registers, ctx_idx, &vec!())?;
+                    self.compile_variables_ctx(eb_inner, registers, ctx_idx, &vec!())?;
                 }
             }
 
             NessaExpr::For(i, c, b) => {
-                let idx = registers.pop().unwrap();
-                ctx_idx.entry(i.clone()).or_insert((idx, Type::Wildcard));
-                curr_ctx.entry(i.clone()).or_insert(idx);
+                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
-                NessaContext::compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
-                NessaContext::compile_variables_ctx(b, registers, ctx_idx, &vec!())?;
+                let container_type = self.infer_type(c).unwrap();
+                let iterator_type = self.get_iterator_type(&container_type)?;
+                let element_type = self.get_iterator_output_type(&iterator_type)?;
 
-                *expr = NessaExpr::CompiledFor(idx, i.clone(), c.clone(), b.clone());
+                let iterator_idx = *registers.last().unwrap();
+                let element_idx = *registers.get(registers.len() - 2).unwrap();
+
+                self.compile_variables_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type), (i.clone(), element_type)))?;
+
+                *expr = NessaExpr::CompiledFor(iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
             }
 
             NessaExpr::Return(e) => {
-                NessaContext::compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
             }
 
             _ => {}
@@ -111,7 +118,7 @@ impl NessaContext {
         return Ok(());
     }
     
-    fn compile_variables_ctx(body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+    fn compile_variables_ctx(&self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, String> {
         let mut curr_ctx = HashMap::new();
 
         for (n, t) in args {
@@ -122,7 +129,7 @@ impl NessaContext {
 
         // Compile each expression sequentially
         for e in body {
-            NessaContext::compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
+            self.compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
         }
 
         let mut max_var = 0;
@@ -139,7 +146,7 @@ impl NessaContext {
     }
 
     pub fn compile_variables(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
-        return NessaContext::compile_variables_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args);
+        return self.compile_variables_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args);
     }
 
     /*
@@ -162,7 +169,8 @@ impl NessaContext {
             },
 
             // Compile variable definitions
-            NessaExpr::CompiledVariableDefinition(_, _, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, e) => {
                 self.compile_expr_function_names(e);
             },
 
@@ -196,7 +204,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) => {
                 self.compile_expr_function_names(c);
                 b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
             }
@@ -212,7 +220,8 @@ impl NessaContext {
     fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
             // Compile variable definitions
-            NessaExpr::CompiledVariableDefinition(_, _, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, e) => {
                 self.compile_expr_function_calls(e)?;
             },
 
@@ -267,7 +276,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) => {
                 self.compile_expr_function_calls(c)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?
             }
@@ -359,8 +368,9 @@ pub enum CompiledNessaExpr {
     GetVariable(usize),
 
     Jump(usize),
-    RelativeJump(usize),
-    ConditionalRelativeJump(usize),
+    RelativeJump(i32),
+    RelativeJumpIfFalse(usize),
+    RelativeJumpIfTrue(usize),
     Call(usize, usize),
     Return,
 
@@ -372,9 +382,16 @@ pub enum CompiledNessaExpr {
     Halt
 }
 
+#[derive(Debug)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
     pub comment: String
+}
+
+impl NessaInstruction {
+    pub fn to_string(&self) -> String {
+        return format!("{:<30}{}{}", format!("{:?}", self.instruction), if self.comment.is_empty() { "" } else { "# " }, format!("{}", self.comment));
+    }
 }
 
 impl From<CompiledNessaExpr> for NessaInstruction {
@@ -465,7 +482,7 @@ impl NessaContext{
                 res
             }
 
-            NessaExpr::CompiledFor(_, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) => {
                 let mut res = self.get_templated_function_instances(c);
 
                 for line in b {
@@ -522,7 +539,7 @@ impl NessaContext{
                                 let and = Type::And(a.iter().map(|(_, t)| t).cloned().collect());
 
                                 // Find function overload id
-                                for (i, (i_t, _, _)) in self.functions[*id].overloads.iter().enumerate() {
+                                for (i, (_, i_t, _, _)) in self.functions[*id].overloads.iter().enumerate() {
                                     if *i_t == and {
                                         functions.entry((*id, i)).or_insert(program_size);
                                         registers.insert(j, *v);
@@ -705,15 +722,7 @@ impl NessaContext{
                 NessaExpr::CompiledBinaryOperationDefinition(..) |
                 NessaExpr::CompiledNaryOperationDefinition(..) => {},
 
-                _ => {
-                    let mut program = self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, max_register)?;
-
-                    if let Some(NessaInstruction{comment, ..}) = program.first_mut() {
-                        *comment = "Start of the program".into();
-                    } 
-
-                    res.extend(program);
-                }
+                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, max_register)?)
             }
         }
 
@@ -788,7 +797,7 @@ impl NessaContext{
             NessaExpr::BinaryOperation(id, a, b) => {
                 let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, max_register)?;
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, max_register)?);
-
+                
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = self.infer_type(b).unwrap();
 
@@ -832,7 +841,7 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, max_register)?;
                 let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, max_register)?;
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::ConditionalRelativeJump(if_body.len() + 1)));
+                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 1)));
                 res.extend(if_body);
 
                 for (h, b) in ei {
@@ -840,7 +849,7 @@ impl NessaContext{
 
                     let elif_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
 
-                    res.push(NessaInstruction::from(CompiledNessaExpr::ConditionalRelativeJump(elif_body.len() + 1)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(elif_body.len() + 1)));
                     res.extend(elif_body);
                 }
 
@@ -849,6 +858,86 @@ impl NessaContext{
                 }
 
                 Ok(res)
+            },
+            NessaExpr::CompiledFor(it_var_id, elem_var_id, _, c, b) => {
+                if let Some(t) = self.infer_type(c) {
+                    let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
+
+                    // Get "iterator", "next" and "is_consumed" function overloads and check them
+                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(5, vec!(t.clone())) {
+                        let it_mut = Type::MutRef(Box::new(it_type.clone()));
+
+                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(6, vec!(it_mut.clone())) {
+                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(7, vec!(it_mut.clone())) {
+                                if let Type::Basic(2) = consumed_res {
+                                    let for_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
+
+                                    // Convert the iterable into an iterator
+                                    if it_native {
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(5, it_ov_id, it_args)));
+    
+                                    } else {
+                                        unimplemented!()
+                                    }
+
+                                    // Store the iterator
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*it_var_id)));
+
+                                    // Check end of iterator
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+
+                                    if consumed_native {
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(7, consumed_ov_id, consumed_args)));
+    
+                                    } else {
+                                        unimplemented!()
+                                    }                                    
+
+                                    // Jump to end of loop
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5)));
+
+                                    // Get next value
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+
+                                    if next_native {
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(6, next_ov_id, next_args)));
+    
+                                    } else {
+                                        unimplemented!()
+                                    }
+
+                                    // Store next value
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
+
+                                    // Add for body
+                                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body.len() as i32 + 6));
+
+                                    res.extend(for_body);
+
+                                    // Jump to the beginning of the loop
+                                    res.push(NessaInstruction::from(beginning_jmp));
+    
+                                    Ok(res)
+
+                                } else {
+                                    Err(format!("Funtion overload is_consumed({}) returns {} (expected Bool)", it_mut.get_name(self), consumed_res.get_name(self)))
+                                }
+
+                            } else {
+                                Err(format!("Funtion overload for is_consumed({}) is not defined", it_mut.get_name(self)))
+                            }
+
+                        } else {
+                            Err(format!("Funtion overload for next({}) is not defined", it_mut.get_name(self)))
+                        }
+
+                    } else {
+                        Err(format!("Funtion overload for iterator({}) is not defined", t.get_name(self)))
+                    }
+                    
+                } else {
+                    Err("Container expression does not return a valid value".into())
+                }
             },
             NessaExpr::Return(e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
@@ -864,7 +953,7 @@ impl NessaContext{
                 }
                 
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
-                let (ov_id, _, native) = self.get_first_function_overload(*id, args_types).unwrap();
+                let (ov_id, _, native, _) = self.get_first_function_overload(*id, args_types).unwrap();
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
@@ -943,9 +1032,9 @@ impl NessaContext{
     pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), String> {
         for i in lines {
             match i {
-                NessaExpr::CompiledFunctionDefinition(id, _t, a, r, b, v) => {
+                NessaExpr::CompiledFunctionDefinition(id, t, a, r, b, v) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                    self.define_function_overload(*id, &arg_types, r.clone(), None)?
+                    self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None)?
                 },
 
                 _ => {}

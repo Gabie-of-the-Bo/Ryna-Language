@@ -328,8 +328,8 @@ impl NessaObject for (Type, Vec<Object>) {
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<Vec<Object>>();
-        let tb = b.as_any().downcast_ref::<Vec<Object>>();
+        let ta = self.as_any().downcast_ref::<(Type, Vec<Object>)>();
+        let tb = b.as_any().downcast_ref::<(Type, Vec<Object>)>();
 
         return ta == tb;
     }

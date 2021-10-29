@@ -320,6 +320,59 @@ mod tests {
             )))));
             assert_eq!(ctx.variables[7], Some(Object::new(Number::from(16))));
         }
+
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn is_prime(n: &&Number) -> Bool {
+                if n <= 1 {
+                    return false;
+                }
+                
+                let i: Number = 1;
+
+                while i < n - 1 {
+                    i = i + 1;
+
+                    if n % i == 0 {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            let array: Array<Number> = arr<Number>();
+            let it: Number = 0;
+
+            while it < 50 {
+                if is_prime(it) {
+                    array.push(it.deref<Number>());
+                }
+
+                it = it + 1;
+            }
+        ".to_string();
+        
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!(
+            Object::new(Number::from(2)),
+            Object::new(Number::from(3)),
+            Object::new(Number::from(5)),
+            Object::new(Number::from(7)),
+            Object::new(Number::from(11)),
+            Object::new(Number::from(13)),
+            Object::new(Number::from(17)),
+            Object::new(Number::from(19)),
+            Object::new(Number::from(23)),
+            Object::new(Number::from(29)),
+            Object::new(Number::from(31)),
+            Object::new(Number::from(37)),
+            Object::new(Number::from(41)),
+            Object::new(Number::from(43)),
+            Object::new(Number::from(47)),
+        )))));
     }
 
     #[test]

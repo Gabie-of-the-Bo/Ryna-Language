@@ -64,6 +64,7 @@ pub enum NessaExpr {
     NaryOperationDefinition(usize, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
+    While(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
 }
@@ -649,6 +650,17 @@ impl NessaContext {
         )(input);
     }
     
+    fn while_header_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("while"),
+                multispace1,
+                |input| self.nessa_expr_parser(input, op_cache)
+            )),
+            |(_, _, e)| e
+        )(input);
+    }
+    
     fn else_if_header_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
@@ -708,6 +720,17 @@ impl NessaContext {
                 |input| self.nessa_expr_parser(input, op_cache)
             )),
             |(_, _, n, _, _, _, e)| (n, e)
+        )(input);
+    }
+    
+    fn while_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                |input| self.while_header_parser(input, op_cache),
+                multispace0,
+                |input| self.code_block_parser(input, op_cache),
+            )),
+            |(c, _, b)| NessaExpr::While(Box::new(c), b)
         )(input);
     }
     
@@ -1324,6 +1347,7 @@ impl NessaContext {
             |input| self.variable_definition_parser(input, op_cache),
             |input| self.variable_assignment_parser(input, op_cache),
             |input| self.return_parser(input, op_cache),
+            |input| self.while_parser(input, op_cache),
             |input| self.for_parser(input, op_cache),
             |input| self.if_parser(input, op_cache),
             |input| terminated(|input| self.nessa_expr_parser(input, op_cache), tuple((multispace0, tag(";"))))(input)
@@ -1335,6 +1359,7 @@ impl NessaContext {
             |input| self.variable_definition_parser(input, op_cache),
             |input| self.variable_assignment_parser(input, op_cache),
             |input| self.return_parser(input, op_cache),
+            |input| self.while_parser(input, op_cache),
             |input| self.for_parser(input, op_cache),
             |input| self.if_parser(input, op_cache),
             |input| self.function_definition_parser(input, op_cache),

@@ -43,7 +43,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(2, 1, &[Type::Ref(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, v| {
+    ctx.define_native_function_overload(2, 1, &[Type::MutRef(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, v| {
         return v[0].deref_obj();
     }).unwrap();
 

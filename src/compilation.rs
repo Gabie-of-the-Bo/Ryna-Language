@@ -93,6 +93,11 @@ impl NessaContext {
                 }
             }
 
+            NessaExpr::While(c, b) => {
+                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
+                self.compile_variables_ctx(b, registers, ctx_idx, &vec!())?;
+            }
+
             NessaExpr::For(i, c, b) => {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
@@ -204,7 +209,8 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) |
+            NessaExpr::While(c, b) => {
                 self.compile_expr_function_names(c);
                 b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
             }
@@ -276,7 +282,8 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) |
+            NessaExpr::While(c, b) => {
                 self.compile_expr_function_calls(c)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?
             }
@@ -482,7 +489,8 @@ impl NessaContext{
                 res
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) => {
+            NessaExpr::CompiledFor(_, _, _, c, b) | 
+            NessaExpr::While(c, b) => {
                 let mut res = self.get_templated_function_instances(c);
 
                 for line in b {
@@ -752,6 +760,8 @@ impl NessaContext{
                 
                 res
             },
+            CompiledFor(_, _, _, c, b) => self.compiled_form_size(c) + self.compiled_form_body_size(b) + 9,
+            While(c, b) => self.compiled_form_size(c) + self.compiled_form_body_size(b) + 2,
             FunctionCall(_, _, a) => self.compiled_form_body_size(a) + 1, 
             _ => unreachable!()
         }
@@ -856,6 +866,22 @@ impl NessaContext{
                 if let Some(b) = e {
                     res.extend(self.compiled_form_body(b, functions, unary, binary, nary, max_register)?);
                 }
+
+                Ok(res)
+            },
+            NessaExpr::While(c, b) => {
+                // Start with the condition
+                let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
+                let while_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
+
+                // Add while body
+                let beginning_jmp = CompiledNessaExpr::RelativeJump(-(while_body.len() as i32 + res.len() as i32 + 1));
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(while_body.len() + 2)));
+                res.extend(while_body);
+
+                // Jump to the beginning of the loop
+                res.push(NessaInstruction::from(beginning_jmp));
 
                 Ok(res)
             },

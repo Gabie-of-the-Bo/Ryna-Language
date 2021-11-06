@@ -16,7 +16,7 @@ pub struct TypeTemplate {
     pub params: Vec<String>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Hash, Debug)]
 pub enum Type {
     // Empty type (also called void)
     Empty,

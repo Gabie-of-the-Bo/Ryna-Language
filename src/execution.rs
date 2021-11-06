@@ -502,4 +502,39 @@ mod tests {
         assert_eq!(ctx.variables[6], Some(Object::new(Number::from(55))));
         assert_eq!(ctx.variables[7], Some(Object::new(Number::from(26))));
     }
+
+    #[test]
+    fn templated_functions() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn test<T>() -> Array<'T> {
+                return arr<'T>();
+            }
+
+            let a = test<Number>();
+            let b = test<String>();
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!()))));
+        assert_eq!(ctx.variables[1], Some(Object::new((Type::Basic(1), vec!()))));
+
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn sum<T>(a: 'T, b: 'T) -> 'T {
+                return a + b;
+            }
+
+            let a = sum<Number>(5, 6);
+            let b = sum<String>(\"test\", \"tset\");
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
+        assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
+    }
 }

@@ -114,7 +114,7 @@ impl NessaContext {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = stack.pop().unwrap();
 
-                        // stack.push(operations[*ov_id].2(&obj));
+                        stack.push(operations[*ov_id].2.unwrap()(&obj));
 
                         ip += 1;
                     
@@ -217,7 +217,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let v_0 = 5;
+            let v_0 = !true;
             let v_1 = 3 + 4;
             let v_2: Number = 2;
 
@@ -227,7 +227,7 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5))));
+        assert_eq!(ctx.variables[0], Some(Object::new(false)));
         assert_eq!(ctx.variables[1], Some(Object::new(Number::from(7))));
         assert_eq!(ctx.variables[2], Some(Object::new(Number::from(4))));
     }

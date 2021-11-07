@@ -68,11 +68,40 @@ impl Operator {
                                                   ╘════════════════╛
 */
 
+macro_rules! define_unary_native_op {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
+        $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
+            let $a = &*a.get::<$unwrap_type>();
+            
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_unary_native_op_deref {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
+        $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
+            let $a = &*a.deref::<$unwrap_type>();
+            
+            return Object::new($result);
+        }).unwrap();
+    };
+}
+
+macro_rules! define_unary_native_op_combinations {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
+        let base_ref = Type::Ref(Box::new($inner_type.clone()));
+        let base_mut = Type::MutRef(Box::new($inner_type.clone()));
+        
+        define_unary_native_op!($ctx, $id, $inner_type, $return_type, $unwrap_type, $a, $result);
+        define_unary_native_op_deref!($ctx, $id, base_ref.clone(), $return_type, $unwrap_type, $a, $result);
+        define_unary_native_op_deref!($ctx, $id, base_mut.clone(), $return_type, $unwrap_type, $a, $result);
+    };
+}
+
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 100).unwrap();
-    ctx.define_unary_operator("!".into(), true, 200).unwrap();
-    ctx.define_unary_operator("?".into(), false, 150).unwrap();
-    
+
     ctx.define_native_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
         let n_a = &*a.deref::<Number>();
         let mut res = n_a.clone();
@@ -81,6 +110,12 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
         return Object::new(res);
     }).unwrap();
+
+    ctx.define_unary_operator("!".into(), true, 200).unwrap();
+
+    define_unary_native_op_combinations!(ctx, 1, Type::Basic(2), Type::Basic(2), bool, arg, !arg);
+
+    ctx.define_unary_operator("?".into(), false, 150).unwrap();
 }
 
 macro_rules! define_binary_native_op {

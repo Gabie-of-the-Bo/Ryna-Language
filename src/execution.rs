@@ -219,7 +219,10 @@ mod tests {
         let code_str = "
             let v_0 = 5;
             let v_1 = 3 + 4;
-            let v_2 = inc(inc(2));
+            let v_2: Number = 2;
+
+            inc(v_2);
+            inc(v_2);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -536,5 +539,35 @@ mod tests {
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
+    }
+
+    #[test]
+    fn custom_iterators() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        fn iterator(it: Number) -> Number {
+            return it;
+        }
+
+        fn next(it: &&Number) -> Number {
+            it.inc();
+            return it.deref<Number>();
+        }
+
+        fn is_consumed(it: &&Number) -> Bool {
+            return it >= 10;
+        }
+
+        let sum: Number = 0;
+
+        for i in 0 {
+            sum = sum + i;
+        }
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
     }
 }

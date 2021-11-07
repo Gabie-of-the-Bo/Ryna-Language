@@ -2,7 +2,6 @@ use crate::number::Number;
 use crate::types::Type;
 use crate::object::*;
 use crate::context::NessaContext;
-use crate::parser::NessaExpr;
 
 /*
                                                   ╒══════════════════╕
@@ -29,8 +28,10 @@ pub struct Function {
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(0, 0, &[Type::Basic(0)], Type::Basic(0), |_, v| { 
-        Object::new(&*v[0].deref::<Number>() + Number::from(1)) 
+    ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Empty, |_, v| { 
+        *v[0].get::<Reference>().get_mut::<Number>() += Number::from(1);
+
+        return Object::empty();
     }).unwrap();
 
     ctx.define_function("print".into()).unwrap();

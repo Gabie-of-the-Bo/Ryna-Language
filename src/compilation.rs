@@ -102,6 +102,7 @@ impl NessaContext {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
                 let container_type = self.infer_type(c).unwrap();
+                println!("Container {}", container_type.get_name(self));
                 let iterator_type = self.get_iterator_type(&container_type)?;
                 let element_type = self.get_iterator_output_type(&iterator_type)?;
 
@@ -512,6 +513,16 @@ impl NessaContext{
                 res
             }
 
+            NessaExpr::CompiledFunctionDefinition(id, t, _, _, _, _) => {
+                let mut res = HashMap::new();
+
+                if t.is_empty() {
+                    NessaContext::add_function_instance(&mut res, *id, &vec!());
+                }
+
+                res
+            }
+
             _ => HashMap::new()
         }
     }
@@ -672,6 +683,8 @@ impl NessaContext{
                 NessaExpr::CompiledFunctionDefinition(id, _, a, r, b, _) => {
                     if let Some(usages) = function_instances.get(id) {
                         for ov in usages {
+                            println!("({}, {:?})", id, ov);
+
                             // Store parameters
                             for i in 0..a.len(){
                                 if i == 0 {
@@ -963,7 +976,8 @@ impl NessaContext{
                                         res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(5, it_ov_id, it_args)));
     
                                     } else {
-                                        unimplemented!()
+                                        let pos = functions.get(&(5, it_ov_id, it_args)).unwrap();
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                                     }
 
                                     // Store the iterator
@@ -976,7 +990,8 @@ impl NessaContext{
                                         res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(7, consumed_ov_id, consumed_args)));
     
                                     } else {
-                                        unimplemented!()
+                                        let pos = functions.get(&(7, consumed_ov_id, consumed_args)).unwrap();
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                                     }                                    
 
                                     // Jump to end of loop
@@ -989,7 +1004,8 @@ impl NessaContext{
                                         res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(6, next_ov_id, next_args)));
     
                                     } else {
-                                        unimplemented!()
+                                        let pos = functions.get(&(6, next_ov_id, next_args)).unwrap();
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                                     }
 
                                     // Store next value
@@ -1088,7 +1104,7 @@ impl NessaContext{
         let ops = self.nessa_function_headers_parser(code).unwrap().1;
 
         for i in ops {
-            self.define_function(i.0)?;
+            self.define_function(i.0).unwrap_or_default();
         }
 
         return Ok(());
@@ -1115,7 +1131,7 @@ impl NessaContext{
     pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), String> {
         for i in lines {
             match i {
-                NessaExpr::CompiledFunctionDefinition(id, t, a, r, b, v) => {
+                NessaExpr::FunctionDefinition(id, t, a, r, _) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                     self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None)?
                 },
@@ -1137,9 +1153,9 @@ impl NessaContext{
         self.define_module_operations(code)?;
 
         let mut lines = self.parse_nessa_module(code);
-        let max_register = self.compile(&mut lines, &vec!())?;
-
         self.define_module_function_overloads(&lines)?;
+
+        let max_register = self.compile(&mut lines, &vec!())?;
 
         return self.compiled_form(&lines, max_register);
     }

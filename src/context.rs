@@ -382,7 +382,7 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let def_1 = ctx.define_native_function_overload(0, 0, &[Type::Basic(1)], Type::Basic(0), |_, a| { a[0].clone() });
-        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::Basic(0)], Type::Basic(0), |_, a| { a[0].clone() });
+        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Basic(0), |_, a| { a[0].clone() });
         let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], Type::Basic(0), |_, a| { a[0].clone() });
 
         assert!(def_1.is_ok());

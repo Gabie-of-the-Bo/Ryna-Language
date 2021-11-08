@@ -3,11 +3,11 @@ use std::cell::RefCell;
 
 use nom::{
     IResult,
-    combinator::{map, map_res, opt, eof},
-    bytes::complete::{take_while, take_while1, tag},
+    combinator::{map, map_res, opt, eof, value},
+    bytes::complete::{take_while, take_while1, tag, escaped_transform},
     sequence::{tuple, delimited, terminated},
     branch::alt,
-    character::complete::{multispace0, multispace1},
+    character::complete::{multispace0, multispace1, satisfy},
     multi::{separated_list0, separated_list1}
 };
 
@@ -349,7 +349,16 @@ impl NessaContext {
         return map(
             delimited(
                 tag("\""), 
-                take_while(|c| c != '\"'), 
+                escaped_transform(
+                    satisfy(|i| i != '"' && i != '\\'), 
+                    '\\', 
+                    alt((
+                        value("\n", tag("n")),
+                        value("\t", tag("t")),
+                        value("\"", tag("\"")),
+                        value("\\", tag("\\"))
+                    ))
+                ),
                 tag("\"")
             ),
             String::from
@@ -1528,14 +1537,17 @@ mod tests {
         let number_str = "123";
         let bool_v_str = "true";
         let string_str = "\"test\"";
+        let escaped_string_str = "\"test\\ntest2\\ttest3\\\"\\\\\"";
 
         let (_, number) = ctx.literal_parser(number_str).unwrap();
         let (_, bool_v) = ctx.literal_parser(bool_v_str).unwrap();
         let (_, string) = ctx.literal_parser(string_str).unwrap();
+        let (_, escaped_string) = ctx.literal_parser(escaped_string_str).unwrap();
 
         assert_eq!(number, NessaExpr::Literal(Object::new(Number::from(123))));
         assert_eq!(bool_v, NessaExpr::Literal(Object::new(true)));
         assert_eq!(string, NessaExpr::Literal(Object::new("test".to_string())));
+        assert_eq!(escaped_string, NessaExpr::Literal(Object::new("test\ntest2\ttest3\"\\".to_string())));
     }
 
     #[test]

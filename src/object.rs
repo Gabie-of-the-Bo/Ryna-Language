@@ -3,8 +3,6 @@ use std::rc::Rc;
 use std::cell::*;
 
 use crate::number::Number;
-use crate::operations::Operator;
-use crate::context::NessaContext;
 use crate::types::Type;
 
 /*
@@ -403,7 +401,6 @@ impl NessaObject for () {
 mod tests {
     use crate::number::Number;
     use crate::object::*;
-    use crate::context::*;
 
     #[test]
     fn object_construction() {

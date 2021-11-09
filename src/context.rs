@@ -1,5 +1,3 @@
-use std::cell::{RefCell, Ref};
-
 use crate::types::*;
 use crate::operations::*;
 use crate::object::*;
@@ -344,7 +342,6 @@ impl NessaContext {
 mod tests {
     use crate::types::Type;
     use crate::context::*;
-    use crate::number::*;
 
     #[test]
     fn operation_subsumption() {

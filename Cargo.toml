@@ -13,6 +13,7 @@ impl_ops = "*"
 rayon = "1.5"
 bit-set = "*"
 nom = "7"
+clap = "*"
 
 [dev-dependencies]
 num-traits = "*"

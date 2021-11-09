@@ -102,7 +102,6 @@ impl NessaContext {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
                 let container_type = self.infer_type(c).unwrap();
-                println!("Container {}", container_type.get_name(self));
                 let iterator_type = self.get_iterator_type(&container_type)?;
                 let element_type = self.get_iterator_output_type(&iterator_type)?;
 
@@ -683,8 +682,6 @@ impl NessaContext{
                 NessaExpr::CompiledFunctionDefinition(id, _, a, r, b, _) => {
                     if let Some(usages) = function_instances.get(id) {
                         for ov in usages {
-                            println!("({}, {:?})", id, ov);
-
                             // Store parameters
                             for i in 0..a.len(){
                                 if i == 0 {

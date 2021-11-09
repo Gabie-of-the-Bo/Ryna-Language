@@ -743,8 +743,6 @@ mod tests {
 
         let pattern = u_pattern.compile();
 
-        println!("{:?}", pattern);
-
         assert_eq!(pattern.matches("test".into()), None);
         assert_eq!(pattern.matches("".into()), None);
         assert_eq!(pattern.matches("a".into()), None);

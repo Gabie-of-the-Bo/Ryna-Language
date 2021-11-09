@@ -1,9 +1,7 @@
 use crate::types::Type;
-use crate::object::{Object, Reference};
-use crate::parser::NessaExpr;
+use crate::object::Object;
 use crate::context::NessaContext;
 use crate::operations::Operator;
-use crate::functions::FunctionOverload;
 use crate::compilation::CompiledNessaExpr;
 
 /*
@@ -13,7 +11,7 @@ use crate::compilation::CompiledNessaExpr;
 */
 
 impl NessaContext {
-    fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
+    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         let compiled_code = self.parse_and_compile(code)?;
 
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
@@ -24,7 +22,7 @@ impl NessaContext {
     pub fn execute_compiled_code(&mut self, program: &Vec<CompiledNessaExpr>) -> Result<(), String> {
         use CompiledNessaExpr::*;
 
-        fn check_bool_obj(mut obj: Object) -> bool {
+        fn check_bool_obj(obj: Object) -> bool {
             if obj.is_ref() {
                 let ref_obj = obj.deref_obj();
 
@@ -137,8 +135,8 @@ impl NessaContext {
                     }
                 }
 
-                NaryOperatorCall(op_id, ov_id) => {
-                    if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
+                NaryOperatorCall(op_id, _ov_id) => {
+                    if let Operator::Nary{operations: _op, ..} = &self.nary_ops[*op_id] {
                         /*
                         let a = stack.pop().unwrap();
                         let b = stack.pop().unwrap();

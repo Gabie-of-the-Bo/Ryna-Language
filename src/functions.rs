@@ -25,6 +25,11 @@ pub struct Function {
                                                   ╘══════════════════════╛
 */
 
+// Constant identifiers
+pub const ITERATOR_FUNC_ID: usize = 5;
+pub const NEXT_FUNC_ID: usize = 6;
+pub const IS_CONSUMED_FUNC_ID: usize = 7;
+
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 

@@ -179,6 +179,10 @@ macro_rules! define_binary_native_op_combinations {
     };
 }
 
+// Constant identifiers
+pub const DOT_BINOP_ID: usize = 5;
+pub const LT_BINOP_ID: usize = 6;
+
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     
     /*

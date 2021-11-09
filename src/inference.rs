@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
+use crate::functions::*;
 use crate::operations::*;
 use crate::types::Type;
 
@@ -63,7 +62,7 @@ impl NessaContext {
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {
-        if let Some((_, it_type, _, _)) = self.get_first_function_overload(5, vec!(container_type.clone())) {
+        if let Some((_, it_type, _, _)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone())) {
             return Ok(it_type.clone());
         }
 
@@ -73,7 +72,7 @@ impl NessaContext {
     pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<Type, String> {
         let it_mut = Type::MutRef(Box::new(iterator_type.clone()));
 
-        if let Some((_, r, _, _)) = self.get_first_function_overload(6, vec!(it_mut.clone())) {
+        if let Some((_, r, _, _)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone())) {
             return Ok(r);
         }
 

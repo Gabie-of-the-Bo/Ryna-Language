@@ -17,6 +17,7 @@ use crate::operations::Operator;
 use crate::object::Object;
 use crate::number::Number;
 use crate::types::Type;
+use crate::operations::*;
 use crate::context::NessaContext;
 
 /*
@@ -468,7 +469,7 @@ impl NessaContext {
 
             // Comparison operators
             let mut bi_no_cmp = bi.clone();
-            bi_no_cmp.insert(6);
+            bi_no_cmp.insert(LT_BINOP_ID);
     
             let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, op_cache)?;
     

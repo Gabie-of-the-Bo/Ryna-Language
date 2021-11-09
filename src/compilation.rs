@@ -5,7 +5,7 @@ use crate::context::NessaContext;
 use crate::parser::NessaExpr;
 use crate::types::Type;
 use crate::object::Object;
-use crate::functions::FunctionOverload;
+use crate::functions::*;
 use crate::operations::*;
 
 /*
@@ -242,7 +242,7 @@ impl NessaContext {
                 self.compile_expr_function_calls(b)?;
 
                 // Member function calls
-                if *id == 5 {
+                if *id == DOT_BINOP_ID {
                     if let NessaExpr::FunctionCall(f_id, t, args) = b.as_ref() {
                         // Append first operand to the function's arguments 
                         let mut new_args = vec!(a.as_ref().clone());
@@ -963,20 +963,20 @@ impl NessaContext{
                     let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
 
                     // Get "iterator", "next" and "is_consumed" function overloads and check them
-                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(5, vec!(t.clone())) {
+                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone())) {
                         let it_mut = Type::MutRef(Box::new(it_type.clone()));
 
-                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(6, vec!(it_mut.clone())) {
-                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(7, vec!(it_mut.clone())) {
+                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone())) {
+                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone())) {
                                 if let Type::Basic(2) = consumed_res {
                                     let for_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
 
                                     // Convert the iterable into an iterator
                                     if it_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(5, it_ov_id, it_args)));
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)));
     
                                     } else {
-                                        let pos = functions.get(&(5, it_ov_id, it_args)).unwrap();
+                                        let pos = functions.get(&(ITERATOR_FUNC_ID, it_ov_id, it_args)).unwrap();
                                         res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                                     }
 
@@ -987,7 +987,7 @@ impl NessaContext{
                                     res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
 
                                     if consumed_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(7, consumed_ov_id, consumed_args)));
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)));
     
                                     } else {
                                         let pos = functions.get(&(7, consumed_ov_id, consumed_args)).unwrap();
@@ -1001,7 +1001,7 @@ impl NessaContext{
                                     res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
 
                                     if next_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(6, next_ov_id, next_args)));
+                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)));
     
                                     } else {
                                         let pos = functions.get(&(6, next_ov_id, next_args)).unwrap();

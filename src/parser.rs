@@ -347,9 +347,9 @@ impl NessaContext {
     }
 
     fn string_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
-        return map(
-            delimited(
-                tag("\""), 
+        return delimited(
+            tag("\""), 
+            alt((
                 escaped_transform(
                     satisfy(|i| i != '"' && i != '\\'), 
                     '\\', 
@@ -360,9 +360,9 @@ impl NessaContext {
                         value("\\", tag("\\"))
                     ))
                 ),
-                tag("\"")
-            ),
-            String::from
+                value(String::new(), tag(""))
+            )),
+            tag("\"")
         )(input);
     }
     

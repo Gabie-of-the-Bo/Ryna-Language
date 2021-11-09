@@ -10,9 +10,9 @@ use crate::number::*;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunction = Option<fn(&Object) -> Object>;
-pub type BinaryFunction = Option<fn(&Object, &Object) -> Object>;
-pub type NaryFunction = Option<fn(&Object, &[&Object]) -> Object>;
+pub type UnaryFunction = Option<fn(&Object) -> Result<Object, String>>;
+pub type BinaryFunction = Option<fn(&Object, &Object) -> Result<Object, String>>;
+pub type NaryFunction = Option<fn(&Object, &[&Object]) -> Result<Object, String>>;
 
 pub type UnaryOperations = Vec<(Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(Type, Type, BinaryFunction)>;
@@ -73,7 +73,7 @@ macro_rules! define_unary_native_op {
         $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
             let $a = &*a.get::<$unwrap_type>();
             
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }
@@ -83,7 +83,7 @@ macro_rules! define_unary_native_op_deref {
         $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
             let $a = &*a.deref::<$unwrap_type>();
             
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }
@@ -108,7 +108,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
         res.negate();
 
-        return Object::new(res);
+        return Ok(Object::new(res));
     }).unwrap();
 
     ctx.define_unary_operator("!".into(), true, 200).unwrap();
@@ -124,7 +124,7 @@ macro_rules! define_binary_native_op {
             let $a = &*a.get::<$unwrap_type>();
             let $b = &*b.get::<$unwrap_type>();
     
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }
@@ -135,7 +135,7 @@ macro_rules! define_binary_native_op_deref_l {
             let $a = &*a.deref::<$unwrap_type>();
             let $b = &*b.get::<$unwrap_type>();
     
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }
@@ -146,7 +146,7 @@ macro_rules! define_binary_native_op_deref_r {
             let $a = &*a.get::<$unwrap_type>();
             let $b = &*b.deref::<$unwrap_type>();
     
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }
@@ -157,7 +157,7 @@ macro_rules! define_binary_native_op_deref {
             let $a = &*a.deref::<$unwrap_type>();
             let $b = &*b.deref::<$unwrap_type>();
     
-            return Object::new($result);
+            return Ok(Object::new($result));
         }).unwrap();
     };
 }

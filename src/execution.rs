@@ -99,7 +99,7 @@ impl NessaContext {
                             args.push(stack.pop().unwrap());
                         }
 
-                        stack.push(f(type_args, args));
+                        stack.push(f(type_args, args)?);
 
                         ip += 1;
                     
@@ -112,7 +112,7 @@ impl NessaContext {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2.unwrap()(&obj));
+                        stack.push(operations[*ov_id].2.unwrap()(&obj)?);
 
                         ip += 1;
                     
@@ -126,7 +126,7 @@ impl NessaContext {
                         let a = stack.pop().unwrap();
                         let b = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2.unwrap()(&a, &b));
+                        stack.push(operations[*ov_id].2.unwrap()(&a, &b)?);
                         
                         ip += 1;
                     

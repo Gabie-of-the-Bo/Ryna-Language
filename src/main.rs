@@ -1,24 +1,7 @@
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate impl_ops;
-extern crate nom;
 use clap::{App, Arg};
-
 use std::fs;
 
-pub mod number;
-pub mod patterns;
-pub mod object;
-pub mod operations;
-pub mod functions;
-pub mod types;
-pub mod context;
-
-pub mod parser;
-pub mod inference;
-pub mod compilation;
-pub mod execution;
-
-use context::*;
+use nessa::context::*;
 
 fn main() {
     /*

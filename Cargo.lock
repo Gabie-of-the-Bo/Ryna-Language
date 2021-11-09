@@ -178,7 +178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c835948974f68e0bd58636fc6c5b1fbff7b297e3046f11b3b3c18bbac012c6d"
 
 [[package]]
-name = "nessa"
+name = "nessa-language"
 version = "0.1.0"
 dependencies = [
  "bit-set",

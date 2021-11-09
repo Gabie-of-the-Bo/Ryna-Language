@@ -16,12 +16,17 @@ fn is_prime(n: &&Number) -> Bool {
     return true;
 }
 
+let array: Array<Number> = arr<Number>();
 let it: Number = 0;
 
-while it < 50 {
+while it < 1000 {
     if is_prime(it) {
-        print(it.deref<Number>());
+        array.push(it.deref<Number>());
     }
 
     it = it + 1;
+}
+
+if array.len() != 168 {
+    panic("Invalid number of primes");
 }

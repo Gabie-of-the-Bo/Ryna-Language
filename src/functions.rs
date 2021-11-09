@@ -154,4 +154,27 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             return Ok(Object::new(iterator.2 >= iterator.1.get::<(Type, Vec<Object>)>().1.len()));
         }
     ).unwrap();
+
+    ctx.define_function("panic".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        8, 
+        0,
+        &[Type::Basic(1)], 
+        Type::Empty, 
+        |_, v| {
+            return Err(v[0].get::<String>().clone());
+        }
+    ).unwrap();
+
+    ctx.define_function("len".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        9, 
+        1,
+        &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::Wildcard))))], 
+        Type::Basic(0), 
+        |_, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+    ).unwrap();
+
 }

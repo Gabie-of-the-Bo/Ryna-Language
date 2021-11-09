@@ -1,10 +1,16 @@
 [package]
-name = "nessa"
+name = "nessa-language"
 version = "0.1.0"
 authors = ["Gabie <jacadel1998@hotmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "nessa"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nessa"
+path = "src/main.rs"
 
 [dependencies]
 lazy_static = "*"

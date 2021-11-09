@@ -1,5 +1,7 @@
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
+use crate::operations::Operator;
+use crate::types::Type;
 
 /*
                                                   ╒══════════════════╕
@@ -10,6 +12,13 @@ use crate::parser::NessaExpr;
 impl NessaContext {
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
+            NessaExpr::Literal(_) |
+            NessaExpr::Variable(..) |
+            NessaExpr::PrefixOperatorDefinition(..) |
+            NessaExpr::PostfixOperatorDefinition(..) |
+            NessaExpr::BinaryOperatorDefinition(..) |
+            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
+
             NessaExpr::CompiledVariableDefinition(_, n, t, e) |
             NessaExpr::CompiledVariableAssignment(_, n, t, e) => {
                 self.type_check(e)?;
@@ -33,7 +42,265 @@ impl NessaContext {
                     Err("Unable to infer return value of right-hand of assignment".into())
                 }
             },
-            _ => Ok(())
+
+            NessaExpr::FunctionCall(id, _ , args) => {
+                let mut arg_types = Vec::with_capacity(args.len());
+
+                for (i, arg) in args.iter().enumerate() {
+                    self.type_check(arg)?;
+
+                    if let Some(t) = self.infer_type(arg) {
+                        arg_types.push(t);
+                    
+                    } else {
+                        return Err(format!("Unable to infer return value for argument with index {}", i))
+                    }
+                }
+
+                if self.get_first_function_overload(*id, arg_types.clone()).is_none() {
+                    Err(format!(
+                        "Unable to get function overload for {}({})",
+                        self.functions[*id].name,
+                        arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
+                    ))
+
+                } else {
+                    Ok(())
+                }
+            },
+
+            NessaExpr::UnaryOperation(id, arg) => {
+                self.type_check(arg)?;
+
+                let inferred_type = self.infer_type(arg);
+
+                if let Some(t) = inferred_type {
+                    if self.get_first_unary_op(*id, t.clone()).is_none() {
+                        if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                            if *prefix {
+                                Err(format!(
+                                    "Unable to get unary operator overload for {}({})",
+                                    representation,
+                                    t.get_name(self)
+                                ))
+
+                            } else {
+                                Err(format!(
+                                    "Unable to get unary operator overload for ({}){}",
+                                    t.get_name(self),
+                                    representation
+                                ))
+                            }
+
+                        } else {
+                            unreachable!()
+                        }
+
+                    } else {
+                        Ok(())
+                    }
+
+                } else {
+                    if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
+                        Err(format!("Unable to infer return value of argument of unary operator {}", representation))
+
+                    } else {
+                        unreachable!();
+                    }
+                }
+            },
+
+            NessaExpr::BinaryOperation(id, arg1, arg2) => {
+                self.type_check(arg1)?;
+                self.type_check(arg2)?;
+
+                let inferred_type_1 = self.infer_type(arg1);
+                let inferred_type_2 = self.infer_type(arg2);
+
+                if let Some(t1) = inferred_type_1 {
+                    if let Some(t2) = inferred_type_2 {
+                        if self.get_first_binary_op(*id, t1.clone(), t2.clone()).is_none() {
+                            if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                                Err(format!(
+                                    "Unable to get binary operator overload for ({}){}({})",
+                                    t1.get_name(self),
+                                    representation,
+                                    t2.get_name(self)
+                                ))
+    
+                            } else {
+                                unreachable!()
+                            }
+    
+                        } else {
+                            Ok(())
+                        }
+                        
+                    } else {
+                        if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                            Err(format!("Unable to infer return value of right argument of binary operator {}", representation))
+    
+                        } else {
+                            unreachable!();
+                        }
+                    }
+                    
+                } else {
+                    if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                        Err(format!("Unable to infer return value of left argument of binary operator {}", representation))
+
+                    } else {
+                        unreachable!();
+                    }
+                }
+            },
+
+            NessaExpr::NaryOperation(id, _, first, args) => {
+                self.type_check(first)?;
+
+                let first_type = self.infer_type(first);
+
+                if let Some(t) = first_type {
+                    let mut arg_types = Vec::with_capacity(args.len());
+
+                    for (i, arg) in args.iter().enumerate() {
+                        self.type_check(arg)?;
+    
+                        if let Some(t) = self.infer_type(arg) {
+                            arg_types.push(t);
+                        
+                        } else {
+                            return Err(format!("Unable to infer return value for argument with index {}", i))
+                        }
+                    }
+    
+                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone()).is_none() {
+                        if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                            Err(format!(
+                                "Unable to get n-ary operator overload for {}{}{}{}",
+                                t.get_name(self),
+                                open_rep,
+                                arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                close_rep
+                            ))
+
+                        } else {
+                            unreachable!()
+                        }
+    
+                    } else {
+                        Ok(())
+                    }
+
+                } else {
+                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                        Err(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep))
+
+                    } else {
+                        unreachable!()
+                    }
+                }
+            },
+
+            NessaExpr::If(ih, ib, ei, eb) => {
+                self.type_check(ih)?;
+
+                let if_header_type = self.infer_type(ih);
+
+                if let Some(t) = if_header_type {
+                    if t != Type::Basic(2) {
+                        return Err(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)))
+                    }
+
+                } else {
+                    return Err("Unable to infer return value of if condition".into())
+                }
+
+                for line in ib {
+                    self.type_check(line)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    let elif_header_type = self.infer_type(ei_h);
+
+                    if let Some(t) = elif_header_type {
+                        if t != Type::Basic(2) {
+                            return Err(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)))
+                        }
+    
+                    } else {
+                        return Err("Unable to infer return value of if condition".into())
+                    }
+
+                    for line in ei_b {
+                        self.type_check(line)?;
+                    }
+                }
+
+                if let Some(eb_inner) = eb {
+                    for line in eb_inner {
+                        self.type_check(line)?;
+                    }
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::While(cond, body) => {
+                self.type_check(cond)?;
+
+                let while_header_type = self.infer_type(cond);
+
+                if let Some(t) = while_header_type {
+                    if t != Type::Basic(2) {
+                        return Err(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)))
+                    }
+
+                } else {
+                    return Err("Unable to infer return value of while condition".into())
+                }
+
+                for line in body {
+                    self.type_check(line)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::Return(e) => {
+                self.type_check(e)?;
+
+                if self.infer_type(e).is_some() {
+                    Ok(())
+
+                } else {
+                    return Err("Unable to infer return value of return statement".into())
+                }
+            }
+
+            NessaExpr::CompiledFunctionDefinition(_, t, _, _, b, _) => {
+                if t.is_empty() {
+                    for line in b {
+                        self.type_check(line)?;
+                    }
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledFor(_, _, _, _, b) => {
+                for line in b {
+                    self.type_check(line)?;
+                }
+
+                Ok(())
+            }
+
+            _ => unimplemented!("{:?}", expr)
         };
     }
 }

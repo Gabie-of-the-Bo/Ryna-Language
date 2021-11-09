@@ -12,6 +12,7 @@ pub mod context;
 
 pub mod parser;
 pub mod inference;
+pub mod checks;
 pub mod compilation;
 pub mod execution;
 

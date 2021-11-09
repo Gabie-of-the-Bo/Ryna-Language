@@ -115,12 +115,12 @@ impl NessaContext {
                 return Some(r.clone());
             },
 
-            NessaExpr::FunctionCall(id, _, args) => {
+            NessaExpr::FunctionCall(id, t, args) => {
                 let arg_types = args.iter().map(|i| self.infer_type(i).unwrap()).collect::<Vec<_>>();
 
                 let (_, r, _, _) = self.get_first_function_overload(*id, arg_types).unwrap();
 
-                return Some(r.clone());
+                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
             _ => None

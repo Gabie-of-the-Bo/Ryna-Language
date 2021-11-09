@@ -32,7 +32,7 @@ pub enum NessaExpr {
     FunctionName(usize),
     Variable(usize, String, Type),
     CompiledVariableDefinition(usize, String, Type, Box<NessaExpr>),
-    CompiledVariableAssignment(usize, String, Box<NessaExpr>),
+    CompiledVariableAssignment(usize, String, Type, Box<NessaExpr>),
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 

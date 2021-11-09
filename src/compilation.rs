@@ -40,9 +40,9 @@ impl NessaContext {
                 if ctx_idx.contains_key(n) {
                     self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
 
-                    let (idx, _) = ctx_idx.get(n).unwrap();
+                    let (idx, t) = ctx_idx.get(n).unwrap();
 
-                    *expr = NessaExpr::CompiledVariableAssignment(*idx, n.clone(), e.clone());
+                    *expr = NessaExpr::CompiledVariableAssignment(*idx, n.clone(), t.clone(), e.clone());
                 
                 } else {
                     return Err(format!("Variable with name {} is not defined", n));
@@ -175,7 +175,7 @@ impl NessaContext {
 
             // Compile variable definitions
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, e) => {
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) => {
                 self.compile_expr_function_names(e);
             },
 
@@ -227,7 +227,7 @@ impl NessaContext {
         match expr {
             // Compile variable definitions
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, e) => {
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) => {
                 self.compile_expr_function_calls(e)?;
             },
 
@@ -443,7 +443,7 @@ impl NessaContext{
     pub fn get_templated_function_instances(&self, expr: &NessaExpr) -> HashMap<usize, Vec<Vec<Type>>> {
         return match expr {
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, e) | 
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) | 
             NessaExpr::UnaryOperation(_, e) |
             NessaExpr::Return(e) => self.get_templated_function_instances(e), 
 
@@ -540,7 +540,7 @@ impl NessaContext{
         match expr {
             NessaExpr::Variable(_, _, t) => *t = t.sub_templates(templates),
 
-            NessaExpr::CompiledVariableAssignment(_, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) |
             NessaExpr::UnaryOperation(_, e) |
             NessaExpr::Return(e) => self.subtitute_type_params_expr(e, templates),
 
@@ -816,7 +816,7 @@ impl NessaContext{
             Literal(_) | Variable(..) => 1, 
             BinaryOperation(_, a, b) => self.compiled_form_size(a) + self.compiled_form_size(b) + 1,
             NaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_body_size(b) + 1,
-            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, e) | UnaryOperation(_, e) => self.compiled_form_size(e) + 1,
+            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, e) => self.compiled_form_size(e) + 1,
             If(ih, ib, ei, e) => {
                 let mut res = self.compiled_form_size(ih) + self.compiled_form_body_size(ib) + 1;
 
@@ -852,7 +852,7 @@ impl NessaContext{
         return match expr {
             NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
             NessaExpr::Variable(id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
-            NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, e) => {
+            NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, _, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
 
@@ -1153,6 +1153,10 @@ impl NessaContext{
         self.define_module_function_overloads(&lines)?;
 
         let max_register = self.compile(&mut lines, &vec!())?;
+
+        for expr in &lines {
+            self.type_check(expr)?;
+        }
 
         return self.compiled_form(&lines, max_register);
     }

@@ -115,17 +115,7 @@ impl Type {
 
             (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
             
-            (Type::TemplateParam(id), b) => {
-                if let Some(t) = t_assignments.get(id) {
-                    return b == t;
-                
-                } else {
-                    t_assignments.insert(*id, b.clone());
-
-                    return b.template_cyclic_reference_check(*id, t_deps);
-                }
-            },
-
+            (Type::TemplateParam(id), b) |
             (b, Type::TemplateParam(id)) => {
                 if let Some(t) = t_assignments.get(id) {
                     return b == t;

@@ -710,9 +710,9 @@ impl NessaContext{
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
 
-                                // Type check the newly instantiated functions
+                                // Statically check the newly instantiated functions
                                 for line in &sub_b {
-                                    self.type_check(line)?;
+                                    self.static_check(line)?;
                                 }
 
                                 res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
@@ -1160,7 +1160,7 @@ impl NessaContext{
         let max_register = self.compile(&mut lines, &vec!())?;
 
         for expr in &lines {
-            self.type_check(expr)?;
+            self.static_check(expr)?;
         }
 
         return self.compiled_form(&lines, max_register);

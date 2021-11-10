@@ -17,6 +17,24 @@ impl NessaContext {
         return None;
     }
 
+    pub fn is_unary_op_ambiguous(&self, id: usize, arg_type: Type) -> Option<Vec<(Type, Type)>> {
+        if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
+            let overloads = operations.iter()
+                            .map(|(a, r, _)| (a.clone(), r.clone()))
+                            .filter(|(a, _)| arg_type.bindable_to(a)).collect::<Vec<_>>();
+
+            // Return Some(overloads) if the call is ambiguous, else return None
+            if overloads.len() > 1 {
+                return Some(overloads);
+
+            } else {
+                return None;
+            }
+        }
+
+        unreachable!();
+    }
+
     pub fn get_first_binary_op(&self, id: usize, a_type: Type, b_type: Type) -> Option<(usize, Type, bool)> {
         let t = Type::And(vec!(a_type, b_type));
 
@@ -29,6 +47,34 @@ impl NessaContext {
         }
 
         return None;
+    }
+
+    pub fn is_binary_op_ambiguous(&self, id: usize, a_type: Type, b_type: Type) -> Option<Vec<(Type, Type, Type)>> {
+        let t = Type::And(vec!(a_type, b_type));
+
+        if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
+            let overloads = operations.iter()
+                            .filter(|(a, _, _)| t.bindable_to(&a))
+                            .map(|(a, r, _)| {
+                                if let Type::And(t) = a {
+                                    (t[0].clone(), t[1].clone(), r.clone())
+
+                                } else {
+                                    unreachable!()
+                                }
+                            })
+                            .collect::<Vec<_>>();
+
+            // Return Some(overloads) if the call is ambiguous, else return None
+            if overloads.len() > 1 {
+                return Some(overloads);
+
+            } else {
+                return None;
+            }
+        }
+
+        unreachable!();
     }
 
     pub fn get_first_nary_op(&self, id: usize, a_type: Type, b_type: Vec<Type>) -> Option<(usize, Type, bool)> {
@@ -48,6 +94,37 @@ impl NessaContext {
         return None;
     }
 
+    pub fn is_nary_op_ambiguous(&self, id: usize, a_type: Type, b_type: Vec<Type>) -> Option<Vec<(Type, Vec<Type>, Type)>> {
+        let mut arg_types = vec!(a_type.clone());
+        arg_types.extend(b_type.iter().cloned());
+
+        let t = Type::And(arg_types);
+        
+        if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
+            let overloads = operations.iter()
+                            .filter(|(a, _, _)| t.bindable_to(a))
+                            .map(|(a, r, _)| {
+                                if let Type::And(t) = a {
+                                    (t[0].clone(), t[1..].to_vec(), r.clone())
+
+                                } else {
+                                    unreachable!()
+                                }
+                            })
+                            .collect::<Vec<_>>();
+
+            // Return Some(overloads) if the call is ambiguous, else return None
+            if overloads.len() > 1 {
+                return Some(overloads);
+
+            } else {
+                return None;
+            }
+        }
+
+        unreachable!();
+    }
+
     pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>) -> Option<(usize, Type, bool, Vec<Type>)> {
         let t = Type::And(arg_type);
 
@@ -59,6 +136,22 @@ impl NessaContext {
         }
 
         return None;
+    }
+
+    pub fn is_function_overload_ambiguous(&self, id: usize, arg_type: Vec<Type>) -> Option<Vec<(Type, Type)>> {
+        let t = Type::And(arg_type);
+
+        let overloads = self.functions[id].overloads.iter()
+                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
+                            .filter(|(a, _)| t.bindable_to(a)).collect::<Vec<_>>();
+
+        // Return Some(overloads) if the call is ambiguous, else return None
+        if overloads.len() > 1 {
+            return Some(overloads);
+
+        } else {
+            return None;
+        }
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {

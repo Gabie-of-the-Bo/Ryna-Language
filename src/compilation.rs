@@ -712,7 +712,7 @@ impl NessaContext{
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
-                                    self.static_check(line)?;
+                                    self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
                                 }
 
                                 res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                

@@ -400,16 +400,16 @@ mod tests {
             binary op \"$\" (300);
             binary op \"@\" (300);
 
-            op (a: &&Number) · (b: &&Number) -> &&Number {
+            op (a: &&Number) · (b: &&Number) -> Number {
                 return a + b;
             }
 
-            let c: &&Number = a · b;
+            let c: Number = a · b;
 
             nary op from \"`\" to \"´\" (500);
 
-            op (a: &&Number)`b: &&Number, c: &&Number´ -> &&Number {
-                return a · b · ~c;
+            op (a: &&Number)`b: &&Number, c: &&Number´ -> Number {
+                return a + b + ~c;
             }
 
             let d = a`b, c´;
@@ -428,13 +428,13 @@ mod tests {
             }
         
             fn test_2() -> &&Number {
-                let res = 0;
+                let res: Number = 0;
 
                 return res;
             }
         
             fn test_3() -> &&String {
-                let res = 0;
+                let res: String = \"\";
 
                 res = \"Hello\";
 
@@ -442,13 +442,13 @@ mod tests {
             }
         
             fn test_4() -> &&Number {
-                let res = test_1() + test_1();
+                let res: Number = test_1() + test_1();
 
                 return res;
             }
         
             fn test_5(a: Number, b: Number) -> &&Number {
-                let res = a + b;
+                let res: Number = a + b;
 
                 return res;
             }
@@ -545,7 +545,7 @@ mod tests {
         
         let code_str = "
         fn iterator(it: Number) -> Number {
-            return it;
+            return it.deref<Number>();
         }
 
         fn next(it: &&Number) -> Number {

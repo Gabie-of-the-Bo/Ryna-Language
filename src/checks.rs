@@ -10,6 +10,103 @@ use crate::types::Type;
 */
 
 impl NessaContext {
+    pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), String> {
+        return match (expr, ret_type) {
+            (NessaExpr::Literal(_), _) |
+            (NessaExpr::Variable(..), _) |
+            (NessaExpr::UnaryOperation(..), _) |
+            (NessaExpr::BinaryOperation(..), _) |
+            (NessaExpr::NaryOperation(..), _) |
+            (NessaExpr::FunctionCall(..), _) |
+            (NessaExpr::PrefixOperatorDefinition(..), _) |
+            (NessaExpr::PostfixOperatorDefinition(..), _) |
+            (NessaExpr::BinaryOperatorDefinition(..), _) |
+            (NessaExpr::NaryOperatorDefinition(..), _) => Ok(()),
+
+            (NessaExpr::CompiledVariableDefinition(_, _, _, e), ret) |
+            (NessaExpr::CompiledVariableAssignment(_, _, _, e), ret) => self.return_check(e, ret),
+
+            (NessaExpr::Return(_), None) => Err("Return statements are only allowed inside function and operation definition bodies".into()),
+            (NessaExpr::Return(e), Some(expected_t)) => {
+                self.return_check(e, ret_type)?;
+
+                if let Some(t) = self.infer_type(e) {
+                    if t.bindable_to(&expected_t) {
+                        Ok(())
+
+                    } else {
+                        Err(format!("Value of type {} is not bindable to expected return value of type {}", t.get_name(self), expected_t.get_name(self)))
+                    }
+
+                } else {
+                    Err("Unable to infer return value of return statement".into())
+                }
+            },
+
+            (NessaExpr::CompiledFunctionDefinition(_, t, _, ret, body, _), None) => {
+                if t.is_empty() {
+                    let expected_ret = Some(ret.clone());
+
+                    for line in body {
+                        self.return_check(line, &expected_ret)?;
+                    }
+                }
+
+                Ok(())
+            }
+
+            (NessaExpr::CompiledPrefixOperationDefinition(_, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledPostfixOperationDefinition(_, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledBinaryOperationDefinition(_, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledNaryOperationDefinition(_, _, _, ret, body, _), None) => {
+                let expected_ret = Some(ret.clone());
+
+                for line in body {
+                    self.return_check(line, &expected_ret)?;
+                }
+
+                Ok(())
+            }
+
+            (NessaExpr::While(cond, body), ret) |
+            (NessaExpr::CompiledFor(_, _, _, cond, body), ret) => {
+                self.return_check(cond, ret)?;
+
+                for line in body {
+                    self.return_check(line, ret)?;
+                }
+
+                Ok(())
+            },
+
+            (NessaExpr::If(ih, ib, ei, eb), ret) => {
+                self.return_check(ih, ret)?;
+
+                for line in ib {
+                    self.return_check(line, ret)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.return_check(ei_h, ret)?;
+
+                    for line in ei_b {
+                        self.return_check(line, ret)?;
+                    }
+                }
+
+                if let Some(eb_inner) = eb {
+                    for line in eb_inner {
+                        self.return_check(line, ret)?;
+                    }
+                }
+
+                Ok(())
+            },
+
+            _ => unimplemented!("{:?}", expr)
+        }
+    }
+
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
@@ -636,11 +733,16 @@ impl NessaContext {
         };
     }
 
-    pub fn static_check(&self, expr: &NessaExpr) -> Result<(), String> {
+    pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), String> {
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
+        self.return_check(expr, expected)?;
 
         return Ok(());
+    }
+
+    pub fn static_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        return self.static_check_expected(expr, &None);
     }
 }
 
@@ -827,6 +929,32 @@ mod tests {
             }
 
             \"Test\"[true];
+        ".to_string();
+
+        assert!(ctx.parse_and_compile(&code_str).is_err());
+    }
+
+    #[test]
+    fn return_type_check() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn test(a: String) -> &&String {
+                return a;
+            }
+
+            test(\"Test\");
+        ".to_string();
+
+        ctx.parse_and_compile(&code_str).unwrap();
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn test(a: String) -> Number {
+                return a;
+            }
+
+            test(\"Test\");
         ".to_string();
 
         assert!(ctx.parse_and_compile(&code_str).is_err());

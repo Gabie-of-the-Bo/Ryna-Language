@@ -221,6 +221,8 @@ impl NessaContext {
                 }
 
                 for (ei_h, ei_b) in ei {
+                    self.type_check(ei_h)?;
+
                     let elif_header_type = self.infer_type(ei_h);
 
                     if let Some(t) = elif_header_type {

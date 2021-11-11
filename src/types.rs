@@ -18,9 +18,10 @@ pub struct TypeTemplate {
     pub attributes: Vec<(String, Type)>
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct TypeInstance {
     pub id: usize,
+    pub params: Vec<Type>,
     pub attributes: Vec<Object>
 }
 

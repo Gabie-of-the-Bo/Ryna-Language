@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::cell::*;
 
 use crate::number::Number;
-use crate::types::Type;
+use crate::types::*;
 
 /*
                                                   ╒══════════════════╕
@@ -357,6 +357,40 @@ impl NessaObject for (Type, Reference, usize) {
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
         let ta = self.as_any().downcast_ref::<(Type, Reference, usize)>();
         let tb = b.as_any().downcast_ref::<(Type, Reference, usize)>();
+
+        return ta == tb;
+    }
+}
+
+impl NessaObject for TypeInstance {
+    fn get_type_id(&self) -> usize {
+        return self.id;
+    }
+
+    fn get_type(&self) -> Type {
+        if self.params.is_empty() {
+            return Type::Basic(self.id);
+
+        } else {
+            return Type::Template(self.id, self.params.clone());
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn to_string(&self) -> String {
+        return format!("Class [{}]", self.attributes.iter().map(Object::to_string).collect::<Vec<_>>().join(", "));
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<TypeInstance>();
+        let tb = b.as_any().downcast_ref::<TypeInstance>();
 
         return ta == tb;
     }

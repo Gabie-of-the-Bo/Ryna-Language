@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::context::NessaContext;
+use crate::object::Object;
 
 /*
                                                   ╒══════════════════╕
@@ -13,7 +14,14 @@ use crate::context::NessaContext;
 pub struct TypeTemplate {
     pub id: usize,
     pub name: String,
-    pub params: Vec<String>
+    pub params: Vec<String>,
+    pub attributes: Vec<(String, Type)>
+}
+
+#[derive(Clone)]
+pub struct TypeInstance {
+    pub id: usize,
+    pub attributes: Vec<Object>
 }
 
 #[derive(Clone, Hash, Debug)]
@@ -208,25 +216,29 @@ mod tests {
         let number_t = TypeTemplate {
             id: 0,
             name: "Number".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let string_t = TypeTemplate {
             id: 1,
             name: "String".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let bool_t = TypeTemplate {
             id: 2,
             name: "Bool".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let vector_t = TypeTemplate {
             id: 3,
             name: "Vector".into(),
-            params: vec!("T".into())
+            params: vec!("T".into()),
+            attributes: vec!()
         };
 
         let number = Type::Basic(number_t.id);
@@ -306,31 +318,36 @@ mod tests {
         let number_t = TypeTemplate {
             id: 0,
             name: "Number".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let string_t = TypeTemplate {
             id: 1,
             name: "String".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let bool_t = TypeTemplate {
             id: 2,
             name: "Bool".into(),
-            params: vec!()
+            params: vec!(),
+            attributes: vec!()
         };
 
         let vector_t = TypeTemplate {
             id: 3,
             name: "Vector".into(),
-            params: vec!("T".into())
+            params: vec!("T".into()),
+            attributes: vec!()
         };
 
         let map_t = TypeTemplate {
             id: 3,
             name: "Map".into(),
-            params: vec!("T".into(), "G".into())
+            params: vec!("T".into(), "G".into()),
+            attributes: vec!()
         };
 
         let number = Type::Basic(number_t.id);
@@ -423,10 +440,10 @@ mod tests {
 */
 
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Number".into(), vec!()).unwrap();
-    ctx.define_type("String".into(), vec!()).unwrap();
-    ctx.define_type("Bool".into(), vec!()).unwrap();
-    ctx.define_type("Array".into(), vec!("Inner".into())).unwrap();
-    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into())).unwrap();
-    ctx.define_type("ArrayIterator".into(), vec!("Inner".into())).unwrap();
+    ctx.define_type("Number".into(), vec!(), vec!()).unwrap();
+    ctx.define_type("String".into(), vec!(), vec!()).unwrap();
+    ctx.define_type("Bool".into(), vec!(), vec!()).unwrap();
+    ctx.define_type("Array".into(), vec!("Inner".into()), vec!()).unwrap();
+    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!()).unwrap();
+    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!()).unwrap();
 } 

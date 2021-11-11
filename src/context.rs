@@ -31,7 +31,7 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
-    pub fn define_type(&mut self, representation: String, params: Vec<String>) -> Result<(), String> {
+    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
                 return Err(format!("Type \"{}\" is already defined", representation))
@@ -41,7 +41,8 @@ impl NessaContext {
         self.type_templates.push(TypeTemplate {
             id: self.type_templates.len(),
             name: representation,
-            params: params
+            params: params,
+            attributes: attributes
         });
 
         return Ok(());
@@ -418,8 +419,8 @@ mod tests {
     fn type_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_type("Matrix".into(), vec!());
-        let def_2 = ctx.define_type("Number".into(), vec!());
+        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!());
+        let def_2 = ctx.define_type("Number".into(), vec!(), vec!());
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

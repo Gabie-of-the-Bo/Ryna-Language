@@ -10,6 +10,49 @@ use crate::types::Type;
 */
 
 impl NessaContext {
+    pub fn ensured_return_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        return match expr {
+            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, body, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, body, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, body, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, body, _) |
+            NessaExpr::CompiledFunctionDefinition(_, _, _, _, body, _) => self.ensured_return_check_body(body),
+
+            _ => Ok(())
+        };
+    }
+
+    fn ensured_return_check_body(&self, lines: &Vec<NessaExpr>) -> Result<(), String> {
+        for line in lines {
+            match line {
+                NessaExpr::Return(_) => return Ok(()),
+
+                NessaExpr::If(_, ib, ei, eb) => {
+                    if let Some(eb_inner) = eb {
+                        let mut returns = self.ensured_return_check_body(ib).is_ok() && self.ensured_return_check_body(eb_inner).is_ok();
+
+                        if returns { // Check every branch
+                            for (_, ei_b) in ei {
+                                if self.ensured_return_check_body(ei_b).is_err() {
+                                    returns = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if returns {
+                            return Ok(());
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        return Err("Function may not always return a value".into());
+    }
+
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), String> {
         return match (expr, ret_type) {
             (NessaExpr::Literal(_), _) |
@@ -737,6 +780,7 @@ impl NessaContext {
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
+        self.ensured_return_check(expr)?;
 
         return Ok(());
     }
@@ -955,6 +999,53 @@ mod tests {
             }
 
             test(\"Test\");
+        ".to_string();
+
+        assert!(ctx.parse_and_compile(&code_str).is_err());
+    }
+
+    #[test]
+    fn ensured_return_check() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn test(a: String) -> &&String {
+                return a;
+            }
+            
+            fn test(a: Number) -> Number {
+                if true {
+                    return 0;
+                    
+                } else {
+                    return 1;
+                }
+            }
+            
+            fn test(a: Bool) -> Number {
+                if true {
+                    let a = 0;
+                    
+                } else {
+                    return 1;
+                }
+
+                return 0;
+            }
+        ".to_string();
+
+        ctx.parse_and_compile(&code_str).unwrap();
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            fn test(a: Bool) -> Number {
+                if true {
+                    let a = 0;
+                    
+                } else {
+                    return 1;
+                }
+            }
         ".to_string();
 
         assert!(ctx.parse_and_compile(&code_str).is_err());

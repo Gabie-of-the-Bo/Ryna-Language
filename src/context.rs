@@ -303,7 +303,7 @@ impl NessaContext {
         return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
     }
 
-    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, Vec<Object>) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>) -> Result<Object, String>) -> Result<(), String> {
         return self.define_function_overload(id, templates, args, ret, Some(f));
     }
 
@@ -379,9 +379,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_function_overload(0, 0, &[Type::Basic(1)], Type::Basic(0), |_, a| { Ok(a[0].clone()) });
-        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Basic(0), |_, a| { Ok(a[0].clone()) });
-        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], Type::Basic(0), |_, a| { Ok(a[0].clone()) });
+        let def_1 = ctx.define_native_function_overload(0, 0, &[Type::Basic(1)], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
+        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
+        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

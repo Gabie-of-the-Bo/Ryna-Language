@@ -92,14 +92,14 @@ impl NessaContext {
                 }, 
 
                 NativeFunctionCall(func_id, ov_id, type_args) => {
-                    if let (_, Type::And(v), _, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {
                             args.push(stack.pop().unwrap());
                         }
 
-                        stack.push(f(type_args, args)?);
+                        stack.push(f(type_args, r, args)?);
 
                         ip += 1;
                     
@@ -567,5 +567,34 @@ mod tests {
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
+    }
+
+    #[test]
+    fn class_definitions() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        class Range {
+            start: Number;
+            current: Number;
+            end: Number;
+        }
+
+        let r: Range = Range(0, 0, 10);
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        let id = ctx.type_templates.iter().filter(|i| i.name == "Range").next().unwrap().id;
+
+        assert_eq!(ctx.variables[0], Some(Object::new(TypeInstance {
+            id: id,
+            params: vec!(),
+            attributes: vec!(
+                Object::new(Number::from(0)),
+                Object::new(Number::from(0)),
+                Object::new(Number::from(10))
+            )
+        })));
     }
 }

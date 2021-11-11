@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
-use crate::types::Type;
+use crate::types::*;
 use crate::object::Object;
 use crate::functions::*;
 use crate::operations::*;
@@ -1084,6 +1084,46 @@ impl NessaContext{
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, max_register)).flat_map(|i| i.unwrap()).collect());
     }
 
+    pub fn define_module_classes(&mut self, code: &String) -> Result<(), String> {
+        let ops = self.nessa_class_parser(code).unwrap().1;
+
+        for i in ops {
+            match i {
+                NessaExpr::ClassDefinition(n, t, a) => {
+                    let n_templates = t.len();
+                    let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
+
+                    self.define_type(n.clone(), t, a)?;
+                    self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
+
+                    let func_id = self.functions.iter().filter(|i| i.name == n).next().unwrap().id;
+                    let class_id = self.type_templates.last().unwrap().id;
+
+                    // Define constructor instance
+                    if n_templates == 0 {
+                        self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Basic(class_id), |_, r, a| {
+                            if let Type::Basic(id) = r {
+                                return Ok(Object::new(TypeInstance {
+                                    id: *id,
+                                    params: vec!(),
+                                    attributes: a
+                                }))
+                            }
+
+                            unreachable!();
+                        })?;
+
+                    } else {
+                        unimplemented!();
+                    }
+                },
+
+                _ => unreachable!()
+            }
+        }
+
+        return Ok(());
+    }
     
     pub fn define_module_operators(&mut self, code: &String) -> Result<(), String> {
         let ops = self.nessa_operators_parser(code).unwrap().1;
@@ -1150,6 +1190,7 @@ impl NessaContext{
     }
 
     pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, String> {
+        self.define_module_classes(code)?;
         self.define_module_operators(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;

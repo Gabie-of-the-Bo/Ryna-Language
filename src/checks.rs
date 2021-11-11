@@ -64,7 +64,8 @@ impl NessaContext {
             (NessaExpr::PrefixOperatorDefinition(..), _) |
             (NessaExpr::PostfixOperatorDefinition(..), _) |
             (NessaExpr::BinaryOperatorDefinition(..), _) |
-            (NessaExpr::NaryOperatorDefinition(..), _) => Ok(()),
+            (NessaExpr::NaryOperatorDefinition(..), _) |
+            (NessaExpr::ClassDefinition(..), _) => Ok(()),
 
             (NessaExpr::CompiledVariableDefinition(_, _, _, e), ret) |
             (NessaExpr::CompiledVariableAssignment(_, _, _, e), ret) => self.return_check(e, ret),
@@ -157,7 +158,8 @@ impl NessaContext {
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
+            NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::ClassDefinition(..) => Ok(()),
 
             NessaExpr::CompiledVariableDefinition(_, n, t, e) |
             NessaExpr::CompiledVariableAssignment(_, n, t, e) => {
@@ -487,7 +489,8 @@ impl NessaContext {
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
+            NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::ClassDefinition(..) => Ok(()),
 
             NessaExpr::CompiledVariableDefinition(_, n, t, e) |
             NessaExpr::CompiledVariableAssignment(_, n, t, e) => {

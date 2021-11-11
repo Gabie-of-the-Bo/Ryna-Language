@@ -1437,6 +1437,25 @@ impl NessaContext {
         return Ok(("", ops));
     }
 
+    pub fn nessa_class_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.class_definition_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else {
+                let mut chars = input.chars();
+                chars.next();
+
+                input = chars.as_str();
+            }
+        }
+
+        return Ok(("", ops));
+    }
+
     pub fn nessa_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
         return delimited(
             multispace0,

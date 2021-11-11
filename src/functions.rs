@@ -9,7 +9,8 @@ use crate::context::NessaContext;
                                                   ╘══════════════════╛
 */
 
-pub type FunctionOverload = Option<fn(&Vec<Type>, Vec<Object>) -> Result<Object, String>>;
+// Takes type parameters, return type and arguments
+pub type FunctionOverload = Option<fn(&Vec<Type>, &Type, Vec<Object>) -> Result<Object, String>>;
 
 pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
@@ -33,7 +34,7 @@ pub const IS_CONSUMED_FUNC_ID: usize = 7;
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Empty, |_, v| { 
+    ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Empty, |_, _, v| { 
         *v[0].get::<Reference>().get_mut::<Number>() += Number::from(1);
 
         return Ok(Object::empty());
@@ -41,7 +42,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_function("print".into()).unwrap();
 
-    ctx.define_native_function_overload(1, 0, &[Type::Wildcard], Type::Empty, |_, v| { 
+    ctx.define_native_function_overload(1, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
         println!("{}", v[0].to_string());
 
         return Ok(Object::empty());
@@ -49,7 +50,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(2, 1, &[Type::MutRef(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, v| {
+    ctx.define_native_function_overload(2, 1, &[Type::MutRef(Box::new(Type::TemplateParam(0)))], Type::TemplateParam(0), |_, _, v| {
         return Ok(v[0].deref_obj());
     }).unwrap();
 
@@ -60,7 +61,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[], 
         Type::Template(3, vec!(Type::TemplateParam(0))), 
-        |t, _| Ok(Object::new((t[0].clone(), vec!())))
+        |t, _, _| Ok(Object::new((t[0].clone(), vec!())))
     ).unwrap();
 
     ctx.define_function("push".into()).unwrap();
@@ -70,7 +71,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))), Type::TemplateParam(0)], 
         Type::Empty, 
-        |_, v| {
+        |_, _, v| {
             let array = v[0].get::<Reference>();
 
             array.get_mut::<(Type, Vec<Object>)>().1.push(v[1].clone());
@@ -86,7 +87,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
         Type::Template(5, vec!(Type::MutRef(Box::new(Type::TemplateParam(0))))), 
-        |t, v| {
+        |t, _, v| {
             return Ok(Object::new((Type::MutRef(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0)));
         }
     ).unwrap();
@@ -96,7 +97,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0)))))], 
         Type::Template(5, vec!(Type::Ref(Box::new(Type::TemplateParam(0))))), 
-        |t, v| {
+        |t, _, v| {
             return Ok(Object::new((Type::Ref(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0)));
         }
     ).unwrap();
@@ -106,7 +107,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::Template(3, vec!(Type::TemplateParam(0)))], 
         Type::Template(5, vec!(Type::TemplateParam(0))), 
-        |t, v| {
+        |t, _, v| {
             return Ok(Object::new((t[0].clone(), v[0].get::<Reference>().clone(), 0)));
         }
     ).unwrap();
@@ -118,7 +119,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::TemplateParam(0)))))], 
         Type::TemplateParam(0), 
-        |t, v| {
+        |t, _, v| {
             let reference = v[0].get::<Reference>();
             let mut iterator = reference.get_mut::<(Type, Reference, usize)>();
 
@@ -147,7 +148,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::Wildcard))))], 
         Type::Basic(2), 
-        |_, v| {
+        |_, _, v| {
             let reference = v[0].get::<Reference>();
             let iterator = reference.get::<(Type, Reference, usize)>();
 
@@ -162,7 +163,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[Type::Basic(1)], 
         Type::Empty, 
-        |_, v| {
+        |_, _, v| {
             return Err(v[0].get::<String>().clone());
         }
     ).unwrap();
@@ -174,7 +175,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::Wildcard))))], 
         Type::Basic(0), 
-        |_, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+        |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
 }

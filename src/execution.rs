@@ -580,7 +580,11 @@ mod tests {
             end: Number;
         }
 
-        let r: Range = Range(0, 0, 10);
+        let r: Range = Range(0, 2, 10);
+
+        let a = r.start();
+        let b = r.current();
+        let c = r.end();
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -592,9 +596,13 @@ mod tests {
             params: vec!(),
             attributes: vec!(
                 Object::new(Number::from(0)),
-                Object::new(Number::from(0)),
+                Object::new(Number::from(2)),
                 Object::new(Number::from(10))
             )
         })));
+
+        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(0)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(2)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(10)).get_ref_mut_obj()));
     }
 }

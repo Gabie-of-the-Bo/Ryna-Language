@@ -177,5 +177,4 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Type::Basic(0), 
         |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
-
 }

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use seq_macro::seq;
+
 use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
@@ -1093,15 +1095,15 @@ impl NessaContext{
                     let n_templates = t.len();
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                    self.define_type(n.clone(), t, a)?;
+                    self.define_type(n.clone(), t, a.clone())?;
                     self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
 
                     let func_id = self.functions.iter().filter(|i| i.name == n).next().unwrap().id;
                     let class_id = self.type_templates.last().unwrap().id;
 
-                    // Define constructor instance
                     if n_templates == 0 {
-                        self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Basic(class_id), |_, r, a| {
+                        // Define constructor instance
+                        self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
                             if let Type::Basic(id) = r {
                                 return Ok(Object::new(TypeInstance {
                                     id: *id,
@@ -1112,6 +1114,45 @@ impl NessaContext{
 
                             unreachable!();
                         })?;
+                        
+                        // Define constructor meber access
+                        for (i, (att_name, att_type)) in a.into_iter().enumerate() {
+                            self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
+                            let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+
+                            let ref_type = match &att_type {
+                                Type::MutRef(t) => Type::Ref(t.clone()),
+                                Type::Ref(t) => Type::Ref(t.clone()),
+                                t => Type::Ref(Box::new(t.clone()))
+                            };
+
+                            let mut_type = match &att_type {
+                                Type::MutRef(t) => Type::MutRef(t.clone()),
+                                Type::Ref(t) => Type::Ref(t.clone()),
+                                t => Type::MutRef(Box::new(t.clone()))
+                            };
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
+                                    #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
+                                    #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
+                                    #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+                        }
 
                     } else {
                         unimplemented!();

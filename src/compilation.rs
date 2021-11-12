@@ -76,7 +76,13 @@ impl NessaContext {
                 self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
 
                 for i in b {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;
+                }
+            }
+
+            NessaExpr::FunctionCall(_, _, a) => {
+                for i in a {
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
                 }
             }
 
@@ -176,8 +182,8 @@ impl NessaContext {
             },
 
             // Compile variable definitions
-            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, _, e) => {
+            NessaExpr::VariableDefinition(_, _, e) |
+            NessaExpr::VariableAssignment(_, e) => {
                 self.compile_expr_function_names(e);
             },
 
@@ -211,7 +217,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) |
+            NessaExpr::For(_, c, b) |
             NessaExpr::While(c, b) => {
                 self.compile_expr_function_names(c);
                 b.iter_mut().for_each(|i| self.compile_expr_function_names(i));
@@ -228,8 +234,8 @@ impl NessaContext {
     fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
             // Compile variable definitions
-            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, _, e) => {
+            NessaExpr::VariableDefinition(_, _, e) |
+            NessaExpr::VariableAssignment(_, e) => {
                 self.compile_expr_function_calls(e)?;
             },
 
@@ -284,7 +290,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) |
+            NessaExpr::For(_, c, b) |
             NessaExpr::While(c, b) => {
                 self.compile_expr_function_calls(c)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?
@@ -356,8 +362,8 @@ impl NessaContext {
     */
 
     pub fn compile(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
-        let max_register = self.compile_variables(body, args)?;
         self.compile_functions(body)?;
+        let max_register = self.compile_variables(body, args)?;
 
         return Ok(max_register);
     }

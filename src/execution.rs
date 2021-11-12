@@ -567,6 +567,41 @@ mod tests {
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
+
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        class Range {
+            start: Number;
+            current: Number;
+            end: Number;
+        }
+
+        fn iterator(it: Range) -> Range {
+            return it.deref<Range>();
+        }
+
+        fn next(it: &&Range) -> Number {
+            let curr: &&Number = it.current();
+            curr.inc();
+
+            return curr.deref<Number>();
+        }
+
+        fn is_consumed(it: &&Range) -> Bool {
+            return it.current() >= it.end();
+        }
+
+        let sum: Number = 0;
+
+        for i in Range(0, 0, 10) {
+            sum = sum + i;
+        }
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
     }
 
     #[test]

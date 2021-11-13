@@ -639,5 +639,35 @@ mod tests {
         assert_eq!(ctx.variables[1], Some(Object::new(Number::from(0)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[2], Some(Object::new(Number::from(2)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[3], Some(Object::new(Number::from(10)).get_ref_mut_obj()));
+
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        class Option<T> {
+            present: Bool;
+            obj: 'T;
+        }
+
+        let a: Option<Number> = Option<Number>(true, 5);
+
+        let b = a.present<Number>();
+        let c = a.obj<Number>();
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        let id = ctx.type_templates.iter().filter(|i| i.name == "Option").next().unwrap().id;
+
+        assert_eq!(ctx.variables[0], Some(Object::new(TypeInstance {
+            id: id,
+            params: vec!(Type::Basic(0)),
+            attributes: vec!(
+                Object::new(true),
+                Object::new(Number::from(5))
+            )
+        })));
+
+        assert_eq!(ctx.variables[1], Some(Object::new(true).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(5)).get_ref_mut_obj()));
     }
 }

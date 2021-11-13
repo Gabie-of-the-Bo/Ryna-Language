@@ -125,13 +125,13 @@ impl NessaContext {
         unreachable!();
     }
 
-    pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>) -> Option<(usize, Type, bool, Vec<Type>)> {
+    pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         let t = Type::And(arg_type);
 
         for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
             if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
                 let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
-                return Some((i, r.sub_templates(&subs), f.is_some(), t_args));
+                return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
             }
         }
 
@@ -155,7 +155,7 @@ impl NessaContext {
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {
-        if let Some((_, it_type, _, _)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone())) {
+        if let Some((_, it_type, _, _)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone()), true) {
             return Ok(it_type.clone());
         }
 
@@ -165,7 +165,7 @@ impl NessaContext {
     pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<Type, String> {
         let it_mut = Type::MutRef(Box::new(iterator_type.clone()));
 
-        if let Some((_, r, _, _)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone())) {
+        if let Some((_, r, _, _)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
             return Ok(r);
         }
 
@@ -211,7 +211,7 @@ impl NessaContext {
             NessaExpr::FunctionCall(id, t, args) => {
                 let arg_types = args.iter().map(|i| self.infer_type(i).unwrap()).collect::<Vec<_>>();
 
-                let (_, r, _, _) = self.get_first_function_overload(*id, arg_types).unwrap();
+                let (_, r, _, _) = self.get_first_function_overload(*id, arg_types, false).unwrap();
 
                 return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },

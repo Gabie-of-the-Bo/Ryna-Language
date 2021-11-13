@@ -973,11 +973,11 @@ impl NessaContext{
                     let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
 
                     // Get "iterator", "next" and "is_consumed" function overloads and check them
-                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone())) {
+                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone()), true) {
                         let it_mut = Type::MutRef(Box::new(it_type.clone()));
 
-                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone())) {
-                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone())) {
+                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
+                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
                                 if let Type::Basic(2) = consumed_res {
                                     let for_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
 
@@ -1065,7 +1065,7 @@ impl NessaContext{
                 }
                 
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
-                let (ov_id, _, native, _) = self.get_first_function_overload(*id, args_types).unwrap();
+                let (ov_id, _, native, _) = self.get_first_function_overload(*id, args_types, false).unwrap();
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
@@ -1161,7 +1161,58 @@ impl NessaContext{
                         }
 
                     } else {
-                        unimplemented!();
+                        let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
+
+                        // Define constructor instance
+                        self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
+                            if let Type::Template(id, _) = r {
+                                return Ok(Object::new(TypeInstance {
+                                    id: *id,
+                                    params: t.clone(),
+                                    attributes: a
+                                }))
+                            }
+
+                            unreachable!();
+                        })?;
+
+                        for (i, (att_name, att_type)) in a.into_iter().enumerate() {
+                            self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
+                            let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+
+                            let ref_type = match &att_type {
+                                Type::MutRef(t) => Type::Ref(t.clone()),
+                                Type::Ref(t) => Type::Ref(t.clone()),
+                                t => Type::Ref(Box::new(t.clone()))
+                            };
+
+                            let mut_type = match &att_type {
+                                Type::MutRef(t) => Type::MutRef(t.clone()),
+                                Type::Ref(t) => Type::Ref(t.clone()),
+                                t => Type::MutRef(Box::new(t.clone()))
+                            };
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
+                                    #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
+                                    #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+
+                            seq!(N in 0..100 {
+                                self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
+                                    #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                    _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                                })?;
+                            });
+                        }
                     }
                 },
 

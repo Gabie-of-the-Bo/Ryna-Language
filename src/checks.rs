@@ -530,7 +530,7 @@ impl NessaContext {
                     }
                 }
 
-                if self.get_first_function_overload(*id, arg_types.clone()).is_none() {
+                if self.get_first_function_overload(*id, arg_types.clone(), false).is_none() {
                     Err(format!(
                         "Unable to get function overload for {}({})",
                         self.functions[*id].name,

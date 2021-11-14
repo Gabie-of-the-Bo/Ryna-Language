@@ -1,0 +1,33 @@
+class DoubleIterator<T> {
+    iter: ArrayIterator<'T>;
+}
+
+fn iterator<T>(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
+    return it.deref<DoubleIterator<'T>>();
+}
+
+fn next<T>(it: &&DoubleIterator<'T>) -> Number {
+    return iter<'T>(it).next<'T>() * 2;
+}
+
+fn is_consumed<T>(it: &&DoubleIterator<'T>) -> Bool {
+    return iter<'T>(it).is_consumed<'T>();
+}
+
+let a: Array<Number> = arr<Number>();
+a.push<Number>(0);
+a.push<Number>(1);
+a.push<Number>(2);
+a.push<Number>(3);
+a.push<Number>(4);
+a.push<Number>(5);
+
+let sum: Number = 0;
+
+for i in DoubleIterator<Number>(iterator<Number>(a)) {
+    sum = sum + i;
+}
+
+if sum != 30 {
+    panic("Invalid result");
+}

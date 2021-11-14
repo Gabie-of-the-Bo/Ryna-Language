@@ -497,7 +497,30 @@ impl NessaContext{
                 res
             }
 
-            NessaExpr::CompiledFor(_, _, _, c, b) | 
+            NessaExpr::CompiledFor(_, _, _, c, b) => {
+                let mut res = self.get_templated_function_instances(c);
+
+                if let Some(ct) = self.infer_type(c) {
+                    if let Some((_, it_type, _, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(ct.clone()), true) {
+                        let it_mut = Type::MutRef(Box::new(it_type.clone()));
+
+                        if let Some((_, _, _, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
+                            if let Some((_, _, _, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
+                                NessaContext::add_function_instance(&mut res, ITERATOR_FUNC_ID, &it_args);
+                                NessaContext::add_function_instance(&mut res, NEXT_FUNC_ID, &next_args);
+                                NessaContext::add_function_instance(&mut res, IS_CONSUMED_FUNC_ID, &consumed_args);
+                            }
+                        }
+                    }
+                }
+
+                for line in b {
+                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                }
+
+                res
+            }
+
             NessaExpr::While(c, b) => {
                 let mut res = self.get_templated_function_instances(c);
 
@@ -546,6 +569,8 @@ impl NessaContext{
 
     pub fn subtitute_type_params_expr(&self, expr: &mut NessaExpr, templates: &HashMap<usize, Type>) {
         match expr {
+            NessaExpr::Literal(_) => {},
+
             NessaExpr::Variable(_, _, t) => *t = t.sub_templates(templates),
 
             NessaExpr::CompiledVariableAssignment(_, _, _, e) |
@@ -588,7 +613,7 @@ impl NessaContext{
                 }
             }
             
-            _ => unimplemented!()
+            _ => unimplemented!("{:?}", expr)
         };
     }
 

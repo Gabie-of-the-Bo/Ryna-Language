@@ -29,11 +29,16 @@ mod integration {
 
         let result = ctx.parse_and_execute_nessa_module(&file);
 
-        assert!(result.is_ok());
+        result.unwrap();
     }
 
     #[test]
     fn naive_primality() {
         integration_text("test/primality.nessa");
+    }
+
+    #[test]
+    fn mapped_iterator() {
+        integration_text("test/mapped_iterator.nessa");
     }
 }

@@ -516,7 +516,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::FunctionCall(id, _ , args) => {
+            NessaExpr::FunctionCall(id, templates, args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
                 for (i, arg) in args.iter().enumerate() {
@@ -532,8 +532,9 @@ impl NessaContext {
 
                 if self.get_first_function_overload(*id, arg_types.clone(), false).is_none() {
                     Err(format!(
-                        "Unable to get function overload for {}({})",
+                        "Unable to get function overload for {}{}({})",
                         self.functions[*id].name,
+                        if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
                     ))
 

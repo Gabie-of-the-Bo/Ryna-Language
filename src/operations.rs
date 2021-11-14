@@ -218,7 +218,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         ╘══════════════════════╛
     */
 
-    ctx.define_binary_operator(".".into(), 1000).unwrap();
+    ctx.define_binary_operator(".".into(), 100).unwrap();
 
     /*
         ╒═══════════════════════╕

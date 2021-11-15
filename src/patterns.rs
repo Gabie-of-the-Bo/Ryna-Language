@@ -1,5 +1,12 @@
 use std::collections::HashMap;
 
+use nom::{
+    IResult,
+    combinator::{map, opt, value},
+    bytes::complete::tag,
+    character::complete::satisfy,
+};
+
 /*
                                                   ╒══════════════════╕
     ============================================= │  IMPLEMENTATION  │ =============================================
@@ -27,412 +34,193 @@ pub enum Pattern{
     Repeat(Box<Pattern>, Option<usize>, Option<usize>)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PatternNFANodeType<'a>{
-    // Markers
-    Start,
-    End,
-    ArgStart(String),
-    ArgEnd,
-    
-    // Tail nodes
-    Str(String),
-    Range(char, char),
-    Symbol(char),
-    
-    // Uncompiled nodes
-    Uncompiled(&'a Pattern)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PatternNFANode<'a>{
-    pattern_type: PatternNFANodeType<'a>,
-    outputs: Vec<usize>
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PatternNFAState{
-    node: usize,
-    pos: usize,
-    args: Vec<(String, usize, usize)>, // (Identifier, from, to)
-    curr_arg: Option<(String, usize)> // (Identifier, from)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PatternNFA<'a>{
-    nodes: Vec<PatternNFANode<'a>>
-}
-
-impl<'a> PatternNFANode<'a>{
-    fn start_node() -> PatternNFANode<'a>{
-        return PatternNFANode{
-            pattern_type: PatternNFANodeType::Start,
-            outputs: vec!(1) // Starts connected to the second node
-        };
-    }
-
-    fn end_node() -> PatternNFANode<'a>{
-        return PatternNFANode{
-            pattern_type: PatternNFANodeType::End,
-            outputs: vec!()
-        };
-    }
-
-    fn arg_end_node() -> PatternNFANode<'a>{
-        return PatternNFANode{
-            pattern_type: PatternNFANodeType::ArgEnd,
-            outputs: vec!()
-        };
-    }
-
-    fn uncompiled_node(p: &Pattern) -> PatternNFANode{
-        return PatternNFANode{
-            pattern_type: PatternNFANodeType::Uncompiled(p),
-            outputs: vec!()
-        };
-    }
-
-    fn matches(&self, text: &[char]) -> Option<usize>{
-        return match &self.pattern_type {
-            PatternNFANodeType::Str(s) => {
-                let chars = &s.as_str().chars().collect::<Vec<_>>()[..];
-
-                if text.starts_with(chars) { 
-                    Some(s.len()) 
-                
-                } else {
-                    None 
-                }
-            }
-            
-            PatternNFANodeType::Range(start, end) => {
-                if text.len() > 0 && text[0] as u32 >= *start as u32 && text[0] as u32 <= *end as u32 { 
-                    Some(1) 
-                
-                } else {
-                    None 
-                }
-            }
-            
-            PatternNFANodeType::Symbol(s) => {
-                let matches = text.len() > 0 && match s {
-                    'd' => text[0].is_digit(10),
-                    'l' => text[0].is_lowercase(),
-                    'L' => text[0].is_uppercase(),
-                    'a' => text[0].is_alphabetic(),
-                    'A' => text[0].is_alphanumeric(),
-                    's' => text[0].is_whitespace(),
-                    'q' => text[0] == '\'',
-                    
-                    _ => unreachable!()
-                };
-
-                if matches { Some(1) } else { None }
-            }
-
-            _ => Some(0)
-        }
-    }
-}
-
 impl Pattern{
-    pub fn compile(&self) -> PatternNFA{
-        let mut res = PatternNFA{
-            nodes: vec!(PatternNFANode::start_node(), PatternNFANode::uncompiled_node(self), PatternNFANode::end_node())
+    pub fn matches<'a>(&self, text: &'a str) -> IResult<&'a str, ()> {
+        return match self {
+            Pattern::Symbol('d') => value((), satisfy(|c| c.is_digit(10)))(text),
+            Pattern::Symbol('l') => value((), satisfy(|c| c.is_lowercase()))(text),
+            Pattern::Symbol('L') => value((), satisfy(|c| c.is_uppercase()))(text),
+            Pattern::Symbol('a') => value((), satisfy(|c| c.is_alphabetic()))(text),
+            Pattern::Symbol('A') => value((), satisfy(|c| c.is_alphanumeric()))(text),
+            Pattern::Symbol('s') => value((), satisfy(|c| c.is_whitespace()))(text),
+            Pattern::Symbol('q') => value((), satisfy(|c| c == '\''))(text),
+            Pattern::Symbol(_) => unreachable!(),
+
+            Pattern::Range(a, b) => value((), satisfy(|c| c >= *a && c <= *b))(text),
+
+            Pattern::Str(s) => value((), tag(s.as_str()))(text),
+
+            Pattern::And(patterns) => {
+                let mut input = text;
+
+                for p in patterns {
+                    if let Ok((i, _)) = p.matches(input) {
+                        input = i;
+
+                    } else {
+                        return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                    }
+                }
+                
+                Ok((input, ()))
+            },
+
+            Pattern::Or(patterns) => {
+                for p in patterns {
+                    if let Ok((i, o)) = p.matches(text) {
+                        return Ok((i, o));
+                    }
+                }
+                
+                Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+            },
+            
+            Pattern::Repeat(p, from, to) => {
+                let mut input = text;
+
+                // Minimum
+                if let Some(f) = from {
+                    for _ in 0..*f {
+                        if let Ok((i, _)) = p.matches(input) {
+                            input = i;
+    
+                        } else {
+                            return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                        }
+                    }
+                }
+
+                // Maximum
+                if let Some(t) = to {
+                    for _ in 0..(t - from.unwrap_or(0)) {
+                        if let Ok((i, _)) = p.matches(input) {
+                            input = i;
+    
+                        } else {
+                            break;
+                        }
+                    }
+
+                } else {
+                    loop {
+                        if let Ok((i, _)) = p.matches(input) {
+                            input = i;
+    
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                Ok((input, ()))
+            }
+
+            Pattern::Optional(p) => value((), opt(|i| p.matches(i)))(text),
+            Pattern::Arg(p, _) => p.matches(text)
         };
-
-        res.nodes[1].outputs.push(2);
-        res.compile(1);
-
-        return res;
     }
-}
 
-impl PatternNFAState{
-    fn new(node: usize, pos: usize, args: Vec<(String, usize, usize)>, curr_arg: Option<(String, usize)>) -> PatternNFAState{
-        return PatternNFAState{
-            node: node,
-            pos: pos,
-            args: args,
-            curr_arg: curr_arg
+    pub fn extract<'a>(&self, text: &'a str) -> IResult<&'a str, HashMap<String, Vec<&'a str>>> {
+        fn merge<'a>(a: &mut HashMap<String, Vec<&'a str>>, b: HashMap<String, Vec<&'a str>>) {
+            for (k, v) in b.into_iter() {
+                a.entry(k).or_default().extend(v);
+            }
         }
-    }
 
-    fn has_ended(&self, machine: &PatternNFA, text: &[char]) -> bool {
-        return machine.nodes[self.node].outputs.len() == 0 && self.pos == text.len();
-    }
+        return match self {
+            Pattern::Symbol('d') => value(HashMap::new(), satisfy(|c| c.is_digit(10)))(text),
+            Pattern::Symbol('l') => value(HashMap::new(), satisfy(|c| c.is_lowercase()))(text),
+            Pattern::Symbol('L') => value(HashMap::new(), satisfy(|c| c.is_uppercase()))(text),
+            Pattern::Symbol('a') => value(HashMap::new(), satisfy(|c| c.is_alphabetic()))(text),
+            Pattern::Symbol('A') => value(HashMap::new(), satisfy(|c| c.is_alphanumeric()))(text),
+            Pattern::Symbol('s') => value(HashMap::new(), satisfy(|c| c.is_whitespace()))(text),
+            Pattern::Symbol('q') => value(HashMap::new(), satisfy(|c| c == '\''))(text),
+            Pattern::Symbol(_) => unreachable!(),
 
-    fn update_args(&mut self, machine: &PatternNFA) {
-        match &machine.nodes[self.node].pattern_type {
-            PatternNFANodeType::ArgStart(n) => {
-                self.curr_arg = Some((n.clone(), self.pos));
+            Pattern::Range(a, b) => value(HashMap::new(), satisfy(|c| c >= *a && c <= *b))(text),
+
+            Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
+
+            Pattern::And(patterns) => {
+                let mut res = HashMap::new();
+                let mut input = text;
+
+                for p in patterns {
+                    if let Ok((i, o)) = p.extract(input) {
+                        input = i;
+                        merge(&mut res, o);
+
+                    } else {
+                        return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                    }
+                }
+                
+                Ok((input, res))
             },
 
-            PatternNFANodeType::ArgEnd => {
-                let (name, start) = self.curr_arg.as_ref().unwrap(); 
-
-                self.args.push((name.clone(), *start, self.pos));
-                self.curr_arg = None;
+            Pattern::Or(patterns) => {
+                for p in patterns {
+                    if let Ok((i, o)) = p.extract(text) {
+                        return Ok((i, o));
+                    }
+                }
+                
+                Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
             },
+            
+            Pattern::Repeat(p, from, to) => {
+                let mut res = HashMap::new();
+                let mut input = text;
 
-            _ => { }
-        }
-    }
-
-    fn args_map(&self, text: &[char]) -> HashMap<String, Vec<String>> {
-        let mut res = HashMap::new();
-
-        for (name, start, end) in &self.args {
-            res.entry(name.clone()).or_insert(vec!()).push(text[*start..*end].iter().collect::<String>());
-        }
-
-        return res;
-    }
-
-    fn advance(&self, machine: &PatternNFA, text: &[char]) -> Vec<PatternNFAState> {
-        let mut res = vec!();
-
-        for out in &machine.nodes[self.node].outputs{
-            if let Some(n) = machine.nodes[*out].matches(&text[self.pos..]) {
-                res.push(PatternNFAState::new(*out, self.pos + n, self.args.clone(), self.curr_arg.clone()));
-            }
-        }
-
-        return res;
-    }
-}
-
-impl<'a> PatternNFA<'a>{
-    pub fn matches(&self, text: &str) -> Option<usize> {
-        let characters = text.chars().collect::<Vec<_>>();
-        
-        let mut states = vec!(PatternNFAState::new(0, 0, vec!(), None));
-
-        while states.len() > 0{
-            let mut new_states = vec!();
-
-            for state in &mut states {
-                if state.has_ended(&self, &characters[..]) {
-                    return Some(state.pos);
+                // Minimum
+                if let Some(f) = from {
+                    for _ in 0..*f {
+                        if let Ok((i, o)) = p.extract(input) {
+                            input = i;
+                            merge(&mut res, o);
     
+                        } else {
+                            return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                        }
+                    }
+                }
+
+                // Maximum
+                if let Some(t) = to {
+                    for _ in 0..(t - from.unwrap_or(0)) {
+                        if let Ok((i, o)) = p.extract(input) {
+                            input = i;
+                            merge(&mut res, o);
+    
+                        } else {
+                            break;
+                        }
+                    }
+
                 } else {
-                    new_states.extend(state.advance(&self, &characters[..]));
+                    loop {
+                        if let Ok((i, o)) = p.extract(input) {
+                            input = i;
+                            merge(&mut res, o);
+    
+                        } else {
+                            break;
+                        }
+                    }
                 }
+
+                Ok((input, res))
             }
 
-            states = new_states;
-        }
+            Pattern::Optional(p) => map(opt(|i| p.extract(i)), Option::unwrap_or_default)(text),
+            Pattern::Arg(p, k) => {
+                let (i, mut o) = p.extract(text)?;
 
-        return None;
-    }
+                o.entry(k.clone()).or_default().push(&text[..(text.len() - i.len())]);
 
-    pub fn extract(&self, text: &str) -> Option<(usize, HashMap<String, Vec<String>>)> {
-        let characters = text.chars().collect::<Vec<_>>();
-        
-        let mut states = vec!(PatternNFAState::new(0, 0, vec!(), None));
-
-        while states.len() > 0{
-            let mut new_states = vec!();
-
-            for state in &mut states {
-                state.update_args(&self);
-
-                if state.has_ended(&self, &characters[..]) {
-                    return Some((state.pos, state.args_map(&characters[..])));
-    
-                } else {
-                    new_states.extend(state.advance(&self, &characters[..]));
-                }
+                Ok((i, o))
             }
-
-            states = new_states;
-        }
-
-        return None;
-    }
-
-    fn compile(&mut self, i: usize){
-        if let PatternNFANodeType::Uncompiled(p) = self.nodes[i].pattern_type {
-            match p {
-                Pattern::Str(s) => {
-                    self.nodes[i].pattern_type = PatternNFANodeType::Str(s.clone());
-                }
-
-                Pattern::Range(start, end) => {
-                    self.nodes[i].pattern_type = PatternNFANodeType::Range(*start, *end);
-                }
-
-                Pattern::Symbol(s) => {
-                    self.nodes[i].pattern_type = PatternNFANodeType::Symbol(*s);
-                }
-
-                Pattern::And(v) => {
-                    // Prepare first node
-                    let new_nodes_start = self.nodes.len();
-                    let outs = self.nodes[i].outputs.iter().copied().collect::<Vec<_>>();
-
-                    self.nodes[i].pattern_type = PatternNFANodeType::Uncompiled(&v[0]);
-                    self.nodes[i].outputs = vec!(self.nodes.len());
-
-                    self.nodes.push(PatternNFANode::uncompiled_node(&v[1]));
-
-                    let mut curr = self.nodes[i].outputs[0];
-
-                    // Create a node for each element in the pattern
-                    for j in 1..(v.len() - 1) {
-                        let new_node_idx = self.nodes.len();                 
-                        self.nodes[curr].outputs.push(new_node_idx);
-                        self.nodes.push(PatternNFANode::uncompiled_node(&v[j + 1]));
-
-                        curr = new_node_idx;
-                    }
-
-                    let new_nodes_end = self.nodes.len();
-
-                    // Set last node's outputs
-                    self.nodes[curr].outputs = outs;
-
-                    // Compile new nodes
-                    self.compile(i);
-                    
-                    for new_node in new_nodes_start..new_nodes_end{
-                        self.compile(new_node);
-                    }
-                }
-
-                Pattern::Or(v) => {
-                    // Prepare first node
-                    self.nodes[i].pattern_type = PatternNFANodeType::Uncompiled(&v[0]);
-
-                    // Create new nodes
-                    let outs = self.nodes[i].outputs.iter().copied().collect::<Vec<_>>();
-
-                    let new_nodes_start = self.nodes.len();
-                    self.nodes.extend(v[1..].iter().map(|i| PatternNFANode::uncompiled_node(i)));
-
-                    for new_node in new_nodes_start..self.nodes.len(){
-                        self.nodes[new_node].outputs.extend(outs.iter().copied());
-                    }
-
-                    // Update outputs and compile new nodes
-                    let new_nodes_end = self.nodes.len();
-
-                    for node in &mut self.nodes{
-                        if node.outputs.contains(&i) {
-                            node.outputs.extend(new_nodes_start..new_nodes_end);
-                        }
-                    }
-
-                    // Compile new nodes
-                    self.compile(i);
-
-                    for new_node in new_nodes_start..new_nodes_end{
-                        self.compile(new_node);
-                    }
-                }
-
-                Pattern::Repeat(p, min, max) => {
-                    // Prepare first node
-                    let new_nodes_start = self.nodes.len();
-                    let outs = self.nodes[i].outputs.iter().copied().collect::<Vec<_>>();
-
-                    self.nodes[i].pattern_type = PatternNFANodeType::Uncompiled(p);
-
-                    let mut curr = i;
-
-                    // Create a node for the minimum repetitions
-                    if let Some(m) = min {
-                        for _ in 1..*m {
-                            let new_node_idx = self.nodes.len();                 
-                            self.nodes[curr].outputs = vec!(new_node_idx);
-                            self.nodes.push(PatternNFANode::uncompiled_node(p));
-    
-                            curr = new_node_idx;
-                        }
-
-                    } else{
-                        for node in &mut self.nodes{
-                            if node.outputs.contains(&i) {
-                                node.outputs.extend(outs.iter().copied());
-                            }
-                        }
-                    }
-
-                    // Create a node for the maximum repetitions
-                    if let Some(m) = max {
-                        for _ in min.unwrap_or(1)..*m {
-                            let new_node_idx = self.nodes.len();                 
-                            self.nodes[curr].outputs = vec!(new_node_idx);
-                            self.nodes[curr].outputs.extend(outs.iter().copied());
-
-                            self.nodes.push(PatternNFANode::uncompiled_node(p));
-    
-                            curr = new_node_idx;
-                        }
-
-                    } else{
-                        self.nodes[curr].outputs.push(curr);
-                    }
-
-                    let new_nodes_end = self.nodes.len();
-
-                    // Set last node's outputs
-                    self.nodes[curr].outputs.extend(outs);
-
-                    // Compile new nodes
-                    self.compile(i);
-
-                    for new_node in new_nodes_start..new_nodes_end{
-                        self.compile(new_node);
-                    }
-                }
-
-                Pattern::Optional(p) => {
-                    let outs = self.nodes[i].outputs.iter().copied().collect::<Vec<_>>();
-
-                    // Update pattern reference
-                    self.nodes[i].pattern_type = PatternNFANodeType::Uncompiled(p);
-
-                    // Update references to be able to skip this node
-                    for node in &mut self.nodes{
-                        if node.outputs.contains(&i) {
-                            node.outputs.extend(outs.iter().copied());
-                        }
-                    }
-
-                    // Compile new node
-                    self.compile(i);
-                }
-
-                Pattern::Arg(p, n) => {
-                    // Set up indices
-                    let outs = self.nodes[i].outputs.iter().copied().collect::<Vec<_>>();
-
-                    let curr = self.nodes.len();
-                    let end = curr + 1;
-                    
-                    // Modify current node to be a start node
-                    self.nodes.push(self.nodes[i].clone());
-                    self.nodes[i].pattern_type = PatternNFANodeType::ArgStart(n.clone());
-
-                    // Modify the next node to point to the inner pattern
-                    self.nodes[curr].pattern_type = PatternNFANodeType::Uncompiled(p);
-                    self.nodes[i].outputs = vec!(curr);
-
-                    // Set up outputs
-                    self.nodes[curr].outputs = vec!(end);
-
-                    self.nodes.push(PatternNFANode::arg_end_node());
-                    self.nodes[end].outputs = outs;
-
-                    // Compile the new node
-                    self.compile(curr);
-                }
-            }
-
-        } else{
-            panic!("Unable to recompile pattern");
-        }
+        };
     }
 }
 
@@ -623,26 +411,29 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::FromIterator;
     
+    use nom::IResult;
+
     use crate::patterns::Pattern;
+
+    fn ok_result<'a, T>(res: IResult<&'a str, T>) -> bool {
+        return res.is_ok() && res.unwrap().0.is_empty();
+    }
 
     #[test]
     fn basic_patterns() {
         let u_pattern = Pattern::Str("test".into());
-        let pattern = u_pattern.compile();
 
-        assert_eq!(pattern.matches("utest".into()), None);
-        assert_eq!(pattern.matches("test".into()), Some(4));
+        assert!(u_pattern.matches("utest").is_err());
+        assert!(ok_result(u_pattern.matches("test")));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
             Pattern::Str("1".into())
         ));
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("utest".into()), None);
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("test1".into()), Some(5));
+        assert!(u_pattern.matches("utest").is_err());
+        assert!(u_pattern.matches("test").is_err());
+        assert!(ok_result(u_pattern.matches("test1")));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("*".into()),
@@ -650,24 +441,20 @@ mod tests {
             Pattern::Str("1".into())
         ));
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("utest".into()), None);
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("test1".into()), None);
-        assert_eq!(pattern.matches("*test1".into()), Some(6));
+        assert!(u_pattern.matches("utest").is_err());
+        assert!(u_pattern.matches("test").is_err());
+        assert!(u_pattern.matches("test1").is_err());
+        assert!(ok_result(u_pattern.matches("*test1")));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("1".into()),
             Pattern::Str("2".into())
         ));
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("*".into()), None);
-        assert_eq!(pattern.matches("1".into()), Some(1));
-        assert_eq!(pattern.matches("2".into()), Some(1));
+        assert!(u_pattern.matches("test").is_err());
+        assert!(u_pattern.matches("*").is_err());
+        assert!(ok_result(u_pattern.matches("1")));
+        assert!(ok_result(u_pattern.matches("2")));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("*".into()),
@@ -675,12 +462,10 @@ mod tests {
             Pattern::Str("2".into())
         ));
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("*".into()), Some(1));
-        assert_eq!(pattern.matches("1".into()), Some(1));
-        assert_eq!(pattern.matches("2".into()), Some(1));
+        assert!(u_pattern.matches("test").is_err());
+        assert!(ok_result(u_pattern.matches("*")));
+        assert!(ok_result(u_pattern.matches("1")));
+        assert!(ok_result(u_pattern.matches("2")));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Or(vec!(
@@ -693,81 +478,71 @@ mod tests {
                 Pattern::Str("2".into())
             ))
         ));
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches(".test".into()), None);
-        assert_eq!(pattern.matches("#test".into()), None);
-        assert_eq!(pattern.matches("test1".into()), None);
-        assert_eq!(pattern.matches("test2".into()), None);
-        assert_eq!(pattern.matches("#test1".into()), Some(6));
-        assert_eq!(pattern.matches("#test2".into()), Some(6));
-        assert_eq!(pattern.matches(".test1".into()), Some(6));
-        assert_eq!(pattern.matches(".test2".into()), Some(6));
+        
+        assert!(u_pattern.matches("test").is_err());
+        assert!(u_pattern.matches(".test").is_err());
+        assert!(u_pattern.matches("#test").is_err());
+        assert!(u_pattern.matches("test1").is_err());
+        assert!(u_pattern.matches("test2").is_err());
+        assert!(ok_result(u_pattern.matches("#test1")));
+        assert!(ok_result(u_pattern.matches("#test2")));
+        assert!(ok_result(u_pattern.matches(".test1")));
+        assert!(ok_result(u_pattern.matches(".test2")));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("test".into())),
             Some(1),
             Some(3)
         );
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("utest".into()), None);
-        assert_eq!(pattern.matches("".into()), None);
-        assert_eq!(pattern.matches("test".into()), Some(4));
-        assert_eq!(pattern.matches("testtest".into()), Some(8));
-        assert_eq!(pattern.matches("testtesttest".into()), Some(12));
-        assert_eq!(pattern.matches("testtesttesttest".into()), None);
+        
+        assert!(u_pattern.matches("utest").is_err());
+        assert!(u_pattern.matches("").is_err());
+        assert!(ok_result(u_pattern.matches("test")));
+        assert!(ok_result(u_pattern.matches("testtest")));
+        assert!(ok_result(u_pattern.matches("testtesttest")));
+        assert!(!ok_result(u_pattern.matches("testtesttesttest")));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
             None,
             Some(2)
         );
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("".into()), Some(0));
-        assert_eq!(pattern.matches("a".into()), Some(1));
-        assert_eq!(pattern.matches("aa".into()), Some(2));
-        assert_eq!(pattern.matches("aaa".into()), None);
+        
+        assert!(!ok_result(u_pattern.matches("test")));
+        assert!(ok_result(u_pattern.matches("")));
+        assert!(ok_result(u_pattern.matches("a")));
+        assert!(ok_result(u_pattern.matches("aa")));
+        assert!(!ok_result(u_pattern.matches("aaa")));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
             Some(2),
             None
         );
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("".into()), None);
-        assert_eq!(pattern.matches("a".into()), None);
-        assert_eq!(pattern.matches("aa".into()), Some(2));
-        assert_eq!(pattern.matches("aaa".into()), Some(3));
-        assert_eq!(pattern.matches("aaaa".into()), Some(4));
-        assert_eq!(pattern.matches("aaaaa".into()), Some(5));
-        assert_eq!(pattern.matches("aaaaaa".into()), Some(6));
+        
+        assert!(!ok_result(u_pattern.matches("test")));
+        assert!(!ok_result(u_pattern.matches("")));
+        assert!(!ok_result(u_pattern.matches("a")));
+        assert!(ok_result(u_pattern.matches("aa")));
+        assert!(ok_result(u_pattern.matches("aaa")));
+        assert!(ok_result(u_pattern.matches("aaaa")));
+        assert!(ok_result(u_pattern.matches("aaaaa")));
+        assert!(ok_result(u_pattern.matches("aaaaaa")));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
             None,
             None
         );
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("test".into()), None);
-        assert_eq!(pattern.matches("".into()), Some(0));
-        assert_eq!(pattern.matches("a".into()), Some(1));
-        assert_eq!(pattern.matches("aa".into()), Some(2));
-        assert_eq!(pattern.matches("aaa".into()), Some(3));
-        assert_eq!(pattern.matches("aaaa".into()), Some(4));
-        assert_eq!(pattern.matches("aaaaa".into()), Some(5));
-        assert_eq!(pattern.matches("aaaaaa".into()), Some(6));
+        
+        assert!(!ok_result(u_pattern.matches("test")));
+        assert!(ok_result(u_pattern.matches("")));
+        assert!(ok_result(u_pattern.matches("a")));
+        assert!(ok_result(u_pattern.matches("aa")));
+        assert!(ok_result(u_pattern.matches("aaa")));
+        assert!(ok_result(u_pattern.matches("aaaa")));
+        assert!(ok_result(u_pattern.matches("aaaaa")));
+        assert!(ok_result(u_pattern.matches("aaaaaa")));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
@@ -775,12 +550,10 @@ mod tests {
                 Box::new(Pattern::Str("?".into()))
             )
         ));
-
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("utest".into()), None);
-        assert_eq!(pattern.matches("test".into()), Some(4));
-        assert_eq!(pattern.matches("test?".into()), Some(5));
+        
+        assert!(!ok_result(u_pattern.matches("utest")));
+        assert!(ok_result(u_pattern.matches("test")));
+        assert!(ok_result(u_pattern.matches("test?")));
     }
 
     #[test]
@@ -844,28 +617,26 @@ mod tests {
             ))
         ));
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.extract("125".into()), Some((3, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("125".into()).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("".into())),
             ("Int".into(), vec!("125".into())),
-        )))));
+        )));
 
-        assert_eq!(pattern.extract("0.056".into()), Some((5, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("0.056".into()).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("".into())),
             ("Int".into(), vec!("0".into())),
             ("Dec".into(), vec!("056".into())),
-        )))));
+        )));
 
-        assert_eq!(pattern.extract("-13.26".into()), Some((6, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("-13.26".into()).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("-".into())),
             ("Int".into(), vec!("13".into())),
             ("Dec".into(), vec!("26".into())),
-        )))));
+        )));
 
-        assert_eq!(pattern.extract("+100".into()), None);
-        assert_eq!(pattern.extract("123.".into()), None);
-        assert_eq!(pattern.extract("test".into()), None);
+        assert!(!ok_result(u_pattern.extract("+100".into())));
+        assert!(!ok_result(u_pattern.extract("123.".into())));
+        assert!(!ok_result(u_pattern.extract("test".into())));
     }
 
     #[test]
@@ -906,14 +677,12 @@ mod tests {
 
         assert_eq!(u_pattern, str_pattern);
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("13".into()), Some(2));
-        assert_eq!(pattern.matches("-156".into()), Some(4));
-        assert_eq!(pattern.matches("0156".into()), Some(4));
-        assert_eq!(pattern.matches("15.56".into()), Some(5));
-        assert_eq!(pattern.matches("15.".into()), None);
-        assert_eq!(pattern.matches("-56.176".into()), Some(7));
+        assert!(ok_result(u_pattern.matches("13".into())));
+        assert!(ok_result(u_pattern.matches("-156".into())));
+        assert!(ok_result(u_pattern.matches("0156".into())));
+        assert!(ok_result(u_pattern.matches("15.56".into())));
+        assert!(!ok_result(u_pattern.matches("15.".into())));
+        assert!(ok_result(u_pattern.matches("-56.176".into())));
     }
 
     #[test]
@@ -934,11 +703,9 @@ mod tests {
 
         assert_eq!(u_pattern, str_pattern);
 
-        let pattern = u_pattern.compile();
-
-        assert_eq!(pattern.matches("k1".into()), Some(2));
-        assert_eq!(pattern.matches("90".into()), Some(2));
-        assert_eq!(pattern.matches("b2".into()), Some(2));
-        assert_eq!(pattern.matches("yy".into()), None);
+        assert!(ok_result(u_pattern.matches("k1".into())));
+        assert!(ok_result(u_pattern.matches("90".into())));
+        assert!(ok_result(u_pattern.matches("b2".into())));
+        assert!(!ok_result(u_pattern.matches("yy".into())));
     }
 }

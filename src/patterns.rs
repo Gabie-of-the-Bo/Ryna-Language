@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use nom::{
     IResult,
     combinator::{map, opt, value},
-    bytes::complete::tag,
-    character::complete::satisfy,
+    bytes::complete::{take_while, take_while1, tag},
+    sequence::{tuple, delimited, separated_pair},
+    character::complete::{multispace0, multispace1, one_of, satisfy},
+    branch::alt,
+    multi::separated_list1
 };
 
 /*
@@ -224,179 +227,57 @@ impl Pattern{
     }
 }
 
-fn enclosing_split(string: &[char], s: char) -> Vec<&[char]> {
-    let mut depth_par: i32 = 0;
-    let mut depth_bra: i32 = 0;
-    let mut depth_cur: i32 = 0;
-    let mut depth_str: i32 = 0;
-
-    let mut reps = false;
-    let mut idx = 0;
-    let mut indices = vec!();
-
-    for (i, c) in string.iter().enumerate() {
-        if string[idx] != *c {
-            reps = false;
-        }
-
-        match *c {
-            '\'' => depth_str = 1 - depth_str,
-
-            _ if depth_str == 0 => match *c {
-                '(' => depth_par += 1,
-                ')' => depth_par -= 1,
-                '[' => depth_bra += 1,
-                ']' => depth_bra -= 1,
-                '{' => depth_cur += 1,
-                '}' => depth_cur -= 1,
-    
-                cr if !reps && cr == s && depth_str == 0 && depth_par == 0 && depth_bra == 0 && depth_cur == 0 => {
-                    indices.push(&string[idx..i]); 
-                    idx = i + 1;
-                    reps = true;
-                },
-
-                _ => { }
-            }
-
-            _ => { }
-        }
-    }
-
-    indices.push(&string[idx..]); 
-
-    return indices;
-}
-
-fn is_enclosed_from_start(string: &[char]) -> bool {
-    let mut depth_par: i32 = 0;
-    let mut depth_bra: i32 = 0;
-    let mut depth_cur: i32 = 0;
-    let mut depth_str: i32 = 0;
-
-    for (i, c) in string.iter().enumerate() {
-        match *c {
-            '\'' => depth_str = 1 - depth_str,
-
-            _ if depth_str == 0 => match *c {
-                '(' => depth_par += 1,
-                ')' => depth_par -= 1,
-                '[' => depth_bra += 1,
-                ']' => depth_bra -= 1,
-                '{' => depth_cur += 1,
-                '}' => depth_cur -= 1,
-
-                _ => { }
-            }
-
-            _ => { }
-        }
-
-        // Return false when there is nothing enclosing the current position
-        if i < string.len() - 1 && depth_str == 0 && depth_par == 0 && depth_bra == 0 && depth_cur == 0 {
-            return false;
-        }
-    }
-
-    return depth_str == 0 && depth_par == 0 && depth_bra == 0 && depth_cur == 0;
-}
-
-fn parse_pattern(mut string: &[char]) -> Result<Pattern, String>{
-    if string.len() == 0{
-        return Err("Unable to parse empty string".into());
-    }
-
-    // Trim slice
-    while string[0].is_whitespace() { string = &string[1..] }
-    while string[string.len() - 1].is_whitespace() { string = &string[..string.len() - 1] }
-
-    // Symbol pattern
-    if string.len() == 1 && VALID_SYMBOLS.contains(&string[0]) {
-        return Ok(Pattern::Symbol(string[0]));
-    }
-
-    // Range pattern
-    if string.len() == 5 && string[0] == '[' && string[2] == '-' && string[4] == ']' && string[1] != string[3] {
-        return Ok(Pattern::Range(string[1], string[3]));
-    }
-
-    // String pattern
-    if string.len() > 2 && string[0] == '\'' && string[string.len() - 1] == '\'' && string.iter().filter(|&i| *i == '\'').count() == 2 {
-        return Ok(Pattern::Str(string[1..(string.len() - 1)].iter().collect()));
-    } 
-
-    // Pattern enclosed in parentheses
-    if string[0] == '(' && string[string.len() - 1] == ')' && is_enclosed_from_start(string) {
-        return parse_pattern(&string[1..(string.len() - 1)]);
-    }
-
-    // Optional pattern
-    if string[0] == '[' && string[string.len() - 1] == ']' && is_enclosed_from_start(string) {
-        return Ok(Pattern::Optional(Box::new(parse_pattern(&string[1..(string.len() - 1)]).unwrap())));
-    }
-
-    // Repetition pattern
-    let first_dig = string.iter().enumerate().filter(|(_, c)| !c.is_digit(10)).map(|(i, _)| i).next().unwrap_or(0);
-    let last_dig = string.iter().enumerate().rev().filter(|(_, c)| !c.is_digit(10)).map(|(i, _)| i).next().unwrap_or(string.len() - 1);
-
-    let r_string = &string[first_dig..=last_dig];
-
-    if r_string[0] == '{' && r_string[r_string.len() - 1] == '}' && is_enclosed_from_start(r_string) {
-        let mut start = None;
-        let mut end = None;
-
-        // Start and end iteration limits
-        if first_dig > 0 {
-            start = Some(string[..first_dig].iter().collect::<String>().parse::<usize>().unwrap());
-        }
-
-        if last_dig < string.len() - 1 {
-            end = Some(string[(last_dig + 1)..].iter().collect::<String>().parse::<usize>().unwrap());
-        }
+fn parse_and<'a>(text: &'a str, and: bool) -> IResult<&'a str, Pattern> {
+    return if and {
+        map(
+            separated_list1(multispace1, |i| parse_ndl_pattern(i, false, false)), 
+            |v| if v.len() > 1 { Pattern::And(v) } else { v[0].clone() }
+        )(text)
         
-        return Ok(Pattern::Repeat(Box::new(parse_pattern(&r_string[1..(r_string.len() - 1)]).unwrap()), start, end));
+    } else {
+        Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::SeparatedList)))
     }
+}
 
-    // Argument marker
-    if string.len() > 5 && string[0] == 'A' && string[1] == 'r' && string[2] == 'g' && string[3] == '(' && string[string.len() - 1] == ')' {
-        let inner = &string[3..];
-
-        if is_enclosed_from_start(inner){
-            let args = enclosing_split(&inner[1..(inner.len() - 1)], ',');
-
-            if args.len() == 2 {
-                let name = args[1].iter().collect::<String>();
-                let pattern = parse_pattern(args[0]).unwrap();
-
-                return Ok(Pattern::Arg(Box::new(pattern), name.trim().into()));
-            }
-
-            return Err(format!("Invalid number of arguments in Argument Marker (expected 2, got {})", args.len()));
-        }
+fn parse_or<'a>(text: &'a str, or: bool) -> IResult<&'a str, Pattern> {
+    return if or {
+        return map(
+            separated_list1(tuple((multispace0, tag("|"), multispace0)), |i| parse_ndl_pattern(i, false, true)), 
+            |v| if v.len() > 1 { Pattern::Or(v) } else { v[0].clone() }
+        )(text)
+        
+    } else {
+        Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::SeparatedList)))
     }
+}
 
-    // Alternative pattern
-    let alternatives = enclosing_split(string, '|');
-
-    if alternatives.len() > 1 {
-        return Ok(Pattern::Or(alternatives.into_iter().map(parse_pattern).map(Result::unwrap).collect::<Vec<_>>()));
-    }
-
-    // Composition pattern
-    let patterns = enclosing_split(string, ' ');
-
-    if patterns.len() > 1 {
-        return Ok(Pattern::And(patterns.into_iter().map(parse_pattern).map(Result::unwrap).collect::<Vec<_>>()));
-    }
-
-    return Err(format!("Unable to parse pattern \"{}\"", string.iter().collect::<String>()));
+fn parse_ndl_pattern<'a>(text: &'a str, or: bool, and: bool) -> IResult<&'a str, Pattern> {
+    return alt((
+        |i| parse_or(i, or),
+        |i| parse_and(i, and),
+        map(delimited(tag("["), separated_pair(satisfy(|c| c != '\''), tag("-"), satisfy(|c| c != '\'')), tag("]")), |(a, b)| Pattern::Range(a, b)),
+        map(delimited(tag("'"), take_while(|c| c != '\''), tag("'")), |s: &'a str| Pattern::Str(s.into())),
+        map(delimited(
+            tuple((tag("Arg("), multispace0)),
+            separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(","), multispace0)), take_while1(|c| c != ')')),
+            tuple((multispace0, tag(")")))
+        ), |(p, n)| Pattern::Arg(Box::new(p), n.into())),
+        map(tuple((
+            opt(map(take_while1(|c: char| c.is_digit(10)), |s: &'a str| s.parse::<usize>().unwrap())),
+            delimited(tuple((tag("{"), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("}")))),
+            opt(map(take_while1(|c: char| c.is_digit(10)), |s: &'a str| s.parse::<usize>().unwrap()))
+        )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
+        map(delimited(tuple((tag("["), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
+        delimited(tuple((tag("("), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(")")))),
+        map(one_of("dlLaAsq"), Pattern::Symbol)
+    ))(text);
 }
 
 impl std::str::FromStr for Pattern{
     type Err = String;
 
     fn from_str(string: &str) -> Result<Pattern, Self::Err>{
-        return parse_pattern(&string.chars().collect::<Vec<_>>());
+        return Ok(parse_ndl_pattern(string, true, true).unwrap().1);
     }
 }
 

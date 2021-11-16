@@ -19,6 +19,7 @@ use crate::number::Number;
 use crate::types::Type;
 use crate::operations::*;
 use crate::context::NessaContext;
+use crate::patterns::*;
 
 /*
                                                   ╒══════════════════╕
@@ -57,7 +58,7 @@ pub enum NessaExpr {
     PostfixOperatorDefinition(String, usize),
     BinaryOperatorDefinition(String, usize),
     NaryOperatorDefinition(String, String, usize),
-    ClassDefinition(String, Vec<String>,Vec<(String, Type)>),
+    ClassDefinition(String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
 
     PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
@@ -1272,6 +1273,21 @@ impl NessaContext {
         )(input);
     }
 
+    fn inline_class_syntax_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Pattern> {
+        return map(
+            tuple((
+                tag("syntax"),
+                multispace1,
+                tag("from"),
+                multispace1,
+                |input| parse_ndl_pattern(input, true, true),
+                multispace0,
+                tag(";")
+            )),
+            |(_, _, _, _, p, _, _)| p
+        )(input);
+    }
+
     fn class_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
@@ -1296,6 +1312,11 @@ impl NessaContext {
                     )
                 ),
                 tag("{"),
+                multispace0,
+                separated_list0(
+                    multispace0,
+                    |input| self.inline_class_syntax_parser(input)
+                ),
                 multispace0,
                 separated_list0(
                     multispace0,
@@ -1326,12 +1347,12 @@ impl NessaContext {
                 multispace0,
                 tag("}")
             )),
-            |(_, _, n, _, t, _, _, mut f, _, _)| {
+            |(_, _, n, _, t, _, _, p, _, mut f, _, _)| {
                 let u_t = t.unwrap_or_default();
 
                 f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
 
-                NessaExpr::ClassDefinition(n, u_t, f)
+                NessaExpr::ClassDefinition(n, u_t, f, p)
             }
         )(input);
     }
@@ -2047,6 +2068,10 @@ mod tests {
         }";
 
         let sync_lists_str = "class SyncLists<K, V> {
+            syntax from 'test';
+            syntax from [[a-h] | d];
+            syntax from Arg(['-'], Sign) Arg(1{d}, Int) ['.' Arg(1{d}, Dec)];
+
             from: Array<'K>;
             to: Array<'V>;
         }";
@@ -2060,7 +2085,8 @@ mod tests {
             vec!(
                 ("faces".into(), Type::Basic(0)),
                 ("rolls".into(), Type::Basic(0))
-            )
+            ),
+            vec!()
         ));
 
         assert_eq!(sync_lists, NessaExpr::ClassDefinition(
@@ -2069,6 +2095,44 @@ mod tests {
             vec!(
                 ("from".into(), Type::Template(3, vec!(Type::TemplateParam(0)))),
                 ("to".into(), Type::Template(3, vec!(Type::TemplateParam(1))))
+            ),
+            vec!(
+                Pattern::Str("test".into()),
+                Pattern::Optional(Box::new(Pattern::Or(vec!(
+                    Pattern::Range('a', 'h'),
+                    Pattern::Symbol('d')
+                )))),
+                Pattern::And(vec!(
+                    Pattern::Arg(
+                        Box::new(Pattern::Optional(
+                            Box::new(Pattern::Str("-".into()))
+                        )),
+                        "Sign".into()
+                    ),
+                    Pattern::Arg(
+                        Box::new(
+                            Pattern::Repeat(
+                                Box::new(Pattern::Symbol('d')),
+                                Some(1),
+                                None
+                            ),
+                        ),
+                        "Int".into()
+                    ),
+                    Pattern::Optional(Box::new(
+                        Pattern::And(vec!(
+                            Pattern::Str(".".into()),
+                            Pattern::Arg(
+                                Box::new(Pattern::Repeat(
+                                    Box::new(Pattern::Symbol('d')),
+                                    Some(1),
+                                    None
+                                )),
+                                "Dec".into()
+                            )
+                        ))
+                    ))
+                ))
             )
         ));
     }

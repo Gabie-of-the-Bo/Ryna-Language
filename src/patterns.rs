@@ -251,7 +251,7 @@ fn parse_or<'a>(text: &'a str, or: bool) -> IResult<&'a str, Pattern> {
     }
 }
 
-fn parse_ndl_pattern<'a>(text: &'a str, or: bool, and: bool) -> IResult<&'a str, Pattern> {
+pub fn parse_ndl_pattern<'a>(text: &'a str, or: bool, and: bool) -> IResult<&'a str, Pattern> {
     return alt((
         |i| parse_or(i, or),
         |i| parse_and(i, and),

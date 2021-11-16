@@ -1122,7 +1122,7 @@ impl NessaContext{
 
         for i in ops {
             match i {
-                NessaExpr::ClassDefinition(n, t, a) => {
+                NessaExpr::ClassDefinition(n, t, a, _) => {
                     let n_templates = t.len();
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 

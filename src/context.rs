@@ -2,6 +2,7 @@ use crate::types::*;
 use crate::operations::*;
 use crate::object::*;
 use crate::functions::*;
+use crate::patterns::*;
 
 /*
                                                   ╒══════════════════╕
@@ -31,7 +32,7 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
-    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>) -> Result<(), String> {
+    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
                 return Err(format!("Type \"{}\" is already defined", representation))
@@ -42,7 +43,9 @@ impl NessaContext {
             id: self.type_templates.len(),
             name: representation,
             params: params,
-            attributes: attributes
+            attributes: attributes,
+            patterns: patterns,
+            parser: parser
         });
 
         return Ok(());
@@ -419,8 +422,8 @@ mod tests {
     fn type_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!());
-        let def_2 = ctx.define_type("Number".into(), vec!(), vec!());
+        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!(), vec!(), None);
+        let def_2 = ctx.define_type("Number".into(), vec!(), vec!(), vec!(), None);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

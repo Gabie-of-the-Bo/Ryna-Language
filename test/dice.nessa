@@ -1,0 +1,52 @@
+class Dice {
+    syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
+
+    rolls: Number;
+    sides: Number;
+}
+
+let d1: Dice = 2D20;
+let d2: Dice = 5D6;
+let d3: Dice = 9D10;
+
+if d1.rolls() != 2 {
+    panic("Invalid d1");
+}
+
+if d1.sides() != 20 {
+    panic("Invalid d1");
+}
+
+if d2.rolls() != 5 {
+    panic("Invalid d2");
+}
+
+if d2.sides() != 6 {
+    panic("Invalid d2");
+}
+
+if d3.rolls() != 9 {
+    panic("Invalid d3");
+}
+
+if d3.sides() != 10 {
+    panic("Invalid d3");
+}
+
+class InnerDice {
+    syntax from '[' Arg(1{d} 'D' 1{d}, inner_dice) ']';
+
+    inner_dice: Dice;
+}
+
+let id: InnerDice = [7D4];
+
+print(id);
+
+if inner_dice(id).rolls() != 7 {
+    panic("Invalid d3");
+}
+
+if inner_dice(id).sides() != 4 {
+    panic("Invalid d3");
+}

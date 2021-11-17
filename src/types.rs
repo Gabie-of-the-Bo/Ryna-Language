@@ -3,6 +3,8 @@ use std::collections::HashSet;
 
 use crate::context::NessaContext;
 use crate::object::Object;
+use crate::patterns::Pattern;
+use crate::number::Number;
 
 /*
                                                   ╒══════════════════╕
@@ -10,12 +12,16 @@ use crate::object::Object;
                                                   ╘══════════════════╛
 */
 
+pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Object;
+
 #[derive(Clone)]
 pub struct TypeTemplate {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
-    pub attributes: Vec<(String, Type)>
+    pub attributes: Vec<(String, Type)>,
+    pub patterns: Vec<Pattern>,
+    pub parser: Option<ParsingFunction>
 }
 
 #[derive(Clone, PartialEq)]
@@ -218,28 +224,36 @@ mod tests {
             id: 0,
             name: "Number".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let string_t = TypeTemplate {
             id: 1,
             name: "String".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let bool_t = TypeTemplate {
             id: 2,
             name: "Bool".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let vector_t = TypeTemplate {
             id: 3,
             name: "Vector".into(),
             params: vec!("T".into()),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let number = Type::Basic(number_t.id);
@@ -320,35 +334,45 @@ mod tests {
             id: 0,
             name: "Number".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let string_t = TypeTemplate {
             id: 1,
             name: "String".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let bool_t = TypeTemplate {
             id: 2,
             name: "Bool".into(),
             params: vec!(),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let vector_t = TypeTemplate {
             id: 3,
             name: "Vector".into(),
             params: vec!("T".into()),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let map_t = TypeTemplate {
             id: 3,
             name: "Map".into(),
             params: vec!("T".into(), "G".into()),
-            attributes: vec!()
+            attributes: vec!(),
+            patterns: vec!(),
+            parser: None
         };
 
         let number = Type::Basic(number_t.id);
@@ -441,10 +465,10 @@ mod tests {
 */
 
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Number".into(), vec!(), vec!()).unwrap();
-    ctx.define_type("String".into(), vec!(), vec!()).unwrap();
-    ctx.define_type("Bool".into(), vec!(), vec!()).unwrap();
-    ctx.define_type("Array".into(), vec!("Inner".into()), vec!()).unwrap();
-    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!()).unwrap();
-    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!()).unwrap();
+    ctx.define_type("Number".into(), vec!(), vec!(), vec!(), Some(|_, _, s| Object::new(Number::from(s.as_str())))).unwrap();
+    ctx.define_type("String".into(), vec!(), vec!(), vec!(), None).unwrap();
+    ctx.define_type("Bool".into(), vec!(), vec!(), vec!(), Some(|_, _, s| Object::new(s.starts_with('t')))).unwrap();
+    ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();
+    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), vec!(), None).unwrap();
+    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();
 } 

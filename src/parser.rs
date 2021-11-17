@@ -16,7 +16,7 @@ use bit_set::BitSet;
 use crate::operations::Operator;
 use crate::object::Object;
 use crate::number::Number;
-use crate::types::Type;
+use crate::types::*;
 use crate::operations::*;
 use crate::context::NessaContext;
 use crate::patterns::*;
@@ -366,13 +366,51 @@ impl NessaContext {
             tag("\"")
         )(input);
     }
+
+    pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: &'a str) -> IResult<&'a str, Object> {
+        for p in &c_type.patterns {
+            let res = map(
+                |input| p.extract(input),
+                |args| return Object::new(TypeInstance {
+                        id: c_type.id,
+                        params: vec!(),
+                        attributes: c_type.attributes.iter().map(|(n, t)| {
+                            if let Type::Basic(t_id) = t {  
+                                return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
+                            }
+
+                            Object::empty()
+                        }).collect()
+                })
+            )(input);
+
+            if res.is_ok() {
+                return res;
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
+
+    fn custom_literal_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Object> {
+        for c in &self.type_templates {
+            let res = self.parse_literal_type(c, input);
+
+            if res.is_ok() {
+                return res;
+            }
+        }
+
+        return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
+    }
     
     fn literal_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
         return map(
             alt((
+                |input| self.custom_literal_parser(input),
                 map(|input| self.bool_parser(input), |b| Object::new(b)),
                 map(|input| self.number_parser(input), |n| Object::new(n)),
-                map(|input| self.string_parser(input), |s| Object::new(s))
+                map(|input| self.string_parser(input), |s| Object::new(s)),
             )),
             |o| NessaExpr::Literal(o)
         )(input);
@@ -1494,7 +1532,6 @@ impl NessaContext {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::*;
     use crate::context::*;
     use crate::parser::*;
     use crate::object::*;
@@ -1573,7 +1610,7 @@ mod tests {
 
     #[test]
     fn literal_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
 
         let number_str = "123";
         let bool_v_str = "true";
@@ -1589,6 +1626,90 @@ mod tests {
         assert_eq!(bool_v, NessaExpr::Literal(Object::new(true)));
         assert_eq!(string, NessaExpr::Literal(Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Object::new("test\ntest2\ttest3\"\\".to_string())));
+
+        ctx.define_type("Dice".into(), vec!(), vec!(
+            ("rolls".into(), Type::Basic(0)),
+            ("sides".into(), Type::Basic(0))
+        ), vec!(
+            Pattern::And(vec!(
+                Pattern::Arg(Box::new(Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)), "rolls".into()),
+                Pattern::Str("D".into()),
+                Pattern::Arg(Box::new(Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)), "sides".into()),
+            ))
+        ), Some(
+            |ctx, c_type, s| {
+                if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
+                    return o;
+                }
+
+                unreachable!();
+            }
+        )).unwrap();
+        
+
+        let dice_str = "2D20";
+
+        let (_, dice) = ctx.literal_parser(dice_str).unwrap();
+
+        let id = ctx.type_templates.iter().filter(|i| i.name == "Dice").next().unwrap().id;
+
+        assert_eq!(dice, NessaExpr::Literal(Object::new(TypeInstance {
+            id: id,
+            params: vec!(),
+            attributes: vec!(
+                Object::new(Number::from(2)),
+                Object::new(Number::from(20))
+            )
+        })));
+
+        assert_eq!(ctx.type_templates[6].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Object::new(TypeInstance {
+            id: id,
+            params: vec!(),
+            attributes: vec!(
+                Object::new(Number::from(2)),
+                Object::new(Number::from(20))
+            )
+        }));
+
+        ctx.define_type("InnerDice".into(), vec!(), vec!(
+            ("inner_dice".into(), Type::Basic(id))
+        ), vec!(
+            Pattern::And(vec!(
+                Pattern::Str("[".into()),
+                Pattern::Arg(
+                    Box::new(
+                        Pattern::And(vec!(
+                            Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None),
+                            Pattern::Str("D".into()),
+                            Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None),
+                        ))
+                    ),
+                    "inner_dice".into(),
+                ),
+                Pattern::Str("]".into())
+            ))
+        ), None).unwrap();
+
+        let inner_dice_str = "[2D20]";
+        
+        let (_, inner_dice) = ctx.literal_parser(inner_dice_str).unwrap();
+
+        let inner_id = ctx.type_templates.iter().filter(|i| i.name == "InnerDice").next().unwrap().id;
+
+        assert_eq!(inner_dice, NessaExpr::Literal(Object::new(TypeInstance {
+            id: inner_id,
+            params: vec!(),
+            attributes: vec!(
+                Object::new(TypeInstance {
+                    id: id,
+                    params: vec!(),
+                    attributes: vec!(
+                        Object::new(Number::from(2)),
+                        Object::new(Number::from(20))
+                    )
+                })
+            )
+        })));
     }
 
     #[test]

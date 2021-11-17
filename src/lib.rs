@@ -41,4 +41,9 @@ mod integration {
     fn mapped_iterator() {
         integration_text("test/mapped_iterator.nessa");
     }
+
+    #[test]
+    fn dice() {
+        integration_text("test/dice.nessa");
+    }
 }

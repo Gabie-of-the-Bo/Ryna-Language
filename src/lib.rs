@@ -46,4 +46,9 @@ mod integration {
     fn dice() {
         integration_text("test/dice.nessa");
     }
+
+    #[test]
+    fn ints_custom_syntax() {
+        integration_text("test/ints.nessa");
+    }
 }

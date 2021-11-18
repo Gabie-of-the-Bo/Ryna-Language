@@ -379,6 +379,17 @@ impl NessaContext {
                             return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
                         }
 
+                        if let Type::Template(3, t) = t {  
+                            if let &[Type::Basic(t_id)] = &t[..] {
+                                return args[n].iter().cloned()
+                                    .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg.into()))
+                                    .collect::<Result<Vec<_>, _>>()
+                                    .map(|r| Object::new((Type::Basic(t_id), r)));
+                            }
+
+                            unimplemented!();
+                        }
+
                         unimplemented!();
 
                     }).collect::<Result<Vec<Object>, String>>()?

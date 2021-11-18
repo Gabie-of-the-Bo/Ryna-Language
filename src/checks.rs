@@ -1,7 +1,10 @@
+use std::collections::HashSet;
+
 use crate::context::NessaContext;
 use crate::parser::NessaExpr;
 use crate::operations::Operator;
 use crate::types::Type;
+use crate::patterns::Pattern;
 
 /*
                                                   ╒══════════════════╕
@@ -778,6 +781,28 @@ impl NessaContext {
 
             _ => unimplemented!("{:?}", expr)
         };
+    }
+
+    pub fn implicit_syntax_check(&self, name: &String, templates: &Vec<String>, attributes: &Vec<(String, Type)>, syntaxes: &Vec<Pattern>) -> Result<(), String> {
+        if !syntaxes.is_empty() && !templates.is_empty() {
+            return Err(format!("Implicit syntaxes are not allowed when classes have type parameters"))
+        }
+
+        let atts = attributes.iter().map(|(n, _)| n.clone()).collect::<HashSet<_>>();
+
+        for s in syntaxes {
+            let args = s.get_markers();
+
+            for diff in atts.symmetric_difference(&args) {
+                if args.contains(diff) {
+                    return Err(format!("Syntax argument with name \"{}\" is not an attribute of {}", diff, name));
+                }
+
+                return Err(format!("Attribute \"{}\" does not appear in syntax definition for {}", diff, name));
+            }
+        }
+
+        return Ok(());
     }
 
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), String> {

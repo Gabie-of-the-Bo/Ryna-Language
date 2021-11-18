@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 
 use nom::{
     IResult,
@@ -38,6 +38,17 @@ pub enum Pattern{
 }
 
 impl Pattern{
+    pub fn get_markers(&self) -> HashSet<String> {
+        return match self {
+            Pattern::Arg(_, n) => vec!(n.clone()).into_iter().collect(),
+            Pattern::Or(p) |
+            Pattern::And(p) => p.iter().flat_map(Pattern::get_markers).collect(),
+            Pattern::Repeat(p, _, _) |
+            Pattern::Optional(p) => p.get_markers(),
+            _ => HashSet::new()
+        };
+    }
+
     pub fn matches<'a>(&self, text: &'a str) -> IResult<&'a str, ()> {
         return match self {
             Pattern::Symbol('d') => value((), satisfy(|c| c.is_digit(10)))(text),

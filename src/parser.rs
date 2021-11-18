@@ -375,6 +375,10 @@ impl NessaContext {
                     id: c_type.id,
                     params: vec!(),
                     attributes: c_type.attributes.iter().map(|(n, t)| {
+                        if !args.contains_key(n) {
+                            return Err(format!("NDL extraction results map does not contain the attribute {}", n));
+                        }
+
                         if let Type::Basic(t_id) = t {  
                             return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
                         }

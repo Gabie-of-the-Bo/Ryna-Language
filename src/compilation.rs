@@ -1129,6 +1129,8 @@ impl NessaContext{
                     NessaExpr::ClassDefinition(n, t, a, p) => {
                         needed = true; // Repeat class parsing after creating a new one
 
+                        self.implicit_syntax_check(&n, &t, &a, &p)?;
+
                         let n_templates = t.len();
                         let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                         

@@ -805,11 +805,28 @@ impl NessaContext {
         return Ok(());
     }
 
+    pub fn class_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        return match expr {
+            NessaExpr::ClassDefinition(n, _, attributes, _) => {
+                for (att, _) in attributes {
+                    if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
+                        return Err(format!("Repeated attribute \"{}\" in class {}", att, n));
+                    }
+                }
+                
+                Ok(())
+            }
+
+            _ => Ok(())
+        };
+    }
+
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), String> {
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
         self.ensured_return_check(expr)?;
+        self.class_check(expr)?;
 
         return Ok(());
     }

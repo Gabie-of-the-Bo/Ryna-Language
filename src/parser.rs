@@ -369,19 +369,20 @@ impl NessaContext {
 
     pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: &'a str) -> IResult<&'a str, Object> {
         for p in &c_type.patterns {
-            let res = map(
+            let res = map_res(
                 |input| p.extract(input),
-                |args| return Object::new(TypeInstance {
-                        id: c_type.id,
-                        params: vec!(),
-                        attributes: c_type.attributes.iter().map(|(n, t)| {
-                            if let Type::Basic(t_id) = t {  
-                                return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
-                            }
+                |args| Result::<Object, String>::Ok(Object::new(TypeInstance {
+                    id: c_type.id,
+                    params: vec!(),
+                    attributes: c_type.attributes.iter().map(|(n, t)| {
+                        if let Type::Basic(t_id) = t {  
+                            return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
+                        }
 
-                            Object::empty()
-                        }).collect()
-                })
+                        unimplemented!();
+
+                    }).collect::<Result<Vec<Object>, String>>()?
+                }))
             )(input);
 
             if res.is_ok() {
@@ -1639,10 +1640,10 @@ mod tests {
         ), Some(
             |ctx, c_type, s| {
                 if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
-                    return o;
+                    return Ok(o);
                 }
 
-                unreachable!();
+                return Err(format!("Unable to parse {} from {}", c_type.name, s));
             }
         )).unwrap();
         
@@ -1662,14 +1663,14 @@ mod tests {
             )
         })));
 
-        assert_eq!(ctx.type_templates[6].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Object::new(TypeInstance {
+        assert_eq!(ctx.type_templates[6].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
             id: id,
             params: vec!(),
             attributes: vec!(
                 Object::new(Number::from(2)),
                 Object::new(Number::from(20))
             )
-        }));
+        })));
 
         ctx.define_type("InnerDice".into(), vec!(), vec!(
             ("inner_dice".into(), Type::Basic(id))

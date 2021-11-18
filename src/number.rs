@@ -2,6 +2,7 @@ use std::cmp::{Eq, PartialEq, PartialOrd, Ord, Ordering};
 use std::arch::x86_64::*;
 use std::ops;
 use rayon::prelude::*;
+use std::str::FromStr;
 use rand::{
     RngCore,
     distributions::{
@@ -1109,6 +1110,66 @@ impl From<&Number> for String {
     ╘══════════════════════════════════════╛
 */
 
+fn check_number_format(mut s: &str) -> bool {
+    if s.starts_with('-') {
+        s = &s[1..];
+    }
+
+    let mut state = 0; // 0 -> integer part, 1 -> point, 2 -> decimals
+    let mut ints = 0;
+    let mut chars = s.chars();
+
+    while let Some(c) = chars.next() {
+        match state {
+            0 => {
+                if c == '.' {
+                    if ints == 0 {
+                        return false;
+                    }
+
+                    state = 1;
+                
+                } else if !c.is_digit(10) {
+                    return false;
+                }
+
+                ints += 1;
+            },
+
+            1 => {
+                if !c.is_digit(10) {
+                    return false;
+                
+                } else {
+                    state = 2;
+                }
+            }
+
+            2 => {
+                if !c.is_digit(10) {
+                    return false;
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    return state != 1;
+}
+
+impl FromStr for Number {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Number, Self::Err> {
+        if check_number_format(s) {
+            return Ok(Number::from(s));
+        }
+
+        return Err(format!("Unable to parse number from {}", s));
+    }
+}
+
 impl From<&str> for Number{
     fn from(string: &str) -> Self{
         if string.contains('.') {
@@ -1127,8 +1188,7 @@ impl From<String> for Number{
 
 impl From<Integer> for Number{
     fn from(obj: Integer) -> Number{
-        return 
-        Number::Int(obj);
+        return Number::Int(obj);
     }
 }
 

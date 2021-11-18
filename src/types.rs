@@ -12,7 +12,7 @@ use crate::number::Number;
                                                   ╘══════════════════╛
 */
 
-pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Object;
+pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
 #[derive(Clone)]
 pub struct TypeTemplate {
@@ -465,9 +465,18 @@ mod tests {
 */
 
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Number".into(), vec!(), vec!(), vec!(), Some(|_, _, s| Object::new(Number::from(s.as_str())))).unwrap();
+    ctx.define_type("Number".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<Number>().map(Object::new))).unwrap();
     ctx.define_type("String".into(), vec!(), vec!(), vec!(), None).unwrap();
-    ctx.define_type("Bool".into(), vec!(), vec!(), vec!(), Some(|_, _, s| Object::new(s.starts_with('t')))).unwrap();
+
+    ctx.define_type("Bool".into(), vec!(), vec!(), vec!(), Some(|_, _, s| 
+        if s == "true" || s == "false" {
+            Ok(Object::new(s.starts_with('t')))
+
+        } else {
+            Err(format!("Unable to parse bool from {}", s))
+        }
+    )).unwrap();
+
     ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();
     ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), vec!(), None).unwrap();
     ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();

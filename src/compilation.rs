@@ -1135,10 +1135,10 @@ impl NessaContext{
                         self.define_type(n.clone(), t, a.clone(), p, Some(
                             |ctx, c_type, s| {
                                 if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
-                                    return o;
+                                    return Ok(o);
                                 }
     
-                                unreachable!();
+                                return Err(format!("Unable to parse {} from {}", c_type.name, s));
                             }
                         ))?;
     

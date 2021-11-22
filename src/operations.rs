@@ -267,5 +267,5 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
-    ctx.define_nary_operator("[".into(), "]".into(), 50).unwrap();
+    ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
 }

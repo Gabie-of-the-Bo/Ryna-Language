@@ -381,13 +381,13 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            unary prefix op \"~\" (200);
+            unary prefix op \"~\" (201);
 
             op ~(arg: &&Number) -> &&Number {
                 return arg;
             }
 
-            unary postfix op \"¡\" (300);
+            unary postfix op \"¡\" (301);
 
             op (arg: &&Number)¡ -> &&Number {
                 return arg;
@@ -396,9 +396,9 @@ mod tests {
             let a: Number = 3;
             let b: &&Number = ~a¡;
 
-            binary op \"·\" (300);
-            binary op \"$\" (300);
-            binary op \"@\" (300);
+            binary op \"·\" (401);
+            binary op \"$\" (501);
+            binary op \"@\" (601);
 
             op (a: &&Number) · (b: &&Number) -> Number {
                 return a + b;
@@ -406,7 +406,7 @@ mod tests {
 
             let c: Number = a · b;
 
-            nary op from \"`\" to \"´\" (500);
+            nary op from \"`\" to \"´\" (701);
 
             op (a: &&Number)`b: &&Number, c: &&Number´ -> Number {
                 return a + b + ~c;

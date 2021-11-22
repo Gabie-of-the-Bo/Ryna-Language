@@ -77,7 +77,7 @@ impl NessaContext {
         self.unary_ops.push(op.clone());
 
         match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
-            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Ok(_) => return Err(format!("Precedence {} is already taken", precedence)),
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
@@ -145,7 +145,7 @@ impl NessaContext {
         self.binary_ops.push(op.clone());
 
         match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
-            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Ok(_) => return Err(format!("Precedence {} is already taken", precedence)),
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
@@ -222,7 +222,7 @@ impl NessaContext {
         self.nary_ops.push(op.clone());
 
         match self.sorted_ops.binary_search_by(|i| i.get_precedence().cmp(&precedence)) {
-            Ok(pos) => self.sorted_ops.insert(pos, op),
+            Ok(_) => return Err(format!("Precedence {} is already taken", precedence)),
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
@@ -396,21 +396,21 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let def_1 = ctx.define_unary_operator("~".into(), true, 0);
-        let def_2 = ctx.define_unary_operator("-".into(), true, 0);
+        let def_2 = ctx.define_unary_operator("-".into(), true, 1);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_binary_operator("$".into(), 0);
-        let def_2 = ctx.define_binary_operator("+".into(), 0);
+        let def_1 = ctx.define_binary_operator("$".into(), 2);
+        let def_2 = ctx.define_binary_operator("+".into(), 3);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_nary_operator("`".into(), "´".into(), 0);
-        let def_2 = ctx.define_nary_operator("(".into(), ")".into(), 0);
-        let def_3 = ctx.define_nary_operator("{".into(), ")".into(), 0);
-        let def_4 = ctx.define_nary_operator("(".into(), "}".into(), 0);
+        let def_1 = ctx.define_nary_operator("`".into(), "´".into(), 4);
+        let def_2 = ctx.define_nary_operator("(".into(), ")".into(), 5);
+        let def_3 = ctx.define_nary_operator("{".into(), ")".into(), 6);
+        let def_4 = ctx.define_nary_operator("(".into(), "}".into(), 7);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

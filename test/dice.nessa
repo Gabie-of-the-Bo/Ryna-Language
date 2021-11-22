@@ -9,27 +9,15 @@ let d1: Dice = 2D20;
 let d2: Dice = 5D6;
 let d3: Dice = 9D10;
 
-if d1.rolls() != 2 {
+if d1.rolls() != 2 || d1.sides() != 20 {
     panic("Invalid d1");
 }
 
-if d1.sides() != 20 {
-    panic("Invalid d1");
-}
-
-if d2.rolls() != 5 {
+if d2.rolls() != 5 || d2.sides() != 6 {
     panic("Invalid d2");
 }
 
-if d2.sides() != 6 {
-    panic("Invalid d2");
-}
-
-if d3.rolls() != 9 {
-    panic("Invalid d3");
-}
-
-if d3.sides() != 10 {
+if d3.rolls() != 9 || d3.sides() != 10 {
     panic("Invalid d3");
 }
 
@@ -41,12 +29,6 @@ class InnerDice {
 
 let id: InnerDice = [7D4];
 
-print(id);
-
-if inner_dice(id).rolls() != 7 {
-    panic("Invalid d3");
-}
-
-if inner_dice(id).sides() != 4 {
-    panic("Invalid d3");
+if inner_dice(id).rolls() != 7 || inner_dice(id).sides() != 4 {
+    panic("Invalid inner dice");
 }

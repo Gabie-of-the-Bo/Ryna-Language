@@ -215,7 +215,7 @@ impl std::fmt::Display for Integer{
 */
 
 #[inline]
-fn comp_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Ordering{
+pub fn comp_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Ordering{
     if a.len() > b.len() {
         return Ordering::Greater;
     

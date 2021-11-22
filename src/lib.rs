@@ -16,6 +16,9 @@ pub mod checks;
 pub mod compilation;
 pub mod execution;
 
+#[path = "stdlib/math.rs"]
+pub mod math;
+
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
@@ -50,5 +53,10 @@ mod integration {
     #[test]
     fn ints_custom_syntax() {
         integration_text("test/ints.nessa");
+    }
+
+    #[test]
+    fn random() {
+        integration_text("test/random.nessa");
     }
 }

@@ -26,6 +26,58 @@ pub struct Function {
                                                   ╘══════════════════════╛
 */
 
+macro_rules! define_unary_function {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $deref: ident, $result: expr) => {
+        $ctx.define_native_function_overload(
+            $id, 0,
+            &[$inner_type], 
+            $return_type,
+            |_, _, v| {
+                let $a = v[0].$deref::<$unwrap_type>();
+                return Ok(Object::new($result));
+            }
+        ).unwrap();
+    };
+}
+
+macro_rules! define_binary_function {
+    ($ctx: ident, $id: expr, $inner_type_a: expr, $inner_type_b: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $deref_a: ident, $b: ident, $deref_b: ident, $result: expr) => {
+        $ctx.define_native_function_overload(
+            $id, 0,
+            &[$inner_type_a, $inner_type_b], 
+            $return_type,
+            |_, _, v| {
+                let $a = v[0].$deref_a::<$unwrap_type>();
+                let $b = v[1].$deref_b::<$unwrap_type>();
+
+                return Ok(Object::new($result));
+            }
+        ).unwrap();
+    };
+}
+
+macro_rules! define_unary_function_overloads {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
+        define_unary_function!($ctx, $id, $inner_type, $return_type, $unwrap_type, $a, get, $result);
+        define_unary_function!($ctx, $id, Type::Ref(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $result);
+        define_unary_function!($ctx, $id, Type::MutRef(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $result);
+    };
+}
+
+macro_rules! define_binary_function_overloads {
+    ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
+        define_binary_function!($ctx, $id, $inner_type, $inner_type, $return_type, $unwrap_type, $a, get, $b, get, $result);
+        define_binary_function!($ctx, $id, Type::Ref(Box::new($inner_type)), $inner_type, $return_type, $unwrap_type, $a, deref, $b, get, $result);
+        define_binary_function!($ctx, $id, Type::MutRef(Box::new($inner_type)), $inner_type, $return_type, $unwrap_type, $a, deref, $b, get, $result);
+        define_binary_function!($ctx, $id, $inner_type, Type::Ref(Box::new($inner_type)), $return_type, $unwrap_type, $a, get, $b, deref, $result);
+        define_binary_function!($ctx, $id, $inner_type, Type::MutRef(Box::new($inner_type)), $return_type, $unwrap_type, $a, get, $b, deref, $result);
+        define_binary_function!($ctx, $id, Type::Ref(Box::new($inner_type)), Type::Ref(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $b, deref, $result);
+        define_binary_function!($ctx, $id, Type::MutRef(Box::new($inner_type)), Type::Ref(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $b, deref, $result);
+        define_binary_function!($ctx, $id, Type::Ref(Box::new($inner_type)), Type::MutRef(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $b, deref, $result);
+        define_binary_function!($ctx, $id, Type::MutRef(Box::new($inner_type)), Type::MutRef(Box::new($inner_type)), $return_type, $unwrap_type, $a, deref, $b, deref, $result);
+    };
+}
+
 // Constant identifiers
 pub const ITERATOR_FUNC_ID: usize = 5;
 pub const NEXT_FUNC_ID: usize = 6;
@@ -177,4 +229,36 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Type::Basic(0), 
         |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
+
+    ctx.define_function("sin".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 10, Type::Basic(0), Type::Basic(0), Number, a, a.sin()?);
+
+    ctx.define_function("cos".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 11, Type::Basic(0), Type::Basic(0), Number, a, a.cos()?);
+
+    ctx.define_function("tan".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 12, Type::Basic(0), Type::Basic(0), Number, a, a.tan()?);
+
+    ctx.define_function("fact".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 13, Type::Basic(0), Type::Basic(0), Number, a, a.fact()?);
+
+    ctx.define_function("ln".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 14, Type::Basic(0), Type::Basic(0), Number, a, a.ln()?);
+
+    ctx.define_function("exp".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 15, Type::Basic(0), Type::Basic(0), Number, a, a.exp()?);
+
+    ctx.define_function("rand".into()).unwrap();
+
+    ctx.define_native_function_overload(16, 0, &[], Type::Basic(0), |_, _, _| Ok(Object::new(Number::rand()))).unwrap();
+
+    ctx.define_function("rand_int".into()).unwrap();
+
+    define_binary_function_overloads!(ctx, 17, Type::Basic(0), Type::Basic(0), Number, a, b, Number::rand_int_range(&a, &b)?);
 }

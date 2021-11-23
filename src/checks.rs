@@ -59,6 +59,7 @@ impl NessaContext {
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), String> {
         return match (expr, ret_type) {
             (NessaExpr::Literal(_), _) |
+            (NessaExpr::Tuple(..), _) |
             (NessaExpr::Variable(..), _) |
             (NessaExpr::UnaryOperation(..), _) |
             (NessaExpr::BinaryOperation(..), _) |
@@ -157,6 +158,7 @@ impl NessaContext {
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
+            NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
@@ -488,6 +490,7 @@ impl NessaContext {
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
+            NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |

@@ -175,6 +175,17 @@ impl NessaContext {
     pub fn infer_type(&self, expr: &NessaExpr) -> Option<Type> {
         return match expr {
             NessaExpr::Literal(obj) => Some(obj.get_type()),
+            
+            NessaExpr::Tuple(e) => {
+                let mut args = vec!();
+
+                for i in e {
+                    args.push(self.infer_type(i)?);
+                }
+
+                Some(Type::And(args))
+            },
+
             NessaExpr::Variable(_, _, t) => {
                 match t {
                     Type::Ref(_) | Type::MutRef(_) => Some(t.clone()),

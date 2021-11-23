@@ -45,6 +45,7 @@ pub enum NessaExpr {
 
     // Uncompiled
     Literal(Object),
+    Tuple(Vec<NessaExpr>),
     NameReference(String),
 
     UnaryOperation(usize, Box<NessaExpr>),
@@ -1411,8 +1412,32 @@ impl NessaContext {
         )(input);
     }
 
+    fn tuple_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("("),
+                multispace0,
+                separated_list0(
+                    tuple((multispace0, tag(","), multispace0)),
+                    |input| self.nessa_expr_parser(input, &RefCell::default())
+                ),
+                multispace0,
+                tag(")")
+            )),
+            |(_, _, mut e, _, _)| {
+                if e.len() == 1 {
+                    return e.pop().unwrap();
+
+                } else {
+                    return NessaExpr::Tuple(e);
+                }
+            }
+        )(input);
+    }
+
     fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
+            |input| self.tuple_parser(input),
             |input| self.operation_parser(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache),
             |input| self.literal_parser(input),
             |input| self.variable_parser(input)

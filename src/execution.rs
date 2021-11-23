@@ -51,6 +51,18 @@ impl NessaContext {
                     ip += 1;
                 },
 
+                Tuple(types) => {     
+                    let start_idx = stack.len() - types.len();
+                    let args = stack.drain(start_idx..).rev().collect();
+                    
+                    stack.push(Object::new(crate::types::Tuple {
+                        types: types.clone(),
+                        exprs: args
+                    }));
+
+                    ip += 1;
+                },
+
                 StoreVariable(id) => {
                     self.variables[*id + offset] = Some(stack.pop().unwrap());
                     ip += 1;                    

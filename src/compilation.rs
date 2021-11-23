@@ -80,6 +80,7 @@ impl NessaContext {
                 }
             }
 
+            NessaExpr::Tuple(a) |
             NessaExpr::FunctionCall(_, _, a) => {
                 for i in a {
                     self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
@@ -181,6 +182,8 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::Tuple(e) => e.iter_mut().for_each(|i| self.compile_expr_function_names(i)),
+
             // Compile variable definitions
             NessaExpr::VariableDefinition(_, _, e) |
             NessaExpr::VariableAssignment(_, e) => {
@@ -233,6 +236,13 @@ impl NessaContext {
 
     fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
+            // Compile tuples
+            NessaExpr::Tuple(e) => {
+                for i in e {
+                    self.compile_expr_function_calls(i)?;
+                }
+            },
+
             // Compile variable definitions
             NessaExpr::VariableDefinition(_, _, e) |
             NessaExpr::VariableAssignment(_, e) => {
@@ -378,6 +388,7 @@ impl NessaContext {
 #[derive(Debug)]
 pub enum CompiledNessaExpr {
     Literal(Object),
+    Tuple(Vec<Type>),
 
     StoreVariable(usize),
     GetVariable(usize),
@@ -889,6 +900,21 @@ impl NessaContext{
     ) -> Result<Vec<NessaInstruction>, String> {
         return match expr {
             NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
+
+            NessaExpr::Tuple(e) => {
+                let mut types = Vec::with_capacity(e.len());
+                let mut res = vec!();
+
+                for i in e.iter().rev() {
+                    types.push(self.infer_type(i).unwrap());
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, max_register)?);
+                }
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(types)));
+
+                Ok(res)
+            }
+
             NessaExpr::Variable(id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
             NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, _, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;

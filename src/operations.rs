@@ -245,10 +245,14 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("==".into(), 1100).unwrap();
 
     define_binary_native_op_combinations!(ctx, 10, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 == arg_2);
+    define_binary_native_op_combinations!(ctx, 10, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 == arg_2);
+    define_binary_native_op_combinations!(ctx, 10, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, arg_1 == arg_2);
 
     ctx.define_binary_operator("!=".into(), 1150).unwrap();
 
     define_binary_native_op_combinations!(ctx, 11, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 != arg_2);
+    define_binary_native_op_combinations!(ctx, 11, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 != arg_2);
+    define_binary_native_op_combinations!(ctx, 11, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, arg_1 != arg_2);
 
     /*
         ╒════════════════════╕

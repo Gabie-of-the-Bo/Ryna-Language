@@ -1,5 +1,7 @@
+use seq_macro::seq;
+
 use crate::number::Number;
-use crate::types::Type;
+use crate::types::*;
 use crate::object::*;
 use crate::context::NessaContext;
 
@@ -261,4 +263,20 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("rand_int".into()).unwrap();
 
     define_binary_function_overloads!(ctx, 17, Type::Basic(0), Type::Basic(0), Number, a, b, Number::rand_int_range(&a, &b)?);
+
+    // Max tuple size is 10 for now
+    seq!(I in 0..10 {
+        let id = ctx.functions.len();
+        ctx.define_function(format!("get_{}", I)).unwrap();
+
+        seq!(J in 2..10 {
+            ctx.define_native_function_overload(
+                id, 
+                J,
+                &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
+                Type::Ref(Box::new(Type::TemplateParam(I))), 
+                |_, _, v| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_obj())
+            ).unwrap();
+        });
+    });
 }

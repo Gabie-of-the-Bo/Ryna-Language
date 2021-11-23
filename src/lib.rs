@@ -59,4 +59,9 @@ mod integration {
     fn random() {
         integration_text("test/random.nessa");
     }
+
+    #[test]
+    fn tuples() {
+        integration_text("test/tuples.nessa");
+    }
 }

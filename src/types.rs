@@ -12,6 +12,12 @@ use crate::number::Number;
                                                   ╘══════════════════╛
 */
 
+#[derive(Clone, PartialEq)]
+pub struct Tuple {
+    pub types: Vec<Type>,
+    pub exprs: Vec<Object>
+}
+
 pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
 #[derive(Clone)]

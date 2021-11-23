@@ -327,6 +327,39 @@ impl NessaObject for bool {
     }
 }
 
+impl NessaObject for Tuple {
+    fn get_type_id(&self) -> usize {
+        return 0;
+    }
+
+    fn get_type(&self) -> Type {
+        return Type::And(self.types.clone());
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
+    fn to_string(&self) -> String {
+        return format!("({})", self.exprs.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<Tuple>();
+        let tb = b.as_any().downcast_ref::<Tuple>();
+
+        return ta == tb;
+    }
+}
+
 impl NessaObject for (Type, Vec<Object>) {
     fn get_type_id(&self) -> usize {
         return 3;

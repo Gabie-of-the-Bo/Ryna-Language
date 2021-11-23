@@ -5,6 +5,18 @@ class Dice {
     sides: Number;
 }
 
+fn roll(dice: &&Dice) -> Number {
+    let res: Number = 0;
+    let it: Number = 0;
+
+    while it < dice.rolls() {
+        res = res + rand_int(1, dice.sides());
+        it.inc();
+    }
+
+    return res.deref<Number>();
+}
+
 let d1: Dice = 2D20;
 let d2: Dice = 5D6;
 let d3: Dice = 9D10;
@@ -19,6 +31,18 @@ if d2.rolls() != 5 || d2.sides() != 6 {
 
 if d3.rolls() != 9 || d3.sides() != 10 {
     panic("Invalid d3");
+}
+
+let it: Number = 0;
+
+while it < 1000 {
+    let r: Number = d3.roll();
+
+    if r < d3.rolls() || r > d3.rolls() * d3.sides() {
+        panic("Invalid roll");
+    }
+
+    it.inc();
 }
 
 class InnerDice {

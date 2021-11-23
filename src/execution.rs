@@ -13,7 +13,7 @@ use crate::compilation::CompiledNessaExpr;
 impl NessaContext {
     pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         let compiled_code = self.parse_and_compile(code)?;
-
+        
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
 }
@@ -47,7 +47,7 @@ impl NessaContext {
         loop {
             match &program[ip as usize] {
                 Literal(obj) => {
-                    stack.push(obj.clone());
+                    stack.push(obj.deep_clone());
                     ip += 1;
                 },
 

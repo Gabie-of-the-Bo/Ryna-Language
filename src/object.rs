@@ -30,6 +30,7 @@ pub trait NessaObject {
 
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>>;
     fn to_string(&self) -> String;
     fn equal_to(&self, b: &dyn NessaObject) -> bool;
 }
@@ -58,6 +59,12 @@ impl Object {
         return Object {
             inner: Rc::new(RefCell::new(inner))
         }
+    }
+
+    pub fn deep_clone(&self) -> Object {
+        return Object {
+            inner: self.inner.borrow().deep_clone()
+        };
     }
 
     pub fn get_type_id(&self) -> usize {
@@ -208,6 +215,10 @@ impl NessaObject for Reference {
         return self;
     }
 
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
     fn to_string(&self) -> String {
         if self.mutable {
             return format!("&&{}", self.inner.borrow().to_string());
@@ -242,6 +253,10 @@ impl NessaObject for Number {
         return self;
     }
 
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
     fn to_string(&self) -> String {
         return String::from(self);
     }
@@ -267,6 +282,10 @@ impl NessaObject for String {
         return self;
     }
 
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
     fn to_string(&self) -> String {
         return self.clone();
     }
@@ -290,6 +309,10 @@ impl NessaObject for bool {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
     }
 
     fn to_string(&self) -> String {
@@ -321,6 +344,10 @@ impl NessaObject for (Type, Vec<Object>) {
         return self;
     }
 
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
     fn to_string(&self) -> String {
         return format!("{{{}}}", self.1.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
     }
@@ -348,6 +375,10 @@ impl NessaObject for (Type, Reference, usize) {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
     }
 
     fn to_string(&self) -> String {
@@ -384,6 +415,10 @@ impl NessaObject for TypeInstance {
         return self;
     }
 
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
     fn to_string(&self) -> String {
         return format!("Class [{}]", self.attributes.iter().map(Object::to_string).collect::<Vec<_>>().join(", "));
     }
@@ -411,6 +446,10 @@ impl NessaObject for () {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
     }
 
     fn to_string(&self) -> String {

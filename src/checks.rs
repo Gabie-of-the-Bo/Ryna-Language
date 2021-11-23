@@ -1099,4 +1099,57 @@ mod tests {
 
         assert!(ctx.parse_and_compile(&code_str).is_err());
     }
+
+    #[test]
+    fn class_check() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            class Test {
+                att_1: Number;
+                att_2: (String, Number);
+                att_3: Number | Array<Number>;
+            }
+        ".to_string();
+
+        ctx.parse_and_compile(&code_str).unwrap();
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            class Test {
+                att_1: Number;
+                att_1: (String, Number);
+                att_3: Number | Array<Number>;
+            }
+        ".to_string();
+
+        assert!(ctx.parse_and_compile(&code_str).is_err());
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            class Test {
+                syntax from Arg(1{d}, att_1) Arg('true' | 'false', att_2);
+
+                att_1: Number;
+                att_2: Bool;
+            }
+        ".to_string();
+
+        ctx.parse_and_compile(&code_str).unwrap();
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            class Test {
+                syntax from Arg(1{d}, att_1);
+
+                att_1: Number;
+                att_2: Bool;
+            }
+        ".to_string();
+
+        assert!(ctx.parse_and_compile(&code_str).is_err());
+    }
 }

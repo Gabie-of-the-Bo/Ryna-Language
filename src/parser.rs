@@ -1595,10 +1595,10 @@ mod tests {
         let and_one_str = "(Number)";
 
         let array_str = "Array<Number>";
-        let map_str = "Map<Number, String>";
+        let map_str = "Map<(Number), String>";
         let map_refs_str = "&Map<&Number, &&String>";
 
-        let basic_func_str = "Number => String";
+        let basic_func_str = "Number => (String)";
         let complex_func_str = "(Number, Array<Bool>) => Map<Number, *>";
 
         let (_, wildcard) = ctx.type_parser(wildcard_str).unwrap();
@@ -2097,8 +2097,8 @@ mod tests {
             return 0;
         }";
 
-        let test_4_str = "op (a: Number)[b: Number, c: Number] -> Number {
-            return a + b * c;
+        let test_4_str = "op (a: Number)[b: Number, c: Number] -> (Number, Bool) {
+            return (a + b * c, true);
         }";
 
         let (_, test_1) = ctx.operation_definition_parser(test_1_str, &RefCell::default()).unwrap();
@@ -2204,19 +2204,24 @@ mod tests {
                     ("b".into(), Type::Basic(0)),
                     ("c".into(), Type::Basic(0))
                 ),
-                Type::Basic(0),
+                Type::And(vec!(Type::Basic(0), Type::Basic(2))),
                 vec!(
-                    NessaExpr::Return(Box::new(NessaExpr::BinaryOperation(
-                        0,
-                        Box::new(NessaExpr::NameReference("a".into())),
-                        Box::new(NessaExpr::BinaryOperation(
-                            2,
-                            Box::new(NessaExpr::NameReference("b".into())),
-                            Box::new(NessaExpr::NameReference("c".into()))
-                        )
-                    )))
+                    NessaExpr::Return(Box::new(
+                        NessaExpr::Tuple(vec!(
+                            NessaExpr::BinaryOperation(
+                                0,
+                                Box::new(NessaExpr::NameReference("a".into())),
+                                Box::new(NessaExpr::BinaryOperation(
+                                    2,
+                                    Box::new(NessaExpr::NameReference("b".into())),
+                                    Box::new(NessaExpr::NameReference("c".into()))
+                                )
+                            )),
+                            NessaExpr::Literal(Object::new(true))
+                        ))
+                    ))
                 )
-            ))
+            )
         );
     }
 

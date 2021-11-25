@@ -48,8 +48,8 @@ pub enum NessaExpr {
     Tuple(Vec<NessaExpr>),
     NameReference(String),
 
-    UnaryOperation(usize, Box<NessaExpr>),
-    BinaryOperation(usize, Box<NessaExpr>, Box<NessaExpr>),
+    UnaryOperation(usize, Vec<Type>, Box<NessaExpr>),
+    BinaryOperation(usize, Vec<Type>, Box<NessaExpr>, Box<NessaExpr>),
     NaryOperation(usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
 
     VariableDefinition(String, Type, Box<NessaExpr>),
@@ -80,8 +80,8 @@ impl NessaExpr {
                 e.compile_types(templates);
             }
 
-            NessaExpr::UnaryOperation(_, e) => e.compile_types(templates),
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::UnaryOperation(_, _, e) => e.compile_types(templates),
+            NessaExpr::BinaryOperation(_, _, a, b) => {
                 a.compile_types(templates);
                 b.compile_types(templates);
             },
@@ -445,9 +445,25 @@ impl NessaContext {
             tuple((
                 tag(rep),
                 multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.type_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
                 |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
             )),
-            |(_, _, e)| NessaExpr::UnaryOperation(id, Box::new(e))
+            |(_, _, t, e)| NessaExpr::UnaryOperation(id, t.unwrap_or_default(), Box::new(e))
         )(input);
     }
     
@@ -466,9 +482,25 @@ impl NessaContext {
                 tuple((
                     |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache),
                     multispace0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                multispace0,
+                                separated_list1(
+                                    tuple((multispace0, tag(","), multispace0)), 
+                                    |input| self.type_parser(input)
+                                ),
+                                multispace0,
+                                tag(">"),
+                                multispace0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
                     tag(rep)
                 )),
-                |(e, _, _)| NessaExpr::UnaryOperation(id, Box::new(e))
+                |(e, _, t, _)| NessaExpr::UnaryOperation(id, t.unwrap_or_default(), Box::new(e))
             )(input);
 
             cache_post.insert(input.len(), match &res {
@@ -496,11 +528,27 @@ impl NessaContext {
             let res = map(
                 tuple((
                     multispace0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                multispace0,
+                                separated_list1(
+                                    tuple((multispace0, tag(","), multispace0)), 
+                                    |input| self.type_parser(input)
+                                ),
+                                multispace0,
+                                tag(">"),
+                                multispace0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
                     tag(rep),
                     multispace0,
                     |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
                 )),
-                |(_, _, _, b)| NessaExpr::BinaryOperation(id, Box::new(a.clone()), Box::new(b))
+                |(_, t, _, _, b)| NessaExpr::BinaryOperation(id, t.unwrap_or_default(), Box::new(a.clone()), Box::new(b))
             )(input);
 
             cache_bin.insert(input.len(), match &res {
@@ -1787,23 +1835,30 @@ mod tests {
         let n_var_str = "-5 + a?";
         let n_call_str = "5(-b + !10)";
         let template_func_str = "funct<Number>(5)";
+        let template_prefix_str = "!<Number>7";
+        let template_postfix_str = "false<&String>?";
+        let template_binary_str = "\"test\" <String, Bool>+ true";
 
         let (_, number) = ctx.nessa_expr_parser(number_str, &RefCell::default()).unwrap();
         let (_, var) = ctx.nessa_expr_parser(var_str, &RefCell::default()).unwrap();
         let (_, n_var) = ctx.nessa_expr_parser(n_var_str, &RefCell::default()).unwrap();
         let (_, n_call) = ctx.nessa_expr_parser(n_call_str, &RefCell::default()).unwrap();
         let (_, template_func) = ctx.nessa_expr_parser(template_func_str, &RefCell::default()).unwrap();
+        let (_, template_prefix) = ctx.nessa_expr_parser(template_prefix_str, &RefCell::default()).unwrap();
+        let (_, template_postfix) = ctx.nessa_expr_parser(template_postfix_str, &RefCell::default()).unwrap();
+        let (_, template_binary) = ctx.nessa_expr_parser(template_binary_str, &RefCell::default()).unwrap();
 
-        assert_eq!(number, NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
+        assert_eq!(number, NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
         assert_eq!(
             var, 
-            NessaExpr::UnaryOperation(0, 
-            Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::NameReference("a".into()))))
+            NessaExpr::UnaryOperation(0, vec!(), 
+            Box::new(NessaExpr::UnaryOperation(1, vec!(), Box::new(NessaExpr::NameReference("a".into()))))
         ));
         assert_eq!(n_var, NessaExpr::BinaryOperation(
             0, 
-            Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
-            Box::new(NessaExpr::UnaryOperation(2, Box::new(NessaExpr::NameReference("a".into())))),
+            vec!(),
+            Box::new(NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
+            Box::new(NessaExpr::UnaryOperation(2, vec!(), Box::new(NessaExpr::NameReference("a".into())))),
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(
             0, 
@@ -1812,8 +1867,9 @@ mod tests {
             vec!(
                 NessaExpr::BinaryOperation(
                     0, 
-                    Box::new(NessaExpr::UnaryOperation(0, Box::new(NessaExpr::NameReference("b".into())))),
-                    Box::new(NessaExpr::UnaryOperation(1, Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
+                    vec!(),
+                    Box::new(NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::NameReference("b".into())))),
+                    Box::new(NessaExpr::UnaryOperation(1, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
                 )
             )
         ));
@@ -1825,6 +1881,31 @@ mod tests {
                 NessaExpr::Literal(Object::new(Number::from(5)))
             )
         ));
+        assert_eq!(
+            template_prefix, 
+            NessaExpr::UnaryOperation(
+                1, 
+                vec!(Type::Basic(0)), 
+                Box::new(NessaExpr::Literal(Object::new(Number::from(7))))
+            )
+        );
+        assert_eq!(
+            template_postfix, 
+            NessaExpr::UnaryOperation(
+                2, 
+                vec!(Type::Ref(Box::new(Type::Basic(1)))), 
+                Box::new(NessaExpr::Literal(Object::new(false)))
+            )
+        );
+        assert_eq!(
+            template_binary, 
+            NessaExpr::BinaryOperation(
+                0, 
+                vec!(Type::Basic(1), Type::Basic(2)), 
+                Box::new(NessaExpr::Literal(Object::new("test".to_string()))),
+                Box::new(NessaExpr::Literal(Object::new(true)))
+            )
+        );
     }
 
     #[test]
@@ -1968,6 +2049,7 @@ mod tests {
                         Type::Basic(0), 
                         Box::new(NessaExpr::BinaryOperation(
                             0,
+                            vec!(),
                             Box::new(NessaExpr::NameReference("arg".into())),
                             Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
                         ))
@@ -1975,6 +2057,7 @@ mod tests {
                     NessaExpr::If(
                         Box::new(NessaExpr::BinaryOperation(
                             0,
+                            vec!(),
                             Box::new(NessaExpr::NameReference("r".into())),
                             Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
                         )),
@@ -1985,6 +2068,7 @@ mod tests {
                             (
                                 NessaExpr::BinaryOperation(
                                     0,
+                                    vec!(),
                                     Box::new(NessaExpr::NameReference("arg".into())),
                                     Box::new(NessaExpr::Literal(Object::new(Number::from(2))))
                                 ),
@@ -1993,6 +2077,7 @@ mod tests {
                                         "r".into(),
                                         Box::new(NessaExpr::BinaryOperation(
                                             0,
+                                            vec!(),
                                             Box::new(NessaExpr::NameReference("r".into())),
                                             Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
                                         ))
@@ -2027,6 +2112,7 @@ mod tests {
                         )), 
                         Box::new(NessaExpr::BinaryOperation(
                             0,
+                            vec!(),
                             Box::new(NessaExpr::NameReference("value".into())),
                             Box::new(NessaExpr::NameReference("key".into())),
                         ))
@@ -2210,9 +2296,11 @@ mod tests {
                         NessaExpr::Tuple(vec!(
                             NessaExpr::BinaryOperation(
                                 0,
+                                vec!(),
                                 Box::new(NessaExpr::NameReference("a".into())),
                                 Box::new(NessaExpr::BinaryOperation(
                                     2,
+                                    vec!(),
                                     Box::new(NessaExpr::NameReference("b".into())),
                                     Box::new(NessaExpr::NameReference("c".into()))
                                 )

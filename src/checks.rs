@@ -221,7 +221,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, arg) => {
+            NessaExpr::UnaryOperation(id, _, arg) => {
                 self.ambiguity_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
@@ -270,7 +270,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(id, arg1, arg2) => {
+            NessaExpr::BinaryOperation(id, _, arg1, arg2) => {
                 self.ambiguity_check(arg1)?;
                 self.ambiguity_check(arg2)?;
 
@@ -549,7 +549,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, arg) => {
+            NessaExpr::UnaryOperation(id, _, arg) => {
                 self.type_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
@@ -590,7 +590,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(id, arg1, arg2) => {
+            NessaExpr::BinaryOperation(id, _, arg1, arg2) => {
                 self.type_check(arg1)?;
                 self.type_check(arg2)?;
 

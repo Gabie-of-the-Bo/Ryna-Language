@@ -193,7 +193,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, a) => {
+            NessaExpr::UnaryOperation(id, _, a) => {
                 let args_type = self.infer_type(a)?;
 
                 let (_, r, _) = self.get_first_unary_op(*id, args_type).unwrap();
@@ -201,7 +201,7 @@ impl NessaContext {
                 return Some(r.clone());
             },
 
-            NessaExpr::BinaryOperation(id, a, b) => {
+            NessaExpr::BinaryOperation(id, _, a, b) => {
                 let a_type = self.infer_type(a)?;
                 let b_type = self.infer_type(b)?;
 

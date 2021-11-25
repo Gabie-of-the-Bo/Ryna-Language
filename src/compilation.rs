@@ -63,11 +63,11 @@ impl NessaContext {
             },
 
             // Compile operations
-            NessaExpr::UnaryOperation(_, e) => {
+            NessaExpr::UnaryOperation(_, _, e) => {
                 self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
             }
 
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::BinaryOperation(_, _, a, b) => {
                 self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
                 self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
             }
@@ -191,11 +191,11 @@ impl NessaContext {
             },
 
             // Compile operations
-            NessaExpr::UnaryOperation(_, e) => {
+            NessaExpr::UnaryOperation(_, _, e) => {
                 self.compile_expr_function_names(e);
             }
 
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::BinaryOperation(_, _, a, b) => {
                 self.compile_expr_function_names(a);
                 self.compile_expr_function_names(b);
             }
@@ -250,11 +250,11 @@ impl NessaContext {
             },
 
             // Compile operations
-            NessaExpr::UnaryOperation(_, e) => {
+            NessaExpr::UnaryOperation(_, _, e) => {
                 self.compile_expr_function_calls(e)?;
             }
 
-            NessaExpr::BinaryOperation(id, a, b) => {
+            NessaExpr::BinaryOperation(id, _, a, b) => {
                 self.compile_expr_function_calls(a)?;
                 self.compile_expr_function_calls(b)?;
 
@@ -463,10 +463,10 @@ impl NessaContext{
         return match expr {
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, e) | 
-            NessaExpr::UnaryOperation(_, e) |
+            NessaExpr::UnaryOperation(_, _, e) |
             NessaExpr::Return(e) => self.get_templated_function_instances(e), 
 
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::BinaryOperation(_, _, a, b) => {
                 let mut res = self.get_templated_function_instances(a);
 
                 NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(b));
@@ -585,7 +585,7 @@ impl NessaContext{
             NessaExpr::Variable(_, _, t) => *t = t.sub_templates(templates),
 
             NessaExpr::CompiledVariableAssignment(_, _, _, e) |
-            NessaExpr::UnaryOperation(_, e) |
+            NessaExpr::UnaryOperation(_, _, e) |
             NessaExpr::Return(e) => self.subtitute_type_params_expr(e, templates),
 
             NessaExpr::CompiledVariableDefinition(_, _, t, e) => {
@@ -605,7 +605,7 @@ impl NessaContext{
                 body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, templates));
             },
 
-            NessaExpr::BinaryOperation(_, a, b) => {
+            NessaExpr::BinaryOperation(_, _, a, b) => {
                 self.subtitute_type_params_expr(a, templates);
                 self.subtitute_type_params_expr(b, templates);
             }
@@ -863,9 +863,9 @@ impl NessaContext{
 
         return match expr {
             Literal(_) | Variable(..) => 1, 
-            BinaryOperation(_, a, b) => self.compiled_form_size(a) + self.compiled_form_size(b) + 1,
+            BinaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_size(b) + 1,
             NaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_body_size(b) + 1,
-            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, e) => self.compiled_form_size(e) + 1,
+            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, _, e) => self.compiled_form_size(e) + 1,
             If(ih, ib, ei, e) => {
                 let mut res = self.compiled_form_size(ih) + self.compiled_form_body_size(ib) + 1;
 
@@ -922,7 +922,7 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::UnaryOperation(id, e) => {
+            NessaExpr::UnaryOperation(id, _, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
 
                 let t = self.infer_type(e).unwrap();
@@ -938,7 +938,7 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::BinaryOperation(id, a, b) => {
+            NessaExpr::BinaryOperation(id, _, a, b) => {
                 let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, max_register)?;
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, max_register)?);
                 
@@ -1417,7 +1417,7 @@ mod tests {
         if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &code[1] {
             assert_eq!(*idx, 1);
 
-            if let NessaExpr::UnaryOperation(_, e2) = e.as_ref() {
+            if let NessaExpr::UnaryOperation(_, _, e2) = e.as_ref() {
                 if let NessaExpr::Variable(idx, _, _) = e2.as_ref() {
                     assert_eq!(*idx, 0);
                     
@@ -1448,7 +1448,7 @@ mod tests {
             if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &b[1] {
                 assert_eq!(*idx, 3);
 
-                if let NessaExpr::BinaryOperation(_, a, b) = e.as_ref() {
+                if let NessaExpr::BinaryOperation(_, _, a, b) = e.as_ref() {
                     if let NessaExpr::Variable(idx, _, _) = a.as_ref() {
                         assert_eq!(*idx, 2);
                         

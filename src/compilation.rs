@@ -451,65 +451,41 @@ impl NessaContext{
         curr.push(args.clone());
     }
 
-    fn merge_function_instances(a: &mut HashMap<usize, Vec<Vec<Type>>>, b: HashMap<usize, Vec<Vec<Type>>>){
-        for (id, inst) in b {
-            for args in inst {
-                NessaContext::add_function_instance(a, id, &args);
-            }
-        }
-    }
-
-    pub fn get_templated_function_instances(&self, expr: &NessaExpr) -> HashMap<usize, Vec<Vec<Type>>> {
+    pub fn get_template_calls(&self, expr: &NessaExpr, functions: &mut HashMap<usize, Vec<Vec<Type>>>) {
         return match expr {
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, e) | 
             NessaExpr::UnaryOperation(_, _, e) |
-            NessaExpr::Return(e) => self.get_templated_function_instances(e), 
+            NessaExpr::Return(e) => self.get_template_calls(e, functions), 
+
+            NessaExpr::Tuple(e) => self.get_template_calls_body(e, functions),
 
             NessaExpr::BinaryOperation(_, _, a, b) => {
-                let mut res = self.get_templated_function_instances(a);
-
-                NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(b));
-
-                res
-            }
+                self.get_template_calls(a, functions);
+                self.get_template_calls(b, functions);
+            },
 
             NessaExpr::NaryOperation(_, _, a, b) => {
-                let mut res = self.get_templated_function_instances(a);
-
-                for arg in b {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(arg));
-                }
-
-                res
+                self.get_template_calls(a, functions);
+                self.get_template_calls_body(b, functions);
             }
 
             NessaExpr::If(i, ib, ei, eb) => {
-                let mut res = self.get_templated_function_instances(i);
-
-                for line in ib {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
-                }
+                self.get_template_calls(i, functions);
+                self.get_template_calls_body(ib, functions);
 
                 for (ei_h, ei_b) in ei {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(ei_h));
-
-                    for line in ei_b {
-                        NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
-                    }
+                    self.get_template_calls(ei_h, functions);
+                    self.get_template_calls_body(ei_b, functions);
                 }
 
                 if let Some(b) = eb {
-                    for line in b {
-                        NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
-                    }
+                    self.get_template_calls_body(b, functions);
                 }
-
-                res
             }
 
             NessaExpr::CompiledFor(_, _, _, c, b) => {
-                let mut res = self.get_templated_function_instances(c);
+                self.get_template_calls(c, functions);
 
                 if let Some(ct) = self.infer_type(c) {
                     if let Some((_, it_type, _, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(ct.clone()), true) {
@@ -517,70 +493,51 @@ impl NessaContext{
 
                         if let Some((_, _, _, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
                             if let Some((_, _, _, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
-                                NessaContext::add_function_instance(&mut res, ITERATOR_FUNC_ID, &it_args);
-                                NessaContext::add_function_instance(&mut res, NEXT_FUNC_ID, &next_args);
-                                NessaContext::add_function_instance(&mut res, IS_CONSUMED_FUNC_ID, &consumed_args);
+                                NessaContext::add_function_instance(functions, ITERATOR_FUNC_ID, &it_args);
+                                NessaContext::add_function_instance(functions, NEXT_FUNC_ID, &next_args);
+                                NessaContext::add_function_instance(functions, IS_CONSUMED_FUNC_ID, &consumed_args);
                             }
                         }
                     }
                 }
 
                 for line in b {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+                    self.get_template_calls(line, functions);
                 }
-
-                res
             }
 
             NessaExpr::While(c, b) => {
-                let mut res = self.get_templated_function_instances(c);
-
-                for line in b {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
-                }
-
-                res
+                self.get_template_calls(c, functions);
+                self.get_template_calls_body(b, functions);
             }
 
             NessaExpr::FunctionCall(id, t, args) => {
-                let mut res = HashMap::new();
+                NessaContext::add_function_instance(functions, *id, t);
 
-                NessaContext::add_function_instance(&mut res, *id, t);
-
-                for arg in args {
-                    NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(arg));
-                }
-
-                res
+                self.get_template_calls_body(args, functions);
             }
 
             NessaExpr::CompiledFunctionDefinition(id, t, _, _, _, _) => {
-                let mut res = HashMap::new();
-
                 if t.is_empty() {
-                    NessaContext::add_function_instance(&mut res, *id, &vec!());
+                    NessaContext::add_function_instance(functions, *id, &vec!());
                 }
-
-                res
             }
 
-            _ => HashMap::new()
+            _ => {}
         }
     }
 
-    pub fn get_templated_function_instances_module(&self, lines: &Vec<NessaExpr>) -> HashMap<usize, Vec<Vec<Type>>> {
-        let mut res = HashMap::new();
-
+    pub fn get_template_calls_body(&self, lines: &Vec<NessaExpr>, functions: &mut HashMap<usize, Vec<Vec<Type>>>) {
         for line in lines {
-            NessaContext::merge_function_instances(&mut res, self.get_templated_function_instances(line));
+            self.get_template_calls(line, functions);
         }
-
-        return res;
     }
 
     pub fn subtitute_type_params_expr(&self, expr: &mut NessaExpr, templates: &HashMap<usize, Type>) {
         match expr {
             NessaExpr::Literal(_) => {},
+
+            NessaExpr::Tuple(e) => e.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, templates)),
 
             NessaExpr::Variable(_, _, t) => *t = t.sub_templates(templates),
 
@@ -637,7 +594,9 @@ impl NessaContext{
 
         let mut registers: HashMap<usize, usize> = HashMap::new();
 
-        let function_instances = self.get_templated_function_instances_module(lines);
+        let mut function_instances = HashMap::new();
+
+        self.get_template_calls_body(lines, &mut function_instances);
 
         // Define function indexes
         for (j, expr) in lines.iter().enumerate() {

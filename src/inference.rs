@@ -36,13 +36,14 @@ impl NessaContext {
         unreachable!();
     }
 
-    pub fn get_first_binary_op(&self, id: usize, a_type: Type, b_type: Type) -> Option<(usize, Type, bool)> {
+    pub fn get_first_binary_op(&self, id: usize, a_type: Type, b_type: Type, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         let t = Type::And(vec!(a_type, b_type));
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
-            for (i, (a, r, f)) in operations.iter().enumerate() {
-                if t.bindable_to(&a) { // Take first that matches
-                    return Some((i, r.clone(), f.is_some()));
+            for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+                if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
         }
@@ -55,8 +56,8 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(a, _, _)| t.bindable_to(&a))
-                            .map(|(a, r, _)| {
+                            .filter(|(_, a, _, _)| t.bindable_to(&a))
+                            .map(|(_, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1].clone(), r.clone())
 
@@ -202,13 +203,13 @@ impl NessaContext {
                 return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
-            NessaExpr::BinaryOperation(id, _, a, b) => {
+            NessaExpr::BinaryOperation(id, t, a, b) => {
                 let a_type = self.infer_type(a)?;
                 let b_type = self.infer_type(b)?;
 
-                let (_, r, _) = self.get_first_binary_op(*id, a_type, b_type).unwrap();
+                let (_, r, _, _) = self.get_first_binary_op(*id, a_type, b_type, false).unwrap();
 
-                return Some(r.clone());
+                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
             NessaExpr::NaryOperation(id, _, a, b) => {

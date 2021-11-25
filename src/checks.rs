@@ -599,7 +599,7 @@ impl NessaContext {
 
                 if let Some(t1) = inferred_type_1 {
                     if let Some(t2) = inferred_type_2 {
-                        if self.get_first_binary_op(*id, t1.clone(), t2.clone()).is_none() {
+                        if self.get_first_binary_op(*id, t1.clone(), t2.clone(), false).is_none() {
                             if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
                                 Err(format!(
                                     "Unable to get binary operator overload for ({}){}({})",

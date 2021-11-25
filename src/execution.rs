@@ -135,12 +135,14 @@ impl NessaContext {
                     }
                 }
 
-                BinaryOperatorCall(op_id, ov_id) => {
+                BinaryOperatorCall(op_id, ov_id, type_args) => {
                     if let Operator::Binary{operations, ..} = &self.binary_ops[*op_id] {
                         let a = stack.pop().unwrap();
                         let b = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2.unwrap()(&a, &b)?);
+                        let ov = &operations[*ov_id];
+
+                        stack.push(ov.3.unwrap()(type_args, &ov.2, &a, &b)?);
                         
                         ip += 1;
                     
@@ -572,6 +574,24 @@ mod tests {
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(14))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtest".to_string())));
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            binary op \"@\" (151);
+
+            op (a: 'T) <T>@ (b: 'T) -> 'T {
+                return a + b;
+            }
+
+            let a = 5 <Number>@ 8;
+            let b = \"test\" <String>@ \"tset\";
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(13))));
+        assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
     }
 
     #[test]

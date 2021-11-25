@@ -1,5 +1,5 @@
 use crate::types::Type;
-use crate::object::Object;
+use crate::object::*;
 use crate::context::NessaContext;
 
 use crate::number::*;
@@ -10,11 +10,11 @@ use crate::number::*;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunction = Option<fn(&Object) -> Result<Object, String>>;
+pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, &Object) -> Result<Object, String>>;
 pub type BinaryFunction = Option<fn(&Object, &Object) -> Result<Object, String>>;
 pub type NaryFunction = Option<fn(&Object, &[&Object]) -> Result<Object, String>>;
 
-pub type UnaryOperations = Vec<(Type, Type, UnaryFunction)>;
+pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(Type, Type, BinaryFunction)>;
 pub type NaryOperations = Vec<(Type, Type, NaryFunction)>;
 
@@ -70,7 +70,7 @@ impl Operator {
 
 macro_rules! define_unary_native_op {
     ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
-        $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
+        $ctx.define_native_unary_operation($id, 0, $inner_type, $return_type, |_, _, a| {
             let $a = &*a.get::<$unwrap_type>();
             
             return Ok(Object::new($result));
@@ -80,7 +80,7 @@ macro_rules! define_unary_native_op {
 
 macro_rules! define_unary_native_op_deref {
     ($ctx: ident, $id: expr, $inner_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $result: expr) => {
-        $ctx.define_native_unary_operation($id, $inner_type, $return_type, |a| {
+        $ctx.define_native_unary_operation($id, 0, $inner_type, $return_type, |_, _, a| {
             let $a = &*a.deref::<$unwrap_type>();
             
             return Ok(Object::new($result));
@@ -102,7 +102,7 @@ macro_rules! define_unary_native_op_combinations {
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 300).unwrap();
 
-    ctx.define_native_unary_operation(0, Type::Basic(0), Type::Basic(0), |a| {
+    ctx.define_native_unary_operation(0, 0, Type::Basic(0), Type::Basic(0), |_, _, a| {
         let n_a = &*a.deref::<Number>();
         let mut res = n_a.clone();
 
@@ -114,6 +114,14 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("!".into(), true, 250).unwrap();
 
     define_unary_native_op_combinations!(ctx, 1, Type::Basic(2), Type::Basic(2), bool, arg, !arg);
+
+    ctx.define_unary_operator("*".into(), true, 155).unwrap();
+
+    ctx.define_native_unary_operation(2, 1, Type::MutRef(Box::new(Type::TemplateParam(0))), Type::TemplateParam(0), |_, _, a| {
+        return Ok(Object {
+            inner: a.get::<Reference>().inner.clone()
+        });
+    }).unwrap();
 
     ctx.define_unary_operator("?".into(), false, 150).unwrap();
 }

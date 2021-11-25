@@ -84,23 +84,23 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Type, Type, UnaryFunction)> {
+    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(usize, Type, Type, UnaryFunction)> {
         if let Operator::Unary{operations: o, ..} = &self.unary_ops[id] {
-            return o.iter().filter(|(t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
         }
 
         return vec!();
     }
 
-    pub fn define_native_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: fn(&Object) -> Result<Object, String>) -> Result<(), String> {
-        return self.define_unary_operation(id, a, ret, Some(f));
+    pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, &Object) -> Result<Object, String>) -> Result<(), String> {
+        return self.define_unary_operation(id, templates, a, ret, Some(f));
     }
 
-    pub fn define_unary_operation(&mut self, id: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
+    pub fn define_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
         let op = &self.unary_ops[id];
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
-            for (t, _, _) in o { // Check subsumption
+            for (_, t, _, _) in o { // Check subsumption
                 if a.bindable_to(&t) {
                     return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                         r, a.get_name(self), r, t.get_name(self)));
@@ -114,7 +114,7 @@ impl NessaContext {
         }
 
         if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
-            o.push((a, ret, f));
+            o.push((templates, a, ret, f));
         }
 
         return Ok(());
@@ -351,9 +351,9 @@ mod tests {
     fn operation_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_unary_operation(0, Type::Basic(1), Type::Basic(1), |a| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_unary_operation(0, Type::Basic(0), Type::Basic(1), |a| { Ok(a.clone()) });
-        let def_3 = ctx.define_native_unary_operation(0, Type::Wildcard, Type::Wildcard, |a| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_unary_operation(0, 0, Type::Basic(1), Type::Basic(1), |_, _, a| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_unary_operation(0, 0, Type::Basic(0), Type::Basic(1), |_, _, a| { Ok(a.clone()) });
+        let def_3 = ctx.define_native_unary_operation(0, 0, Type::Wildcard, Type::Wildcard, |_, _, a| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

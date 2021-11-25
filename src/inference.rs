@@ -5,11 +5,12 @@ use crate::operations::*;
 use crate::types::Type;
 
 impl NessaContext {
-    pub fn get_first_unary_op(&self, id: usize, arg_type: Type) -> Option<(usize, Type, bool)> {
+    pub fn get_first_unary_op(&self, id: usize, arg_type: Type, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
-            for (i, (a, r, f)) in operations.iter().enumerate() {
-                if arg_type.bindable_to(&a) { // Take first that matches
-                    return Some((i, r.clone(), f.is_some()));
+            for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+                if let (true, subs) = arg_type.bindable_to_subtitutions(&a) { // Take first that matches
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
         }
@@ -20,7 +21,7 @@ impl NessaContext {
     pub fn is_unary_op_ambiguous(&self, id: usize, arg_type: Type) -> Option<Vec<(Type, Type)>> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             let overloads = operations.iter()
-                            .map(|(a, r, _)| (a.clone(), r.clone()))
+                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
                             .filter(|(a, _)| arg_type.bindable_to(a)).collect::<Vec<_>>();
 
             // Return Some(overloads) if the call is ambiguous, else return None
@@ -193,12 +194,12 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, _, a) => {
+            NessaExpr::UnaryOperation(id, t, a) => {
                 let args_type = self.infer_type(a)?;
 
-                let (_, r, _) = self.get_first_unary_op(*id, args_type).unwrap();
+                let (_, r, _, _) = self.get_first_unary_op(*id, args_type, false).unwrap();
 
-                return Some(r.clone());
+                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
             NessaExpr::BinaryOperation(id, _, a, b) => {

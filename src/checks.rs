@@ -15,10 +15,10 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, body, _) |
-            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, body, _) |
-            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, body, _) |
-            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, body, _) |
+            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, _, body, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, _, body, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, _, body, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, _, body, _) |
             NessaExpr::CompiledFunctionDefinition(_, _, _, _, body, _) => self.ensured_return_check_body(body),
 
             _ => Ok(())
@@ -103,10 +103,10 @@ impl NessaContext {
                 Ok(())
             }
 
-            (NessaExpr::CompiledPrefixOperationDefinition(_, _, _, ret, body, _), None) |
-            (NessaExpr::CompiledPostfixOperationDefinition(_, _, _, ret, body, _), None) |
-            (NessaExpr::CompiledBinaryOperationDefinition(_, _, _, ret, body, _), None) |
-            (NessaExpr::CompiledNaryOperationDefinition(_, _, _, ret, body, _), None) => {
+            (NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, ret, body, _), None) |
+            (NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, ret, body, _), None) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
@@ -461,6 +461,10 @@ impl NessaContext {
                 }
             }
 
+            NessaExpr::CompiledPrefixOperationDefinition(_, t, _, _, _, b, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, t, _, _, _, b, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, t, _, _, _, b, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, t, _, _, _, b, _) |
             NessaExpr::CompiledFunctionDefinition(_, t, _, _, b, _) => {
                 if t.is_empty() {
                     for line in b {
@@ -471,10 +475,6 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, b, _) |
             NessaExpr::CompiledFor(_, _, _, _, b) => {
                 for line in b {
                     self.ambiguity_check(line)?;
@@ -555,7 +555,7 @@ impl NessaContext {
                 let inferred_type = self.infer_type(arg);
 
                 if let Some(t) = inferred_type {
-                    if self.get_first_unary_op(*id, t.clone()).is_none() {
+                    if self.get_first_unary_op(*id, t.clone(), false).is_none() {
                         if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
                             if *prefix {
                                 Err(format!(
@@ -770,10 +770,10 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, b, _) |
-            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, _, b, _) |
             NessaExpr::CompiledFor(_, _, _, _, b) => {
                 for line in b {
                     self.type_check(line)?;

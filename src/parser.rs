@@ -38,10 +38,10 @@ pub enum NessaExpr {
     CompiledFor(usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
     CompiledFunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
-    CompiledPrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>, usize),
-    CompiledPostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>, usize),
-    CompiledBinaryOperationDefinition(usize, (String, Type), (String, Type), Type, Vec<NessaExpr>, usize),
-    CompiledNaryOperationDefinition(usize, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
+    CompiledPrefixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
+    CompiledPostfixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
+    CompiledBinaryOperationDefinition(usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>, usize),
+    CompiledNaryOperationDefinition(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
 
     // Uncompiled
     Literal(Object),
@@ -1954,7 +1954,7 @@ mod tests {
             0, 
             vec!(),
             Box::new(NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
-            Box::new(NessaExpr::UnaryOperation(2, vec!(), Box::new(NessaExpr::NameReference("a".into())))),
+            Box::new(NessaExpr::UnaryOperation(3, vec!(), Box::new(NessaExpr::NameReference("a".into())))),
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(
             0, 
@@ -1988,7 +1988,7 @@ mod tests {
         assert_eq!(
             template_postfix, 
             NessaExpr::UnaryOperation(
-                2, 
+                3, 
                 vec!(Type::Ref(Box::new(Type::Basic(1)))), 
                 Box::new(NessaExpr::Literal(Object::new(false)))
             )
@@ -2313,7 +2313,7 @@ mod tests {
         assert_eq!(
             test_2,
             NessaExpr::PostfixOperationDefinition(
-                2,
+                3,
                 vec!(),
                 "arg".into(),
                 Type::Basic(2),
@@ -2482,7 +2482,7 @@ mod tests {
         assert_eq!(
             test_template_2,
             NessaExpr::PostfixOperationDefinition(
-                2,
+                3,
                 vec!("T".into()),
                 "arg".into(),
                 Type::TemplateParam(0),

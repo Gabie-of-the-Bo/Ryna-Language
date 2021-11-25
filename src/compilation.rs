@@ -324,31 +324,31 @@ impl NessaContext {
                 *expr = NessaExpr::CompiledFunctionDefinition(*id, t.clone(), a.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::PrefixOperationDefinition(id, _, n, t, r, b) => {
+            NessaExpr::PrefixOperationDefinition(id, tm, n, t, r, b) => {
                 let max_var = self.compile(b, &vec!((n.clone(), t.clone())))?;
 
-                *expr = NessaExpr::CompiledPrefixOperationDefinition(*id, n.clone(), t.clone(), r.clone(), b.clone(), max_var);
+                *expr = NessaExpr::CompiledPrefixOperationDefinition(*id, tm.clone(), n.clone(), t.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::PostfixOperationDefinition(id, _, n, t, r, b) => {
+            NessaExpr::PostfixOperationDefinition(id, tm, n, t, r, b) => {
                 let max_var = self.compile(b, &vec!((n.clone(), t.clone())))?;
 
-                *expr = NessaExpr::CompiledPostfixOperationDefinition(*id, n.clone(), t.clone(), r.clone(), b.clone(), max_var);
+                *expr = NessaExpr::CompiledPostfixOperationDefinition(*id, tm.clone(), n.clone(), t.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::BinaryOperationDefinition(id, _, a1, a2, r, b) => {
+            NessaExpr::BinaryOperationDefinition(id, tm, a1, a2, r, b) => {
                 let max_var = self.compile(b, &vec!(a1.clone(), a2.clone()))?;
 
-                *expr = NessaExpr::CompiledBinaryOperationDefinition(*id, a1.clone(), a2.clone(), r.clone(), b.clone(), max_var);
+                *expr = NessaExpr::CompiledBinaryOperationDefinition(*id, tm.clone(), a1.clone(), a2.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::NaryOperationDefinition(id, _, a, args, r, b) => {
+            NessaExpr::NaryOperationDefinition(id, tm, a, args, r, b) => {
                 let mut all_args = vec!(a.clone());
                 all_args.extend(args.iter().cloned());
 
                 let max_var = self.compile(b, &all_args)?;
 
-                *expr = NessaExpr::CompiledNaryOperationDefinition(*id, a.clone(), args.clone(), r.clone(), b.clone(), max_var);
+                *expr = NessaExpr::CompiledNaryOperationDefinition(*id, tm.clone(), a.clone(), args.clone(), r.clone(), b.clone(), max_var);
             }
 
             _ => {}
@@ -401,7 +401,7 @@ pub enum CompiledNessaExpr {
     Return,
 
     NativeFunctionCall(usize, usize, Vec<Type>),
-    UnaryOperatorCall(usize, usize),
+    UnaryOperatorCall(usize, usize, Vec<Type>),
     BinaryOperatorCall(usize, usize),
     NaryOperatorCall(usize, usize),
 
@@ -439,7 +439,7 @@ impl NessaInstruction {
 }
 
 impl NessaContext{
-    fn add_function_instance(map: &mut HashMap<usize, Vec<Vec<Type>>>, id: usize, args: &Vec<Type>){
+    fn add_template_instance(map: &mut HashMap<usize, Vec<Vec<Type>>>, id: usize, args: &Vec<Type>){
         let curr = map.entry(id).or_default();
 
         for i in curr.iter() {
@@ -451,41 +451,46 @@ impl NessaContext{
         curr.push(args.clone());
     }
 
-    pub fn get_template_calls(&self, expr: &NessaExpr, functions: &mut HashMap<usize, Vec<Vec<Type>>>) {
+    pub fn get_template_calls(&self, expr: &NessaExpr, functions: &mut HashMap<usize, Vec<Vec<Type>>>, unary: &mut HashMap<usize, Vec<Vec<Type>>>) {
         return match expr {
             NessaExpr::CompiledVariableDefinition(_, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, e) | 
-            NessaExpr::UnaryOperation(_, _, e) |
-            NessaExpr::Return(e) => self.get_template_calls(e, functions), 
+            NessaExpr::Return(e) => self.get_template_calls(e, functions, unary), 
 
-            NessaExpr::Tuple(e) => self.get_template_calls_body(e, functions),
+            NessaExpr::Tuple(e) => self.get_template_calls_body(e, functions, unary),
+
+            NessaExpr::UnaryOperation(id, t, e) => {
+                NessaContext::add_template_instance(unary, *id, t);
+
+                self.get_template_calls(e, functions, unary);
+            }
 
             NessaExpr::BinaryOperation(_, _, a, b) => {
-                self.get_template_calls(a, functions);
-                self.get_template_calls(b, functions);
+                self.get_template_calls(a, functions, unary);
+                self.get_template_calls(b, functions, unary);
             },
 
             NessaExpr::NaryOperation(_, _, a, b) => {
-                self.get_template_calls(a, functions);
-                self.get_template_calls_body(b, functions);
+                self.get_template_calls(a, functions, unary);
+                self.get_template_calls_body(b, functions, unary);
             }
 
             NessaExpr::If(i, ib, ei, eb) => {
-                self.get_template_calls(i, functions);
-                self.get_template_calls_body(ib, functions);
+                self.get_template_calls(i, functions, unary);
+                self.get_template_calls_body(ib, functions, unary);
 
                 for (ei_h, ei_b) in ei {
-                    self.get_template_calls(ei_h, functions);
-                    self.get_template_calls_body(ei_b, functions);
+                    self.get_template_calls(ei_h, functions, unary);
+                    self.get_template_calls_body(ei_b, functions, unary);
                 }
 
                 if let Some(b) = eb {
-                    self.get_template_calls_body(b, functions);
+                    self.get_template_calls_body(b, functions, unary);
                 }
             }
 
             NessaExpr::CompiledFor(_, _, _, c, b) => {
-                self.get_template_calls(c, functions);
+                self.get_template_calls(c, functions, unary);
 
                 if let Some(ct) = self.infer_type(c) {
                     if let Some((_, it_type, _, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(ct.clone()), true) {
@@ -493,33 +498,33 @@ impl NessaContext{
 
                         if let Some((_, _, _, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
                             if let Some((_, _, _, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
-                                NessaContext::add_function_instance(functions, ITERATOR_FUNC_ID, &it_args);
-                                NessaContext::add_function_instance(functions, NEXT_FUNC_ID, &next_args);
-                                NessaContext::add_function_instance(functions, IS_CONSUMED_FUNC_ID, &consumed_args);
+                                NessaContext::add_template_instance(functions, ITERATOR_FUNC_ID, &it_args);
+                                NessaContext::add_template_instance(functions, NEXT_FUNC_ID, &next_args);
+                                NessaContext::add_template_instance(functions, IS_CONSUMED_FUNC_ID, &consumed_args);
                             }
                         }
                     }
                 }
 
                 for line in b {
-                    self.get_template_calls(line, functions);
+                    self.get_template_calls(line, functions, unary);
                 }
             }
 
             NessaExpr::While(c, b) => {
-                self.get_template_calls(c, functions);
-                self.get_template_calls_body(b, functions);
+                self.get_template_calls(c, functions, unary);
+                self.get_template_calls_body(b, functions, unary);
             }
 
             NessaExpr::FunctionCall(id, t, args) => {
-                NessaContext::add_function_instance(functions, *id, t);
+                NessaContext::add_template_instance(functions, *id, t);
 
-                self.get_template_calls_body(args, functions);
+                self.get_template_calls_body(args, functions, unary);
             }
 
             NessaExpr::CompiledFunctionDefinition(id, t, _, _, _, _) => {
                 if t.is_empty() {
-                    NessaContext::add_function_instance(functions, *id, &vec!());
+                    NessaContext::add_template_instance(functions, *id, &vec!());
                 }
             }
 
@@ -527,9 +532,9 @@ impl NessaContext{
         }
     }
 
-    pub fn get_template_calls_body(&self, lines: &Vec<NessaExpr>, functions: &mut HashMap<usize, Vec<Vec<Type>>>) {
+    pub fn get_template_calls_body(&self, lines: &Vec<NessaExpr>, functions: &mut HashMap<usize, Vec<Vec<Type>>>, unary: &mut HashMap<usize, Vec<Vec<Type>>>) {
         for line in lines {
-            self.get_template_calls(line, functions);
+            self.get_template_calls(line, functions, unary);
         }
     }
 
@@ -541,13 +546,17 @@ impl NessaContext{
 
             NessaExpr::Variable(_, _, t) => *t = t.sub_templates(templates),
 
-            NessaExpr::CompiledVariableAssignment(_, _, _, e) |
-            NessaExpr::UnaryOperation(_, _, e) |
             NessaExpr::Return(e) => self.subtitute_type_params_expr(e, templates),
 
+            NessaExpr::CompiledVariableAssignment(_, _, t, e) |
             NessaExpr::CompiledVariableDefinition(_, _, t, e) => {
                 *t = t.sub_templates(templates);
                 self.subtitute_type_params_expr(e, templates);
+            },
+            
+            NessaExpr::UnaryOperation(_, t, a) => {
+                t.iter_mut().for_each(|i| *i = i.sub_templates(templates));
+                self.subtitute_type_params_expr(a, templates);
             },
             
             NessaExpr::FunctionCall(_, t, args) => {
@@ -588,15 +597,16 @@ impl NessaContext{
     pub fn compiled_form(&self, lines: &Vec<NessaExpr>, max_register: usize) -> Result<Vec<NessaInstruction>, String> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
-        let mut unary: HashMap<(usize, usize), usize> = HashMap::new();
+        let mut unary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
         let mut binary: HashMap<(usize, usize), usize> = HashMap::new();
         let mut nary: HashMap<(usize, usize), usize> = HashMap::new();
 
         let mut registers: HashMap<usize, usize> = HashMap::new();
 
         let mut function_instances = HashMap::new();
+        let mut unary_instances = HashMap::new();
 
-        self.get_template_calls_body(lines, &mut function_instances);
+        self.get_template_calls_body(lines, &mut function_instances, &mut unary_instances);
 
         // Define function indexes
         for (j, expr) in lines.iter().enumerate() {
@@ -620,23 +630,27 @@ impl NessaContext{
                     }
                 },
                 
-                NessaExpr::CompiledPrefixOperationDefinition(id, _, t, _, b, v) |
-                NessaExpr::CompiledPostfixOperationDefinition(id, _, t, _, b, v) => {
-                    // Find unary operator overload id
-                    if let Operator::Unary{operations, ..} = &self.unary_ops[*id] {
-                        for (i, (i_t, _, _)) in operations.iter().enumerate() {
-                            if i_t == t {
-                                unary.entry((*id, i)).or_insert(program_size);
-                                registers.insert(j, *v);
-                                break;
+                NessaExpr::CompiledPrefixOperationDefinition(id, _, _, t, _, b, v) |
+                NessaExpr::CompiledPostfixOperationDefinition(id, _, _, t, _, b, v) => {
+                    if let Some(usages) = unary_instances.get(id) {
+                        for ov in usages {
+                            // Find unary operator overload id
+                            if let Operator::Unary{operations, ..} = &self.unary_ops[*id] {
+                                for (i, (_, i_t, _, _)) in operations.iter().enumerate() {
+                                    if i_t == t {
+                                        unary.entry((*id, i, ov.clone())).or_insert(program_size);
+                                        registers.insert(j, *v);
+                                        break;
+                                    }
+                                }
                             }
+            
+                            program_size += self.compiled_form_body_size(b) + 1;
                         }
                     }
-    
-                    program_size += self.compiled_form_body_size(b) + 1;
                 }
                 
-                NessaExpr::CompiledBinaryOperationDefinition(id, (_, a_t), (_, b_t), _, b, v) => {
+                NessaExpr::CompiledBinaryOperationDefinition(id, _, (_, a_t), (_, b_t), _, b, v) => {
                     let and = Type::And(vec!(a_t.clone(), b_t.clone()));
 
                     // Find binary operator overload id
@@ -653,7 +667,7 @@ impl NessaContext{
                     program_size += self.compiled_form_body_size(b) + 2;
                 }
                 
-                NessaExpr::CompiledNaryOperationDefinition(id, (_, a_t), a, _, b, v) => {
+                NessaExpr::CompiledNaryOperationDefinition(id, _, (_, a_t), a, _, b, v) => {
                     let mut arg_types = vec!(a_t.clone());
                     arg_types.extend(a.iter().map(|(_, t)| t).cloned());
 
@@ -720,36 +734,56 @@ impl NessaContext{
 
                                 res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
                             }
-            
                         }
                     }
                 },
 
-                NessaExpr::CompiledPrefixOperationDefinition(id, _, t, r, b, _) |
-                NessaExpr::CompiledPostfixOperationDefinition(id, _, t, r, b, _) => {
-                    let mut rep = String::new();
-                    let mut is_prefix = false;
+                NessaExpr::CompiledPrefixOperationDefinition(id, _, _, t, r, b, _) |
+                NessaExpr::CompiledPostfixOperationDefinition(id, _, _, t, r, b, _) => {
+                    if let Some(usages) = unary_instances.get(id) {
+                        for ov in usages {
+                            let mut rep = String::new();
+                            let mut is_prefix = false;
+        
+                            if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                                rep = representation.clone();
+                                is_prefix = *prefix;
+                            }
+        
+                            // Store parameter
+                            let comment;
+        
+                            if is_prefix {
+                                comment = format!("op {}({}) -> {}", rep, t.get_name(self), r.get_name(self));
+        
+                            } else {
+                                comment = format!("op ({}){} -> {}", t.get_name(self), rep, r.get_name(self));
+                            }
+                            
+                            res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
 
-                    if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
-                        rep = representation.clone();
-                        is_prefix = *prefix;
+                            // Substitute type parameters if it is necessary
+                            if ov.is_empty() {
+                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
+                            
+                            } else {
+                                let mut sub_b = b.clone();
+                                let templates = ov.iter().cloned().enumerate().collect();
+
+                                sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
+
+                                // Statically check the newly instantiated functions
+                                for line in &sub_b {
+                                    self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
+                                }
+
+                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                            }
+                        }
                     }
-
-                    // Store parameter
-                    let comment;
-
-                    if is_prefix {
-                        comment = format!("op {}({}) -> {}", rep, t.get_name(self), r.get_name(self));
-
-                    } else {
-                        comment = format!("op ({}){} -> {}", t.get_name(self), rep, r.get_name(self));
-                    }
-                    
-                    res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
-                    res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
                 },
 
-                NessaExpr::CompiledBinaryOperationDefinition(id, (_, t1), (_, t2), r, b, _) => {
+                NessaExpr::CompiledBinaryOperationDefinition(id, _, (_, t1), (_, t2), r, b, _) => {
                     // Store parameter
                     let mut rep = String::new();
 
@@ -764,7 +798,7 @@ impl NessaContext{
                     res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
                 },
 
-                NessaExpr::CompiledNaryOperationDefinition(id, (_, t), a, r, b, _) => {
+                NessaExpr::CompiledNaryOperationDefinition(id, _, (_, t), a, r, b, _) => {
                     // Store parameters
                     let mut o_rep = String::new();
                     let mut c_rep = String::new();
@@ -852,7 +886,7 @@ impl NessaContext{
     pub fn compiled_form_expr(
         &self, expr: &NessaExpr, 
         functions: &HashMap<(usize, usize, Vec<Type>), usize>, 
-        unary: &HashMap<(usize, usize), usize>, 
+        unary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         binary: &HashMap<(usize, usize), usize>, 
         nary: &HashMap<(usize, usize), usize>, 
         max_register: usize
@@ -881,22 +915,24 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::UnaryOperation(id, _, e) => {
+
+            NessaExpr::UnaryOperation(id, t, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
 
-                let t = self.infer_type(e).unwrap();
-                let (ov_id, _, native) = self.get_first_unary_op(*id, t).unwrap();
+                let i_t = self.infer_type(e).unwrap();
+                let (ov_id, _, native, _) = self.get_first_unary_op(*id, i_t, false).unwrap();
 
                 if native {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
 
                 } else {
-                    let pos = unary.get(&(*id, ov_id)).unwrap();
+                    let pos = unary.get(&(*id, ov_id, t.clone())).unwrap();
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos, max_register)));
                 }
 
                 Ok(res)
             },
+
             NessaExpr::BinaryOperation(id, _, a, b) => {
                 let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, max_register)?;
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, max_register)?);
@@ -916,6 +952,7 @@ impl NessaContext{
 
                 Ok(res)
             },
+
             NessaExpr::NaryOperation(id, _, a, b) => {
                 let mut res = vec!();
 
@@ -940,6 +977,7 @@ impl NessaContext{
 
                 Ok(res)
             },
+
             NessaExpr::If(ih, ib, ei, e) => {
                 let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, max_register)?;
                 let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, max_register)?;
@@ -1094,7 +1132,7 @@ impl NessaContext{
     pub fn compiled_form_body(
         &self, lines: &Vec<NessaExpr>, 
         functions: &HashMap<(usize, usize, Vec<Type>), usize>, 
-        unary: &HashMap<(usize, usize), usize>, 
+        unary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         binary: &HashMap<(usize, usize), usize>, 
         nary: &HashMap<(usize, usize), usize>, 
         max_register: usize
@@ -1284,8 +1322,8 @@ impl NessaContext{
         for i in ops {
             // TODO: create functions from bodies
             match i {
-                NessaExpr::PrefixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
-                NessaExpr::PostfixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
+                NessaExpr::PrefixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, 0, t, r, None)?,
+                NessaExpr::PostfixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, 0, t, r, None)?,
                 NessaExpr::BinaryOperationDefinition(id, _, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, ta, tb, r, None)?,
                 NessaExpr::NaryOperationDefinition(id, _, (_a, ta), v, r, _) => self.define_nary_operation(id, ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, None)?,
 

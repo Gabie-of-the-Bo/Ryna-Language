@@ -37,7 +37,7 @@ pub trait NessaObject {
 
 #[derive(Clone, Debug)]
 pub struct Object {
-    inner: Rc<RefCell<dyn NessaObject>>
+    pub inner: Rc<RefCell<dyn NessaObject>>
 }
 
 impl std::fmt::Debug for dyn NessaObject {

@@ -120,11 +120,13 @@ impl NessaContext {
                     }
                 }
 
-                UnaryOperatorCall(op_id, ov_id) => {
+                UnaryOperatorCall(op_id, ov_id, type_args) => {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = stack.pop().unwrap();
 
-                        stack.push(operations[*ov_id].2.unwrap()(&obj)?);
+                        let ov = &operations[*ov_id];
+
+                        stack.push(ov.3.unwrap()(type_args, &ov.2, &obj)?);
 
                         ip += 1;
                     
@@ -549,6 +551,27 @@ mod tests {
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
+    }
+
+    #[test]
+    fn templated_operations() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            unary prefix op \"~\" (151);
+
+            op ~<T>(a: 'T) -> 'T {
+                return a + a;
+            }
+            
+            let a = ~<Number>7;
+            let b = ~<String>\"test\";
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(14))));
+        assert_eq!(ctx.variables[1], Some(Object::new("testtest".to_string())));
     }
 
     #[test]

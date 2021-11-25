@@ -14,7 +14,7 @@ fn roll(dice: &&Dice) -> Number {
         it.inc();
     }
 
-    return res.deref<Number>();
+    return *<Number>res;
 }
 
 let d1: Dice = 2D20;

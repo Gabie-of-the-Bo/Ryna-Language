@@ -1355,11 +1355,10 @@ impl NessaContext{
         let ops = self.nessa_operations_parser(code).unwrap().1;
 
         for i in ops {
-            // TODO: create functions from bodies
             match i {
-                NessaExpr::PrefixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, 0, t, r, None)?,
-                NessaExpr::PostfixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, 0, t, r, None)?,
-                NessaExpr::BinaryOperationDefinition(id, _, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, ta, tb, r, None)?,
+                NessaExpr::PrefixOperationDefinition(id, tm, _a, t, r, _) => self.define_unary_operation(id, tm.len(), t, r, None)?,
+                NessaExpr::PostfixOperationDefinition(id, tm, _a, t, r, _) => self.define_unary_operation(id, tm.len(), t, r, None)?,
+                NessaExpr::BinaryOperationDefinition(id, tm, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, tm.len(), ta, tb, r, None)?,
                 NessaExpr::NaryOperationDefinition(id, _, (_a, ta), v, r, _) => self.define_nary_operation(id, ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, None)?,
 
                 _ => unreachable!()

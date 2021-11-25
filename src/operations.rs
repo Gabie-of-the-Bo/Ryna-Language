@@ -128,7 +128,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
 macro_rules! define_binary_native_op {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
             let $a = &*a.get::<$unwrap_type>();
             let $b = &*b.get::<$unwrap_type>();
     
@@ -139,7 +139,7 @@ macro_rules! define_binary_native_op {
 
 macro_rules! define_binary_native_op_deref_l {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
             let $a = &*a.deref::<$unwrap_type>();
             let $b = &*b.get::<$unwrap_type>();
     
@@ -150,7 +150,7 @@ macro_rules! define_binary_native_op_deref_l {
 
 macro_rules! define_binary_native_op_deref_r {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
             let $a = &*a.get::<$unwrap_type>();
             let $b = &*b.deref::<$unwrap_type>();
     
@@ -161,7 +161,7 @@ macro_rules! define_binary_native_op_deref_r {
 
 macro_rules! define_binary_native_op_deref {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
             let $a = &*a.deref::<$unwrap_type>();
             let $b = &*b.deref::<$unwrap_type>();
     

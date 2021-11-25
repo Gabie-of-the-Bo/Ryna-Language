@@ -162,11 +162,11 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, &Object, &Object) -> Result<Object, String>) -> Result<(), String> {
-        return self.define_binary_operation(id, a, b, ret, Some(f));
+    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, &Object, &Object) -> Result<Object, String>) -> Result<(), String> {
+        return self.define_binary_operation(id, templates, a, b, ret, Some(f));
     }
 
-    pub fn define_binary_operation(&mut self, id: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
+    pub fn define_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
@@ -189,7 +189,7 @@ impl NessaContext {
         }
 
         if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
-            o.push((0, and, ret, f));
+            o.push((templates, and, ret, f));
         }
 
         return Ok(());
@@ -359,9 +359,9 @@ mod tests {
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_binary_operation(0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_binary_operation(0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
-        let def_3 = ctx.define_native_binary_operation(0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_binary_operation(0, 0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_binary_operation(0, 0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
+        let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

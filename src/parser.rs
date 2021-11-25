@@ -61,10 +61,10 @@ pub enum NessaExpr {
     NaryOperatorDefinition(String, String, usize),
     ClassDefinition(String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
 
-    PrefixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
-    PostfixOperationDefinition(usize, String, Type, Type, Vec<NessaExpr>),
-    BinaryOperationDefinition(usize, (String, Type), (String, Type), Type, Vec<NessaExpr>),
-    NaryOperationDefinition(usize, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    PrefixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    PostfixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    BinaryOperationDefinition(usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
+    NaryOperationDefinition(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
     While(Box<NessaExpr>, Vec<NessaExpr>),
@@ -78,6 +78,10 @@ impl NessaExpr {
             NessaExpr::VariableDefinition(_, t, e) => {
                 t.compile_templates(templates);
                 e.compile_types(templates);
+            }
+
+            NessaExpr::Tuple(e) => {
+                e.iter_mut().for_each(|i| i.compile_types(templates));
             }
 
             NessaExpr::UnaryOperation(_, _, e) => e.compile_types(templates),
@@ -104,6 +108,8 @@ impl NessaExpr {
                     eb_inner.iter_mut().for_each(|i| i.compile_types(templates));
                 }
             }
+            
+            NessaExpr::While(c, b) |
             NessaExpr::For(_, c, b) => {
                 c.compile_types(templates);
                 b.iter_mut().for_each(|i| i.compile_types(templates));
@@ -1140,13 +1146,29 @@ impl NessaContext {
         return Err(nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Alt)));
     }
 
-    fn prefix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, String, Type, Type)> {
+    fn prefix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, Vec<String>, String, Type, Type)> {
         return map(
             tuple((
                 tag("op"),
                 multispace1,
                 |input| self.prefix_operator_parser(input),
                 multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
@@ -1174,11 +1196,11 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, id, _, (n, t), _, _, _, r)| (id, n, t, r)
+            |(_, _, id, _, tm, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
     }
 
-    fn postfix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, String, Type, Type)> {
+    fn postfix_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, Vec<String>, String, Type, Type)> {
         return map(
             tuple((
                 tag("op"),
@@ -1206,17 +1228,33 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
                 |input| self.postfix_operator_parser(input),
                 multispace0,
                 tag("->"),
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, (n, t), _, id, _, _, _, r)| (id, n, t, r)
+            |(_, _, (n, t), _, tm, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
     }
 
-    fn binary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, (String, Type), (String, Type), Type)> {
+    fn binary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, Vec<String>, (String, Type), (String, Type), Type)> {
         return map(
             tuple((
                 tag("op"),
@@ -1244,6 +1282,22 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
                 |input| self.binary_operator_parser(input),
                 multispace0,
                 delimited(
@@ -1273,11 +1327,11 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, a, _, id, _, b, _, _, _, r)| (id, a, b, r)
+            |(_, _, a, _, tm, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
     }
 
-    fn nary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, (String, Type), Vec<(String, Type)>, Type)> {
+    fn nary_operation_header_definition_parser<'a>(&self, input: &'a str) -> IResult<&'a str, (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type)> {
         return map(
             tuple((
                 tag("op"),
@@ -1305,13 +1359,29 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                            multispace0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
                 |input| self.nary_operator_parser(input),
                 multispace0,
                 tag("->"),
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, a, _, (id, b), _, _, _, r)| (id, a, b, r)
+            |(_, _, a, _, tm, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
     }
 
@@ -1322,7 +1392,13 @@ impl NessaContext {
                 multispace0,
                 |input| self.code_block_parser(input, op_cache),
             )),
-            |((id, n, t, r), _, b)| NessaExpr::PrefixOperationDefinition(id, n, t, r, b)
+            |((id, tm, n, mut t, mut r), _, mut b)| {
+                t.compile_templates(&tm);
+                r.compile_templates(&tm);
+                b.iter_mut().for_each(|e| e.compile_types(&tm));
+
+                NessaExpr::PrefixOperationDefinition(id, tm, n, t, r, b)
+            }
         )(input);
     }
 
@@ -1333,7 +1409,13 @@ impl NessaContext {
                 multispace0,
                 |input| self.code_block_parser(input, op_cache),
             )),
-            |((id, n, t, r), _, b)| NessaExpr::PostfixOperationDefinition(id, n, t, r, b)
+            |((id, tm, n, mut t, mut r), _, mut b)| {
+                t.compile_templates(&tm);
+                r.compile_templates(&tm);
+                b.iter_mut().for_each(|e| e.compile_types(&tm));
+
+                NessaExpr::PostfixOperationDefinition(id, tm, n, t, r, b)
+            }
         )(input);
     }
 
@@ -1344,7 +1426,14 @@ impl NessaContext {
                 multispace0,
                 |input| self.code_block_parser(input, op_cache),
             )),
-            |((id, a1, a2, r), _, b)| NessaExpr::BinaryOperationDefinition(id, a1, a2, r, b)
+            |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
+                a1.1.compile_templates(&tm);
+                a2.1.compile_templates(&tm);
+                r.compile_templates(&tm);
+                b.iter_mut().for_each(|e| e.compile_types(&tm));
+
+                NessaExpr::BinaryOperationDefinition(id, tm, a1, a2, r, b)
+            }
         )(input);
     }
 
@@ -1355,7 +1444,14 @@ impl NessaContext {
                 multispace0,
                 |input| self.code_block_parser(input, op_cache),
             )),
-            |((id, a1, a2, r), _, b)| NessaExpr::NaryOperationDefinition(id, a1, a2, r, b)
+            |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
+                a1.1.compile_templates(&tm);
+                a2.iter_mut().for_each(|(_, i)| i.compile_templates(&tm));
+                r.compile_templates(&tm);
+                b.iter_mut().for_each(|e| e.compile_types(&tm));
+
+                NessaExpr::NaryOperationDefinition(id, tm, a1, a2, r, b)
+            }
         )(input);
     }
 
@@ -2196,6 +2292,7 @@ mod tests {
             test_1,
             NessaExpr::PrefixOperationDefinition(
                 1,
+                vec!(),
                 "arg".into(),
                 Type::Basic(2),
                 Type::Basic(2),
@@ -2217,6 +2314,7 @@ mod tests {
             test_2,
             NessaExpr::PostfixOperationDefinition(
                 2,
+                vec!(),
                 "arg".into(),
                 Type::Basic(2),
                 Type::Or(vec!(
@@ -2248,6 +2346,7 @@ mod tests {
             test_3,
             NessaExpr::BinaryOperationDefinition(
                 0,
+                vec!(),
                 ("a".into(), Type::Basic(2)),
                 ("b".into(), Type::Basic(2)),
                 Type::Basic(0),
@@ -2285,12 +2384,182 @@ mod tests {
             test_4,
             NessaExpr::NaryOperationDefinition(
                 1,
+                vec!(),
                 ("a".into(), Type::Basic(0)),
                 vec!(
                     ("b".into(), Type::Basic(0)),
                     ("c".into(), Type::Basic(0))
                 ),
                 Type::And(vec!(Type::Basic(0), Type::Basic(2))),
+                vec!(
+                    NessaExpr::Return(Box::new(
+                        NessaExpr::Tuple(vec!(
+                            NessaExpr::BinaryOperation(
+                                0,
+                                vec!(),
+                                Box::new(NessaExpr::NameReference("a".into())),
+                                Box::new(NessaExpr::BinaryOperation(
+                                    2,
+                                    vec!(),
+                                    Box::new(NessaExpr::NameReference("b".into())),
+                                    Box::new(NessaExpr::NameReference("c".into()))
+                                )
+                            )),
+                            NessaExpr::Literal(Object::new(true))
+                        ))
+                    ))
+                )
+            )
+        );
+
+        let test_template_1_str = "op !<T>(arg: 'T) -> 'T {
+            if arg {
+                return false;
+            }
+
+            return true;
+        }";
+
+        let test_template_2_str = "op (arg: 'T)<T>? -> Number | 'T {
+            if arg {
+                return 5;
+            }
+
+            for i in arr {
+                return i;
+            }
+
+            return true;
+        }";
+
+        let test_template_3_str = "op (a: 'T) <T, G>+ (b: 'T) -> 'G {
+            if a {
+                if b {
+                    return 2;
+                }
+
+                return 1;
+            }
+
+            if b {
+                return 1;
+            }
+
+            return 0;
+        }";
+
+        let test_template_4_str = "op (a: 'T)<T, G>[b: 'G, c: Number] -> ('T, Array<'G>) {
+            return (a + b * c, true);
+        }";
+
+        let (_, test_template_1) = ctx.operation_definition_parser(test_template_1_str, &RefCell::default()).unwrap();
+        let (_, test_template_2) = ctx.operation_definition_parser(test_template_2_str, &RefCell::default()).unwrap();
+        let (_, test_template_3) = ctx.operation_definition_parser(test_template_3_str, &RefCell::default()).unwrap();
+        let (_, test_template_4) = ctx.operation_definition_parser(test_template_4_str, &RefCell::default()).unwrap();
+
+        assert_eq!(
+            test_template_1,
+            NessaExpr::PrefixOperationDefinition(
+                1,
+                vec!("T".into()),
+                "arg".into(),
+                Type::TemplateParam(0),
+                Type::TemplateParam(0),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("arg".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
+                        ),
+                        vec!(),
+                        None
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                )
+            ) 
+        );
+
+        assert_eq!(
+            test_template_2,
+            NessaExpr::PostfixOperationDefinition(
+                2,
+                vec!("T".into()),
+                "arg".into(),
+                Type::TemplateParam(0),
+                Type::Or(vec!(
+                    Type::Basic(0),
+                    Type::TemplateParam(0)
+                )),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("arg".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                        ),
+                        vec!(),
+                        None
+                    ),
+                    NessaExpr::For(
+                        "i".into(),
+                        Box::new(NessaExpr::NameReference("arr".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::NameReference("i".into())))
+                        )
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                )
+            ) 
+        );
+
+        assert_eq!(
+            test_template_3,
+            NessaExpr::BinaryOperationDefinition(
+                0,
+                vec!("T".into(), "G".into()),
+                ("a".into(), Type::TemplateParam(0)),
+                ("b".into(), Type::TemplateParam(0)),
+                Type::TemplateParam(1),
+                vec!(
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("a".into())),
+                        vec!(
+                            NessaExpr::If(
+                                Box::new(NessaExpr::NameReference("b".into())),
+                                vec!(
+                                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(2)))))
+                                ),
+                                vec!(),
+                                None
+                            ),
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                        ),
+                        vec!(),
+                        None
+                    ),
+                    NessaExpr::If(
+                        Box::new(NessaExpr::NameReference("b".into())),
+                        vec!(
+                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                        ),
+                        vec!(),
+                        None
+                    ),
+                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
+                )
+            ) 
+        );
+
+        assert_eq!(
+            test_template_4,
+            NessaExpr::NaryOperationDefinition(
+                1,
+                vec!("T".into(), "G".into()),
+                ("a".into(), Type::TemplateParam(0)),
+                vec!(
+                    ("b".into(), Type::TemplateParam(1)),
+                    ("c".into(), Type::Basic(0))
+                ),
+                Type::And(vec!(Type::TemplateParam(0), Type::Template(3, vec!(Type::TemplateParam(1))))),
                 vec!(
                     NessaExpr::Return(Box::new(
                         NessaExpr::Tuple(vec!(

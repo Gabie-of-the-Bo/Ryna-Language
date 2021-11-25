@@ -324,25 +324,25 @@ impl NessaContext {
                 *expr = NessaExpr::CompiledFunctionDefinition(*id, t.clone(), a.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::PrefixOperationDefinition(id, n, t, r, b) => {
+            NessaExpr::PrefixOperationDefinition(id, _, n, t, r, b) => {
                 let max_var = self.compile(b, &vec!((n.clone(), t.clone())))?;
 
                 *expr = NessaExpr::CompiledPrefixOperationDefinition(*id, n.clone(), t.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::PostfixOperationDefinition(id, n, t, r, b) => {
+            NessaExpr::PostfixOperationDefinition(id, _, n, t, r, b) => {
                 let max_var = self.compile(b, &vec!((n.clone(), t.clone())))?;
 
                 *expr = NessaExpr::CompiledPostfixOperationDefinition(*id, n.clone(), t.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::BinaryOperationDefinition(id, a1, a2, r, b) => {
+            NessaExpr::BinaryOperationDefinition(id, _, a1, a2, r, b) => {
                 let max_var = self.compile(b, &vec!(a1.clone(), a2.clone()))?;
 
                 *expr = NessaExpr::CompiledBinaryOperationDefinition(*id, a1.clone(), a2.clone(), r.clone(), b.clone(), max_var);
             },
 
-            NessaExpr::NaryOperationDefinition(id, a, args, r, b) => {
+            NessaExpr::NaryOperationDefinition(id, _, a, args, r, b) => {
                 let mut all_args = vec!(a.clone());
                 all_args.extend(args.iter().cloned());
 
@@ -1325,10 +1325,10 @@ impl NessaContext{
         for i in ops {
             // TODO: create functions from bodies
             match i {
-                NessaExpr::PrefixOperationDefinition(id, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
-                NessaExpr::PostfixOperationDefinition(id, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
-                NessaExpr::BinaryOperationDefinition(id, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, ta, tb, r, None)?,
-                NessaExpr::NaryOperationDefinition(id, (_a, ta), v, r, _) => self.define_nary_operation(id, ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, None)?,
+                NessaExpr::PrefixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
+                NessaExpr::PostfixOperationDefinition(id, _, _a, t, r, _) => self.define_unary_operation(id, t, r, None)?,
+                NessaExpr::BinaryOperationDefinition(id, _, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, ta, tb, r, None)?,
+                NessaExpr::NaryOperationDefinition(id, _, (_a, ta), v, r, _) => self.define_nary_operation(id, ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, None)?,
 
                 _ => unreachable!()
             }

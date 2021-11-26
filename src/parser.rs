@@ -46,6 +46,7 @@ pub enum NessaExpr {
     // Uncompiled
     Literal(Object),
     Tuple(Vec<NessaExpr>),
+    Lambda(Vec<(String, Type)>, Type, Vec<NessaExpr>),
     NameReference(String),
 
     UnaryOperation(usize, Vec<Type>, Box<NessaExpr>),
@@ -1578,9 +1579,62 @@ impl NessaContext {
         )(input);
     }
 
+    fn lambda_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
+        return map(
+            tuple((
+                tag("("),
+                multispace0,
+                separated_list0(
+                    tuple((multispace0, tag(","), multispace0)), 
+                    tuple((
+                        |input| self.identifier_parser(input),
+                        map(
+                            opt(
+                                map(
+                                    tuple((
+                                        multispace0,
+                                        tag(":"),
+                                        multispace0,
+                                        |input| self.type_parser(input),
+                                        multispace0
+                                    )),
+                                    |(_, _, _, t, _)| t
+                                )
+                            ),
+                            |t| t.unwrap_or(Type::Wildcard)
+                        )
+                    ))
+                ),
+                multispace0,
+                tag(")"),
+                multispace0,
+                opt(
+                    map(
+                        tuple((
+                            tag("->"),
+                            multispace0,
+                            |input| self.type_parser(input),
+                            multispace0,
+                        )),
+                        |(_, _, t, _)| t
+                    ),
+                ),
+                alt((
+                    |input| self.code_block_parser(input, &RefCell::default()),
+                    map(
+                        |input| self.nessa_expr_parser(input, &RefCell::default()),
+                        |e| vec!(NessaExpr::Return(Box::new(e))) // Implicit return
+                    )
+                ))
+            )),
+            |(_, _, a, _, _, _, r, b)| NessaExpr::Lambda(a, r.unwrap_or(Type::Wildcard), b)
+        )(input);
+    }
+
     fn nessa_expr_parser_wrapper<'a>(&self, input: &'a str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return alt((
             |input| self.tuple_parser(input),
+            |input| self.lambda_parser(input),
             |input| self.operation_parser(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache),
             |input| self.literal_parser(input),
             |input| self.variable_parser(input)
@@ -1904,21 +1958,87 @@ mod tests {
         let def_2_str = "let foo: Array<Number | &String> = 5;";
         let def_3_str = "let bar = \"test\";";
         let def_4_str = "let foobar = false;";
+        let def_5_str = "let lambda = (a: Number, b: Number) -> Bool { return a < b; };";
+        let def_6_str = "let lambda = (n: Number) -> Number n * 2;";
+        let def_7_str = "let lambda = (n: Number) n + 1;";
 
         let (_, def_1) = ctx.variable_definition_parser(def_1_str, &RefCell::default()).unwrap();
         let (_, def_2) = ctx.variable_definition_parser(def_2_str, &RefCell::default()).unwrap();
         let (_, def_3) = ctx.variable_definition_parser(def_3_str, &RefCell::default()).unwrap();
         let (_, def_4) = ctx.variable_definition_parser(def_4_str, &RefCell::default()).unwrap();
+        let (_, def_5) = ctx.variable_definition_parser(def_5_str, &RefCell::default()).unwrap();
+        let (_, def_6) = ctx.variable_definition_parser(def_6_str, &RefCell::default()).unwrap();
+        let (_, def_7) = ctx.variable_definition_parser(def_7_str, &RefCell::default()).unwrap();
 
         assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference("a".into()))));
         assert_eq!(def_2, NessaExpr::VariableDefinition(
-                "foo".into(), 
-                Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
-                Box::new(NessaExpr::Literal(Object::new(Number::from(5))))
-            )
-        );
+            "foo".into(), 
+            Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
+            Box::new(NessaExpr::Literal(Object::new(Number::from(5))))
+        ));
         assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
         assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(false)))));
+        assert_eq!(def_5, NessaExpr::VariableDefinition(
+            "lambda".into(), 
+            Type::Wildcard, 
+            Box::new(NessaExpr::Lambda(
+                vec!(
+                    ("a".into(), Type::Basic(0)),
+                    ("b".into(), Type::Basic(0))
+                ),
+                Type::Basic(2),
+                vec!(
+                    NessaExpr::Return(Box::new(
+                        NessaExpr::BinaryOperation(
+                            LT_BINOP_ID, 
+                            vec!(),
+                            Box::new(NessaExpr::NameReference("a".into())),
+                            Box::new(NessaExpr::NameReference("b".into()))
+                        )
+                    ))
+                )
+            ))
+        ));
+        assert_eq!(def_6, NessaExpr::VariableDefinition(
+            "lambda".into(), 
+            Type::Wildcard, 
+            Box::new(NessaExpr::Lambda(
+                vec!(
+                    ("n".into(), Type::Basic(0))
+                ),
+                Type::Basic(0),
+                vec!(
+                    NessaExpr::Return(Box::new(
+                        NessaExpr::BinaryOperation(
+                            2, 
+                            vec!(),
+                            Box::new(NessaExpr::NameReference("n".into())),
+                            Box::new(NessaExpr::Literal(Object::new(Number::from(2))))
+                        )
+                    ))
+                )
+            ))
+        ));
+        assert_eq!(def_7, NessaExpr::VariableDefinition(
+            "lambda".into(), 
+            Type::Wildcard, 
+            Box::new(NessaExpr::Lambda(
+                vec!(
+                    ("n".into(), Type::Basic(0))
+                ),
+                Type::Wildcard,
+                vec!(
+                    NessaExpr::Return(Box::new(
+                        NessaExpr::BinaryOperation(
+                            0, 
+                            vec!(),
+                            Box::new(NessaExpr::NameReference("n".into())),
+                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                        )
+                    ))
+                )
+            ))
+        ));
     }
 
     #[test]

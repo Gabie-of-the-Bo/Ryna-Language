@@ -157,7 +157,7 @@ impl NessaContext {
                             let first = stack.pop().unwrap();
                             let mut args = Vec::with_capacity(v.len());
     
-                            for _ in v {
+                            for _ in 1..v.len() {
                                 args.push(stack.pop().unwrap());
                             }
 

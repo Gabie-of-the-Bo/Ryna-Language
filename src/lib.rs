@@ -64,4 +64,9 @@ mod integration {
     fn tuples() {
         integration_text("test/tuples.nessa");
     }
+
+    #[test]
+    fn array_access() {
+        integration_text("test/array_access.nessa");
+    }
 }

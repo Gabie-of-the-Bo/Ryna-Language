@@ -277,7 +277,90 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     define_binary_native_op_combinations!(ctx, 13, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 && *arg_2);
 }
 
+macro_rules! idx_op_definition {
+    ($array_type: expr, $idx_type: expr, $result_type: expr, $ctx: expr, $deref_arr: ident, $deref_idx: ident, $ref_method: ident) => {
+        $ctx.define_native_nary_operation(
+            1, 1, $array_type, &[$idx_type], $result_type, 
+            |_, _, a, v| {
+                let arr = &a.$deref_arr::<(Type, Vec<Object>)>().1;
+                let idx = &*v[0].$deref_idx::<Number>();
+    
+                return match idx {
+                    Number::Float(f) if f.fract() == 0.0 => Ok(arr[*f as usize].$ref_method()),
+                    Number::Float(_) => Err("Unable to index array with a non-integer float".into()),
+                    Number::Int(i) if i.limbs.len() == 1 => Ok(arr[i.limbs[0] as usize].$ref_method()),
+                    Number::Int(_) => Err("Unable to index array with a number wider than 64 bits".into())
+                };
+            }
+        ).unwrap();
+    };
+}
+
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
+
+    // Indexing operations on arrays
+    idx_op_definition!(
+        Type::Template(3, vec!(Type::TemplateParam(0))),
+        Type::Basic(0),
+        Type::TemplateParam(0),
+        ctx, deref, get, clone
+    );
+
+    idx_op_definition!(
+        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::Basic(0),
+        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ctx, deref, get, get_ref_mut_obj
+    );
+
+    idx_op_definition!(
+        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::Basic(0),
+        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ctx, deref, get, get_ref_obj
+    );
+
+    idx_op_definition!(
+        Type::Template(3, vec!(Type::TemplateParam(0))),
+        Type::MutRef(Box::new(Type::Basic(0))),
+        Type::TemplateParam(0),
+        ctx, deref, deref, clone
+    );
+
+    idx_op_definition!(
+        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::MutRef(Box::new(Type::Basic(0))),
+        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ctx, deref, deref, get_ref_mut_obj
+    );
+
+    idx_op_definition!(
+        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::MutRef(Box::new(Type::Basic(0))),
+        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ctx, deref, deref, get_ref_obj
+    );
+
+    idx_op_definition!(
+        Type::Template(3, vec!(Type::TemplateParam(0))),
+        Type::Ref(Box::new(Type::Basic(0))),
+        Type::TemplateParam(0),
+        ctx, deref, deref, clone
+    );
+
+    idx_op_definition!(
+        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::Ref(Box::new(Type::Basic(0))),
+        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ctx, deref, deref, get_ref_mut_obj
+    );
+
+    idx_op_definition!(
+        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
+        Type::Ref(Box::new(Type::Basic(0))),
+        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ctx, deref, deref, get_ref_obj
+    );
 }

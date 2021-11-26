@@ -92,7 +92,7 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, &Object) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<(), String> {
         return self.define_unary_operation(id, templates, a, ret, Some(f));
     }
 
@@ -162,7 +162,7 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, &Object, &Object) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<(), String> {
         return self.define_binary_operation(id, templates, a, b, ret, Some(f));
     }
 

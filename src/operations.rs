@@ -10,8 +10,8 @@ use crate::number::*;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, &Object) -> Result<Object, String>>;
-pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, &Object, &Object) -> Result<Object, String>>;
+pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, Object) -> Result<Object, String>>;
+pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>>;
 pub type NaryFunction = Option<fn(&Vec<Type>, &Type, Object, Vec<Object>) -> Result<Object, String>>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;

@@ -126,7 +126,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        stack.push(ov.3.unwrap()(type_args, &ov.2, &obj)?);
+                        stack.push(ov.3.unwrap()(type_args, &ov.2, obj)?);
 
                         ip += 1;
                     
@@ -142,7 +142,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        stack.push(ov.3.unwrap()(type_args, &ov.2, &a, &b)?);
+                        stack.push(ov.3.unwrap()(type_args, &ov.2, a, b)?);
                         
                         ip += 1;
                     

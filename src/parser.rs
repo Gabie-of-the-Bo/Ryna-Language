@@ -869,12 +869,10 @@ impl NessaContext {
         return map(
             tuple((
                 tag("fn"),
-                multispace1,
-                |input| self.identifier_parser(input),
-                multispace0,
                 opt(
                     map(
                         tuple((
+                            multispace0,
                             tag("<"),
                             multispace0,
                             separated_list1(
@@ -883,11 +881,12 @@ impl NessaContext {
                             ),
                             multispace0,
                             tag(">"),
-                            multispace0,
                         )),
-                        |(_, _, t, _, _, _)| t
+                        |(_, _, _, t, _, _)| t
                     )
                 ),
+                multispace1,
+                |input| self.identifier_parser(input),
                 multispace0,
                 tag("("),
                 multispace0,
@@ -919,7 +918,7 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, n, _, t, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
+            |(_, t, _, n, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
         )(input);
     }
 
@@ -1150,12 +1149,10 @@ impl NessaContext {
         return map(
             tuple((
                 tag("op"),
-                multispace1,
-                |input| self.prefix_operator_parser(input),
-                multispace0,
                 opt(
                     map(
                         tuple((
+                            multispace0,
                             tag("<"),
                             multispace0,
                             separated_list1(
@@ -1163,12 +1160,14 @@ impl NessaContext {
                                 |input| self.identifier_parser(input)
                             ),
                             multispace0,
-                            tag(">"),
-                            multispace0,
+                            tag(">")
                         )),
-                        |(_, _, t, _, _, _)| t
+                        |(_, _, _, t, _, _)| t
                     )
                 ),
+                multispace1,
+                |input| self.prefix_operator_parser(input),
+                multispace0,
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
@@ -1196,7 +1195,7 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, id, _, tm, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
+            |(_, tm, _, id, _, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
     }
 
@@ -1204,6 +1203,22 @@ impl NessaContext {
         return map(
             tuple((
                 tag("op"),
+                opt(
+                    map(
+                        tuple((
+                            multispace0,
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                        )),
+                        |(_, _, _, t, _, _)| t
+                    )
+                ),
                 multispace1,
                 delimited(
                     tuple((tag("("), multispace0)),
@@ -1228,29 +1243,13 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("<"),
-                            multispace0,
-                            separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
-                            ),
-                            multispace0,
-                            tag(">"),
-                            multispace0,
-                        )),
-                        |(_, _, t, _, _, _)| t
-                    )
-                ),
                 |input| self.postfix_operator_parser(input),
                 multispace0,
                 tag("->"),
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, (n, t), _, tm, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
+            |(_, tm, _, (n, t), _, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
     }
 
@@ -1258,6 +1257,22 @@ impl NessaContext {
         return map(
             tuple((
                 tag("op"),
+                opt(
+                    map(
+                        tuple((
+                            multispace0,
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                        )),
+                        |(_, _, _, t, _, _)| t
+                    )
+                ),
                 multispace1,
                 delimited(
                     tuple((tag("("), multispace0)),
@@ -1282,22 +1297,6 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("<"),
-                            multispace0,
-                            separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
-                            ),
-                            multispace0,
-                            tag(">"),
-                            multispace0,
-                        )),
-                        |(_, _, t, _, _, _)| t
-                    )
-                ),
                 |input| self.binary_operator_parser(input),
                 multispace0,
                 delimited(
@@ -1327,7 +1326,7 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, a, _, tm, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
+            |(_, tm, _, a, _, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
     }
 
@@ -1335,6 +1334,22 @@ impl NessaContext {
         return map(
             tuple((
                 tag("op"),
+                opt(
+                    map(
+                        tuple((
+                            multispace0,
+                            tag("<"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)), 
+                                |input| self.identifier_parser(input)
+                            ),
+                            multispace0,
+                            tag(">"),
+                        )),
+                        |(_, _, _, t, _, _)| t
+                    )
+                ),
                 multispace1,
                 delimited(
                     tuple((tag("("), multispace0)),
@@ -1359,29 +1374,13 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("<"),
-                            multispace0,
-                            separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
-                            ),
-                            multispace0,
-                            tag(">"),
-                            multispace0,
-                        )),
-                        |(_, _, t, _, _, _)| t
-                    )
-                ),
                 |input| self.nary_operator_parser(input),
                 multispace0,
                 tag("->"),
                 multispace0,
                 |input| self.type_parser(input)
             )),
-            |(_, _, a, _, tm, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
+            |(_, tm, _, a, _, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
     }
 
@@ -2094,7 +2093,7 @@ mod tests {
             return r;
         }";
 
-        let test_3_str = "fn inc<K, V>(key: 'K, value: 'V) -> Map<'K, 'V> {
+        let test_3_str = "fn<K, V> inc(key: 'K, value: 'V) -> Map<'K, 'V> {
             let a: 'V | 'K = value + key;
             return a;
         }";
@@ -2412,7 +2411,7 @@ mod tests {
             )
         );
 
-        let test_template_1_str = "op !<T>(arg: 'T) -> 'T {
+        let test_template_1_str = "op<T> !(arg: 'T) -> 'T {
             if arg {
                 return false;
             }
@@ -2420,7 +2419,7 @@ mod tests {
             return true;
         }";
 
-        let test_template_2_str = "op (arg: 'T)<T>? -> Number | 'T {
+        let test_template_2_str = "op<T> (arg: 'T)? -> Number | 'T {
             if arg {
                 return 5;
             }
@@ -2432,7 +2431,7 @@ mod tests {
             return true;
         }";
 
-        let test_template_3_str = "op (a: 'T) <T, G>+ (b: 'T) -> 'G {
+        let test_template_3_str = "op<T, G> (a: 'T) + (b: 'T) -> 'G {
             if a {
                 if b {
                     return 2;
@@ -2448,7 +2447,7 @@ mod tests {
             return 0;
         }";
 
-        let test_template_4_str = "op (a: 'T)<T, G>[b: 'G, c: Number] -> ('T, Array<'G>) {
+        let test_template_4_str = "op<T, G> (a: 'T)[b: 'G, c: Number] -> ('T, Array<'G>) {
             return (a + b * c, true);
         }";
 

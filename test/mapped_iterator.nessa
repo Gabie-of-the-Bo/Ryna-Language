@@ -2,15 +2,15 @@ class DoubleIterator<T> {
     iter: ArrayIterator<'T>;
 }
 
-fn iterator<T>(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
+fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
     return it.deref<DoubleIterator<'T>>();
 }
 
-fn next<T>(it: &&DoubleIterator<'T>) -> Number {
+fn<T> next(it: &&DoubleIterator<'T>) -> Number {
     return iter<'T>(it).next<'T>() * 2;
 }
 
-fn is_consumed<T>(it: &&DoubleIterator<'T>) -> Bool {
+fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
     return iter<'T>(it).is_consumed<'T>();
 }
 

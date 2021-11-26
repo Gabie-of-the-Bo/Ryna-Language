@@ -532,7 +532,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test<T>() -> Array<'T> {
+            fn<T> test() -> Array<'T> {
                 return arr<'T>();
             }
 
@@ -548,7 +548,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn sum<T>(a: 'T, b: 'T) -> 'T {
+            fn<T> sum(a: 'T, b: 'T) -> 'T {
                 return a + b;
             }
 
@@ -569,7 +569,7 @@ mod tests {
         let code_str = "
             unary prefix op \"~\" (151);
 
-            op ~<T>(a: 'T) -> 'T {
+            op<T> ~(a: 'T) -> 'T {
                 return a + a;
             }
             
@@ -585,9 +585,27 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
+            unary postfix op \"~\" (151);
+
+            op<T> (a: 'T)~ -> 'T {
+                return a + a;
+            }
+            
+            let a = 7<Number>~;
+            let b = \"test\"<String>~;
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(14))));
+        assert_eq!(ctx.variables[1], Some(Object::new("testtest".to_string())));
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
             binary op \"@\" (151);
 
-            op (a: 'T) <T>@ (b: 'T) -> 'T {
+            op<T> (a: 'T) @ (b: 'T) -> 'T {
                 return a + b;
             }
 
@@ -605,7 +623,7 @@ mod tests {
         let code_str = "
             nary op from \"`\" to \"´\" (151);
 
-            op (a: 'T)<T, G>`b: 'G´ -> 'T {
+            op<T, G> (a: 'T)`b: 'G´ -> 'T {
                 return a + b;
             }
 

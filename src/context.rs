@@ -229,24 +229,24 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(Type, Type, NaryFunction)> {
+    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(usize, Type, Type, NaryFunction)> {
         let mut subtypes = vec!(from);
         subtypes.extend(args.iter().cloned());
 
         let and = Type::And(subtypes);
 
         if let Operator::Nary{operations: o, ..} = &self.nary_ops[id] {
-            return o.iter().filter(|(t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
         }
 
         return vec!();
     }
 
-    pub fn define_native_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: fn(&Object, &[&Object]) -> Result<Object, String>) -> Result<(), String> {
-        return self.define_nary_operation(id, from, args, ret, Some(f));
+    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Object, Vec<Object>) -> Result<Object, String>) -> Result<(), String> {
+        return self.define_nary_operation(id, templates, from, args, ret, Some(f));
     }
 
-    pub fn define_nary_operation(&mut self, id: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
+    pub fn define_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.into_iter().cloned());
 
@@ -254,7 +254,7 @@ impl NessaContext {
         let op = &self.nary_ops[id];
 
         if let Operator::Nary{operations: o, open_rep: or, close_rep: cr, ..} = op {
-            for (t, _, _) in o { // Check subsumption
+            for (_, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
                     if and.bindable_to(&t) {
                         return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
@@ -272,7 +272,7 @@ impl NessaContext {
         }
 
         if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
-            o.push((and, ret, f));
+            o.push((templates, and, ret, f));
         }
 
         return Ok(());
@@ -367,10 +367,10 @@ mod tests {
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_nary_operation(0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |a, _| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_nary_operation(0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |a, _| { Ok(a.clone()) });
-        let def_3 = ctx.define_native_nary_operation(0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |a, _| { Ok(a.clone()) });
-        let def_4 = ctx.define_native_nary_operation(0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |a, _| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_nary_operation(0, 0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |_, _, a, _| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
+        let def_3 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
+        let def_4 = ctx.define_native_nary_operation(0, 0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());

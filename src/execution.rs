@@ -151,17 +151,24 @@ impl NessaContext {
                     }
                 }
 
-                NaryOperatorCall(op_id, _ov_id) => {
-                    if let Operator::Nary{operations: _op, ..} = &self.nary_ops[*op_id] {
-                        /*
-                        let a = stack.pop().unwrap();
-                        let b = stack.pop().unwrap();
+                NaryOperatorCall(op_id, ov_id, type_args) => {
+                    if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
+                        if let (_, Type::And(v), r, Some(f)) = &operations[*ov_id] {
+                            let first = stack.pop().unwrap();
+                            let mut args = Vec::with_capacity(v.len());
+    
+                            for _ in v {
+                                args.push(stack.pop().unwrap());
+                            }
 
-                        stack.push(operations[*ov_id].2(&a, &b));
+                            stack.push(f(type_args, r, first, args)?);
 
-                        ip += 1;
-                        */
-                    
+                            ip += 1;
+
+                        } else {
+                            unreachable!();
+                        }
+
                     } else {
                         unreachable!();
                     }
@@ -592,6 +599,24 @@ mod tests {
 
         assert_eq!(ctx.variables[0], Some(Object::new(Number::from(13))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
+        
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+            nary op from \"`\" to \"´\" (151);
+
+            op (a: 'T)<T, G>`b: 'G´ -> 'T {
+                return a + b;
+            }
+
+            let a = 2<Number, Number>`9´;
+            let b = \"test\"<String, String>`\"tttt\"´;
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
+        assert_eq!(ctx.variables[1], Some(Object::new("testtttt".to_string())));
     }
 
     #[test]

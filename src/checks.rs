@@ -654,7 +654,7 @@ impl NessaContext {
                         }
                     }
     
-                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone()).is_none() {
+                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone(), false).is_none() {
                         if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
                             Err(format!(
                                 "Unable to get n-ary operator overload for {}{}{}{}",

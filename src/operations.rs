@@ -12,11 +12,11 @@ use crate::number::*;
 
 pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, &Object) -> Result<Object, String>>;
 pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, &Object, &Object) -> Result<Object, String>>;
-pub type NaryFunction = Option<fn(&Object, &[&Object]) -> Result<Object, String>>;
+pub type NaryFunction = Option<fn(&Vec<Type>, &Type, Object, Vec<Object>) -> Result<Object, String>>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
-pub type NaryOperations = Vec<(Type, Type, NaryFunction)>;
+pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
 
 #[derive(Clone)]
 pub enum Operator {

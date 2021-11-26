@@ -79,16 +79,17 @@ impl NessaContext {
         unreachable!();
     }
 
-    pub fn get_first_nary_op(&self, id: usize, a_type: Type, b_type: Vec<Type>) -> Option<(usize, Type, bool)> {
+    pub fn get_first_nary_op(&self, id: usize, a_type: Type, b_type: Vec<Type>, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         let mut arg_types = vec!(a_type.clone());
         arg_types.extend(b_type.iter().cloned());
 
         let t = Type::And(arg_types);
 
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
-            for (i, (a, r, f)) in operations.iter().enumerate() {
-                if t.bindable_to(&a) { // Take first that matches
-                    return Some((i, r.clone(), f.is_some()));
+            for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+                if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
         }
@@ -104,8 +105,8 @@ impl NessaContext {
         
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(a, _, _)| t.bindable_to(a))
-                            .map(|(a, r, _)| {
+                            .filter(|(_, a, _, _)| t.bindable_to(a))
+                            .map(|(_, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1..].to_vec(), r.clone())
 
@@ -212,13 +213,13 @@ impl NessaContext {
                 return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
-            NessaExpr::NaryOperation(id, _, a, b) => {
+            NessaExpr::NaryOperation(id, t, a, b) => {
                 let a_type = self.infer_type(a)?;
                 let b_type = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
 
-                let (_, r, _) = self.get_first_nary_op(*id, a_type, b_type).unwrap();
+                let (_, r, _, _) = self.get_first_nary_op(*id, a_type, b_type, false).unwrap();
 
-                return Some(r.clone());
+                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
             },
 
             NessaExpr::FunctionCall(id, t, args) => {

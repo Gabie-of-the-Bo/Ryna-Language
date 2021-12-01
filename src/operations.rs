@@ -12,7 +12,7 @@ use crate::number::*;
 
 pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, Object) -> Result<Object, String>>;
 pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>>;
-pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut i32), &Vec<Type>, &Type, Object, Vec<Object>) -> Result<(), String>>;
+pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut Vec<usize>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
@@ -281,9 +281,14 @@ macro_rules! idx_op_definition {
     ($array_type: expr, $idx_type: expr, $result_type: expr, $ctx: expr, $deref_arr: ident, $deref_idx: ident, $ref_method: ident) => {
         $ctx.define_native_nary_operation(
             1, 1, $array_type, &[$idx_type], $result_type, 
-            |(s, _, _, _), _, _, a, v| {
-                let arr = &a.$deref_arr::<(Type, Vec<Object>)>().1;
-                let idx = &*v[0].$deref_idx::<Number>();
+            |(s, _, _, _, ip), _, _| {
+                let arr = s.pop().unwrap();
+                let first = s.pop().unwrap();
+
+                let arr = &arr.$deref_arr::<(Type, Vec<Object>)>().1;
+                let idx = &*first.$deref_idx::<Number>();
+
+                *ip += 1;
     
                 return match idx {
                     Number::Float(f) if f.fract() == 0.0 => {
@@ -307,29 +312,33 @@ pub const CALL_OP: usize = 0;
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
 
-    ctx.define_native_nary_operation(
-        0, 
-        2, 
-        Type::MutRef(Box::new(
-            Type::Function(
-                Box::new(Type::And(vec!(Type::TemplateParam(0)))),
-                Box::new(Type::TemplateParam(1))
-            )
-        )), 
-        &[Type::TemplateParam(0)], 
-        Type::TemplateParam(1), 
-        |(s, off, call_stack, ip), _, _, a, mut b| {
-            let f = &a.deref::<(usize, usize, Type, Type)>();
+    for n in 0..30 {
+        let args = (0..(n + 1)).map(Type::TemplateParam).collect::<Vec<_>>();
 
-            s.append(&mut b);
+        ctx.define_native_nary_operation(
+            0, 
+            n + 2, 
+            Type::MutRef(Box::new(
+                Type::Function(
+                    Box::new(Type::And(args.clone())),
+                    Box::new(Type::TemplateParam(n + 1))
+                )
+            )), 
+            args.as_slice(), 
+            Type::TemplateParam(n + 1), 
+            |(s, off, call_stack, access_stack, ip), _, _| {
+                let a = s.pop().unwrap();
+                let f = &a.deref::<(usize, usize, Type, Type)>();
 
-            call_stack.push((*ip + 1, *off));
-            *ip = f.0 as i32 - 1;
-            *off += f.1;
-            
-            return Ok(());
-        }
-    ).unwrap();    
+                call_stack.push((*ip + 1, *off));
+                *ip = f.0 as i32;
+                *off += access_stack.last().unwrap() + 1;
+                access_stack.push(0);
+                
+                return Ok(());
+            }
+        ).unwrap();
+    }  
 
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
 

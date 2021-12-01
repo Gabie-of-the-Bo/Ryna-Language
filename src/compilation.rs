@@ -708,12 +708,12 @@ impl NessaContext{
 
                 lambda_positions.entry(*i).or_insert(lambdas.len() + 1);
 
-                for i in (0..a.len()).rev() {
+                for i in 0..a.len() {
                     lambdas.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
                 }
 
                 lambdas.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *m)?);
-
+                
                 Ok(())
             }
 

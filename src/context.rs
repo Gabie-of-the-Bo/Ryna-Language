@@ -244,7 +244,7 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut i32), &Vec<Type>, &Type, Object, Vec<Object>) -> Result<(), String>) -> Result<(), String> {
+    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut Vec<usize>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<(), String> {
         return self.define_nary_operation(id, templates, from, args, ret, Some(f));
     }
 
@@ -369,10 +369,10 @@ mod tests {
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_nary_operation(0, 0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |_, _, _, _, _| { Ok(()) });
-        let def_2 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |_, _, _, _, _| { Ok(()) });
-        let def_3 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |_, _, _, _, _| { Ok(()) });
-        let def_4 = ctx.define_native_nary_operation(0, 0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |_, _, _, _, _| { Ok(()) });
+        let def_1 = ctx.define_native_nary_operation(0, 0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |_, _, _| { Ok(()) });
+        let def_2 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |_, _, _| { Ok(()) });
+        let def_3 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |_, _, _| { Ok(()) });
+        let def_4 = ctx.define_native_nary_operation(0, 0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |_, _, _| { Ok(()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_ok());

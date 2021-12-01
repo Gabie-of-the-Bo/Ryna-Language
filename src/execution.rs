@@ -41,8 +41,11 @@ impl NessaContext {
         let mut ip: i32 = 0;
         let mut offset: usize = 0;
         
+        let mut access_stack: Vec<usize> = Vec::with_capacity(1000);
         let mut call_stack: Vec<(i32, usize)> = Vec::with_capacity(1000);
         let mut stack: Vec<Object> = Vec::with_capacity(1000);
+
+        access_stack.push(0);
 
         loop {
             match &program[ip as usize] {
@@ -64,8 +67,12 @@ impl NessaContext {
                 },
 
                 StoreVariable(id) => {
+                    let idx = access_stack.len() - 1;
+                    let l = &mut access_stack[idx];
+                    *l = (*l).max(*id);
+                    
                     self.variables[*id + offset] = Some(stack.pop().unwrap());
-                    ip += 1;                    
+                    ip += 1;
                 },
 
                 GetVariable(id) => {
@@ -91,16 +98,18 @@ impl NessaContext {
                         ip += 1;
                     }
                 },
-                Call(to, off) => {
+                Call(to, _) => {
                     call_stack.push((ip + 1, offset));
                     ip = *to as i32;
-                    offset += off;
+                    offset += access_stack.last().unwrap() + 1;
+                    access_stack.push(0);
                 },
                 Return => {
                     let (prev_ip, prev_offset) = call_stack.pop().unwrap();
 
                     ip = prev_ip;
                     offset = prev_offset;
+                    access_stack.pop().unwrap();
                 }, 
 
                 NativeFunctionCall(func_id, ov_id, type_args) => {
@@ -153,17 +162,8 @@ impl NessaContext {
 
                 NaryOperatorCall(op_id, ov_id, type_args) => {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
-                        if let (_, Type::And(v), r, Some(f)) = &operations[*ov_id] {
-                            let first = stack.pop().unwrap();
-                            let mut args = Vec::with_capacity(v.len());
-    
-                            for _ in 1..v.len() {
-                                args.push(stack.pop().unwrap());
-                            }
-
-                            f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r, first, args)?;
-
-                            ip += 1;
+                        if let (_, _, r, Some(f)) = &operations[*ov_id] {
+                            f((&mut stack, &mut offset, &mut call_stack, &mut access_stack, &mut ip), type_args, r)?;
 
                         } else {
                             unreachable!();
@@ -777,6 +777,13 @@ mod tests {
         let a: (Number) => Number = (n: Number) -> Number n * 2;
 
         let b = a(4);
+
+        let c: (Number, Bool) => Number = (n: Number, b: Bool) -> Number {
+            return n + 1;
+        };
+
+        let d = c(5, true);
+        let d = c(5, false);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

@@ -37,6 +37,7 @@ pub enum NessaExpr {
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
+    CompiledLambda(Option<usize>, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
     CompiledFunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
     CompiledPrefixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
     CompiledPostfixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
@@ -268,7 +269,7 @@ impl NessaContext {
                 multispace0,
                 |input| self.type_parser_wrapper(input, false, or)
             )),
-            |(f, _, _, _, t)| Type::Function(Box::new(f), Box::new(t))
+            |(f, _, _, _, t)| Type::Function(None, Box::new(f), Box::new(t))
         )(input);
     }
 
@@ -1833,8 +1834,9 @@ mod tests {
         let (_, basic_func) = ctx.type_parser(basic_func_str).unwrap();
         let (_, complex_func) = ctx.type_parser(complex_func_str).unwrap();
 
-        assert_eq!(basic_func, Type::Function(Box::new(Type::Basic(0)), Box::new(Type::Basic(1))));
+        assert_eq!(basic_func, Type::Function(None, Box::new(Type::Basic(0)), Box::new(Type::Basic(1))));
         assert_eq!(complex_func, Type::Function(
+            None,
             Box::new(Type::And(vec!(
                 Type::Basic(0),
                 Type::Template(3, vec!(Type::Basic(2)))

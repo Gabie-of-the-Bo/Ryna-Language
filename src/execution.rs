@@ -768,4 +768,17 @@ mod tests {
         assert_eq!(ctx.variables[1], Some(Object::new(true).get_ref_mut_obj()));
         assert_eq!(ctx.variables[2], Some(Object::new(Number::from(5)).get_ref_mut_obj()));
     }
+
+    #[test]
+    fn lambda_definition() {
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        let a: (Number) => Number = (n: Number) -> Number n * 2;
+
+        let b = a + 1;
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+    }
 }

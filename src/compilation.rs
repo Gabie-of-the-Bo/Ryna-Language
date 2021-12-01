@@ -318,6 +318,71 @@ impl NessaContext {
 
     fn compile_expr_function_bodies(&self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
+            NessaExpr::PrefixOperatorDefinition(..) |
+            NessaExpr::PostfixOperatorDefinition(..) |
+            NessaExpr::BinaryOperatorDefinition(..) |
+            NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::ClassDefinition(..) |
+            NessaExpr::NameReference(..) |
+            NessaExpr::Literal(..) => {},
+
+            NessaExpr::VariableAssignment(_, e) |
+            NessaExpr::VariableDefinition(_, _, e) |
+            NessaExpr::UnaryOperation(_, _, e) |
+            NessaExpr::Return(e) => {
+                self.compile_expr_function_bodies(e)?;
+            },
+
+            NessaExpr::FunctionCall(_, _, args) |
+            NessaExpr::Tuple(args) => {
+                for e in args {
+                    self.compile_expr_function_bodies(e)?;
+                }
+            }
+
+            NessaExpr::BinaryOperation(_, _, a, b) => {
+                self.compile_expr_function_bodies(a)?;
+                self.compile_expr_function_bodies(b)?;
+            }
+
+            NessaExpr::For(_, a, b) |
+            NessaExpr::While(a, b) |
+            NessaExpr::NaryOperation(_, _, a, b) => {
+                self.compile_expr_function_bodies(a)?;
+
+                for e in b {
+                    self.compile_expr_function_bodies(e)?;
+                }
+            }
+
+            NessaExpr::If(ih, ib, ei, eb) => {
+                self.compile_expr_function_bodies(ih)?;
+
+                for e in ib {
+                    self.compile_expr_function_bodies(e)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.compile_expr_function_bodies(ei_h)?;
+
+                    for e in ei_b {
+                        self.compile_expr_function_bodies(e)?;
+                    }   
+                }
+
+                if let Some(eb_inner) = eb {
+                    for e in eb_inner {
+                        self.compile_expr_function_bodies(e)?;
+                    }   
+                }
+            }
+
+            NessaExpr::Lambda(a, r, b) => {
+                let max_var = self.compile(b, &a)?;
+
+                *expr = NessaExpr::CompiledLambda(None, a.clone(), r.clone(), b.clone(), max_var);
+            },
+
             NessaExpr::FunctionDefinition(id, t, a, r, b) => {
                 let max_var = self.compile(b, &a)?;
 
@@ -351,7 +416,7 @@ impl NessaContext {
                 *expr = NessaExpr::CompiledNaryOperationDefinition(*id, tm.clone(), a.clone(), args.clone(), r.clone(), b.clone(), max_var);
             }
 
-            _ => {}
+            _ => unimplemented!("{:?}", expr)
         }
 
         return Ok(());
@@ -930,7 +995,7 @@ impl NessaContext{
         use NessaExpr::*;
 
         return match expr {
-            Literal(_) | Variable(..) => 1, 
+            Literal(_) | Variable(..) | CompiledLambda(..) => 1, 
             BinaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_size(b) + 1,
             NaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_body_size(b) + 1,
             Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, _, e) => self.compiled_form_size(e) + 1,
@@ -968,6 +1033,14 @@ impl NessaContext{
     ) -> Result<Vec<NessaInstruction>, String> {
         return match expr {
             NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
+
+            NessaExpr::CompiledLambda(i, a, r, _, _) => {
+                Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(Object::new((
+                    i.clone(),
+                    Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
+                    r.clone()
+                ))))))
+            },
 
             NessaExpr::Tuple(e) => {
                 let mut types = Vec::with_capacity(e.len());

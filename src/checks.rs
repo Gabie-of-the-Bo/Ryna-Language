@@ -103,6 +103,7 @@ impl NessaContext {
                 Ok(())
             }
 
+            (NessaExpr::CompiledLambda(_, _, ret, body, _), None) |
             (NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, ret, body, _), None) |
             (NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, ret, body, _), None) |
             (NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, ret, body, _), None) |
@@ -158,6 +159,7 @@ impl NessaContext {
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
+            NessaExpr::CompiledLambda(..) |
             NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -490,6 +492,7 @@ impl NessaContext {
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
+            NessaExpr::CompiledLambda(..) |
             NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |

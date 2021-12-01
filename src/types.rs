@@ -60,7 +60,7 @@ pub enum Type {
     Template(usize, Vec<Type>),
 
     // Function type
-    Function(Box<Type>, Box<Type>)
+    Function(Option<usize>, Box<Type>, Box<Type>)
 }
 
 impl PartialEq for Type {
@@ -72,10 +72,12 @@ impl PartialEq for Type {
             (Type::MutRef(ta), Type::MutRef(tb)) => ta == tb,
             (Type::Or(va), Type::Or(vb)) => va.iter().all(|i| vb.contains(i)) && vb.iter().all(|i| va.contains(i)),
             (Type::And(va), Type::And(vb)) => va == vb,
+            (Type::And(va), b) => va.len() == 1 && va[0] == *b,
+            (a, Type::And(vb)) => vb.len() == 1 && vb[0] == *a,
             (Type::Wildcard, Type::Wildcard) => true,
             (Type::TemplateParam(id_a), Type::TemplateParam(id_b)) => id_a == id_b,
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va == vb,
-            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa == fb && ta == tb,
+            (Type::Function(ia, fa, ta), Type::Function(ib, fb, tb)) => ia == ib && fa == fb && ta == tb,
             
             _ => false
         }
@@ -101,7 +103,7 @@ impl Type {
             Type::TemplateParamStr(name) => format!("'{}", name),
             Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.clone(), 
                                                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
-            Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
+            Type::Function(_, from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
         }
     }
 
@@ -135,6 +137,8 @@ impl Type {
             (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps)),
 
             (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
+            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps),
+            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps),
             
             (Type::TemplateParam(id), b) |
             (b, Type::TemplateParam(id)) => {
@@ -151,7 +155,7 @@ impl Type {
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
                                                                     va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
 
-            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.template_bindable_to(fb, t_assignments, t_deps) && ta.template_bindable_to(tb, t_assignments, t_deps),
+            (Type::Function(_, fa, ta), Type::Function(_, fb, tb)) => fa.template_bindable_to(fb, t_assignments, t_deps) && ta.template_bindable_to(tb, t_assignments, t_deps),
 
             _ => false
         }
@@ -173,7 +177,7 @@ impl Type {
             
             Type::Template(_, v) => v.iter().all(|i| i.template_cyclic_reference_check(t_id, t_deps)),
 
-            Type::Function(f, t) => f.template_cyclic_reference_check(t_id, t_deps) && t.template_cyclic_reference_check(t_id, t_deps),
+            Type::Function(_, f, t) => f.template_cyclic_reference_check(t_id, t_deps) && t.template_cyclic_reference_check(t_id, t_deps),
 
             _ => true
         }
@@ -191,7 +195,7 @@ impl Type {
             
             Type::Template(_, v) => v.iter_mut().for_each(|i| i.compile_templates(templates)),
 
-            Type::Function(f, t) => {
+            Type::Function(_, f, t) => {
                 f.compile_templates(templates); 
                 t.compile_templates(templates)
             },
@@ -206,7 +210,7 @@ impl Type {
             Type::MutRef(t) => Type::MutRef(Box::new(t.sub_templates(args))),
             Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_templates(args)).collect()),
             Type::And(t) => Type::And(t.iter().map(|i| i.sub_templates(args)).collect()),
-            Type::Function(f, t) => Type::Function(Box::new(f.sub_templates(args)), Box::new(t.sub_templates(args))),
+            Type::Function(i, f, t) => Type::Function(i.clone(), Box::new(f.sub_templates(args)), Box::new(t.sub_templates(args))),
             Type::TemplateParam(id) => args.get(id).unwrap_or(self).clone(),
             Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates(args)).collect()),
             _ => self.clone()
@@ -325,8 +329,8 @@ mod tests {
         assert!(vector_number.bindable_to(&vector_number_or_string));
         assert!(!vector_number.bindable_to(&vector_string));
 
-        let f_number_number = Type::Function(Box::new(number.clone()), Box::new(number.clone()));
-        let f_number_or_string_number = Type::Function(Box::new(number_or_string.clone()), Box::new(number.clone()));
+        let f_number_number = Type::Function(None, Box::new(number.clone()), Box::new(number.clone()));
+        let f_number_or_string_number = Type::Function(None, Box::new(number_or_string.clone()), Box::new(number.clone()));
 
         assert!(f_number_number.bindable_to(&f_number_number));
         assert!(f_number_or_string_number.bindable_to(&f_number_or_string_number));

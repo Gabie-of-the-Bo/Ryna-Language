@@ -360,6 +360,44 @@ impl NessaObject for Tuple {
     }
 }
 
+impl NessaObject for (Option<usize>, Type, Type) {
+    fn get_type_id(&self) -> usize {
+        return 0;
+    }
+
+    fn get_type(&self) -> Type {
+        return Type::Function(self.0, Box::new(self.1.clone()), Box::new(self.2.clone()));
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
+    fn to_string(&self) -> String {
+        if let Some(id) = self.0 {
+            return format!("Lambda {:?} => {:?} at {}", self.1, self.2, id);
+
+        } else {
+            return format!("Uncompiled lambda {:?} => {:?}", self.1, self.2);
+        }
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<(Option<usize>, Type, Type)>();
+        let tb = b.as_any().downcast_ref::<(Option<usize>, Type, Type)>();
+
+        return ta == tb;
+    }
+}
+
 impl NessaObject for (Type, Vec<Object>) {
     fn get_type_id(&self) -> usize {
         return 3;

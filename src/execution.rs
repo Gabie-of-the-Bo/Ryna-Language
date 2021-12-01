@@ -161,7 +161,7 @@ impl NessaContext {
                                 args.push(stack.pop().unwrap());
                             }
 
-                            stack.push(f(type_args, r, first, args)?);
+                            f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r, first, args)?;
 
                             ip += 1;
 
@@ -776,7 +776,7 @@ mod tests {
         let code_str = "
         let a: (Number) => Number = (n: Number) -> Number n * 2;
 
-        let b = a + 1;
+        let b = a(4);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

@@ -173,7 +173,7 @@ impl NessaContext {
         return self.functions.iter().filter(|i| i.name == *name).next();
     }
 
-    fn compile_expr_function_names(&self, expr: &mut NessaExpr) {
+    fn compile_expr_function_names(&mut self, expr: &mut NessaExpr) {
         match expr {
             // Compile function name references
             NessaExpr::NameReference(n) => {
@@ -234,7 +234,7 @@ impl NessaContext {
         }
     }
 
-    fn compile_expr_function_calls(&self, expr: &mut NessaExpr) -> Result<(), String> {
+    fn compile_expr_function_calls(&mut self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
             // Compile tuples
             NessaExpr::Tuple(e) => {
@@ -271,7 +271,7 @@ impl NessaContext {
             }
             
             // Function call
-            NessaExpr::NaryOperation(0, t, a, b) => {
+            NessaExpr::NaryOperation(CALL_OP, t, a, b) => {
                 self.compile_expr_function_calls(a)?;
                 b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
 
@@ -316,7 +316,7 @@ impl NessaContext {
         return Ok(());
     }
 
-    fn compile_expr_function_bodies(&self, expr: &mut NessaExpr) -> Result<(), String> {
+    fn compile_expr_function_bodies(&mut self, expr: &mut NessaExpr) -> Result<(), String> {
         match expr {
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
@@ -380,7 +380,8 @@ impl NessaContext {
             NessaExpr::Lambda(a, r, b) => {
                 let max_var = self.compile(b, &a)?;
 
-                *expr = NessaExpr::CompiledLambda(None, a.clone(), r.clone(), b.clone(), max_var);
+                *expr = NessaExpr::CompiledLambda(self.lambdas, a.clone(), r.clone(), b.clone(), max_var);
+                self.lambdas += 1;
             },
 
             NessaExpr::FunctionDefinition(id, t, a, r, b) => {
@@ -422,7 +423,7 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn compile_functions(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
+    pub fn compile_functions(&mut self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
         body.iter_mut().for_each(|i| self.compile_expr_function_names(i));    
         body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;   
         body.iter_mut().map(|i| self.compile_expr_function_bodies(i)).collect::<Result<_, _>>()?;   
@@ -436,7 +437,7 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
-    pub fn compile(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+    pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
         self.compile_functions(body)?;
         let max_register = self.compile_variables(body, args)?;
 
@@ -683,6 +684,106 @@ impl NessaContext{
         };
     }
 
+    pub fn compile_lambda_expr(
+        &self, 
+        line: &NessaExpr, 
+        lambdas: &mut Vec<NessaInstruction>,
+        lambda_positions: &mut HashMap<usize, usize>,
+        functions: &mut HashMap<(usize, usize, Vec<Type>), usize>, 
+        unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
+        binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
+        nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
+    ) -> Result<(), String> {
+        return match line {
+            NessaExpr::Literal(..) |
+            NessaExpr::Variable(..) |
+            NessaExpr::ClassDefinition(..) |
+            NessaExpr::PrefixOperatorDefinition(..) |
+            NessaExpr::PostfixOperatorDefinition(..) |
+            NessaExpr::BinaryOperatorDefinition(..) |
+            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
+
+            NessaExpr::CompiledLambda(i, a, _, b, m) => {
+                self.compile_lambda(b, lambdas, lambda_positions, functions, unary, binary, nary)?;
+
+                lambda_positions.entry(*i).or_insert(lambdas.len() + 1);
+
+                for i in (0..a.len()).rev() {
+                    lambdas.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                }
+
+                lambdas.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *m)?);
+
+                Ok(())
+            }
+
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) |
+            NessaExpr::Return(e) |
+            NessaExpr::UnaryOperation(_, _, e) => self.compile_lambda_expr(e, lambdas, lambda_positions, functions, unary, binary, nary),
+
+            NessaExpr::BinaryOperation(_, _, a, b) => {
+                self.compile_lambda_expr(a, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda_expr(b, lambdas, lambda_positions, functions, unary, binary, nary)?;
+
+                Ok(())
+            }
+
+            NessaExpr::CompiledFor(_, _, _, a, b) |
+            NessaExpr::While(a, b) |
+            NessaExpr::NaryOperation(_, _, a, b) => {
+                self.compile_lambda_expr(a, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda(b, lambdas, lambda_positions, functions, unary, binary, nary)?;
+
+                Ok(())
+            }
+
+            NessaExpr::If(ih, ib, ei, eb) => {
+                self.compile_lambda_expr(ih, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda(ib, lambdas, lambda_positions, functions, unary, binary, nary)?;
+
+                for (ei_h, ei_b) in ei {
+                    self.compile_lambda_expr(ei_h, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                    self.compile_lambda(ei_b, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                }
+
+                if let Some(eb_inner) = eb {
+                    self.compile_lambda(eb_inner, lambdas, lambda_positions, functions, unary, binary, nary)?;                    
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::Tuple(args) |
+            NessaExpr::FunctionCall(_, _, args) => self.compile_lambda(args, lambdas, lambda_positions, functions, unary, binary, nary),
+
+            NessaExpr::CompiledFunctionDefinition(_, _, _, _, b, _) |
+            NessaExpr::CompiledPrefixOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledPostfixOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledBinaryOperationDefinition(_, _, _, _, _, b, _) |
+            NessaExpr::CompiledNaryOperationDefinition(_, _, _, _, _, b, _) => self.compile_lambda(b, lambdas, lambda_positions, functions, unary, binary, nary),
+
+            _ => unimplemented!("{:?}", line)
+        };
+    }
+
+    pub fn compile_lambda(
+        &self, 
+        lines: &Vec<NessaExpr>, 
+        lambdas: &mut Vec<NessaInstruction>,
+        lambda_positions: &mut HashMap<usize, usize>,
+        functions: &mut HashMap<(usize, usize, Vec<Type>), usize>, 
+        unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
+        binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
+        nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
+    ) -> Result<(), String> {
+        for line in lines {
+            self.compile_lambda_expr(line, lambdas, lambda_positions, functions, unary, binary, nary)?;
+        }
+
+        return Ok(());
+    }
+
     pub fn compiled_form(&self, lines: &Vec<NessaExpr>, max_register: usize) -> Result<Vec<NessaInstruction>, String> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
@@ -790,7 +891,12 @@ impl NessaContext{
             }
         }
 
-        let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Jump(program_size)));
+
+        let mut lambda_positions: HashMap<usize, usize> = HashMap::new();
+        let mut lambdas = vec!();
+        self.compile_lambda(lines, &mut lambdas, &mut lambda_positions, &mut functions, &mut unary, &mut binary, &mut nary)?;
+
+        let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Jump(program_size + lambdas.len())));
 
         // Define functions
         for (j, expr) in lines.iter().enumerate() {
@@ -818,7 +924,7 @@ impl NessaContext{
 
                             // Substitute type parameters if it is necessary
                             if ov.is_empty() {
-                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);                                
                             
                             } else {
                                 let mut sub_b = b.clone();
@@ -831,7 +937,7 @@ impl NessaContext{
                                     self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
                                 }
 
-                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);                                
                             }
                         }
                     }
@@ -863,7 +969,7 @@ impl NessaContext{
 
                             // Substitute type parameters if it is necessary
                             if ov.is_empty() {
-                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
+                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);
                             
                             } else {
                                 let mut sub_b = b.clone();
@@ -876,7 +982,7 @@ impl NessaContext{
                                     self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
                                 }
 
-                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);                                
                             }
                         }
                     }
@@ -899,7 +1005,7 @@ impl NessaContext{
 
                             // Substitute type parameters if it is necessary
                             if ov.is_empty() {
-                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
+                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);
                             
                             } else {
                                 let mut sub_b = b.clone();
@@ -912,7 +1018,7 @@ impl NessaContext{
                                     self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
                                 }
 
-                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);                                
                             }
                         }
                     }
@@ -950,7 +1056,7 @@ impl NessaContext{
 
                             // Substitute type parameters if it is necessary
                             if ov.is_empty() {
-                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);
+                                res.extend(self.compiled_form_body(b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);
                             
                             } else {
                                 let mut sub_b = b.clone();
@@ -963,7 +1069,7 @@ impl NessaContext{
                                     self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
                                 }
 
-                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, *registers.get(&j).unwrap())?);                                
+                                res.extend(self.compiled_form_body(&sub_b, &functions, &unary, &binary, &nary, &lambda_positions, *registers.get(&j).unwrap())?);                                
                             }
                         }
                     }
@@ -972,6 +1078,8 @@ impl NessaContext{
                 _ => {}
             }
         }
+
+        res.extend(lambdas);
 
         // Define everything else
         for expr in lines {
@@ -982,7 +1090,7 @@ impl NessaContext{
                 NessaExpr::CompiledBinaryOperationDefinition(..) |
                 NessaExpr::CompiledNaryOperationDefinition(..) => {},
 
-                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, max_register)?)
+                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, &lambda_positions, max_register)?)
             }
         }
 
@@ -1029,14 +1137,16 @@ impl NessaContext{
         unary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         binary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
+        lambda_positions: &HashMap<usize, usize>, 
         max_register: usize
     ) -> Result<Vec<NessaInstruction>, String> {
         return match expr {
             NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
 
-            NessaExpr::CompiledLambda(i, a, r, _, _) => {
+            NessaExpr::CompiledLambda(i, a, r, _, m) => {
                 Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(Object::new((
-                    i.clone(),
+                    *lambda_positions.get(i).unwrap(),
+                    *m,
                     Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
                     r.clone()
                 ))))))
@@ -1048,7 +1158,7 @@ impl NessaContext{
 
                 for i in e.iter().rev() {
                     types.push(self.infer_type(i).unwrap());
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, max_register)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, max_register)?);
                 }
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(types)));
@@ -1058,14 +1168,14 @@ impl NessaContext{
 
             NessaExpr::Variable(id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
             NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, _, e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, max_register)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
 
                 Ok(res)
             },
 
             NessaExpr::UnaryOperation(id, t, e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                 let i_t = self.infer_type(e).unwrap();
                 let (ov_id, _, native, _) = self.get_first_unary_op(*id, i_t, false).unwrap();
@@ -1082,8 +1192,8 @@ impl NessaContext{
             },
 
             NessaExpr::BinaryOperation(id, t, a, b) => {
-                let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, max_register)?;
-                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, max_register)?);
+                let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, lambda_positions, max_register)?;
+                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, max_register)?);
                 
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = self.infer_type(b).unwrap();
@@ -1105,10 +1215,10 @@ impl NessaContext{
                 let mut res = vec!();
 
                 for i in b.iter().rev() {
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, max_register)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, max_register)?);
                 }
                 
-                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, max_register)?);
+                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, max_register)?);
 
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
@@ -1127,31 +1237,31 @@ impl NessaContext{
             },
 
             NessaExpr::If(ih, ib, ei, e) => {
-                let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, max_register)?;
-                let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, max_register)?;
+                let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, lambda_positions, max_register)?;
+                let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 1)));
                 res.extend(if_body);
 
                 for (h, b) in ei {
-                    res.extend(self.compiled_form_expr(h, functions, unary, binary, nary, max_register)?);
+                    res.extend(self.compiled_form_expr(h, functions, unary, binary, nary, lambda_positions, max_register)?);
 
-                    let elif_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
+                    let elif_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                     res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(elif_body.len() + 1)));
                     res.extend(elif_body);
                 }
 
                 if let Some(b) = e {
-                    res.extend(self.compiled_form_body(b, functions, unary, binary, nary, max_register)?);
+                    res.extend(self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions, max_register)?);
                 }
 
                 Ok(res)
             },
             NessaExpr::While(c, b) => {
                 // Start with the condition
-                let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
-                let while_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
+                let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions, max_register)?;
+                let while_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                 // Add while body
                 let beginning_jmp = CompiledNessaExpr::RelativeJump(-(while_body.len() as i32 + res.len() as i32 + 1));
@@ -1166,7 +1276,7 @@ impl NessaContext{
             },
             NessaExpr::CompiledFor(it_var_id, elem_var_id, _, c, b) => {
                 if let Some(t) = self.infer_type(c) {
-                    let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, max_register)?;
+                    let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                     // Get "iterator", "next" and "is_consumed" function overloads and check them
                     if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone()), true) {
@@ -1175,7 +1285,7 @@ impl NessaContext{
                         if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
                             if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
                                 if let Type::Basic(2) = consumed_res {
-                                    let for_body = self.compiled_form_body(b, functions, unary, binary, nary, max_register)?;
+                                    let for_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions, max_register)?;
 
                                     // Convert the iterable into an iterator
                                     if it_native {
@@ -1248,7 +1358,7 @@ impl NessaContext{
                 }
             },
             NessaExpr::Return(e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, max_register)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, max_register)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::Return));
 
                 Ok(res)
@@ -1257,7 +1367,7 @@ impl NessaContext{
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, max_register)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, max_register)?);
                 }
                 
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
@@ -1283,9 +1393,10 @@ impl NessaContext{
         unary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         binary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
+        lambda_positions: &HashMap<usize, usize>,
         max_register: usize
     ) -> Result<Vec<NessaInstruction>, String> {
-        return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, max_register)).flat_map(|i| i.unwrap()).collect());
+        return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, max_register)).flat_map(|i| i.unwrap()).collect());
     }
 
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), String> {
@@ -1652,7 +1763,7 @@ mod tests {
 
     #[test]
     fn function_names_and_calls() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
         
         let code_1_str = "
         inc(5);

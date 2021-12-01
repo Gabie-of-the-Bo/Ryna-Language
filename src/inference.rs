@@ -179,8 +179,7 @@ impl NessaContext {
         return match expr {
             NessaExpr::Literal(obj) => Some(obj.get_type()),
 
-            NessaExpr::CompiledLambda(i, a, r, _, _) => Some(Type::Function(
-                i.clone(),
+            NessaExpr::CompiledLambda(_, a, r, _, _) => Some(Type::Function(
                 Box::new(Type::And(a.iter().map(|(_, t)| t).cloned().collect())),
                 Box::new(r.clone())
             )),

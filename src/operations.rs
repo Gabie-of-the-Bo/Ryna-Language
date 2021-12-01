@@ -12,7 +12,7 @@ use crate::number::*;
 
 pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, Object) -> Result<Object, String>>;
 pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>>;
-pub type NaryFunction = Option<fn(&Vec<Type>, &Type, Object, Vec<Object>) -> Result<Object, String>>;
+pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut i32), &Vec<Type>, &Type, Object, Vec<Object>) -> Result<(), String>>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
@@ -103,7 +103,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 300).unwrap();
 
     ctx.define_native_unary_operation(0, 0, Type::Basic(0), Type::Basic(0), |_, _, a| {
-        let n_a = &*a.deref::<Number>();
+        let n_a = &*a.get::<Number>();
         let mut res = n_a.clone();
 
         res.negate();
@@ -281,14 +281,20 @@ macro_rules! idx_op_definition {
     ($array_type: expr, $idx_type: expr, $result_type: expr, $ctx: expr, $deref_arr: ident, $deref_idx: ident, $ref_method: ident) => {
         $ctx.define_native_nary_operation(
             1, 1, $array_type, &[$idx_type], $result_type, 
-            |_, _, a, v| {
+            |(s, _, _, _), _, _, a, v| {
                 let arr = &a.$deref_arr::<(Type, Vec<Object>)>().1;
                 let idx = &*v[0].$deref_idx::<Number>();
     
                 return match idx {
-                    Number::Float(f) if f.fract() == 0.0 => Ok(arr[*f as usize].$ref_method()),
+                    Number::Float(f) if f.fract() == 0.0 => {
+                        s.push(arr[*f as usize].$ref_method());
+                        Ok(())
+                    },
                     Number::Float(_) => Err("Unable to index array with a non-integer float".into()),
-                    Number::Int(i) if i.limbs.len() == 1 => Ok(arr[i.limbs[0] as usize].$ref_method()),
+                    Number::Int(i) if i.limbs.len() == 1 => {
+                        s.push(arr[i.limbs[0] as usize].$ref_method());
+                        Ok(())
+                    },
                     Number::Int(_) => Err("Unable to index array with a number wider than 64 bits".into())
                 };
             }
@@ -296,8 +302,35 @@ macro_rules! idx_op_definition {
     };
 }
 
+pub const CALL_OP: usize = 0;
+
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
+
+    ctx.define_native_nary_operation(
+        0, 
+        2, 
+        Type::MutRef(Box::new(
+            Type::Function(
+                Box::new(Type::And(vec!(Type::TemplateParam(0)))),
+                Box::new(Type::TemplateParam(1))
+            )
+        )), 
+        &[Type::TemplateParam(0)], 
+        Type::TemplateParam(1), 
+        |(s, off, call_stack, ip), _, _, a, mut b| {
+            let f = &a.deref::<(usize, usize, Type, Type)>();
+
+            s.append(&mut b);
+
+            call_stack.push((*ip + 1, *off));
+            *ip = f.0 as i32 - 1;
+            *off += f.1;
+            
+            return Ok(());
+        }
+    ).unwrap();    
+
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
 
     // Indexing operations on arrays

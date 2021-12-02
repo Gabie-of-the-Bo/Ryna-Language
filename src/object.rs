@@ -353,13 +353,13 @@ impl NessaObject for Tuple {
     }
 }
 
-impl NessaObject for (usize, usize, Type, Type) {
+impl NessaObject for (usize, Type, Type) {
     fn get_type_id(&self) -> usize {
         return 0;
     }
 
     fn get_type(&self) -> Type {
-        return Type::Function(Box::new(self.2.clone()), Box::new(self.3.clone()));
+        return Type::Function(Box::new(self.1.clone()), Box::new(self.2.clone()));
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -375,7 +375,7 @@ impl NessaObject for (usize, usize, Type, Type) {
     }
 
     fn to_string(&self) -> String {
-        return format!("[Line {}, Offset {}] Lambda {:?} => {:?}", self.0, self.1, self.2, self.3);
+        return format!("[Line {}] Lambda {:?} => {:?}", self.0, self.1, self.2);
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {

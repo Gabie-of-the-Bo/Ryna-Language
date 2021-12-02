@@ -1129,7 +1129,6 @@ impl NessaContext{
             NessaExpr::CompiledLambda(i, a, r, _) => {
                 Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(Object::new((
                     *lambda_positions.get(i).unwrap(),
-                    0,
                     Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
                     r.clone()
                 ))))))

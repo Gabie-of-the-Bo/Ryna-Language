@@ -15,6 +15,7 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
+            NessaExpr::CompiledLambda(_, _, _, body) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, body) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, body) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, body) |
@@ -91,7 +92,11 @@ impl NessaContext {
                 }
             },
 
-            (NessaExpr::FunctionDefinition(_, t, _, ret, body), None) => {
+            (NessaExpr::FunctionDefinition(_, t, _, ret, body), None) |
+            (NessaExpr::PrefixOperationDefinition(_, t, _, _, ret, body), None) |
+            (NessaExpr::PostfixOperationDefinition(_, t, _, _, ret, body), None) |
+            (NessaExpr::BinaryOperationDefinition(_, t, _, _, ret, body), None) |
+            (NessaExpr::NaryOperationDefinition(_, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
 
@@ -100,21 +105,17 @@ impl NessaContext {
                     }
                 }
 
-                Ok(())
+                self.ensured_return_check(expr)
             }
 
-            (NessaExpr::CompiledLambda(_, _, ret, body), None) |
-            (NessaExpr::PrefixOperationDefinition(_, _, _, _, ret, body), None) |
-            (NessaExpr::PostfixOperationDefinition(_, _, _, _, ret, body), None) |
-            (NessaExpr::BinaryOperationDefinition(_, _, _, _, ret, body), None) |
-            (NessaExpr::NaryOperationDefinition(_, _, _, _, ret, body), None) => {
+            (NessaExpr::CompiledLambda(_, _, ret, body), None) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
                     self.return_check(line, &expected_ret)?;
                 }
 
-                Ok(())
+                self.ensured_return_check(expr)
             }
 
             (NessaExpr::While(cond, body), ret) |
@@ -492,7 +493,6 @@ impl NessaContext {
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
             NessaExpr::Literal(_) |
-            NessaExpr::CompiledLambda(..) |
             NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -763,6 +763,14 @@ impl NessaContext {
                 }
             }
 
+            NessaExpr::CompiledLambda(_, _, _, b) => {
+                for line in b {
+                    self.type_check(line)?;
+                }                
+
+                Ok(())
+            }
+
             NessaExpr::FunctionDefinition(_, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
@@ -831,7 +839,6 @@ impl NessaContext {
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
-        self.ensured_return_check(expr)?;
         self.class_check(expr)?;
 
         return Ok(());

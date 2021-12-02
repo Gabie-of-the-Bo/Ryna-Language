@@ -328,7 +328,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             Type::TemplateParam(n + 1), 
             |(s, off, call_stack, access_stack, ip), _, _| {
                 let a = s.pop().unwrap();
-                let f = &a.deref::<(usize, usize, Type, Type)>();
+                let f = &a.deref::<(usize, Type, Type)>();
 
                 call_stack.push((*ip + 1, *off));
                 *ip = f.0 as i32;

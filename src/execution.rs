@@ -98,7 +98,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 },
-                Call(to, _) => {
+                Call(to) => {
                     call_stack.push((ip + 1, offset));
                     ip = *to as i32;
                     offset += access_stack.last().unwrap() + 1;
@@ -779,13 +779,34 @@ mod tests {
         let b = a(4);
 
         let c: (Number, Bool) => Number = (n: Number, b: Bool) -> Number {
+            if *<Bool>b {
+                return n + 2;
+            }
+
             return n + 1;
         };
 
         let d = c(5, true);
-        let d = c(5, false);
+        let e = c(5, false);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(8))));
+        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(7))));
+        assert_eq!(ctx.variables[4], Some(Object::new(Number::from(6))));
+
+        let mut ctx = standard_ctx();
+        
+        let code_str = "
+        let apply: (Number, &&(Number => Number)) => Number = (n: Number, f: &&(Number => Number)) -> Number f(*<Number>n);
+        let f: (Number) => Number = (n: Number) -> Number n * n;
+
+        let a = apply(5, f);
+        ".to_string();
+
+        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+
+        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(25))));
     }
 }

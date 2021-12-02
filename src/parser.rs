@@ -37,12 +37,7 @@ pub enum NessaExpr {
     FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
-    CompiledLambda(usize, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
-    CompiledFunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
-    CompiledPrefixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
-    CompiledPostfixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>, usize),
-    CompiledBinaryOperationDefinition(usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>, usize),
-    CompiledNaryOperationDefinition(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>, usize),
+    CompiledLambda(usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Uncompiled
     Literal(Object),

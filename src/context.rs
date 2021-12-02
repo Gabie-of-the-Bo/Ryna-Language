@@ -244,7 +244,7 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut Vec<usize>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<(), String> {
+    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<(), String> {
         return self.define_nary_operation(id, templates, from, args, ret, Some(f));
     }
 

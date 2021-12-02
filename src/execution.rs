@@ -41,11 +41,10 @@ impl NessaContext {
         let mut ip: i32 = 0;
         let mut offset: usize = 0;
         
-        let mut access_stack: Vec<usize> = Vec::with_capacity(1000);
-        let mut call_stack: Vec<(i32, usize)> = Vec::with_capacity(1000);
+        let mut call_stack: Vec<(i32, usize, i32)> = Vec::with_capacity(1000);
         let mut stack: Vec<Object> = Vec::with_capacity(1000);
 
-        access_stack.push(0);
+        call_stack.push((0, 0, -1));
 
         loop {
             match &program[ip as usize] {
@@ -67,9 +66,9 @@ impl NessaContext {
                 },
 
                 StoreVariable(id) => {
-                    let idx = access_stack.len() - 1;
-                    let l = &mut access_stack[idx];
-                    *l = (*l).max(*id);
+                    let idx = call_stack.len() - 1;
+                    let l = &mut call_stack[idx].2;
+                    *l = (*l).max(*id as i32);
                     
                     self.variables[*id + offset] = Some(stack.pop().unwrap());
                     ip += 1;
@@ -99,17 +98,15 @@ impl NessaContext {
                     }
                 },
                 Call(to) => {
-                    call_stack.push((ip + 1, offset));
+                    call_stack.push((ip + 1, offset, -1));
                     ip = *to as i32;
-                    offset += access_stack.last().unwrap() + 1;
-                    access_stack.push(0);
+                    offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 },
                 Return => {
-                    let (prev_ip, prev_offset) = call_stack.pop().unwrap();
+                    let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
 
                     ip = prev_ip;
                     offset = prev_offset;
-                    access_stack.pop().unwrap();
                 }, 
 
                 NativeFunctionCall(func_id, ov_id, type_args) => {
@@ -163,7 +160,7 @@ impl NessaContext {
                 NaryOperatorCall(op_id, ov_id, type_args) => {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
                         if let (_, _, r, Some(f)) = &operations[*ov_id] {
-                            f((&mut stack, &mut offset, &mut call_stack, &mut access_stack, &mut ip), type_args, r)?;
+                            f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r)?;
 
                         } else {
                             unreachable!();

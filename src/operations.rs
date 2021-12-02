@@ -12,7 +12,7 @@ use crate::number::*;
 
 pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, Object) -> Result<Object, String>>;
 pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>>;
-pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize)>, &mut Vec<usize>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>>;
+pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
@@ -281,7 +281,7 @@ macro_rules! idx_op_definition {
     ($array_type: expr, $idx_type: expr, $result_type: expr, $ctx: expr, $deref_arr: ident, $deref_idx: ident, $ref_method: ident) => {
         $ctx.define_native_nary_operation(
             1, 1, $array_type, &[$idx_type], $result_type, 
-            |(s, _, _, _, ip), _, _| {
+            |(s, _, _, ip), _, _| {
                 let arr = s.pop().unwrap();
                 let first = s.pop().unwrap();
 
@@ -326,14 +326,13 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             )), 
             args.as_slice(), 
             Type::TemplateParam(n + 1), 
-            |(s, off, call_stack, access_stack, ip), _, _| {
+            |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.deref::<(usize, Type, Type)>();
 
-                call_stack.push((*ip + 1, *off));
+                call_stack.push((*ip + 1, *off, -1));
                 *ip = f.0 as i32;
-                *off += access_stack.last().unwrap() + 1;
-                access_stack.push(0);
+                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
                 return Ok(());
             }

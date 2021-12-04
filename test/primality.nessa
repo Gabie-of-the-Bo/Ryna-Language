@@ -21,7 +21,7 @@ let it: Number = 0;
 
 while it < 1000 {
     if is_prime(it) {
-        array.push(it.deref<Number>());
+        array.push<Number>(it.deref<Number>());
     }
 
     it = it + 1;

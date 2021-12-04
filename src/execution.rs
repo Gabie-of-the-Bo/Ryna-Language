@@ -368,7 +368,7 @@ mod tests {
 
             while it < 50 {
                 if is_prime(it) {
-                    array.push(it.deref<Number>());
+                    array.push<Number>(it.deref<Number>());
                 }
 
                 it = it + 1;
@@ -773,7 +773,7 @@ mod tests {
         let code_str = "
         let a: (Number) => Number = (n: Number) -> Number n * 2;
 
-        let b = a(4);
+        let b = a<Number, Number>(4);
 
         let c: (Number, Bool) => Number = (n: Number, b: Bool) -> Number {
             if *<Bool>b {
@@ -783,8 +783,8 @@ mod tests {
             return n + 1;
         };
 
-        let d = c(5, true);
-        let e = c(5, false);
+        let d = c<Number, Bool, Number>(5, true);
+        let e = c<Number, Bool, Number>(5, false);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -796,10 +796,10 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-        let apply: (Number, &&(Number => Number)) => Number = (n: Number, f: &&(Number => Number)) -> Number f(*<Number>n);
+        let apply: (Number, &&(Number => Number)) => Number = (n: Number, f: &&(Number => Number)) -> Number f<Number, Number>(*<Number>n);
         let f: (Number) => Number = (n: Number) -> Number n * n;
 
-        let a = apply(5, f);
+        let a = apply<Number, &&(Number => Number), Number>(5, f);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

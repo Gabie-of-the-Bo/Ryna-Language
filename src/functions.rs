@@ -189,7 +189,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         7, 
-        1,
+        0,
         &[Type::MutRef(Box::new(Type::Template(5, vec!(Type::Wildcard))))], 
         Type::Basic(2), 
         |_, _, v| {
@@ -216,7 +216,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(
         9, 
-        1,
+        0,
         &[Type::MutRef(Box::new(Type::Template(3, vec!(Type::Wildcard))))], 
         Type::Basic(0), 
         |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))

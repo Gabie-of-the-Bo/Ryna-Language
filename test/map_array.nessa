@@ -2,10 +2,22 @@ fn<T, G> map(array: &&Array<'T>, f: (&&'T) => 'G) -> Array<'G> {
     let res: Array<'G> = arr<'G>();
 
     for i in array {
-        res.push<'G>(f(i));
+        res.push<'G>(f<'T, 'G>(i));
     }
 
     return *<Array<'G>>res;
+}
+
+fn<T> filter(array: &&Array<'T>, f: (&&'T) => Bool) -> Array<'T> {
+    let res: Array<'T> = arr<'T>();
+
+    for i in array {
+        if f<&&'T, Bool>(i) {
+            res.push<'T>(*<'T>i);
+        }
+    }
+
+    return *<Array<'T>>res;
 }
 
 let a: Array<Number> = arr<Number>();
@@ -23,5 +35,13 @@ if b<Number>[0] != 2 || b<Number>[1] != 4 || b<Number>[2] != 6 || b<Number>[3] !
 }
 
 if *<Bool>c<Bool>[0] || *<Bool>c<Bool>[1] || !*<Bool>c<Bool>[2] || !*<Bool>c<Bool>[3] || !*<Bool>c<Bool>[4] {
+    panic("Invalid array contents");
+}
+
+let d: Array<Number> = a.filter<Number>((n: &&Number) -> Bool n % 2 == 0);
+
+print(d);
+
+if d<Number>[0] != 2 || d<Number>[1] != 4 {
     panic("Invalid array contents");
 }

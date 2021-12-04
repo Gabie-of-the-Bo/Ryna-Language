@@ -11,7 +11,7 @@ fn<T> next(it: &&DoubleIterator<'T>) -> Number {
 }
 
 fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
-    return iter<'T>(it).is_consumed<'T>();
+    return iter<'T>(it).is_consumed();
 }
 
 let a: Array<Number> = arr<Number>();

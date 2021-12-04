@@ -277,9 +277,6 @@ impl NessaContext {
 
                 if let NessaExpr::FunctionName(id) = a.as_ref() {                    
                     *expr = NessaExpr::FunctionCall(*id, t.clone(), b.clone());
-
-                } else if !t.is_empty() {
-                    return Err("Invalid type parameters on n-ary call operation".into());
                 }
             }
 
@@ -1167,7 +1164,11 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions)?;
 
                 let i_t = self.infer_type(e).unwrap();
-                let (ov_id, _, native, _) = self.get_first_unary_op(*id, i_t, false).unwrap();
+                let (ov_id, _, native, t_args) = self.get_first_unary_op(*id, i_t, false).unwrap();
+
+                if t.len() != t_args.len() {
+                    return Err(format!("Unary operation expected {} type arguments and got {}", t_args.len(), t.len()));
+                }
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
@@ -1187,7 +1188,11 @@ impl NessaContext{
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = self.infer_type(b).unwrap();
 
-                let (ov_id, _, native, _) = self.get_first_binary_op(*id, a_t, b_t, false).unwrap();
+                let (ov_id, _, native, t_args) = self.get_first_binary_op(*id, a_t, b_t, false).unwrap();
+
+                if t.len() != t_args.len() {
+                    return Err(format!("Binary operation expected {} type arguments and got {}", t_args.len(), t.len()));
+                }
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id, t.clone())));
@@ -1212,7 +1217,11 @@ impl NessaContext{
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
 
-                let (ov_id, _, native, _) = self.get_first_nary_op(*id, a_t, b_t, false).unwrap();
+                let (ov_id, _, native, t_args) = self.get_first_nary_op(*id, a_t, b_t, false).unwrap();
+
+                if tm.len() != t_args.len() {
+                    return Err(format!("N-ary operation expected {} type arguments and got {}", t_args.len(), tm.len()));
+                }
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, tm.clone())));
@@ -1360,7 +1369,11 @@ impl NessaContext{
                 }
                 
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
-                let (ov_id, _, native, _) = self.get_first_function_overload(*id, args_types, false).unwrap();
+                let (ov_id, _, native, t_args) = self.get_first_function_overload(*id, args_types, false).unwrap();
+
+                if t.len() != t_args.len() {
+                    return Err(format!("Function call {} expected {} type arguments and got {}", self.functions[*id].name, t_args.len(), t.len()));
+                }
 
                 if native {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
@@ -1760,10 +1773,6 @@ mod tests {
         let code_2_str = "
         inc<Number>(5);
         ";
-        
-        let code_3_str = "
-        wea<Number>(5);
-        ";
 
         let (_, mut code) = ctx.nessa_parser(code_1_str).unwrap();
         ctx.compile_functions(&mut code).unwrap();
@@ -1777,10 +1786,6 @@ mod tests {
         let (_, mut code) = ctx.nessa_parser(code_2_str).unwrap();
 
         assert!(ctx.compile_functions(&mut code).is_ok());
-        
-        let (_, mut code) = ctx.nessa_parser(code_3_str).unwrap();
-
-        assert!(ctx.compile_functions(&mut code).is_err());
     }
 
     #[test]

@@ -115,6 +115,7 @@ impl NessaContext {
                     self.return_check(line, &expected_ret)?;
                 }
 
+                self.lambda_check(expr)?;
                 self.ensured_return_check(expr)
             }
 
@@ -833,6 +834,139 @@ impl NessaContext {
 
             _ => Ok(())
         };
+    }
+
+    pub fn no_template_check_type(&self, t: &Type) -> Result<(), String> {
+        if t.has_templates() {
+            Err("Template types are not allowed in this context".into())
+
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn no_template_check_types(&self, t: &Vec<Type>) -> Result<(), String> {
+        if t.iter().any(Type::has_templates) {
+            Err("Template types are not allowed in this context".into())
+
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn no_template_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        return match expr {
+            NessaExpr::Literal(..) |
+            NessaExpr::CompiledLambda(..) => Ok(()),
+
+            NessaExpr::Variable(_, _, t) => self.no_template_check_type(t),
+
+            NessaExpr::CompiledVariableAssignment(_, _, t, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, t, e) => {
+                self.no_template_check_type(t)?;
+                self.no_template_check(e)
+            }
+
+            NessaExpr::Tuple(e) => {
+                for i in e {
+                    self.no_template_check(i)?;
+                }
+
+                Ok(())
+            }
+            
+            NessaExpr::UnaryOperation(_, tm, e) => {
+                self.no_template_check_types(tm)?;
+                self.no_template_check(e)
+            }
+            
+            NessaExpr::BinaryOperation(_, tm, a, b) => {
+                self.no_template_check_types(tm)?;
+                self.no_template_check(a)?;
+                self.no_template_check(b)
+            }
+            
+            NessaExpr::NaryOperation(_, tm, a, b) => {
+                self.no_template_check_types(tm)?;
+                self.no_template_check(a)?;
+
+                for i in b {
+                    self.no_template_check(i)?;
+                }
+
+                Ok(())
+            }
+            
+            NessaExpr::FunctionCall(_, tm, e) => {
+                self.no_template_check_types(tm)?;
+
+                for i in e {
+                    self.no_template_check(i)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::CompiledFor(_, _, _, e, b) |
+            NessaExpr::While(e, b) => {
+                self.no_template_check(e)?;
+
+                for i in b {
+                    self.no_template_check(i)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::If(ih, ib, ei, eb) => {
+                self.no_template_check(ih)?;
+
+                for i in ib {
+                    self.no_template_check(i)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.no_template_check(ei_h)?;
+
+                    for i in ei_b {
+                        self.no_template_check(i)?;
+                    }   
+                }
+
+                if let Some(eb_inner) = eb {
+                    for i in eb_inner {
+                        self.no_template_check(i)?;
+                    }
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::Return(e) => self.no_template_check(e),
+            
+            _ => unimplemented!("{:?}", expr)
+        };
+    }
+
+    pub fn lambda_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        if let NessaExpr::CompiledLambda(_, a, r, b) = expr {
+            if r.has_templates() {
+                return Err("Parametric types are not allowed in lambda return types".into());
+            }
+
+            if a.iter().map(|(_, t)| t).any(Type::has_templates) {
+                return Err("Parametric types are not allowed in lambda parameters".into());
+            }
+
+            for line in b {
+                self.no_template_check(line)?;
+            }
+
+            return Ok(());
+       
+        } else {
+            unreachable!()
+        }
     }
 
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), String> {

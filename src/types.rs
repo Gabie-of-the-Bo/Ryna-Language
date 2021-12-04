@@ -107,6 +107,27 @@ impl Type {
         }
     }
 
+    pub fn has_templates(&self) -> bool {
+        return match self {
+            Type::Wildcard |
+            Type::Empty |
+            Type::Basic(_) => false,
+
+            Type::Ref(a) |
+            Type::MutRef(a) => a.has_templates(),
+
+            Type::Template(_, a) |
+            Type::Or(a) |
+            Type::And(a) => a.iter().any(Type::has_templates),
+
+            Type::TemplateParam(_) => true,
+            
+            Type::Function(a, b) => a.has_templates() || b.has_templates(),
+
+            _ => unimplemented!()
+        };
+    }
+
     pub fn bindable_to(&self, other: &Type) -> bool {
         return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
     }

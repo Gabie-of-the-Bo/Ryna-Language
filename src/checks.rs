@@ -115,6 +115,7 @@ impl NessaContext {
                     self.return_check(line, &expected_ret)?;
                 }
 
+                self.repeated_arguments_check(expr)?;
                 self.lambda_check(expr)?;
                 self.ensured_return_check(expr)
             }
@@ -732,6 +733,16 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::CompiledFor(_, _, _, iter, body) => {
+                self.type_check(iter)?;
+
+                for line in body {
+                    self.type_check(line)?;
+                }
+
+                Ok(())
+            }
+
             NessaExpr::While(cond, body) => {
                 self.type_check(cond)?;
 
@@ -772,6 +783,10 @@ impl NessaContext {
                 Ok(())
             }
 
+            NessaExpr::PrefixOperationDefinition(_, t, _, _, _, b) |
+            NessaExpr::PostfixOperationDefinition(_, t, _, _, _, b) |
+            NessaExpr::BinaryOperationDefinition(_, t, _, _, _, b) |
+            NessaExpr::NaryOperationDefinition(_, t, _, _, _, b) |
             NessaExpr::FunctionDefinition(_, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
@@ -781,18 +796,6 @@ impl NessaContext {
 
                 Ok(())
             },
-
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, b) |
-            NessaExpr::CompiledFor(_, _, _, _, b) => {
-                for line in b {
-                    self.type_check(line)?;
-                }
-
-                Ok(())
-            }
 
             _ => unimplemented!("{:?}", expr)
         };
@@ -969,7 +972,56 @@ impl NessaContext {
         }
     }
 
+    pub fn repeated_args(&self, args: &Vec<&String>) -> Result<(), String> {
+        let mut args_set = HashSet::new();
+
+        for i in args {
+            if args_set.contains(i) {
+                return Err(format!("Parameter \"{}\" is defined multiple times", i));
+            }
+
+            args_set.insert(i);
+        }
+
+        return Ok(());
+    }
+
+    pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), String> {
+        return match expr {
+            NessaExpr::PostfixOperationDefinition(_, t, n, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, t, n, _, _, _) => {
+                self.repeated_args(&vec!(n))?;
+                self.repeated_args(&t.iter().collect())
+            }
+
+            NessaExpr::BinaryOperationDefinition(_, t, (n1, _), (n2, _), _, _) => {
+                self.repeated_args(&vec!(n1, n2))?;
+                self.repeated_args(&t.iter().collect())
+            }
+
+            NessaExpr::NaryOperationDefinition(_, t, (n1, _), n, _, _) => {
+                let mut args = vec!(n1);
+                args.extend(n.iter().map(|(i, _)| i));
+
+                self.repeated_args(&args)?;
+                self.repeated_args(&t.iter().collect())
+            }
+
+            NessaExpr::FunctionDefinition(_, t, a, _, _) => {
+                self.repeated_args(&a.iter().map(|(n, _)| n).collect())?;
+                self.repeated_args(&t.iter().collect())
+            }
+
+            NessaExpr::CompiledLambda(_, a, _, _) => {
+                self.repeated_args(&a.iter().map(|(n, _)| n).collect())
+            }
+
+            _ => Ok(())
+        };
+    }
+
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), String> {
+        self.repeated_arguments_check(expr)?;
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;

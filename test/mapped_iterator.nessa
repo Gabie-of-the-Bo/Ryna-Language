@@ -24,7 +24,7 @@ a.push<Number>(5);
 
 let sum: Number = 0;
 
-for i in DoubleIterator<Number>(iterator<Number>(a)) {
+for i in DoubleIterator<&&Number>(iterator<Number>(a)) {
     sum = sum + i;
 }
 

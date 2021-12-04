@@ -69,4 +69,9 @@ mod integration {
     fn array_access() {
         integration_text("test/array_access.nessa");
     }
+
+    #[test]
+    fn map_array() {
+        integration_text("test/map_array.nessa");
+    }
 }

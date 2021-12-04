@@ -1,0 +1,27 @@
+fn<T, G> map(array: &&Array<'T>, f: (&&'T) => 'G) -> Array<'G> {
+    let res: Array<'G> = arr<'G>();
+
+    for i in array {
+        res.push<'G>(f(i));
+    }
+
+    return *<Array<'G>>res;
+}
+
+let a: Array<Number> = arr<Number>();
+a.push<Number>(1);
+a.push<Number>(2);
+a.push<Number>(3);
+a.push<Number>(4);
+a.push<Number>(5);
+
+let b: Array<Number> = a.map<Number, Number>((n: &&Number) -> Number n * 2);
+let c: Array<Bool> = a.map<Number, Bool>((n: &&Number) -> Bool n > 2);
+
+if b<Number>[0] != 2 || b<Number>[1] != 4 || b<Number>[2] != 6 || b<Number>[3] != 8 || b<Number>[4] != 10 {
+    panic("Invalid array contents");
+}
+
+if *<Bool>c<Bool>[0] || *<Bool>c<Bool>[1] || !*<Bool>c<Bool>[2] || !*<Bool>c<Bool>[3] || !*<Bool>c<Bool>[4] {
+    panic("Invalid array contents");
+}

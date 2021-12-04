@@ -81,8 +81,13 @@ impl NessaExpr {
                 e.iter_mut().for_each(|i| i.compile_types(templates));
             }
 
-            NessaExpr::UnaryOperation(_, _, e) => e.compile_types(templates),
-            NessaExpr::BinaryOperation(_, _, a, b) => {
+            NessaExpr::UnaryOperation(_, t, e) => {
+                t.iter_mut().for_each(|i| i.compile_templates(templates));
+                e.compile_types(templates);
+            },
+
+            NessaExpr::BinaryOperation(_, t, a, b) => {
+                t.iter_mut().for_each(|i| i.compile_templates(templates));
                 a.compile_types(templates);
                 b.compile_types(templates);
             },

@@ -329,7 +329,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.deref::<(usize, Type, Type)>();
-
+                
                 call_stack.push((*ip + 1, *off, -1));
                 *ip = f.0 as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;

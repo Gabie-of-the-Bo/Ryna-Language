@@ -1,0 +1,4 @@
+module_name: prime_filter
+module_paths:
+  - test/lib
+modules: {}

@@ -1,0 +1,24 @@
+module sum [1.0]
+
+import class Range from range;
+import fn { iterator, next, is_consumed } from range;
+
+fn sum(r: Range) -> Number {
+    let res: Number = 0;
+
+    for i in *<Range>r {
+        res = res + i;
+    }
+
+    return *<Number>res;
+}
+
+let r: Range = Range(0, 0, 10);
+
+iterator(*<Range>r);
+next(r);
+is_consumed(r);
+
+if sum(Range(0, 0, 100)) != 5050 {
+    panic("Invalid result");
+}

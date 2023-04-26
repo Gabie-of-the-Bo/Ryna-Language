@@ -101,6 +101,22 @@ pub fn div_by_two(number: &mut Vec<u64>, base: u128) -> u64{
 }
 
 #[inline]
+pub fn div_by_two_lbase(number: &mut Vec<u64>) -> u64{
+    let mut carry = 0;
+
+    *number = number.into_iter().map(|i| {
+        carry = (carry << BITS_PER_LIMB) + *i as u128;
+        let res = carry >> 1;
+        carry &= 1;
+
+        return res as u64;
+    
+    }).skip_while(|i| *i == 0).collect();
+
+    return carry as u64;
+}
+
+#[inline]
 pub fn div_by_digit_rev_lbase(number: &mut Vec<u64>, digit: u128) -> u64{
     let mut carry = 0;
 
@@ -422,8 +438,19 @@ fn add_limbs_offset(a: &mut Vec<u64>, b: &Vec<u64>, offset: usize){
     
     let mut carry = 0;
 
-    for i in offset..a.len(){
-        carry = unsafe { _addcarry_u64(carry, a[i], b[i - offset], &mut a[i]) };
+    if a.len() == b.len() + offset {
+        for i in offset..a.len(){
+            carry = unsafe { _addcarry_u64(carry, a[i], b[i - offset], &mut a[i]) };
+        }
+
+    } else {
+        for i in offset..(b.len() + offset) {
+            carry = unsafe { _addcarry_u64(carry, a[i], b[i - offset], &mut a[i]) };
+        }
+
+        for i in (b.len() + offset)..a.len() {
+            carry = unsafe { _addcarry_u64(carry, a[i], 0, &mut a[i]) };
+        }
     }
 
     if carry > 0{
@@ -954,6 +981,66 @@ fn full_not(a: &Integer) -> Integer{
 }
 
 /*
+    ╒════════════════════════════════════╕
+    │ More complex arithmetic operations │
+    ╘════════════════════════════════════╛
+*/
+
+pub fn pow(b: &Integer, e: &Integer) -> Result<Integer, String>{
+
+    // Allow only positive exponents
+    if e.negative {
+        return Err("Unable to exponentiate integer to a negative power".to_string());
+    }
+
+    let mut y = Integer::new(false, vec!(1));
+    let mut x = b.clone();
+    let mut n = e.clone();
+
+    // Exponentiation by squaring
+    while !n.is_zero() {
+        if !n.is_even() {
+            y = &x * &y;
+        }
+
+        x = &x * &x;
+        div_by_two_lbase(&mut n.limbs);
+    } 
+
+    return Ok(y);
+}
+
+pub fn modpow(b: &Integer, e: &Integer, m: &Integer) -> Result<Integer, String>{
+
+    // Allow only positive exponents
+    if e.negative {
+        return Err("Unable to exponentiate integer to a negative power".to_string());
+    }
+
+    // Allow only positive mod
+    if m.negative {
+        return Err("Unable to exponentiate integer with a negative modulo".to_string());
+    }
+
+    let mut y = Integer::new(false, vec!(1));
+    let mut x = b.clone();
+    let mut n = e.clone();
+
+    // Exponentiation by squaring
+    while !n.is_zero() {
+        if !n.is_even() {
+            y = (&x * &y) % m;
+        }
+
+        x = &x * &x;
+        x = &x % m;
+        div_by_two_lbase(&mut n.limbs);
+    } 
+
+    return Ok(y);
+}
+
+/*
     ╒═════════════════════════════════════════════════════════════════════════════════════════════════╕
     │ These lines define the basic arithmetic operators for all combinations of references and values │
     ╘═════════════════════════════════════════════════════════════════════════════════════════════════╛
@@ -1011,8 +1098,16 @@ impl Integer{
         return res;
     }
 
+    pub fn is_even(&self) -> bool{
+        return self.limbs[0] % 2 == 0;
+    }
+
     pub fn is_zero(&self) -> bool{
         return self.limbs.iter().all(|&i| i == 0);
+    }
+
+    pub fn is_one(&self) -> bool{
+        return self.limbs.len() == 1 && self.limbs[0] == 1;
     }
 
     pub fn normalize_sign(&mut self) -> &Self{

@@ -1,0 +1,22 @@
+module range [1.0]
+
+class Range {
+    start: Number;
+    current: Number;
+    end: Number;
+}
+
+fn iterator(it: Range) -> Range {
+    return it.deref<Range>();
+}
+
+fn next(it: &&Range) -> Number {
+    let curr: &&Number = it.current();
+    curr.inc();
+
+    return curr.deref<Number>();
+}
+
+fn is_consumed(it: &&Range) -> Bool {
+    return it.current() >= it.end();
+}

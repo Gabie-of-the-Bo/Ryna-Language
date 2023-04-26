@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 
 use seq_macro::seq;
 
 use crate::functions::Function;
 use crate::context::NessaContext;
-use crate::parser::NessaExpr;
+use crate::parser::*;
 use crate::types::*;
 use crate::object::Object;
 use crate::functions::*;
@@ -110,6 +110,7 @@ impl NessaContext {
             NessaExpr::For(i, c, b) => {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
+                println!("{:?}", c);
                 let container_type = self.infer_type(c).unwrap();
                 let iterator_type = self.get_iterator_type(&container_type)?;
                 let element_type = self.get_iterator_output_type(&iterator_type)?;
@@ -445,6 +446,7 @@ pub enum CompiledNessaExpr {
 
     StoreVariable(usize),
     GetVariable(usize),
+    Drop,
 
     Jump(usize),
     RelativeJump(i32),
@@ -808,7 +810,7 @@ impl NessaContext{
                                 }
                             }
             
-                            program_size += self.compiled_form_body_size(b) + a.len();
+                            program_size += self.compiled_form_body_size(b, true) + a.len();
                         }
                     }
                 },
@@ -827,7 +829,7 @@ impl NessaContext{
                                 }
                             }
             
-                            program_size += self.compiled_form_body_size(b) + 1;
+                            program_size += self.compiled_form_body_size(b, true) + 1;
                         }
                     }
                 }
@@ -847,7 +849,7 @@ impl NessaContext{
                                 }
                             }
             
-                            program_size += self.compiled_form_body_size(b) + 2;
+                            program_size += self.compiled_form_body_size(b, true) + 2;
                         }
                     }
                 }
@@ -870,7 +872,7 @@ impl NessaContext{
                                 }
                             }
             
-                            program_size += self.compiled_form_body_size(b) + a.len() + 1;
+                            program_size += self.compiled_form_body_size(b, true) + a.len() + 1;
                         }
                     }
                 }
@@ -1078,7 +1080,7 @@ impl NessaContext{
                 NessaExpr::BinaryOperationDefinition(..) |
                 NessaExpr::NaryOperationDefinition(..) => {},
 
-                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, &lambda_positions)?)
+                _ => res.extend(self.compiled_form_expr(expr, &functions, &unary, &binary, &nary, &lambda_positions, true)?)
             }
         }
 
@@ -1087,36 +1089,42 @@ impl NessaContext{
         return Ok(res);
     }
 
-    pub fn compiled_form_size(&self, expr: &NessaExpr) -> usize {
+    pub fn compiled_form_size(&self, expr: &NessaExpr, root: bool, root_counter: &mut usize) -> usize {
         use NessaExpr::*;
 
         return match expr {
             Literal(_) | Variable(..) | CompiledLambda(..) => 1, 
-            BinaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_size(b) + 1,
-            NaryOperation(_, _, a, b) => self.compiled_form_size(a) + self.compiled_form_body_size(b) + 1,
-            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, _, e) => self.compiled_form_size(e) + 1,
+            BinaryOperation(_, _, a, b) => self.compiled_form_size(a, false, root_counter) + self.compiled_form_size(b, false, root_counter) + 1,
+            NaryOperation(_, _, a, b) => self.compiled_form_size(a, false, root_counter) + self.compiled_form_body_size(b, false) + 1,
+            Return(e) | CompiledVariableDefinition(_, _, _, e) | CompiledVariableAssignment(_, _, _, e) | UnaryOperation(_, _, e) => self.compiled_form_size(e, false, root_counter) + 1,
             If(ih, ib, ei, e) => {
-                let mut res = self.compiled_form_size(ih) + self.compiled_form_body_size(ib) + 1;
+                let mut res = self.compiled_form_size(ih, false, root_counter) + self.compiled_form_body_size(ib, true) + 1;
 
                 for (h, b) in ei {
-                    res += self.compiled_form_size(h) + self.compiled_form_body_size(b) + 1
+                    res += self.compiled_form_size(h, false, root_counter) + self.compiled_form_body_size(b, true) + 1
                 }
 
                 if let Some(b) = e {
-                    res += self.compiled_form_body_size(b);
+                    res += self.compiled_form_body_size(b, true);
                 }
                 
                 res
             },
-            CompiledFor(_, _, _, c, b) => self.compiled_form_size(c) + self.compiled_form_body_size(b) + 9,
-            While(c, b) => self.compiled_form_size(c) + self.compiled_form_body_size(b) + 2,
-            FunctionCall(_, _, a) => self.compiled_form_body_size(a) + 1, 
+            CompiledFor(_, _, _, c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 9,
+            While(c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 2,
+            FunctionCall(_, _, a) => {
+                *root_counter += root as usize; // Add drop instruction
+                self.compiled_form_body_size(a, false) + 1
+            }, 
             _ => unreachable!()
         }
     }
 
-    pub fn compiled_form_body_size(&self, lines: &Vec<NessaExpr>) -> usize {
-        return lines.iter().map(|i| self.compiled_form_size(i)).sum();
+    pub fn compiled_form_body_size(&self, lines: &Vec<NessaExpr>, root: bool) -> usize {
+        let mut counter = 0;
+        let res: usize = lines.iter().map(|i| self.compiled_form_size(i, root, &mut counter)).sum();
+
+        return res + counter;
     }
 
     pub fn compiled_form_expr(
@@ -1125,7 +1133,8 @@ impl NessaContext{
         unary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         binary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
-        lambda_positions: &HashMap<usize, usize>
+        lambda_positions: &HashMap<usize, usize>,
+        root: bool
     ) -> Result<Vec<NessaInstruction>, String> {
         return match expr {
             NessaExpr::Literal(obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
@@ -1144,7 +1153,7 @@ impl NessaContext{
 
                 for i in e.iter().rev() {
                     types.push(self.infer_type(i).unwrap());
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(types)));
@@ -1154,14 +1163,14 @@ impl NessaContext{
 
             NessaExpr::Variable(id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
             NessaExpr::CompiledVariableDefinition(id, _, _, e) | NessaExpr::CompiledVariableAssignment(id, _, _, e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, false)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
 
                 Ok(res)
             },
 
             NessaExpr::UnaryOperation(id, t, e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, false)?;
 
                 let i_t = self.infer_type(e).unwrap();
                 let (ov_id, _, native, t_args) = self.get_first_unary_op(*id, i_t, false).unwrap();
@@ -1182,8 +1191,8 @@ impl NessaContext{
             },
 
             NessaExpr::BinaryOperation(id, t, a, b) => {
-                let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, lambda_positions)?;
-                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions)?);
+                let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, lambda_positions, false)?;
+                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, false)?);
                 
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = self.infer_type(b).unwrap();
@@ -1209,10 +1218,10 @@ impl NessaContext{
                 let mut res = vec!();
 
                 for i in b.iter().rev() {
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
                 
-                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions)?);
+                res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, false)?);
 
                 let a_t = self.infer_type(a).unwrap();
                 let b_t = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
@@ -1235,14 +1244,14 @@ impl NessaContext{
             },
 
             NessaExpr::If(ih, ib, ei, e) => {
-                let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, lambda_positions)?;
+                let mut res = self.compiled_form_expr(ih, functions, unary, binary, nary, lambda_positions, false)?;
                 let if_body = self.compiled_form_body(ib, functions, unary, binary, nary, lambda_positions)?;
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 1)));
                 res.extend(if_body);
 
                 for (h, b) in ei {
-                    res.extend(self.compiled_form_expr(h, functions, unary, binary, nary, lambda_positions)?);
+                    res.extend(self.compiled_form_expr(h, functions, unary, binary, nary, lambda_positions, false)?);
 
                     let elif_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions)?;
 
@@ -1258,7 +1267,7 @@ impl NessaContext{
             },
             NessaExpr::While(c, b) => {
                 // Start with the condition
-                let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions)?;
+                let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions, false)?;
                 let while_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions)?;
 
                 // Add while body
@@ -1274,7 +1283,7 @@ impl NessaContext{
             },
             NessaExpr::CompiledFor(it_var_id, elem_var_id, _, c, b) => {
                 if let Some(t) = self.infer_type(c) {
-                    let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions)?;
+                    let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions, false)?;
 
                     // Get "iterator", "next" and "is_consumed" function overloads and check them
                     if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone()), true) {
@@ -1290,6 +1299,7 @@ impl NessaContext{
                                         res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)));
     
                                     } else {
+                                        println!("{:?}", functions);
                                         let pos = functions.get(&(ITERATOR_FUNC_ID, it_ov_id, it_args)).unwrap();
                                         res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos)));
                                     }
@@ -1356,7 +1366,7 @@ impl NessaContext{
                 }
             },
             NessaExpr::Return(e) => {
-                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions)?;
+                let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, false)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::Return));
 
                 Ok(res)
@@ -1365,7 +1375,7 @@ impl NessaContext{
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
-                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions)?);
+                    res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
                 
                 let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
@@ -1383,6 +1393,11 @@ impl NessaContext{
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(*pos)));
                 }
 
+                if root { // Drop if the return value is unused
+                    println!("{:?}", expr);
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
+
                 Ok(res)
             }
             _ => { Ok(vec!()) }
@@ -1397,7 +1412,148 @@ impl NessaContext{
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         lambda_positions: &HashMap<usize, usize>
     ) -> Result<Vec<NessaInstruction>, String> {
-        return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions)).flat_map(|i| i.unwrap()).collect());
+        return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, true)).flat_map(|i| i.unwrap()).collect());
+    }
+
+    pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), String> {
+        match definition {
+            NessaExpr::ClassDefinition(n, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
+            NessaExpr::ClassDefinition(n, t, a, p) => {
+                *needed = true; // Repeat class parsing after creating a new one
+
+                self.implicit_syntax_check(&n, &t, &a, &p)?;
+
+                let n_templates = t.len();
+                let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
+                
+                self.define_type(n.clone(), t, a.clone(), p, Some(
+                    |ctx, c_type, s| {
+                        if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
+                            return Ok(o);
+                        }
+
+                        return Err(format!("Unable to parse {} from {}", c_type.name, s));
+                    }
+                ))?;
+
+                self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
+
+                let func_id = self.functions.iter().filter(|i| i.name == n).next().unwrap().id;
+                let class_id = self.type_templates.iter().filter(|t| t.name == n).next().unwrap().id;
+
+                if n_templates == 0 {
+                    // Define constructor instance
+                    self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
+                        if let Type::Basic(id) = r {
+                            return Ok(Object::new(TypeInstance {
+                                id: *id,
+                                params: vec!(),
+                                attributes: a
+                            }))
+                        }
+
+                        unreachable!();
+                    })?;
+                    
+                    // Define constructor meber access
+                    for (i, (att_name, att_type)) in a.into_iter().enumerate() {
+                        self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
+                        let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+
+                        let ref_type = match &att_type {
+                            Type::MutRef(t) => Type::Ref(t.clone()),
+                            Type::Ref(t) => Type::Ref(t.clone()),
+                            t => Type::Ref(Box::new(t.clone()))
+                        };
+
+                        let mut_type = match &att_type {
+                            Type::MutRef(t) => Type::MutRef(t.clone()),
+                            Type::Ref(t) => Type::Ref(t.clone()),
+                            t => Type::MutRef(Box::new(t.clone()))
+                        };
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
+                                #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
+                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
+                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+                    }
+
+                } else {
+                    let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
+
+                    // Define constructor instance
+                    self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
+                        if let Type::Template(id, _) = r {
+                            return Ok(Object::new(TypeInstance {
+                                id: *id,
+                                params: t.clone(),
+                                attributes: a
+                            }))
+                        }
+
+                        unreachable!();
+                    })?;
+
+                    for (i, (att_name, att_type)) in a.into_iter().enumerate() {
+                        self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
+                        let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+
+                        let ref_type = match &att_type {
+                            Type::MutRef(t) => Type::Ref(t.clone()),
+                            Type::Ref(t) => Type::Ref(t.clone()),
+                            t => Type::Ref(Box::new(t.clone()))
+                        };
+
+                        let mut_type = match &att_type {
+                            Type::MutRef(t) => Type::MutRef(t.clone()),
+                            Type::Ref(t) => Type::Ref(t.clone()),
+                            t => Type::MutRef(Box::new(t.clone()))
+                        };
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
+                                #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
+                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+
+                        seq!(N in 0..100 {
+                            self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
+                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
+                            })?;
+                        });
+                    }
+                }
+            },
+
+            _ => unreachable!()
+        }
+
+        return Ok(());
     }
 
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), String> {
@@ -1407,142 +1563,7 @@ impl NessaContext{
             needed = false;
 
             for i in self.nessa_class_parser(code).unwrap().1 {
-                match i {
-                    NessaExpr::ClassDefinition(n, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
-                    NessaExpr::ClassDefinition(n, t, a, p) => {
-                        needed = true; // Repeat class parsing after creating a new one
-
-                        self.implicit_syntax_check(&n, &t, &a, &p)?;
-
-                        let n_templates = t.len();
-                        let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                        
-                        self.define_type(n.clone(), t, a.clone(), p, Some(
-                            |ctx, c_type, s| {
-                                if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
-                                    return Ok(o);
-                                }
-    
-                                return Err(format!("Unable to parse {} from {}", c_type.name, s));
-                            }
-                        ))?;
-    
-                        self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
-    
-                        let func_id = self.functions.iter().filter(|i| i.name == n).next().unwrap().id;
-                        let class_id = self.type_templates.last().unwrap().id;
-    
-                        if n_templates == 0 {
-                            // Define constructor instance
-                            self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
-                                if let Type::Basic(id) = r {
-                                    return Ok(Object::new(TypeInstance {
-                                        id: *id,
-                                        params: vec!(),
-                                        attributes: a
-                                    }))
-                                }
-    
-                                unreachable!();
-                            })?;
-                            
-                            // Define constructor meber access
-                            for (i, (att_name, att_type)) in a.into_iter().enumerate() {
-                                self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                                let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
-    
-                                let ref_type = match &att_type {
-                                    Type::MutRef(t) => Type::Ref(t.clone()),
-                                    Type::Ref(t) => Type::Ref(t.clone()),
-                                    t => Type::Ref(Box::new(t.clone()))
-                                };
-    
-                                let mut_type = match &att_type {
-                                    Type::MutRef(t) => Type::MutRef(t.clone()),
-                                    Type::Ref(t) => Type::Ref(t.clone()),
-                                    t => Type::MutRef(Box::new(t.clone()))
-                                };
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
-                                        #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
-                                        #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
-                                        #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-                            }
-    
-                        } else {
-                            let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
-    
-                            // Define constructor instance
-                            self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
-                                if let Type::Template(id, _) = r {
-                                    return Ok(Object::new(TypeInstance {
-                                        id: *id,
-                                        params: t.clone(),
-                                        attributes: a
-                                    }))
-                                }
-    
-                                unreachable!();
-                            })?;
-    
-                            for (i, (att_name, att_type)) in a.into_iter().enumerate() {
-                                self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                                let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
-    
-                                let ref_type = match &att_type {
-                                    Type::MutRef(t) => Type::Ref(t.clone()),
-                                    Type::Ref(t) => Type::Ref(t.clone()),
-                                    t => Type::Ref(Box::new(t.clone()))
-                                };
-    
-                                let mut_type = match &att_type {
-                                    Type::MutRef(t) => Type::MutRef(t.clone()),
-                                    Type::Ref(t) => Type::Ref(t.clone()),
-                                    t => Type::MutRef(Box::new(t.clone()))
-                                };
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
-                                        #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
-                                        #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-    
-                                seq!(N in 0..100 {
-                                    self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
-                                        #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
-                                        _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                                    })?;
-                                });
-                            }
-                        }
-                    },
-    
-                    _ => unreachable!()
-                }
+                self.define_module_class(i, &mut needed)?;
             }
         }
 
@@ -1612,20 +1633,355 @@ impl NessaContext{
         return self.nessa_parser(code).unwrap().1;
     }
 
-    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, String> {
+    fn map_nessa_class(&mut self, other: &NessaContext, id: usize, classes: &mut HashMap<usize, usize>) -> Result<usize, String> {
+        let other_cl = &other.type_templates[id];
+        let c_name = &other_cl.name;
+
+        if !classes.contains_key(&id) {
+            let class_id;
+
+            // If the function has another id in the target context
+            if let Some(f) = self.type_templates.iter().filter(|f| f.name == *c_name).next() {
+                class_id = f.id;
+
+            } else { // Else the function needs to be defined
+                class_id = self.type_templates.len();
+                self.define_type(c_name.clone(), other_cl.params.clone(), other_cl.attributes.clone(), other_cl.patterns.clone(), other_cl.parser)?;
+            }
+
+            return Ok(*classes.entry(id).or_insert(class_id));
+        }
+
+        return Ok(classes[&id]);
+    }
+
+    fn map_nessa_function(&mut self, other: &NessaContext, id: usize, functions: &mut HashMap<usize, usize>) -> Result<usize, String> {
+        let f_name = &other.functions[id].name;
+
+        if !functions.contains_key(&id) {
+            let fn_id;
+
+            // If the function has another id in the target context
+            if let Some(f) = self.functions.iter().filter(|f| f.name == *f_name).next() {
+                fn_id = f.id;
+
+            } else { // Else the function needs to be defined
+                fn_id = self.functions.len();
+                self.define_function(f_name.clone())?;
+            }
+
+            return Ok(*functions.entry(id).or_insert(fn_id));
+        }
+
+        return Ok(functions[&id]);
+    }
+
+    fn map_nessa_unary_operator(&mut self, other: &NessaContext, id: usize, unary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+        if let Operator::Unary{representation: r, prefix, precedence, ..} = &other.unary_ops[id] {
+            if !unary_operators.contains_key(&id) {
+                let mapped_op_id;
+    
+                // If the function has another id in the target context
+                if let Some((op_id, _)) = self.unary_ops.iter()
+                                     .map(|op| if let Operator::Unary{id: op_id, representation: op_rep, ..} = op { (op_id, op_rep) } else { unreachable!() })
+                                     .filter(|(_, op_rep)| *op_rep == r)
+                                     .next() {
+                    mapped_op_id = *op_id;
+    
+                } else { // Else the function needs to be defined
+                    mapped_op_id = self.unary_ops.len();
+                    self.define_unary_operator(r.clone(), *prefix, *precedence)?;
+                }
+    
+                return Ok(*unary_operators.entry(id).or_insert(mapped_op_id));
+            }
+        
+        } else {
+            return Err(format!("Unable to find unary operator with id = {}", id));
+        }
+
+        return Ok(unary_operators[&id]);
+    }
+
+    fn map_nessa_binary_operator(&mut self, other: &NessaContext, id: usize, binary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+        if let Operator::Binary{representation: r, precedence, ..} = &other.binary_ops[id] {
+            if !binary_operators.contains_key(&id) {
+                let mapped_op_id;
+    
+                // If the function has another id in the target context
+                if let Some((op_id, _)) = self.binary_ops.iter()
+                                     .map(|op| if let Operator::Binary{id: op_id, representation: op_rep, ..} = op { (op_id, op_rep) } else { unreachable!() })
+                                     .filter(|(_, op_rep)| *op_rep == r)
+                                     .next() {
+                    mapped_op_id = *op_id;
+    
+                } else { // Else the function needs to be defined
+                    mapped_op_id = self.binary_ops.len();
+                    self.define_binary_operator(r.clone(), *precedence)?;
+                }
+    
+                return Ok(*binary_operators.entry(id).or_insert(mapped_op_id));
+            }
+        
+        } else {
+            return Err(format!("Unable to find binary operator with id = {}", id));
+        }
+
+        return Ok(binary_operators[&id]);
+    }
+
+    fn map_nessa_nary_operator(&mut self, other: &NessaContext, id: usize, nary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+        if let Operator::Nary{open_rep: or, close_rep: cr, precedence, ..} = &other.nary_ops[id] {
+            if !nary_operators.contains_key(&id) {
+                let mapped_op_id;
+    
+                // If the function has another id in the target context
+                if let Some((op_id, _, _)) = self.nary_ops.iter()
+                                     .map(|op| if let Operator::Nary{id: op_id, open_rep: op_or, close_rep: op_cr, ..} = op { (op_id, op_or, op_cr) } else { unreachable!() })
+                                     .filter(|(_, op_or, op_cr)| *op_or == or && *op_cr == cr)
+                                     .next() {
+                    mapped_op_id = *op_id;
+    
+                } else { // Else the function needs to be defined
+                    mapped_op_id = self.binary_ops.len();
+                    self.define_nary_operator(or.clone(), cr.clone(), *precedence)?;
+                }
+    
+                return Ok(*nary_operators.entry(id).or_insert(mapped_op_id));
+            }
+        
+        } else {
+            return Err(format!("Unable to find binary operator with id = {}", id));
+        }
+
+        return Ok(nary_operators[&id]);
+    }
+
+    pub fn map_nessa_expression(
+        &mut self, expr: &mut NessaExpr, ctx: &NessaContext,
+        functions: &mut HashMap<usize, usize>,
+        unary_operators: &mut HashMap<usize, usize>,
+        binary_operators: &mut HashMap<usize, usize>,
+        nary_operators: &mut HashMap<usize, usize>,
+        classes: &mut HashMap<usize, usize>
+    ) -> Result<(), String> {
+        match expr {
+            NessaExpr::Literal(..) |
+            NessaExpr::NameReference(..) => {}
+
+            NessaExpr::VariableDefinition(_, t, e) => {
+                let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
+                *t = t.map_basic_types(&mut mapping);
+
+                self.map_nessa_expression(e, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+            }
+
+            NessaExpr::VariableAssignment(_, e) => {
+                self.map_nessa_expression(e, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+            }
+
+            NessaExpr::UnaryOperation(id, t, a) => {
+                *id = self.map_nessa_unary_operator(ctx, *id, unary_operators)?;
+
+                let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
+                *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
+
+                self.map_nessa_expression(a, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+            }
+
+            NessaExpr::BinaryOperation(id, t, a, b) => {
+                *id = self.map_nessa_binary_operator(ctx, *id, unary_operators)?;
+
+                let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
+                *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
+
+                self.map_nessa_expression(a, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                self.map_nessa_expression(b, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+            }
+
+            NessaExpr::NaryOperation(id, t, a, b) => {
+                *id = self.map_nessa_nary_operator(ctx, *id, nary_operators)?;
+
+                let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
+                *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
+
+                self.map_nessa_expression(a, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+
+                for arg in b {
+                    self.map_nessa_expression(arg, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                }
+            }
+
+            NessaExpr::FunctionCall(id, t, args) => {
+                *id = self.map_nessa_function(ctx, *id, functions)?;
+
+                let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
+                *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
+
+                for arg in args {
+                    self.map_nessa_expression(arg, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                }
+            }
+
+            NessaExpr::If(ih, ib, ei, eb) => {
+                self.map_nessa_expression(ih, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+
+                for line in ib {
+                    self.map_nessa_expression(line, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.map_nessa_expression(ei_h, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+
+                    for line in ei_b {
+                        self.map_nessa_expression(line, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                    }
+                }
+
+                if let Some(eb_inner) = eb {
+                    for line in eb_inner {
+                        self.map_nessa_expression(line, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                    }
+                }
+            }
+
+            NessaExpr::For(_, c, lines) => {
+                self.map_nessa_expression(c, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                
+                for line in lines {
+                    self.map_nessa_expression(line, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+                }
+            }
+
+            NessaExpr::Return(e) => {
+                self.map_nessa_expression(e, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
+            }
+
+            _ => unimplemented!("{:?}", expr)
+        }
+
+        return Ok(());
+    }
+
+    pub fn import_code(&mut self, code: &Vec<NessaExpr>, ctx: &NessaContext, imports: &HashMap<ImportType, HashSet<String>>) -> Result<Vec<NessaExpr>, String> {
+        let mut res = vec!();
+        let mut functions: HashMap<usize, usize> = HashMap::new();
+        let mut unary_operators: HashMap<usize, usize> = HashMap::new();
+        let mut binary_operators: HashMap<usize, usize> = HashMap::new();
+        let mut nary_operators: HashMap<usize, usize> = HashMap::new();
+        let mut classes: HashMap<usize, usize> = HashMap::new();
+
+        for line in code {
+            match line {
+                NessaExpr::ClassDefinition(n, t, atts, p) => {
+                    if imports.contains_key(&ImportType::Class) && imports[&ImportType::Class].contains(n) {
+                        let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
+                        let mapped_atts = atts.iter().map(|(n, t)| (n.clone(), t.map_basic_types(&mut mapping))).collect();
+
+                        let mut needed = false;
+                        let mapped_expr = NessaExpr::ClassDefinition(n.clone(), t.clone(), mapped_atts, p.clone());
+
+                        self.define_module_class(mapped_expr.clone(), &mut needed)?;
+    
+                        res.push(mapped_expr);
+
+                        println!("Importing class {} - {}", n, self.type_templates.len() - 1);
+                    }
+                }
+
+                NessaExpr::FunctionDefinition(id, t, a, r, b) => {
+                    let f_name = &ctx.functions[*id].name;
+
+                    // If the function needs to be imported
+                    if imports.contains_key(&ImportType::Fn) && imports[&ImportType::Fn].contains(f_name) {
+                        let fn_id = self.map_nessa_function(&ctx, *id, &mut functions)?;
+
+                        let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
+                        let mapped_args = a.iter().map(|(n, t)| (n.clone(), t.map_basic_types(&mut mapping))).collect::<Vec<_>>();
+                        let mapped_return = r.map_basic_types(&mut mapping);
+
+                        println!("Importing fn {} - {}({:?})", fn_id, f_name, mapped_args);
+
+                        let mut mapped_body = b.clone();
+
+                        // Map each line of the definition to the target context
+                        for line in mapped_body.iter_mut() {
+                            self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
+                        }
+
+                        let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
+                        self.define_function_overload(fn_id, t.len(), &arg_types, mapped_return.clone(), None)?;
+
+                        // Add the mapped function to the list of new expressions
+                        res.push(NessaExpr::FunctionDefinition(fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
+                    }
+                }
+
+                NessaExpr::PrefixOperationDefinition(..) => unimplemented!(),
+                NessaExpr::PostfixOperationDefinition(..) => unimplemented!(),
+                NessaExpr::BinaryOperationDefinition(..) => unimplemented!(),
+                NessaExpr::NaryOperationDefinition(..) => unimplemented!(),
+                _ => {}
+            }
+        }
+
+        return Ok(res);
+    }
+
+    pub fn parse_and_precompile_with_dependencies(
+        &mut self, 
+        code: &String, 
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>)>
+    ) -> Result<Vec<NessaExpr>, String> {
+        let mut res = vec!();
+        let imports = nessa_module_imports_parser(&code).unwrap().1;
+
+        // Import code from dependencies
+        for (m, i) in imports {
+            let (other_ctx, other_code) = modules.get(&m).as_ref().unwrap();
+
+            let mut new_code = self.import_code(&other_code, &other_ctx, &i)?;
+            res.append(&mut new_code);
+        }
+
+        let mut main_code = self.parse_without_precompiling(code)?;
+        res.append(&mut main_code);
+
+        return Ok(res);
+    }
+
+    pub fn parse_without_precompiling(&mut self, code: &String) -> Result<Vec<NessaExpr>, String> {
         self.define_module_classes(code)?;
         self.define_module_operators(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;
 
-        let mut lines = self.parse_nessa_module(code);
+        let lines = self.parse_nessa_module(code);
         self.define_module_function_overloads(&lines)?;
 
-        self.compile(&mut lines, &vec!())?;
+        return Ok(lines);
+    }
 
-        for expr in &lines {
+    pub fn precompile_module(&mut self, lines: &mut Vec<NessaExpr>) -> Result<(), String> {        
+        self.compile(lines, &vec!())?;
+
+        for expr in lines {
             self.static_check(expr)?;
         }
+
+        return Ok(());
+    }
+
+    pub fn parse_and_precompile(&mut self, code: &String) -> Result<Vec<NessaExpr>, String> {
+        let mut lines = self.parse_without_precompiling(code)?;
+
+        self.precompile_module(&mut lines)?;
+
+        return Ok(lines);
+    }
+
+    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, String> {
+        let lines = self.parse_and_precompile(&code)?;
 
         return self.compiled_form(&lines);
     }

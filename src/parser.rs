@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
 use nom::{
@@ -67,6 +67,163 @@ pub enum NessaExpr {
     While(Box<NessaExpr>, Vec<NessaExpr>),
     For(String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Box<NessaExpr>)
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum ImportType {
+    Class, Fn, Prefix, Postfix, Binary, Nary
+}
+
+fn identifier_parser<'a>(input: &'a str) -> IResult<&'a str, String> {
+    return map(
+        tuple((
+            take_while1(|c: char| c == '_' || c.is_alphabetic()),
+            take_while(|c: char| c == '_' || c.is_alphanumeric())
+        )),
+        |(a, b)| format!("{}{}", a, b)
+    )(input);
+}
+
+fn string_parser<'a>(input: &'a str) -> IResult<&'a str, String> {
+    return delimited(
+        tag("\""), 
+        alt((
+            escaped_transform(
+                satisfy(|i| i != '"' && i != '\\'), 
+                '\\', 
+                alt((
+                    value("\n", tag("n")),
+                    value("\t", tag("t")),
+                    value("\"", tag("\"")),
+                    value("\\", tag("\\"))
+                ))
+            ),
+            value(String::new(), tag(""))
+        )),
+        tag("\"")
+    )(input);
+}
+
+fn module_header_parser<'a>(input: &'a str) -> IResult<&'a str, (String, String)> {
+    return map(
+        tuple((
+            tag("module"),
+            multispace1,
+            identifier_parser,
+            multispace0,
+            tag("["),
+            multispace0,
+            separated_list1(
+                tag("."), 
+                take_while1(|c: char| c.is_digit(10))
+            ),
+            multispace0,
+            tag("]")
+        )),
+        |(_, _, n, _, _, _, v, _, _)| (n, v.join("."))
+    )(input)
+}
+
+fn module_import_parser<'a>(input: &'a str) -> IResult<&'a str, (String, ImportType, HashSet<String>)> {
+    return map(
+        tuple((
+            tag("import"),
+            multispace1,
+            alt((
+                value(ImportType::Class, tag("class")),
+                value(ImportType::Fn, tag("fn")),
+                value(ImportType::Prefix, tuple((tag("prefix"), multispace1, tag("op")))),
+                value(ImportType::Postfix, tuple((tag("postfix"), multispace1, tag("op")))),
+                value(ImportType::Binary, tuple((tag("binary"), multispace1, tag("op")))),
+                value(ImportType::Nary, tuple((tag("nary"), multispace1, tag("op")))),
+            )),
+            multispace1,
+            alt((
+                map(
+                    tuple((
+                        alt((
+                            string_parser,
+                            identifier_parser
+                        )),
+                        multispace1
+                    )),
+                    |(s, _)| vec!(s)
+                ),
+                map(
+                    tuple((
+                        tag("{"),
+                        multispace0,
+                        separated_list1(
+                            tuple((multispace0, tag(","), multispace0)),
+                            alt((
+                                string_parser,
+                                identifier_parser
+                            ))
+                        ),
+                        multispace0,
+                        tag("}"),
+                        multispace0
+                    )),
+                    |(_, _, v, _, _, _)| v
+                )
+            )),
+            tag("from"),
+            multispace1,
+            identifier_parser,
+            multispace0,
+            tag(";")
+        )),
+        |(_, _, t, _, v, _, _, n, _, _)| (n, t, v.into_iter().collect())
+    )(input)
+}
+
+pub fn nessa_info_parser<'a>(input: &'a str) -> IResult<&'a str, ()> {
+    return delimited(
+        multispace0,
+        alt((
+            value((), module_import_parser),
+            value((), module_header_parser)
+        )),
+        multispace0
+    )(input);
+}
+
+pub fn nessa_module_header_parser<'a>(mut input: &'a str) -> IResult<&'a str, Vec<(String, String)>> {
+    let mut ops = vec!();
+
+    while input.len() > 0 {
+        if let Ok((i, o)) = module_header_parser(input) {
+            input = i;
+            ops.push(o);
+        
+        } else {
+            let mut chars = input.chars();
+            chars.next();
+
+            input = chars.as_str();
+        }
+    }
+
+    return Ok(("", ops));
+}
+
+pub fn nessa_module_imports_parser<'a>(mut input: &'a str) -> IResult<&'a str, HashMap<String, HashMap<ImportType, HashSet<String>>>> {
+    let mut ops: HashMap<String, HashMap<ImportType, HashSet<String>>> = HashMap::new();
+
+    while input.len() > 0 {
+        if let Ok((i, (n, t, v))) = module_import_parser(input) {
+            input = i;
+            ops.entry(n).or_default().entry(t).or_default().extend(v);
+        
+        } else {
+            let mut chars = input.chars();
+            chars.next();
+
+            input = chars.as_str();
+        }
+    }
+
+    return Ok(("", ops));
 }
 
 impl NessaExpr {
@@ -160,16 +317,6 @@ impl NessaContext {
         return self.functions.iter().filter(|t| t.name == name).next().unwrap().id;
     }
 
-    fn identifier_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
-        return map(
-            tuple((
-                take_while1(|c: char| c == '_' || c.is_alphabetic()),
-                take_while(|c: char| c == '_' || c.is_alphanumeric())
-            )),
-            |(a, b)| format!("{}{}", a, b)
-        )(input);
-    }
-
     /*
         ╒═════════════════╕
         │ Type subparsers │
@@ -185,14 +332,14 @@ impl NessaContext {
     }
 
     fn basic_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
-        return map_res(|input| self.identifier_parser(input), |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input);
+        return map_res(identifier_parser, |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input);
     }
 
     fn template_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
         return map(
             tuple((
                 tag("'"),
-                |input| self.identifier_parser(input)
+                identifier_parser
             )), 
             |(_, n)| Type::TemplateParamStr(n)
         )(input);
@@ -245,7 +392,7 @@ impl NessaContext {
     fn parametric_type_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Type> {
         return map_res(
             tuple((
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace0,
                 tag("<"),
                 multispace0,
@@ -356,26 +503,6 @@ impl NessaContext {
         )(input);
     }
 
-    fn string_parser<'a>(&self, input: &'a str) -> IResult<&'a str, String> {
-        return delimited(
-            tag("\""), 
-            alt((
-                escaped_transform(
-                    satisfy(|i| i != '"' && i != '\\'), 
-                    '\\', 
-                    alt((
-                        value("\n", tag("n")),
-                        value("\t", tag("t")),
-                        value("\"", tag("\"")),
-                        value("\\", tag("\\"))
-                    ))
-                ),
-                value(String::new(), tag(""))
-            )),
-            tag("\"")
-        )(input);
-    }
-
     pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: &'a str) -> IResult<&'a str, Object> {
         for p in &c_type.patterns {
             let res = map_res(
@@ -435,7 +562,7 @@ impl NessaContext {
                 |input| self.custom_literal_parser(input),
                 map(|input| self.bool_parser(input), |b| Object::new(b)),
                 map(|input| self.number_parser(input), |n| Object::new(n)),
-                map(|input| self.string_parser(input), |s| Object::new(s)),
+                map(string_parser, |s| Object::new(s)),
             )),
             |o| NessaExpr::Literal(o)
         )(input);
@@ -443,7 +570,7 @@ impl NessaContext {
     
     fn variable_parser<'a>(&self, input: &'a str) -> IResult<&'a str, NessaExpr> {
         return map(
-            |input| self.identifier_parser(input),
+            identifier_parser,
             NessaExpr::NameReference
         )(input);
     }
@@ -713,7 +840,7 @@ impl NessaContext {
             tuple((
                 tag("let"),
                 multispace0,
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace0,
                 opt(
                     tuple((
@@ -736,7 +863,7 @@ impl NessaContext {
     fn variable_assignment_parser<'a>(&self, input: &'a str, op_cache: &OperatorCache<'a>) -> IResult<&'a str, NessaExpr> {
         return map(
             tuple((
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace0,
                 tag("="),
                 multispace0,
@@ -835,7 +962,7 @@ impl NessaContext {
             tuple((
                 tag("for"),
                 multispace1,
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace1,
                 tag("in"),
                 multispace1,
@@ -879,7 +1006,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">"),
@@ -888,14 +1015,14 @@ impl NessaContext {
                     )
                 ),
                 multispace1,
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace0,
                 tag("("),
                 multispace0,
                 separated_list0(
                     tuple((multispace0, tag(","), multispace0)), 
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -952,7 +1079,7 @@ impl NessaContext {
                 multispace1,
                 tag("op"),
                 multispace1,
-                |input| self.string_parser(input),
+                string_parser,
                 multispace0,
                 map(
                     delimited(
@@ -978,7 +1105,7 @@ impl NessaContext {
                 multispace1,
                 tag("op"),
                 multispace1,
-                |input| self.string_parser(input),
+                string_parser,
                 multispace0,
                 map(
                     delimited(
@@ -1002,7 +1129,7 @@ impl NessaContext {
                 multispace1,
                 tag("op"),
                 multispace1,
-                |input| self.string_parser(input),
+                string_parser,
                 multispace0,
                 map(
                     delimited(
@@ -1028,11 +1155,11 @@ impl NessaContext {
                 multispace1,
                 tag("from"),
                 multispace1,
-                |input| self.string_parser(input),
+                string_parser,
                 multispace1,
                 tag("to"),
                 multispace1,
-                |input| self.string_parser(input),
+                string_parser,
                 multispace0,
                 map(
                     delimited(
@@ -1114,7 +1241,7 @@ impl NessaContext {
                         separated_list0(
                             tuple((multispace0, tag(","), multispace0)), 
                             tuple((
-                                |input| self.identifier_parser(input),
+                                identifier_parser,
                                 map(
                                     opt(
                                         map(
@@ -1159,7 +1286,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">")
@@ -1173,7 +1300,7 @@ impl NessaContext {
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1213,7 +1340,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">"),
@@ -1225,7 +1352,7 @@ impl NessaContext {
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1267,7 +1394,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">"),
@@ -1279,7 +1406,7 @@ impl NessaContext {
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1304,7 +1431,7 @@ impl NessaContext {
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1344,7 +1471,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">"),
@@ -1356,7 +1483,7 @@ impl NessaContext {
                 delimited(
                     tuple((tag("("), multispace0)),
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1493,7 +1620,7 @@ impl NessaContext {
             tuple((
                 tag("class"),
                 multispace1,
-                |input| self.identifier_parser(input),
+                identifier_parser,
                 multispace0,
                 opt(
                     map(
@@ -1502,7 +1629,7 @@ impl NessaContext {
                             multispace0,
                             separated_list1(
                                 tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.identifier_parser(input)
+                                identifier_parser
                             ),
                             multispace0,
                             tag(">"),
@@ -1522,7 +1649,7 @@ impl NessaContext {
                     multispace0,
                     map(
                         tuple((
-                            |input| self.identifier_parser(input),
+                            identifier_parser,
                             map(
                                 opt(
                                     map(
@@ -1588,7 +1715,7 @@ impl NessaContext {
                 separated_list0(
                     tuple((multispace0, tag(","), multispace0)), 
                     tuple((
-                        |input| self.identifier_parser(input),
+                        identifier_parser,
                         map(
                             opt(
                                 map(
@@ -1754,10 +1881,16 @@ impl NessaContext {
         return Ok(("", ops));
     }
 
-    pub fn nessa_parser<'a>(&self, input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+    pub fn nessa_parser<'a>(&self, mut input: &'a str) -> IResult<&'a str, Vec<NessaExpr>> {
+        while let Ok((i, _)) = nessa_info_parser(input) {
+            input = i;
+        }
+
+        let cache = RefCell::default();
+
         return delimited(
             multispace0,
-            separated_list0(multispace0, |input| self.nessa_global_parser(input, &RefCell::default())),
+            separated_list0(multispace0, |input| self.nessa_global_parser(input, &cache)),
             tuple((multispace0, eof))
         )(input);
     }

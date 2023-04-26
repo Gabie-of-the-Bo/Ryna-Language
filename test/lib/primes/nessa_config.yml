@@ -1,0 +1,10 @@
+module_name: primes
+module_paths:
+  - test/lib
+modules: 
+  primes:
+    path: test/lib/primes
+    version: 1.0
+    hash: ""
+    dependencies:
+      - range

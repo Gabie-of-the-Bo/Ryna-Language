@@ -38,6 +38,16 @@ impl Number{
                                                       ╘══════════════════════╛
     */
     
+    pub fn pow(&self, exponent: &Number) -> Result<Number, String> {
+        return match (self, exponent) {
+            (Number::Float(b), Number::Float(e)) => Ok(Number::Float(b.powf(*e))),
+            (Number::Float(b), Number::Int(e)) => Ok(Number::Float(b.powf(e.to_f64()))),
+            (Number::Int(b), Number::Float(e)) => Ok(Number::Float(b.to_f64().powf(*e))),
+            (Number::Int(b), Number::Int(e)) if e.negative => Ok(Number::Float(b.to_f64().powf(e.to_f64()))),
+            (Number::Int(b), Number::Int(e)) => Ok(Number::Int(pow(b, e)?)),
+        };
+    }
+
     pub fn exp(&self) -> Result<Number, String> {
         return match self {
             Number::Float(f) => Ok(Number::Float(f.exp())),
@@ -163,4 +173,68 @@ impl Number{
             _ => Err(format!("Invalid range for random generation"))
         };
     }
+}
+
+/*
+                                                  ╒═════════╕
+    ============================================= │  TESTS  │ =============================================
+                                                  ╘═════════╛
+*/
+
+#[cfg(test)]
+mod tests {
+    use crate::number::*;
+    use num_bigint::{BigInt};
+
+    use rand::{
+        distributions::{
+            Distribution, 
+            Uniform
+        }
+    };
+
+    #[test]
+    fn integer_exponentiation() {
+        let mut rng = rand::thread_rng();
+        let distribution = Uniform::from(1..5);
+
+        for _ in 0..100{
+            let a = Integer::rand_with_size(distribution.sample(&mut rng), false);
+            let b = Integer::rand_with_size(distribution.sample(&mut rng), false);
+
+            let a2 = a.to_string().parse::<BigInt>().unwrap();
+
+            assert_eq!(pow(&a, &b).unwrap().to_string(), a2.pow(b.limbs[0] as u32).to_string());
+        }
+    }
+
+    /*
+    TODO: check this
+    #[test]
+    fn integer_modular_exponentiation() {
+        let mut rng = rand::thread_rng();
+        let distribution = Uniform::from(1..30);
+
+        for _ in 0..10000{
+            let a = Integer::rand_with_size(distribution.sample(&mut rng), false);
+            let mut b = Integer::rand_with_size(distribution.sample(&mut rng), false);
+            let mut m = Integer::rand_with_size(distribution.sample(&mut rng), false);
+
+            while b.is_zero() {
+                b = Integer::rand_with_size(distribution.sample(&mut rng), false);
+            }
+
+            while m.is_zero() {
+                m = Integer::rand_with_size(distribution.sample(&mut rng), false);
+            }
+
+            println!("{}, {}, {}", a, b, m);
+
+            let a2 = a.to_string().parse::<BigInt>().unwrap();
+            let b2 = b.to_string().parse::<BigInt>().unwrap();
+            let m2 = m.to_string().parse::<BigInt>().unwrap();
+
+            assert_eq!(modpow(&a, &b, &m).unwrap().to_string(), a2.modpow(&b2, &m2).to_string());
+        }
+    }*/
 }

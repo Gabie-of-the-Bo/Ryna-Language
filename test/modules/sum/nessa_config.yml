@@ -1,0 +1,4 @@
+module_name: sum
+module_paths:
+  - test/lib
+modules: {}

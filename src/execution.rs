@@ -13,6 +13,10 @@ use crate::compilation::CompiledNessaExpr;
 impl NessaContext {
     pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
         let compiled_code = self.parse_and_compile(code)?;
+
+        for (idx, i) in compiled_code.iter().enumerate() {
+            println!("{:<3} {}", idx, i.to_string());
+        }
         
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
@@ -76,6 +80,11 @@ impl NessaContext {
 
                 GetVariable(id) => {
                     stack.push(self.variables[*id + offset].as_ref().unwrap().get_ref_mut_obj());
+                    ip += 1;
+                },
+
+                Drop => {
+                    stack.pop().unwrap();
                     ip += 1;
                 },
 

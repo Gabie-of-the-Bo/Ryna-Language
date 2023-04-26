@@ -237,6 +237,21 @@ impl Type {
             _ => self.clone()
         };
     }
+
+    pub fn map_basic_types(&self, mapping: &mut impl FnMut(usize) -> Result<usize, String>) -> Type {
+        return match self {
+            Type::Basic(id) => Type::Basic(mapping(*id).unwrap()),
+            
+            Type::Ref(t) => Type::Ref(Box::new(t.map_basic_types(mapping))),
+            Type::MutRef(t) => Type::MutRef(Box::new(t.map_basic_types(mapping))),
+            Type::Or(t) => Type::Or(t.iter().map(|i| i.map_basic_types(mapping)).collect()),
+            Type::And(t) => Type::And(t.iter().map(|i| i.map_basic_types(mapping)).collect()),
+            Type::Function(f, t) => Type::Function(Box::new(f.map_basic_types(mapping)), Box::new(t.map_basic_types(mapping))),
+            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.map_basic_types(mapping)).collect()),
+
+            _ => self.clone()
+        };
+    }
 }
 
 /*

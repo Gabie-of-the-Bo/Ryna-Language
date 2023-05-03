@@ -158,7 +158,6 @@ impl NessaContext {
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {
-        println!("{:?}", self.functions[ITERATOR_FUNC_ID].overloads.iter().map(|(_, i, _, _)| i).collect::<Vec<_>>());
         if let Some((_, it_type, _, _)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone()), true) {
             return Ok(it_type.clone());
         }

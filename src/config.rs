@@ -102,7 +102,6 @@ impl NessaConfig {
 
             temp.insert(node.clone());
 
-            println!("Fetching {}", node);
             for n in &config.modules.get(node).unwrap().dependencies {
                 topological_order(config, n, res, temp, perm)?;
             }
@@ -151,7 +150,6 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
         config_yml = NessaConfig::new(config_yml.module_name, config_yml.module_paths, path)?;
 
         let mut ctx = standard_ctx();
-        println!("{:?}", config_yml.modules.iter().map(|(i, _)| i).cloned().collect::<Vec<_>>());
         let topological_order = config_yml.get_imports_topological_order()?;
     
         for dep in &topological_order {
@@ -177,12 +175,6 @@ pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContex
     let (mut ctx, mut lines) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
 
     ctx.precompile_module(&mut lines)?;
-
-    println!("\n\n{}\n\n", path);
-
-    for i in &lines {
-        println!("{:?}", i);
-    }
 
     return Ok((ctx, lines));
 }

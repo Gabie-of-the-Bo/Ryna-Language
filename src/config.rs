@@ -26,6 +26,9 @@ pub struct NessaConfig {
     modules: HashMap<String, ModuleInfo>
 }
 
+pub type Imports = HashMap<ImportType, HashSet<String>>;
+pub type ImportMap = HashMap<String, Imports>;
+
 fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Result<HashMap<String, ModuleInfo>, String> {
     let mut res = HashMap::new();
 
@@ -127,7 +130,7 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, (NessaContext, Vec<NessaExpr>)>) -> Result<(NessaContext, Vec<NessaExpr>), String> {
+fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap)>) -> Result<(NessaContext, Vec<NessaExpr>, ImportMap), String> {
     let config_path = format!("{}/nessa_config.yml", &path);
     let main_path = format!("{}/main.nessa", &path);
 
@@ -141,6 +144,7 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
 
     let config = fs::read_to_string(&config_path).expect("Error while reading config file");
     let main = fs::read_to_string(&main_path).expect("Error while reading main file");
+    let imports = nessa_module_imports_parser(&main).unwrap().1;
 
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
 
@@ -156,14 +160,14 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
             if *dep != config_yml.module_name && !already_compiled.contains_key(dep) {
                 let module = config_yml.modules.get(dep).unwrap();
                 let compiled_module = parse_nessa_module_with_config_aux(&module.path, already_compiled)?;
-    
+
                 already_compiled.entry(dep.clone()).or_insert(compiled_module);
             }
         }
     
         let module = ctx.parse_and_precompile_with_dependencies(&main, &already_compiled)?;
     
-        return Ok((ctx, module));
+        return Ok((ctx, module, imports));
 
     } else {
         unimplemented!();
@@ -172,7 +176,7 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
 
 
 pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), String> {
-    let (mut ctx, mut lines) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
+    let (mut ctx, mut lines, _) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
 
     ctx.precompile_module(&mut lines)?;
 

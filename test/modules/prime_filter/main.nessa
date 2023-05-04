@@ -1,7 +1,5 @@
 module prime_filter [1.0]
 
-import class Range from range;
-import fn { iterator, next, is_consumed } from range;
 import fn is_prime from primes;
 
 if !is_prime(7919) {

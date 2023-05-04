@@ -13,6 +13,7 @@ use nom::{
 
 use bit_set::BitSet;
 
+use crate::config::ImportMap;
 use crate::operations::Operator;
 use crate::object::Object;
 use crate::number::Number;
@@ -69,7 +70,7 @@ pub enum NessaExpr {
     Return(Box<NessaExpr>)
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
     Class, Fn, Prefix, Postfix, Binary, Nary
 }
@@ -207,7 +208,7 @@ pub fn nessa_module_header_parser<'a>(mut input: &'a str) -> IResult<&'a str, Ve
     return Ok(("", ops));
 }
 
-pub fn nessa_module_imports_parser<'a>(mut input: &'a str) -> IResult<&'a str, HashMap<String, HashMap<ImportType, HashSet<String>>>> {
+pub fn nessa_module_imports_parser<'a>(mut input: &'a str) -> IResult<&'a str, ImportMap> {
     let mut ops: HashMap<String, HashMap<ImportType, HashSet<String>>> = HashMap::new();
 
     while input.len() > 0 {

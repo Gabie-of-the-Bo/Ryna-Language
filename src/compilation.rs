@@ -2,6 +2,7 @@ use std::collections::{ HashMap, HashSet };
 
 use seq_macro::seq;
 
+use crate::config::ImportMap;
 use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::parser::*;
@@ -2023,17 +2024,42 @@ impl NessaContext{
         return Ok(res);
     }
 
+    // BFS on imports
+    fn cascade_imports(
+        imports: &mut ImportMap,
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap)>
+    )
+    {
+        let mut res = HashMap::new();
+        
+        while res != *imports {
+            res = imports.clone();
+
+            for (name, _) in imports.iter() {
+                for (d_name, d_deps) in &modules.get(name).unwrap().2 {
+                    for (t, n) in d_deps {
+                        res.entry(d_name.clone()).or_default().entry(t.clone()).or_default().extend(n.iter().cloned());
+                    }
+                }
+            }
+    
+            *imports = res.clone();
+        }
+    }
+
     pub fn parse_and_precompile_with_dependencies(
         &mut self, 
         code: &String, 
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>)>
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap)>
     ) -> Result<Vec<NessaExpr>, String> {
         let mut res = vec!();
-        let imports = nessa_module_imports_parser(&code).unwrap().1;
+        let mut imports = nessa_module_imports_parser(&code).unwrap().1; // TODO: should cache this
+
+        Self::cascade_imports(&mut imports, modules);
 
         // Import code from dependencies
         for (m, i) in imports {
-            let (other_ctx, other_code) = modules.get(&m).as_ref().unwrap();
+            let (other_ctx, other_code, _) = modules.get(&m).as_ref().unwrap();
 
             let mut new_code = self.import_code(&other_code, &other_ctx, &i)?;
             res.append(&mut new_code);

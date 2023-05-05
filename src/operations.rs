@@ -60,6 +60,14 @@ impl Operator {
             Operator::Nary { precedence: p, .. } => *p
         }
     }
+
+    pub fn get_repr(&self) -> String {
+        return match self {
+            Operator::Unary { representation: r, .. } => r.into(),
+            Operator::Binary { representation: r, .. } => r.into(),
+            Operator::Nary { open_rep: o, close_rep: c, .. } => format!("{o}{c}")
+        }
+    }
 }
 
 /*

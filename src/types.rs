@@ -128,6 +128,37 @@ impl Type {
         };
     }
 
+    pub fn type_dependencies(&self) -> Vec<usize> {
+        return match self {
+            Type::Wildcard |
+            Type::Empty  |
+            Type::TemplateParam(_)  |
+            Type::TemplateParamStr(_) => vec!(),
+
+            Type::Basic(id) => vec!(*id),
+
+            Type::Ref(a) |
+            Type::MutRef(a) => a.type_dependencies(),
+
+            Type::Or(ts) |
+            Type::And(ts) => ts.iter().flat_map(|t| t.type_dependencies()).collect(),
+
+            Type::Function(a, b) => {
+                let mut res = a.type_dependencies();
+                res.append(&mut b.type_dependencies());
+
+                res
+            }
+
+            Type::Template(id, ts) => {
+                let mut res = vec!(*id);
+                res.append(&mut ts.iter().flat_map(|t| t.type_dependencies()).collect());
+
+                res
+            }
+        };
+    }
+
     pub fn bindable_to(&self, other: &Type) -> bool {
         return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
     }

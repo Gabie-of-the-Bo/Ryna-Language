@@ -72,7 +72,7 @@ pub enum NessaExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
-    Class, Fn, Prefix, Postfix, Binary, Nary
+    Class, Fn, Prefix, Postfix, Binary, Nary, Outer
 }
 
 fn identifier_parser<'a>(input: &'a str) -> IResult<&'a str, String> {

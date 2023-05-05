@@ -3,8 +3,11 @@ use std::collections::{ HashMap, HashSet };
 use seq_macro::seq;
 
 use crate::config::ImportMap;
+use crate::config::Imports;
+use crate::config::InnerDepGraph;
 use crate::functions::Function;
 use crate::context::NessaContext;
+use crate::graph::DirectedGraph;
 use crate::parser::*;
 use crate::types::*;
 use crate::object::Object;
@@ -506,6 +509,137 @@ impl NessaContext{
         curr.push(args.clone());
 
         return true;
+    }
+
+    pub fn get_inner_dep_graph(&mut self, lines: &Vec<NessaExpr>) -> DirectedGraph<(ImportType, usize), ()> {
+        let mut res = DirectedGraph::new();
+        let mut compiled = lines.clone();
+
+        self.compile(&mut compiled, &vec!()).unwrap(); // TODO: this seems costly...
+
+        self.get_inner_dep_graph_body(&compiled, &(ImportType::Outer, 0), &mut res);
+
+        return res;
+    }
+
+    pub fn get_inner_dep_graph_body(&self, lines: &Vec<NessaExpr>, parent: &(ImportType, usize), deps: &mut DirectedGraph<(ImportType, usize), ()>) {
+        for line in lines {
+            self.get_inner_dep_graph_expr(line, parent, deps);
+        }
+    }
+
+    pub fn get_inner_dep_graph_expr(&self, expr: &NessaExpr, parent: &(ImportType, usize), deps: &mut DirectedGraph<(ImportType, usize), ()>) {
+        match expr {
+            NessaExpr::Literal(obj) => {
+                deps.connect(parent.clone(), (ImportType::Class, obj.get_type_id()), ());
+            }
+
+            NessaExpr::Return(e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, e) => {
+                self.get_inner_dep_graph_expr(e, parent, deps);
+            }
+
+            NessaExpr::Tuple(b) => {
+                self.get_inner_dep_graph_body(b, parent, deps);
+            }
+
+            NessaExpr::FunctionCall(id, _, args) => {
+                deps.connect(parent.clone(), (ImportType::Fn, *id), ());
+
+                self.get_inner_dep_graph_body(args, parent, deps);
+            }
+
+            NessaExpr::UnaryOperation(id, _, a) => {
+                if let Operator::Unary { id, prefix, .. } = &self.unary_ops[*id] {
+                    if *prefix {
+                        deps.connect(parent.clone(), (ImportType::Prefix, *id), ());
+                    
+                    } else {
+                        deps.connect(parent.clone(), (ImportType::Postfix, *id), ());
+                    }
+
+                    self.get_inner_dep_graph_expr(a, parent, deps);
+                }
+            }
+
+            NessaExpr::BinaryOperation(id, _, a, b) => {
+                if let Operator::Binary { id, .. } = &self.binary_ops[*id] {
+                    deps.connect(parent.clone(), (ImportType::Binary, *id), ());
+
+                    self.get_inner_dep_graph_expr(a, parent, deps);
+                    self.get_inner_dep_graph_expr(b, parent, deps);
+                }
+            }
+
+            NessaExpr::NaryOperation(id, _, a, b) => {
+                if let Operator::Nary { id, .. } = &self.nary_ops[*id] {
+                    deps.connect(parent.clone(), (ImportType::Nary, *id), ());
+
+                    self.get_inner_dep_graph_expr(a, parent, deps);
+                    self.get_inner_dep_graph_body(b, parent, deps);
+                }
+            }
+
+            NessaExpr::While(c, b) |
+            NessaExpr::CompiledFor(_, _, _, c, b) => {
+                self.get_inner_dep_graph_expr(c, parent, deps);
+                self.get_inner_dep_graph_body(b, parent, deps);
+            }
+
+            NessaExpr::If(ic, ib, ie, eb) => {
+                self.get_inner_dep_graph_expr(ic, parent, deps);
+                self.get_inner_dep_graph_body(ib, parent, deps);
+
+                for (ie_c, ie_b) in ie {
+                    self.get_inner_dep_graph_expr(ie_c, parent, deps);
+                    self.get_inner_dep_graph_body(ie_b, parent, deps);
+                }
+
+                if let Some(b) = eb {
+                    self.get_inner_dep_graph_body(b, parent, deps);
+                }
+            }
+
+            NessaExpr::CompiledLambda(_, _, _, b) => {
+                self.get_inner_dep_graph_body(b, parent, deps);
+            }
+
+            NessaExpr::FunctionDefinition(id, _, _, _, b) => {
+                self.get_inner_dep_graph_body(b, &(ImportType::Fn, *id), deps);
+            }
+
+            NessaExpr::PrefixOperationDefinition(id, _, _, _, _, b) => {
+                self.get_inner_dep_graph_body(b, &(ImportType::Prefix, *id), deps);
+            }
+
+            NessaExpr::PostfixOperationDefinition(id, _, _, _, _, b) => {
+                self.get_inner_dep_graph_body(b, &(ImportType::Postfix, *id), deps);
+            }
+
+            NessaExpr::BinaryOperationDefinition(id, _, _, _, _, b) => {
+                self.get_inner_dep_graph_body(b, &(ImportType::Binary, *id), deps);
+            }
+
+            NessaExpr::NaryOperationDefinition(id, _, _, _, _, b) => {
+                self.get_inner_dep_graph_body(b, &(ImportType::Nary, *id), deps);
+            }
+
+            NessaExpr::ClassDefinition(n, _, _, _) => {
+                if let Some(t) = self.type_templates.iter().find(|i| i.name == *n) {
+                    deps.connect(parent.clone(), (ImportType::Class, t.id), ());
+
+                    // Dependencies from the attributes
+                    for (_, tp) in &t.attributes {
+                        for t_dep in tp.type_dependencies() {
+                            deps.connect((ImportType::Class, t.id), (ImportType::Class, t_dep), ());
+                        }
+                    }
+                }
+            },
+
+            _ => {}
+        }
     }
 
     pub fn get_template_calls_body(
@@ -2027,7 +2161,7 @@ impl NessaContext{
     // BFS on imports
     fn cascade_imports(
         imports: &mut ImportMap,
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap)>
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap, InnerDepGraph)>
     )
     {
         let mut res = HashMap::new();
@@ -2047,19 +2181,77 @@ impl NessaContext{
         }
     }
 
+    fn map_import(&self, import: &ImportType, name: &String) -> usize {
+        return match import {
+            ImportType::Class => self.type_templates.iter().find(|i| i.name == *name).unwrap().id,
+            ImportType::Fn => self.functions.iter().find(|i| i.name == *name).unwrap().id,
+
+            ImportType::Prefix |
+            ImportType::Postfix => self.unary_ops.iter().find(|i| i.get_repr() == *name).unwrap().get_id(),
+            
+            ImportType::Binary => self.binary_ops.iter().find(|i| i.get_repr() == *name).unwrap().get_id(),
+            ImportType::Nary => self.nary_ops.iter().find(|i| i.get_repr() == *name).unwrap().get_id(),
+
+            _ => unimplemented!()
+        };
+    }
+
+    fn rev_map_import(&self, import: &ImportType, id: usize) -> String {
+        return match import {
+            ImportType::Class => self.type_templates[id].name.clone(),
+            ImportType::Fn => self.functions[id].name.clone(),
+
+            ImportType::Prefix |
+            ImportType::Postfix => self.unary_ops[id].get_repr(),
+            
+            ImportType::Binary => self.binary_ops[id].get_repr(),
+            ImportType::Nary => self.nary_ops[id].get_repr(),
+
+            _ => unimplemented!()
+        };
+    }
+
+    // BFS on imports (inner dependencies)
+    fn cascade_imports_inner(
+        imports: &mut ImportMap,
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap, InnerDepGraph)>
+    )
+    {
+        for (m, imps) in imports {
+            let mut new_imports = Imports::new();
+            let (ctx, _, _, graph) = &modules.get(m).unwrap();
+
+            for (t, names) in imps.iter() {
+                for name in names.iter() {
+                    let id = ctx.map_import(t, name);
+
+                    graph.dfs(&(t.clone(), id), |(tp, id)| {
+                        let mapped_name = ctx.rev_map_import(tp, *id);
+                        new_imports.entry(tp.clone()).or_default().insert(mapped_name);
+                    });
+                }
+            }
+
+            for (t, names) in new_imports {
+                imps.entry(t.clone()).or_default().extend(names);
+            }
+        }
+    }
+
     pub fn parse_and_precompile_with_dependencies(
         &mut self, 
         code: &String, 
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap)>
+        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap, InnerDepGraph)>
     ) -> Result<Vec<NessaExpr>, String> {
         let mut res = vec!();
         let mut imports = nessa_module_imports_parser(&code).unwrap().1; // TODO: should cache this
 
         Self::cascade_imports(&mut imports, modules);
+        Self::cascade_imports_inner(&mut imports, modules);
 
         // Import code from dependencies
         for (m, i) in imports {
-            let (other_ctx, other_code, _) = modules.get(&m).as_ref().unwrap();
+            let (other_ctx, other_code, _, _) = modules.get(&m).as_ref().unwrap();
 
             let mut new_code = self.import_code(&other_code, &other_ctx, &i)?;
             res.append(&mut new_code);

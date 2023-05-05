@@ -1,0 +1,4 @@
+module_name: props_test
+module_paths:
+  - test/lib
+modules: {}

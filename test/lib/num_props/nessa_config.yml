@@ -1,0 +1,9 @@
+module_name: num_props
+module_paths:
+  - test/lib
+modules: 
+  primes:
+    path: test/lib/num_props
+    version: 1.0
+    hash: ""
+    dependencies: []

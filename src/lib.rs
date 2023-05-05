@@ -21,6 +21,9 @@ pub mod config;
 #[path = "stdlib/math.rs"]
 pub mod math;
 
+#[path = "structures/graph.rs"]
+pub mod graph;
+
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
@@ -98,5 +101,10 @@ mod integration {
     #[test]
     fn prime_filter() {
         module_test("test/modules/prime_filter");
+    }
+
+    #[test]
+    fn props_test() {
+        module_test("test/modules/props_test");
     }
 }

@@ -28,3 +28,9 @@ fn range(from: Number, to: Number) -> Range {
 fn irange(from: Number, to: Number) -> Range {
     return Range(from.deref<Number>(), from.deref<Number>(), to.deref<Number>() + 1);
 }
+
+binary op "=>" (10);
+
+op (from: Number) => (to: Number) -> Range {
+    return range(from.deref<Number>(), to.deref<Number>());
+}

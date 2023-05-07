@@ -1,13 +1,14 @@
 module prime_streaming [1.0]
 
 import fn { range, iterator, next, is_consumed } from range;
+import binary op "=>" from range;
 
 import fn primes from primes;
 import fn { iterator, next, is_consumed } from primes;
 
 let p: Primes = primes();
 
-for i in range(0, 100) {
+for i in 0 => 100 {
     if !is_prime(p.next()) {
         panic("This should not happen...");
     }

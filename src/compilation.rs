@@ -2275,7 +2275,39 @@ impl NessaContext{
 
                 NessaExpr::PrefixOperationDefinition(..) => unimplemented!(),
                 NessaExpr::PostfixOperationDefinition(..) => unimplemented!(),
-                NessaExpr::BinaryOperationDefinition(..) => unimplemented!(),
+
+                NessaExpr::BinaryOperationDefinition(id, t, a, b, ret, body) => {
+                    let rep = ctx.binary_ops[*id].get_repr();
+
+                    if imports.contains_key(&ImportType::Binary) && imports[&ImportType::Binary].contains(&rep) && 
+                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Binary) || !curr_mod_imports[&ImportType::Binary].contains(&rep)) {
+
+                        let op_id = self.map_nessa_binary_operator(&ctx, *id, &mut binary_operators)?;
+
+                        let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
+                        let mapped_arg1 = (a.0.clone(), a.1.map_basic_types(&mut mapping));
+                        let mapped_arg2 = (b.0.clone(), b.1.map_basic_types(&mut mapping));
+                        let mapped_return = ret.map_basic_types(&mut mapping);
+
+                        let mut mapped_body = body.clone();
+
+                        // Map each line of the definition to the target context
+                        for line in mapped_body.iter_mut() {
+                            self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
+                        }
+
+                        self.define_binary_operation(*id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None)?;
+
+                        // Add the mapped function to the list of new expressions
+                        res.push(NessaExpr::BinaryOperationDefinition(op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
+                        new_source.push(module.clone());
+                        
+                        // Add to current imports
+                        current_imports.entry(module.clone()).or_default().entry(ImportType::Binary).or_default().insert(rep.clone());
+                    }
+
+                },
+
                 NessaExpr::NaryOperationDefinition(..) => unimplemented!(),
                 _ => {}
             }

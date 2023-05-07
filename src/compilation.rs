@@ -2273,8 +2273,52 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::PrefixOperationDefinition(..) => unimplemented!(),
-                NessaExpr::PostfixOperationDefinition(..) => unimplemented!(),
+                NessaExpr::PrefixOperationDefinition(id, t, arg, arg_t, ret, body) |
+                NessaExpr::PostfixOperationDefinition(id, t, arg, arg_t, ret, body) => {
+                    let rep;
+                    let op_prefix;
+                    let op_import_type;
+
+                    if let Operator::Unary { representation, prefix, .. } = &ctx.unary_ops[*id] {
+                        rep = representation;
+                        op_prefix = prefix;
+                        op_import_type = if *prefix { ImportType::Prefix } else { ImportType::Postfix };
+                    
+                    } else {
+                        unreachable!();
+                    }
+
+                    if imports.contains_key(&op_import_type) && imports[&op_import_type].contains(rep) && 
+                    (!foreign || !curr_mod_imports.contains_key(&op_import_type) || !curr_mod_imports[&op_import_type].contains(rep)) {
+                    
+                        let op_id = self.map_nessa_unary_operator(&ctx, *id, &mut unary_operators)?;
+
+                        let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
+                        let mapped_arg_t = arg_t.map_basic_types(&mut mapping);
+                        let mapped_return = ret.map_basic_types(&mut mapping);
+
+                        let mut mapped_body = body.clone();
+
+                        // Map each line of the definition to the target context
+                        for line in mapped_body.iter_mut() {
+                            self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
+                        }
+
+                        self.define_unary_operation(*id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None)?;
+
+                        // Add the mapped function to the list of new expressions
+                        if *op_prefix {
+                            res.push(NessaExpr::PrefixOperationDefinition(op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
+                            current_imports.entry(module.clone()).or_default().entry(ImportType::Prefix).or_default().insert(rep.clone());
+
+                        } else {
+                            res.push(NessaExpr::PostfixOperationDefinition(op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
+                            current_imports.entry(module.clone()).or_default().entry(ImportType::Postfix).or_default().insert(rep.clone());
+                        }
+
+                        new_source.push(module.clone());
+                    }
+                },
 
                 NessaExpr::BinaryOperationDefinition(id, t, a, b, ret, body) => {
                     let rep = ctx.binary_ops[*id].get_repr();
@@ -2305,10 +2349,41 @@ impl NessaContext{
                         // Add to current imports
                         current_imports.entry(module.clone()).or_default().entry(ImportType::Binary).or_default().insert(rep.clone());
                     }
-
                 },
 
-                NessaExpr::NaryOperationDefinition(..) => unimplemented!(),
+                NessaExpr::NaryOperationDefinition(id, t, arg, args, ret, body) => {
+                    let rep = ctx.nary_ops[*id].get_repr();
+
+                    if imports.contains_key(&ImportType::Nary) && imports[&ImportType::Nary].contains(&rep) && 
+                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Nary) || !curr_mod_imports[&ImportType::Nary].contains(&rep)) {
+
+                        let op_id = self.map_nessa_nary_operator(&ctx, *id, &mut nary_operators)?;
+
+                        let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
+                        let mapped_arg = (arg.0.clone(), arg.1.map_basic_types(&mut mapping));
+                        let mapped_args = args.iter().map(|(n, t)| (n.clone(), t.map_basic_types(&mut mapping))).collect::<Vec<_>>();
+                        let mapped_return = ret.map_basic_types(&mut mapping);
+
+                        let mut mapped_body = body.clone();
+
+                        // Map each line of the definition to the target context
+                        for line in mapped_body.iter_mut() {
+                            self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
+                        }
+
+                        let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
+
+                        self.define_nary_operation(*id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None)?;
+
+                        // Add the mapped function to the list of new expressions
+                        res.push(NessaExpr::NaryOperationDefinition(op_id, t.clone(), mapped_arg, mapped_args, mapped_return, mapped_body));
+                        new_source.push(module.clone());
+                        
+                        // Add to current imports
+                        current_imports.entry(module.clone()).or_default().entry(ImportType::Nary).or_default().insert(rep.clone());
+                    }
+                },
+
                 _ => {}
             }
         }

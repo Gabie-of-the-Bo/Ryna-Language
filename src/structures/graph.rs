@@ -59,19 +59,21 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
     }
 
     pub fn dfs<F: FnMut(&Vertex)>(&self, start: &Vertex, mut op: F) {
-        let mut seen: HashSet<usize> = HashSet::new();
-        let mut stack = vec!(self.vertex_idx_unchecked(start));
-
-        while stack.len() > 0 {
-            let elem = stack.pop().unwrap();
-            seen.insert(elem);
-
-            op(self.vertex_by_idx(elem));
-
-            if self.connections.contains_key(&elem) {
-                for (i, _) in self.connections.get(&elem).unwrap() {
-                    if !seen.contains(i) {
-                        stack.push(*i);
+        if self.vertices.contains_key(start) {
+            let mut seen: HashSet<usize> = HashSet::new();
+            let mut stack = vec!(self.vertex_idx_unchecked(start));
+    
+            while stack.len() > 0 {
+                let elem = stack.pop().unwrap();
+                seen.insert(elem);
+    
+                op(self.vertex_by_idx(elem));
+    
+                if self.connections.contains_key(&elem) {
+                    for (i, _) in self.connections.get(&elem).unwrap() {
+                        if !seen.contains(i) {
+                            stack.push(*i);
+                        }
                     }
                 }
             }
@@ -79,26 +81,28 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
     }
 
     pub fn bfs<F: FnMut(&Vertex)>(&self, start: &Vertex, mut op: F) {
-        let mut seen: HashSet<usize> = HashSet::new();
-        let mut layer = vec!(self.vertex_idx_unchecked(start));
+        if self.vertices.contains_key(start) {
+            let mut seen: HashSet<usize> = HashSet::new();
+            let mut layer = vec!(self.vertex_idx_unchecked(start));
 
-        while layer.len() > 0 {
-            let mut new_layer = vec!();
-            
-            for elem in &layer {
-                seen.insert(*elem);
-                op(self.vertex_by_idx(*elem));
+            while layer.len() > 0 {
+                let mut new_layer = vec!();
+                
+                for elem in &layer {
+                    seen.insert(*elem);
+                    op(self.vertex_by_idx(*elem));
 
-                if self.connections.contains_key(&elem) {
-                    for (i, _) in self.connections.get(&elem).unwrap() {
-                        if !seen.contains(i) {
-                            new_layer.push(*i);
+                    if self.connections.contains_key(&elem) {
+                        for (i, _) in self.connections.get(&elem).unwrap() {
+                            if !seen.contains(i) {
+                                new_layer.push(*i);
+                            }
                         }
                     }
                 }
-            }
 
-            layer = new_layer;
+                layer = new_layer;
+            }
         }
     }
 

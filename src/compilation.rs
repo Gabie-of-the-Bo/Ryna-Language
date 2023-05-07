@@ -4,7 +4,6 @@ use seq_macro::seq;
 
 use crate::config::ImportMap;
 use crate::config::Imports;
-use crate::config::InnerDepGraph;
 use crate::config::NessaModule;
 use crate::functions::Function;
 use crate::context::NessaContext;

@@ -1,4 +1,4 @@
-module_name: num_props
+module_name: math
 module_paths:
   - test/lib
 modules: {}

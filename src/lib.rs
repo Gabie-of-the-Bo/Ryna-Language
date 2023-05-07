@@ -112,4 +112,9 @@ mod integration {
     fn props_test() {
         module_test("test/modules/props_test");
     }
+
+    #[test]
+    fn math_ops() {
+        module_test("test/modules/math_ops");
+    }
 }

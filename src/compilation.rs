@@ -610,10 +610,19 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::While(c, b) |
+            NessaExpr::While(c, b) => {
+                self.get_inner_dep_graph_expr(c, parent, deps);
+                self.get_inner_dep_graph_body(b, parent, deps);
+            }
+
             NessaExpr::CompiledFor(_, _, _, c, b) => {
                 self.get_inner_dep_graph_expr(c, parent, deps);
                 self.get_inner_dep_graph_body(b, parent, deps);
+
+                // Iteration functions, since they are used implicitly
+                deps.connect(parent.clone(), (ImportType::Fn, ITERATOR_FUNC_ID), ());
+                deps.connect(parent.clone(), (ImportType::Fn, NEXT_FUNC_ID), ());
+                deps.connect(parent.clone(), (ImportType::Fn, IS_CONSUMED_FUNC_ID), ());
             }
 
             NessaExpr::If(ic, ib, ie, eb) => {

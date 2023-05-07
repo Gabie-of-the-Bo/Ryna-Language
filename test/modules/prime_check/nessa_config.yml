@@ -1,4 +1,4 @@
-module_name: prime_filter
+module_name: prime_check
 module_paths:
   - test/lib
 modules: {}

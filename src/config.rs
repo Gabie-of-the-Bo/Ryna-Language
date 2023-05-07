@@ -132,7 +132,7 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, (NessaContext, Vec<NessaExpr>, ImportMap, InnerDepGraph)>) -> Result<(NessaContext, Vec<NessaExpr>, ImportMap, InnerDepGraph), String> {
+fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, (NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph)>) -> Result<(NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph), String> {
     let config_path = format!("{}/nessa_config.yml", &path);
     let main_path = format!("{}/main.nessa", &path);
 
@@ -167,10 +167,10 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
             }
         }
     
-        let module = ctx.parse_and_precompile_with_dependencies(&main, &already_compiled)?;
+        let (module, source) = ctx.parse_and_precompile_with_dependencies(&config_yml.module_name, &main, &already_compiled)?;
         let graph = ctx.get_inner_dep_graph(&module);
     
-        return Ok((ctx, module, imports, graph));
+        return Ok((ctx, module, source, imports, graph));
 
     } else {
         unimplemented!();
@@ -179,7 +179,7 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
 
 
 pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), String> {
-    let (mut ctx, mut lines, _, _) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
+    let (mut ctx, mut lines, _,  _, _) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
 
     ctx.precompile_module(&mut lines)?;
 

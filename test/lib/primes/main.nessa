@@ -20,3 +20,31 @@ fn is_prime(n: Number) -> Bool {
 
     return true;
 }
+
+class Primes {
+    start: Number;
+    current: Number;
+}
+
+fn primes() -> Primes {
+    return Primes(1, 1);
+}
+
+fn iterator(it: Primes) -> Primes {
+    return it.deref<Primes>();
+}
+
+fn next(it: &&Primes) -> Number {
+    let curr: &&Number = it.current();
+    curr.inc();
+
+    while !is_prime(curr.deref<Number>()) {
+        curr.inc();
+    }
+
+    return curr.deref<Number>();
+}
+
+fn is_consumed(it: &&Primes) -> Bool {
+    return false;
+}

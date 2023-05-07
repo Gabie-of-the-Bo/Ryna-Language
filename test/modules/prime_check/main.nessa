@@ -1,4 +1,4 @@
-module prime_filter [1.0]
+module prime_check [1.0]
 
 import fn is_prime from primes;
 

@@ -99,8 +99,13 @@ mod integration {
     }
 
     #[test]
-    fn prime_filter() {
-        module_test("test/modules/prime_filter");
+    fn prime_check() {
+        module_test("test/modules/prime_check");
+    }
+
+    #[test]
+    fn prime_streaming() {
+        module_test("test/modules/prime_streaming");
     }
 
     #[test]

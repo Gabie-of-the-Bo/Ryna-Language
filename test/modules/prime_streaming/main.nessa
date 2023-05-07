@@ -1,0 +1,15 @@
+module prime_streaming [1.0]
+
+import class Range from range;
+import fn { iterator, next, is_consumed } from range;
+
+import fn { iterator, next, is_consumed } from primes;
+import fn primes from primes;
+
+let p: Primes = primes();
+
+for i in Range(0, 0, 100) {
+    if !is_prime(p.next()) {
+        panic("This should not happen...");
+    }
+}

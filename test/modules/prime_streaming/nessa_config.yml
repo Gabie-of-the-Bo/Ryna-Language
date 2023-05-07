@@ -1,0 +1,4 @@
+module_name: prime_streaming
+module_paths:
+  - test/lib
+modules: {}

@@ -31,6 +31,28 @@ pub type Imports = HashMap<ImportType, HashSet<String>>;
 pub type ImportMap = HashMap<String, Imports>;
 pub type InnerDepGraph = DirectedGraph<(ImportType, usize), ()>;
 
+pub struct NessaModule {
+    pub name: String,
+    pub ctx: NessaContext,
+    pub code: Vec<NessaExpr>,
+    pub source: Vec<String>, 
+    pub imports: ImportMap,
+    pub inner_dependencies: InnerDepGraph
+}
+
+impl NessaModule {
+    pub fn new(
+        name: String,
+        ctx: NessaContext,
+        code: Vec<NessaExpr>,
+        source: Vec<String>, 
+        imports: ImportMap,
+        inner_dependencies: InnerDepGraph
+    ) -> NessaModule {
+        return NessaModule { name, ctx, code, source, imports, inner_dependencies };
+    }
+}
+
 fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Result<HashMap<String, ModuleInfo>, String> {
     let mut res = HashMap::new();
 
@@ -132,7 +154,7 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, (NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph)>) -> Result<(NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph), String> {
+fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, NessaModule>) -> Result<NessaModule, String> {
     let config_path = format!("{}/nessa_config.yml", &path);
     let main_path = format!("{}/main.nessa", &path);
 
@@ -170,7 +192,7 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
         let (module, source) = ctx.parse_and_precompile_with_dependencies(&config_yml.module_name, &main, &already_compiled)?;
         let graph = ctx.get_inner_dep_graph(&module);
     
-        return Ok((ctx, module, source, imports, graph));
+        return Ok(NessaModule::new(config_yml.module_name, ctx, module, source, imports, graph));
 
     } else {
         unimplemented!();
@@ -179,9 +201,9 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
 
 
 pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), String> {
-    let (mut ctx, mut lines, _,  _, _) = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
+    let mut module = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
 
-    ctx.precompile_module(&mut lines)?;
+    module.ctx.precompile_module(&mut module.code)?;
 
-    return Ok((ctx, lines));
+    return Ok((module.ctx, module.code));
 }

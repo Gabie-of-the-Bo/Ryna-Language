@@ -5,6 +5,7 @@ use seq_macro::seq;
 use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::InnerDepGraph;
+use crate::config::NessaModule;
 use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
@@ -2286,7 +2287,7 @@ impl NessaContext{
     // BFS on imports
     fn cascade_imports(
         imports: &mut ImportMap,
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph)>
+        modules: &HashMap<String, NessaModule>
     )
     {
         let mut res = HashMap::new();
@@ -2295,7 +2296,7 @@ impl NessaContext{
             res = imports.clone();
 
             for (name, _) in imports.iter() {
-                for (d_name, d_deps) in &modules.get(name).unwrap().3 {
+                for (d_name, d_deps) in &modules.get(name).unwrap().imports {
                     for (t, n) in d_deps {
                         res.entry(d_name.clone()).or_default().entry(t.clone()).or_default().extend(n.iter().cloned());
                     }
@@ -2339,19 +2340,19 @@ impl NessaContext{
     // BFS on imports (inner dependencies)
     fn cascade_imports_inner(
         imports: &mut ImportMap,
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph)>
+        modules: &HashMap<String, NessaModule>
     )
     {
         for (m, imps) in imports {
             let mut new_imports = Imports::new();
-            let (ctx, _, _, _, graph) = &modules.get(m).unwrap();
+            let module = &modules.get(m).unwrap();
 
             for (t, names) in imps.iter() {
                 for name in names.iter() {
-                    let id = ctx.map_import(t, name);
+                    let id = module.ctx.map_import(t, name);
 
-                    graph.dfs(&(t.clone(), id), |(tp, id)| {
-                        let mapped_name = ctx.rev_map_import(tp, *id);
+                    module.inner_dependencies.dfs(&(t.clone(), id), |(tp, id)| {
+                        let mapped_name = module.ctx.rev_map_import(tp, *id);
                         new_imports.entry(tp.clone()).or_default().insert(mapped_name);
                     });
                 }
@@ -2367,7 +2368,7 @@ impl NessaContext{
         &mut self, 
         name: &String,
         code: &String, 
-        modules: &HashMap<String, (NessaContext, Vec<NessaExpr>, Vec<String>, ImportMap, InnerDepGraph)>
+        modules: &HashMap<String, NessaModule>
     ) -> Result<(Vec<NessaExpr>, Vec<String>), String> {
         let mut res = vec!();
         let mut source = vec!();
@@ -2384,9 +2385,9 @@ impl NessaContext{
                 i.entry(t.clone()).or_default().retain(|v| !ii.contains(v));
             }
 
-            let (other_ctx, other_code, other_source, _, _) = modules.get(&m).as_ref().unwrap();
+            let other = modules.get(&m).unwrap();
 
-            let (mut new_code, mut new_source) = self.import_code(&m, other_code, other_source, other_ctx, &i, &mut current_imports)?;
+            let (mut new_code, mut new_source) = self.import_code(&m, &other.code, &other.source, &other.ctx, &i, &mut current_imports)?;
             source.append(&mut new_source);
             res.append(&mut new_code);
         }

@@ -270,7 +270,7 @@ mod tests {
             let iter: ArrayIterator<&&Number> = array.iterator<Number>();
             let ended_1: Bool = iter.is_consumed();
             
-            let elem: &&Number = iter.next<&&Number>();
+            let elem: Number = iter.next<&&Number>();
             let ended_2: Bool = iter.is_consumed();
 
             let array_2: Array<Number> = arr<Number>();

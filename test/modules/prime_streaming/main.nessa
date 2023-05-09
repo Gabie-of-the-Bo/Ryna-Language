@@ -6,10 +6,16 @@ import binary op "=>" from range;
 import fn primes from primes;
 import fn { iterator, next, is_consumed } from primes;
 
-let p: Primes = primes();
+fn stream_primes(limit: Number) -> Bool {
+    let p = primes();
 
-for i in 0 => 100 {
-    if !is_prime(p.next()) {
-        panic("This should not happen...");
+    for i in 0 => *limit {
+        if !is_prime(p.next()) {
+            panic("This should not happen...");
+        }
     }
+
+    return true;
 }
+
+stream_primes(100);

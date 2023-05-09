@@ -202,37 +202,45 @@ impl NessaContext {
             },
 
             NessaExpr::UnaryOperation(id, t, a) => {
-                let args_type = self.infer_type(a)?;
+                let t_sub_call = t.iter().cloned().enumerate().collect();
+                let args_type = self.infer_type(a)?.sub_templates(&t_sub_call);
 
-                let (_, r, _, _) = self.get_first_unary_op(*id, args_type, false).unwrap();
+                let (_, r, _, subs) = self.get_first_unary_op(*id, args_type, false)?;
+                let t_sub_ov = subs.iter().cloned().enumerate().collect();
 
-                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
+                return Some(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             },
 
             NessaExpr::BinaryOperation(id, t, a, b) => {
-                let a_type = self.infer_type(a)?;
-                let b_type = self.infer_type(b)?;
+                let t_sub_call = t.iter().cloned().enumerate().collect();
+                let a_type = self.infer_type(a)?.sub_templates(&t_sub_call);
+                let b_type = self.infer_type(b)?.sub_templates(&t_sub_call);
 
-                let (_, r, _, _) = self.get_first_binary_op(*id, a_type, b_type, false).unwrap();
+                let (_, r, _, subs) = self.get_first_binary_op(*id, a_type, b_type, false)?;
+                let t_sub_ov = subs.iter().cloned().enumerate().collect();
 
-                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
+                return Some(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             },
 
             NessaExpr::NaryOperation(id, t, a, b) => {
-                let a_type = self.infer_type(a)?;
-                let b_type = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
+                let t_sub_call = t.iter().cloned().enumerate().collect();
+                let a_type = self.infer_type(a)?.sub_templates(&t_sub_call);
+                let b_type = b.iter().map(|i| self.infer_type(i).unwrap().sub_templates(&t_sub_call)).collect();
 
-                let (_, r, _, _) = self.get_first_nary_op(*id, a_type, b_type, false).unwrap();
+                let (_, r, _, subs) = self.get_first_nary_op(*id, a_type, b_type, false)?;
+                let t_sub_ov = subs.iter().cloned().enumerate().collect();
 
-                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
+                return Some(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             },
 
             NessaExpr::FunctionCall(id, t, args) => {
-                let arg_types = args.iter().map(|i| self.infer_type(i).unwrap()).collect::<Vec<_>>();
+                let t_sub_call = t.iter().cloned().enumerate().collect();
+                let arg_types = args.iter().map(|i| self.infer_type(i).unwrap().sub_templates(&t_sub_call)).collect();
 
-                let (_, r, _, _) = self.get_first_function_overload(*id, arg_types, false).unwrap();
+                let (_, r, _, subs) = self.get_first_function_overload(*id, arg_types, false)?;
+                let t_sub_ov = subs.iter().cloned().enumerate().collect();
 
-                return Some(r.sub_templates(&t.iter().cloned().enumerate().collect()));
+                return Some(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             },
 
             _ => None

@@ -857,7 +857,7 @@ impl NessaContext {
                 multispace0,
                 tag(";")
             )),
-            |(_, _, n, _, t, _, _, e, _, _)| NessaExpr::VariableDefinition(n, t.unwrap_or(("", "", Type::Wildcard, "")).2, Box::new(e))
+            |(_, _, n, _, t, _, _, e, _, _)| NessaExpr::VariableDefinition(n, t.unwrap_or(("", "", Type::InferenceMarker(0), "")).2, Box::new(e))
         )(input);
     }
     
@@ -2111,11 +2111,11 @@ mod tests {
             Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
             Box::new(NessaExpr::Literal(Object::new(Number::from(5))))
         ));
-        assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
-        assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(false)))));
+        assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::InferenceMarker(0), Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
+        assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::InferenceMarker(0), Box::new(NessaExpr::Literal(Object::new(false)))));
         assert_eq!(def_5, NessaExpr::VariableDefinition(
             "lambda".into(), 
-            Type::Wildcard, 
+            Type::InferenceMarker(0), 
             Box::new(NessaExpr::Lambda(
                 vec!(
                     ("a".into(), Type::Basic(0)),
@@ -2136,7 +2136,7 @@ mod tests {
         ));
         assert_eq!(def_6, NessaExpr::VariableDefinition(
             "lambda".into(), 
-            Type::Wildcard, 
+            Type::InferenceMarker(0), 
             Box::new(NessaExpr::Lambda(
                 vec!(
                     ("n".into(), Type::Basic(0))
@@ -2156,7 +2156,7 @@ mod tests {
         ));
         assert_eq!(def_7, NessaExpr::VariableDefinition(
             "lambda".into(), 
-            Type::Wildcard, 
+            Type::InferenceMarker(0), 
             Box::new(NessaExpr::Lambda(
                 vec!(
                     ("n".into(), Type::Basic(0))
@@ -2365,7 +2365,7 @@ mod tests {
                 vec!(),
                 Type::Basic(0),
                 vec!(
-                    NessaExpr::VariableDefinition("res".into(), Type::Wildcard, Box::new(NessaExpr::Literal(Object::new(Number::from(5))))),
+                    NessaExpr::VariableDefinition("res".into(), Type::InferenceMarker(0), Box::new(NessaExpr::Literal(Object::new(Number::from(5))))),
                     NessaExpr::For(
                         "i".into(),
                         Box::new(NessaExpr::NameReference("arr".into())),

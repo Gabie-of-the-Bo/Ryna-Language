@@ -42,6 +42,9 @@ pub enum Type {
     // Empty type (also called void)
     Empty,
 
+    // Type to infer later
+    InferenceMarker(usize),
+
     // Simple types
     Basic(usize),
 
@@ -66,7 +69,9 @@ pub enum Type {
 impl PartialEq for Type {
     fn eq(&self, b: &Self) -> bool {
         return match (self, b) {
-            (Type::Empty, Type::Empty) => true,
+            (Type::Empty, Type::Empty) |
+            (Type::Wildcard, Type::Wildcard) => true,
+            (Type::InferenceMarker(id_a), Type::InferenceMarker(id_b)) |
             (Type::Basic(id_a), Type::Basic(id_b)) => id_a == id_b,
             (Type::Ref(ta), Type::Ref(tb)) => ta == tb,
             (Type::MutRef(ta), Type::MutRef(tb)) => ta == tb,
@@ -74,7 +79,6 @@ impl PartialEq for Type {
             (Type::And(va), Type::And(vb)) => va == vb,
             (Type::And(va), b) => va.len() == 1 && va[0] == *b,
             (a, Type::And(vb)) => vb.len() == 1 && vb[0] == *a,
-            (Type::Wildcard, Type::Wildcard) => true,
             (Type::TemplateParam(id_a), Type::TemplateParam(id_b)) => id_a == id_b,
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va == vb,
             (Type::Function(fa, ta), Type::Function(fb, tb)) => fa == fb && ta == tb,
@@ -90,6 +94,7 @@ impl Type {
     pub fn get_name(&self, ctx: &NessaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
+            Type::InferenceMarker(_) => "[Inferred]".into(),
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone(),
             Type::Ref(t) => format!("&{}", t.get_name(ctx)),
@@ -132,6 +137,7 @@ impl Type {
         return match self {
             Type::Wildcard |
             Type::Empty  |
+            Type::InferenceMarker(_)  |
             Type::TemplateParam(_)  |
             Type::TemplateParamStr(_) => vec!(),
 

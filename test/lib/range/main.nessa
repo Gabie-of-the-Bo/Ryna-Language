@@ -7,14 +7,14 @@ class Range {
 }
 
 fn iterator(it: Range) -> Range {
-    return it.deref<Range>();
+    return *it;
 }
 
 fn next(it: &&Range) -> Number {
     let curr: &&Number = it.current();
     curr.inc();
 
-    return curr.deref<Number>();
+    return *curr;
 }
 
 fn is_consumed(it: &&Range) -> Bool {
@@ -22,15 +22,15 @@ fn is_consumed(it: &&Range) -> Bool {
 }
 
 fn range(from: Number, to: Number) -> Range {
-    return Range(from.deref<Number>(), from.deref<Number>(), to.deref<Number>());
+    return Range(*from, *from, *to);
 }
 
 fn irange(from: Number, to: Number) -> Range {
-    return Range(from.deref<Number>(), from.deref<Number>(), to.deref<Number>() + 1);
+    return Range(*from, *from, *to + 1);
 }
 
-binary op "=>" (10);
+binary op "=>" (10000);
 
 op (from: Number) => (to: Number) -> Range {
-    return range(from.deref<Number>(), to.deref<Number>());
+    return range(*from, *to);
 }

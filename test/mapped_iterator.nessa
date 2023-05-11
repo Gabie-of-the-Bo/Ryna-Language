@@ -14,7 +14,7 @@ fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
     return iter(it).is_consumed();
 }
 
-let a: Array<Number> = arr<Number>();
+let a = arr<Number>();
 a.push(0);
 a.push(1);
 a.push(2);
@@ -22,7 +22,7 @@ a.push(3);
 a.push(4);
 a.push(5);
 
-let sum: Number = 0;
+let sum = 0;
 
 for i in DoubleIterator(iterator(a)) {
     sum = sum + i;

@@ -30,150 +30,6 @@ impl NessaContext {
 
     /*
         ╒══════════════════════╕
-        │ Variable compilation │
-        ╘══════════════════════╛
-    */
-
-    fn compile_expr_variables(&self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), String> {
-        match expr {
-            // Compile variable references
-            NessaExpr::NameReference(n) if ctx_idx.contains_key(n) => {
-                let (idx, t) = ctx_idx.get(n).unwrap();
-                *expr = NessaExpr::Variable(*idx, n.clone(), t.clone());
-            },
-
-            NessaExpr::VariableAssignment(n, e) if ctx_idx.contains_key(n) => {
-                if ctx_idx.contains_key(n) {
-                    self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
-
-                    let (idx, t) = ctx_idx.get(n).unwrap();
-
-                    *expr = NessaExpr::CompiledVariableAssignment(*idx, n.clone(), t.clone(), e.clone());
-                
-                } else {
-                    return Err(format!("Variable with name {} is not defined", n));
-                }
-            },
-
-            // Compile variable definitions
-            NessaExpr::VariableDefinition(n, t, e) => {
-                let idx = registers.pop().unwrap();
-
-                if let Type::InferenceMarker(id) = t {
-                    *id = idx; // Set inference idx to variable idx
-                }
-
-                ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
-                curr_ctx.entry(n.clone()).or_insert(idx);
-
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
-
-                *expr = NessaExpr::CompiledVariableDefinition(idx, n.clone(), t.clone(), e.clone());
-            },
-
-            // Compile operations
-            NessaExpr::UnaryOperation(_, _, e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
-            }
-
-            NessaExpr::BinaryOperation(_, _, a, b) => {
-                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
-                self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
-            }
-            
-            NessaExpr::NaryOperation(_, _, a, b) => {
-                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
-
-                for i in b {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;
-                }
-            }
-
-            NessaExpr::Tuple(a) |
-            NessaExpr::FunctionCall(_, _, a) => {
-                for i in a {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
-                }
-            }
-
-            // Compile flow control
-            NessaExpr::If(h, ib, ei, eb) => {
-                self.compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
-                self.compile_variables_ctx(ib, registers, ctx_idx, &vec!())?;
-
-                for (ei_h, ei_b) in ei {
-                    self.compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
-                    self.compile_variables_ctx(ei_b, registers, ctx_idx, &vec!())?;
-                }
-
-                if let Some(eb_inner) = eb {
-                    self.compile_variables_ctx(eb_inner, registers, ctx_idx, &vec!())?;
-                }
-            }
-
-            NessaExpr::While(c, b) => {
-                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
-                self.compile_variables_ctx(b, registers, ctx_idx, &vec!())?;
-            }
-
-            NessaExpr::For(i, c, b) => {
-                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
-
-                let container_type = self.infer_type(c).unwrap();
-                let iterator_type = self.get_iterator_type(&container_type)?;
-                let element_type = self.get_iterator_output_type(&iterator_type)?;
-
-                let iterator_idx = *registers.last().unwrap();
-                let element_idx = *registers.get(registers.len() - 2).unwrap();
-
-                self.compile_variables_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type), (i.clone(), element_type)))?;
-
-                *expr = NessaExpr::CompiledFor(iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
-            }
-
-            NessaExpr::Return(e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
-            }
-
-            _ => {}
-        }
-
-        return Ok(());
-    }
-    
-    fn compile_variables_ctx(&self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, String> {
-        let mut curr_ctx = HashMap::new();
-
-        for (n, t) in args {
-            let idx = registers.pop().unwrap();
-            ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
-            curr_ctx.entry(n.clone()).or_insert(idx);
-        }
-
-        // Compile each expression sequentially
-        for e in body {
-            self.compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
-        }
-
-        let mut max_var = 0;
-
-        // Free the registers inside the context
-        curr_ctx.into_iter().for_each(|(n, i)| {
-            ctx_idx.remove(&n);
-            registers.push(i);
-
-            max_var = max_var.max(i + 1); // Maximum register
-        });
-
-        return Ok(max_var);
-    }
-
-    pub fn compile_variables(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
-        return self.compile_variables_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args);
-    }
-
-    /*
-        ╒══════════════════════╕
         │ Function compilation │
         ╘══════════════════════╛
     */
@@ -413,7 +269,7 @@ impl NessaContext {
                 self.compile(b, &all_args)?;   
             }
 
-            _ => unimplemented!("{:?}", expr)
+            _ => {}
         }
 
         return Ok(());
@@ -427,122 +283,69 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn infer_var_types_expr(&mut self, expr: &mut NessaExpr, types: &mut HashMap<usize, Type>) -> Result<(), String> {
-        match expr {
-            NessaExpr::CompiledVariableDefinition(_, _, t, e) => {
-                if let Type::InferenceMarker(id) = t {
-                    let id_cpy = id.clone();
+    /*
+        ╒══════════════════╕
+        │ Full compilation │
+        ╘══════════════════╛
+    */
 
+    fn compile_expr_variables(&self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), String> {
+        match expr {
+            // Compile variable references
+            NessaExpr::NameReference(n) if ctx_idx.contains_key(n) => {
+                let (idx, t) = ctx_idx.get(n).unwrap();
+                *expr = NessaExpr::Variable(*idx, n.clone(), t.clone());
+            },
+
+            NessaExpr::VariableAssignment(n, e) if ctx_idx.contains_key(n) => {
+                if ctx_idx.contains_key(n) {
+                    self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+
+                    let (idx, t) = ctx_idx.get(n).unwrap();
+
+                    *expr = NessaExpr::CompiledVariableAssignment(*idx, n.clone(), t.clone(), e.clone());
+                
+                } else {
+                    return Err(format!("Variable with name {} is not defined", n));
+                }
+            },
+
+            // Compile variable definitions
+            NessaExpr::VariableDefinition(n, t, e) => {
+                let idx = registers.pop().unwrap();
+
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+
+                if let Type::InferenceMarker = t {
                     *t = self.infer_type(e).unwrap();
-                    types.entry(id_cpy).or_insert(t.clone());
-                }
-            }
-
-            NessaExpr::Variable(_, _, t) |
-            NessaExpr::CompiledVariableAssignment(_, _, t, _) => {
-                if let Type::InferenceMarker(id) = t {
-                    let id_cpy = id.clone();
-
-                    if let Some(tp) = types.get(&id_cpy) {
-                        *t = tp.clone();
-
-                    } else {
-                        return Err("Unable to infer variable type".into());
-                    }
-                }
-            }
-
-            NessaExpr::While(c, b) |
-            NessaExpr::CompiledFor(_, _, _, c, b) => {
-                self.infer_var_types_expr(c, types)?;
-                self.infer_var_types(b, types)?;
-            }
-
-            NessaExpr::If(ic, ib, ei, eb) => {
-                self.infer_var_types_expr(ic, types)?;
-                self.infer_var_types(ib, types)?;
-
-                for (ei_c, ei_b) in ei {
-                    self.infer_var_types_expr(ei_c, types)?;
-                    self.infer_var_types(ei_b, types)?;
                 }
 
-                if let Some(b) = eb {
-                    self.infer_var_types(b, types)?;
-                }
-            }
+                ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
+                curr_ctx.entry(n.clone()).or_insert(idx);
 
-            NessaExpr::Tuple(args) |
-            NessaExpr::FunctionCall(_, _, args) => {
-                self.infer_var_types(args, types)?;
-            }
+                *expr = NessaExpr::CompiledVariableDefinition(idx, n.clone(), t.clone(), e.clone());
+            },
 
-            NessaExpr::BinaryOperation(_, _, a, b) => {
-                self.infer_var_types_expr(a, types)?;
-                self.infer_var_types_expr(b, types)?;
-            }
-
-            NessaExpr::NaryOperation(_, _, a, b) => {
-                self.infer_var_types_expr(a, types)?;
-                self.infer_var_types(b, types)?;
-            }
-
-            NessaExpr::UnaryOperation(_, _, e) |
-            NessaExpr::Return(e) => self.infer_var_types_expr(e, types)?,
-
-            _ => {}
-        }
-
-        return Ok(());
-    }
-    
-    pub fn infer_var_types(&mut self, body: &mut Vec<NessaExpr>, types: &mut HashMap<usize, Type>) -> Result<(), String> {
-        for line in body {
-            self.infer_var_types_expr(line, types)?;
-        }
-
-        return Ok(());
-    }
-
-    pub fn infer_template_types_expr(&self, expr: &mut NessaExpr) -> Result<(), String> {
-        match expr {
-            NessaExpr::CompiledVariableDefinition(_, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, e) => {
-                self.infer_template_types_expr(e)?;
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
             }
 
-            NessaExpr::While(c, b) |
-            NessaExpr::CompiledFor(_, _, _, c, b) => {
-                self.infer_template_types_expr(c)?;
-                self.infer_template_types(b)?;
+            NessaExpr::CompiledVariableDefinition(id, n, t, e) => {
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+
+                ctx_idx.entry(n.clone()).or_insert((*id, t.clone()));
+                curr_ctx.entry(n.clone()).or_insert(*id);
             }
 
-            NessaExpr::If(ic, ib, ei, eb) => {
-                self.infer_template_types_expr(ic)?;
-                self.infer_template_types(ib)?;
-
-                for (ei_c, ei_b) in ei {
-                    self.infer_template_types_expr(ei_c)?;
-                    self.infer_template_types(ei_b)?;
-                }
-
-                if let Some(b) = eb {
-                    self.infer_template_types(b)?;
-                }
-            }
-
-            NessaExpr::Tuple(args) => {
-                self.infer_template_types(args)?;
-            }
-
-            NessaExpr::FunctionCall(id, t, args) => {                
-                self.infer_template_types(args)?;
+            // Compile operations
+            NessaExpr::UnaryOperation(id, t, e) => {
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
 
                 if t.len() == 0 {
-                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).unwrap()).collect();
+                    let arg_type = self.infer_type(e).unwrap();
 
-                    if self.is_function_overload_ambiguous(*id, arg_types.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_function_overload(*id, arg_types.clone(), true) {
+                    if self.is_unary_op_ambiguous(*id, arg_type.clone()).is_none() {
+                        if let Some((_, _, _, it_args)) = self.get_first_unary_op(*id, arg_type.clone(), true) {
                             if it_args.len() > 0 {
                                 *t = it_args;
                             }
@@ -552,8 +355,8 @@ impl NessaContext {
             }
 
             NessaExpr::BinaryOperation(id, t, a, b) => {
-                self.infer_template_types_expr(a)?;
-                self.infer_template_types_expr(b)?;
+                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
 
                 if t.len() == 0 {
                     let arg_type_1 = self.infer_type(a).unwrap();
@@ -568,10 +371,13 @@ impl NessaContext {
                     }
                 }
             }
-
+            
             NessaExpr::NaryOperation(id, t, a, b) => {
-                self.infer_template_types_expr(a)?;
-                self.infer_template_types(b)?;
+                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
+
+                for i in b.iter_mut() {
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;
+                }
 
                 if t.len() == 0 {
                     let arg_type = self.infer_type(a).unwrap();
@@ -587,14 +393,22 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::UnaryOperation(id, t, e)  => {
-                self.infer_template_types_expr(e)?;
+            NessaExpr::Tuple(args) => {
+                for i in args {
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
+                }
+            }
+
+            NessaExpr::FunctionCall(id, t, args) => {
+                for i in args.iter_mut() {
+                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
+                }
 
                 if t.len() == 0 {
-                    let arg_type = self.infer_type(e).unwrap();
+                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).unwrap()).collect();
 
-                    if self.is_unary_op_ambiguous(*id, arg_type.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_unary_op(*id, arg_type.clone(), true) {
+                    if self.is_function_overload_ambiguous(*id, arg_types.clone()).is_none() {
+                        if let Some((_, _, _, it_args)) = self.get_first_function_overload(*id, arg_types.clone(), true) {
                             if it_args.len() > 0 {
                                 *t = it_args;
                             }
@@ -603,33 +417,85 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::Return(e) => self.infer_template_types_expr(e)?,
+            // Compile flow control
+            NessaExpr::If(h, ib, ei, eb) => {
+                self.compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
+                self.compile_vars_and_infer_ctx(ib, registers, ctx_idx, &vec!())?;
+
+                for (ei_h, ei_b) in ei {
+                    self.compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
+                    self.compile_vars_and_infer_ctx(ei_b, registers, ctx_idx, &vec!())?;
+                }
+
+                if let Some(eb_inner) = eb {
+                    self.compile_vars_and_infer_ctx(eb_inner, registers, ctx_idx, &vec!())?;
+                }
+            }
+
+            NessaExpr::While(c, b) => {
+                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
+                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!())?;
+            }
+
+            NessaExpr::For(i, c, b) => {
+                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
+
+                let container_type = self.infer_type(c).unwrap();
+                let iterator_type = self.get_iterator_type(&container_type)?;
+                let element_type = self.get_iterator_output_type(&iterator_type)?;
+
+                let iterator_idx = *registers.last().unwrap();
+                let element_idx = *registers.get(registers.len() - 2).unwrap();
+
+                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type), (i.clone(), element_type)))?;
+
+                *expr = NessaExpr::CompiledFor(iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
+            }
+
+            NessaExpr::Return(e) => {
+                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+            }
 
             _ => {}
         }
-        
+
         return Ok(());
     }
+    
+    fn compile_vars_and_infer_ctx(&self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+        let mut curr_ctx = HashMap::new();
 
-    pub fn infer_template_types(&self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
-        for line in body {
-            self.infer_template_types_expr(line)?;
+        for (n, t) in args {
+            let idx = registers.pop().unwrap();
+            ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
+            curr_ctx.entry(n.clone()).or_insert(idx);
         }
 
-        return Ok(());
+        // Compile each expression sequentially
+        for e in body {
+            self.compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
+        }
+
+        let mut max_var = 0;
+
+        // Free the registers inside the context
+        curr_ctx.into_iter().for_each(|(n, i)| {
+            ctx_idx.remove(&n);
+            registers.push(i);
+
+            max_var = max_var.max(i + 1); // Maximum register
+        });
+
+        return Ok(max_var);
     }
 
-    /*
-        ╒══════════════════╕
-        │ Full compilation │
-        ╘══════════════════╛
-    */
+    pub fn compile_vars_and_infer(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+        return self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args);
+    }
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), String> {
         self.compile_functions(body)?;
-        self.compile_variables(body, args)?;
-        self.infer_var_types(body, &mut HashMap::new())?;
-        self.infer_template_types(body)?;
+        self.compile_vars_and_infer(body, args)?;
 
         return Ok(());
     }
@@ -1315,7 +1181,7 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn compiled_form(&self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, String> {
+    pub fn compiled_form(&mut self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, String> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
         let mut unary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
@@ -1456,7 +1322,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.infer_template_types(&mut sub_b).unwrap();    
+                                self.compile(&mut sub_b, &vec!()).unwrap();    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1502,7 +1368,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.infer_template_types(&mut sub_b).unwrap();    
+                                self.compile(&mut sub_b, &vec!()).unwrap();    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1539,7 +1405,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.infer_template_types(&mut sub_b).unwrap();    
+                                self.compile(&mut sub_b, &vec!()).unwrap();    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1591,7 +1457,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.infer_template_types(&mut sub_b).unwrap();    
+                                self.compile(&mut sub_b, &vec!()).unwrap();    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -2757,124 +2623,6 @@ mod tests {
     use crate::object::*;
     use crate::parser::*;
     use crate::context::*;
-    
-    #[test]
-    fn variable_register_allocation() {
-        let ctx = standard_ctx();
-        
-        let code_str = "
-            let v_0 = 0;
-            let v_1 = !v_0;
-
-            if v_1 {
-                let v_2 = v_0;
-                let v_3 = v_2 + v_1;
-            }
-
-            let v_4 = v_0[v_1, v_0];
-        ";
-
-        let (_, mut code) = ctx.nessa_parser(code_str).unwrap();
-        ctx.compile_variables(&mut code, &vec!()).unwrap();
-
-        if let NessaExpr::CompiledVariableDefinition(idx, _, _, _) = code[0] {
-            assert_eq!(idx, 0);
-            
-        } else {
-            panic!("Invalid expr type");
-        }
-
-        if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &code[1] {
-            assert_eq!(*idx, 1);
-
-            if let NessaExpr::UnaryOperation(_, _, e2) = e.as_ref() {
-                if let NessaExpr::Variable(idx, _, _) = e2.as_ref() {
-                    assert_eq!(*idx, 0);
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-            }
-            
-        } else {
-            panic!("Invalid expr type");
-        }
-
-        if let NessaExpr::If(_, b, _, _) = &code[2] {
-            if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &b[0] {
-                assert_eq!(*idx, 2);
-
-                if let NessaExpr::Variable(idx, _, _) = e.as_ref() {
-                    assert_eq!(*idx, 0);
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-                
-            } else {
-                panic!("Invalid expr type");
-            }
-
-            if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &b[1] {
-                assert_eq!(*idx, 3);
-
-                if let NessaExpr::BinaryOperation(_, _, a, b) = e.as_ref() {
-                    if let NessaExpr::Variable(idx, _, _) = a.as_ref() {
-                        assert_eq!(*idx, 2);
-                        
-                    } else {
-                        panic!("Invalid expr type");
-                    }
-
-                    if let NessaExpr::Variable(idx, _, _) = b.as_ref() {
-                        assert_eq!(*idx, 1);
-                        
-                    } else {
-                        panic!("Invalid expr type");
-                    }
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-                
-            } else {
-                panic!("Invalid expr type");
-            }
-            
-        } else {
-            panic!("Invalid expr type");
-        }
-
-        if let NessaExpr::CompiledVariableDefinition(idx, _, _, e) = &code[3] {
-            assert!(*idx == 2 || *idx == 3);
-
-            if let NessaExpr::NaryOperation(_, _, a, b) = e.as_ref() {
-                if let NessaExpr::Variable(idx, _, _) = a.as_ref() {
-                    assert_eq!(*idx, 0);
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-                
-                if let NessaExpr::Variable(idx, _, _) = b[0] {
-                    assert_eq!(idx, 1);
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-                
-                if let NessaExpr::Variable(idx, _, _) = b[1] {
-                    assert_eq!(idx, 0);
-                    
-                } else {
-                    panic!("Invalid expr type");
-                }
-            }
-            
-        } else {
-            panic!("Invalid expr type");
-        }
-    }
 
     #[test]
     fn function_names_and_calls() {

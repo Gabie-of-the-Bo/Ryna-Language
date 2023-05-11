@@ -254,6 +254,36 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     define_binary_function_overloads!(ctx, 17, Type::Basic(0), Type::Basic(0), Number, a, b, Number::rand_int_range(&a, &b)?);
 
+    ctx.define_function("is".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        18, 
+        1,
+        &[Type::Wildcard], 
+        Type::Basic(2), 
+        |t, _, v| Ok(Object::new(v[0].get_type() == t[0]))
+    ).unwrap();
+
+    ctx.define_function("as".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        19, 
+        1,
+        &[Type::Wildcard], 
+        Type::TemplateParam(0), 
+        |t, _, mut v| {
+            let obj = v.pop().unwrap();
+            let obj_type = obj.get_type();
+
+            if obj_type != t[0] {
+                Err(format!("Invalid type coercion"))
+
+            } else {
+                Ok(obj)
+            }
+        }
+    ).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let id = ctx.functions.len();

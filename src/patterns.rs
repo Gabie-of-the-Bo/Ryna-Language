@@ -10,15 +10,13 @@ use nom::{
     multi::separated_list1
 };
 
+use crate::parser::Span;
+
 /*
                                                   ╒══════════════════╕
     ============================================= │  IMPLEMENTATION  │ =============================================
                                                   ╘══════════════════╛
 */
-
-lazy_static! {
-    static ref VALID_SYMBOLS: Vec<char> = "dlLaAsq".chars().collect::<Vec<_>>();
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pattern{
@@ -49,7 +47,7 @@ impl Pattern{
         };
     }
 
-    pub fn matches<'a>(&self, text: &'a str) -> IResult<&'a str, ()> {
+    pub fn matches<'a>(&self, text: Span<'a>) -> IResult<Span<'a>, ()> {
         return match self {
             Pattern::Symbol('d') => value((), satisfy(|c| c.is_digit(10)))(text),
             Pattern::Symbol('l') => value((), satisfy(|c| c.is_lowercase()))(text),
@@ -134,7 +132,7 @@ impl Pattern{
         };
     }
 
-    pub fn extract<'a>(&self, text: &'a str) -> IResult<&'a str, HashMap<String, Vec<&'a str>>> {
+    pub fn extract<'a>(&self, text: Span<'a>) -> IResult<Span<'a>, HashMap<String, Vec<&'a str>>> {
         fn merge<'a>(a: &mut HashMap<String, Vec<&'a str>>, b: HashMap<String, Vec<&'a str>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
@@ -238,7 +236,7 @@ impl Pattern{
     }
 }
 
-fn parse_and<'a>(text: &'a str, and: bool) -> IResult<&'a str, Pattern> {
+fn parse_and<'a>(text: Span<'a>, and: bool) -> IResult<Span<'a>, Pattern> {
     return if and {
         map(
             separated_list1(multispace1, |i| parse_ndl_pattern(i, false, false)), 
@@ -250,7 +248,7 @@ fn parse_and<'a>(text: &'a str, and: bool) -> IResult<&'a str, Pattern> {
     }
 }
 
-fn parse_or<'a>(text: &'a str, or: bool) -> IResult<&'a str, Pattern> {
+fn parse_or<'a>(text: Span<'a>, or: bool) -> IResult<Span<'a>, Pattern> {
     return if or {
         return map(
             separated_list1(tuple((multispace0, tag("|"), multispace0)), |i| parse_ndl_pattern(i, false, true)), 
@@ -262,21 +260,21 @@ fn parse_or<'a>(text: &'a str, or: bool) -> IResult<&'a str, Pattern> {
     }
 }
 
-pub fn parse_ndl_pattern<'a>(text: &'a str, or: bool, and: bool) -> IResult<&'a str, Pattern> {
+pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> IResult<Span<'a>, Pattern> {
     return alt((
         |i| parse_or(i, or),
         |i| parse_and(i, and),
         map(delimited(tag("["), separated_pair(satisfy(|c| c != '\''), tag("-"), satisfy(|c| c != '\'')), tag("]")), |(a, b)| Pattern::Range(a, b)),
-        map(delimited(tag("'"), take_while(|c| c != '\''), tag("'")), |s: &'a str| Pattern::Str(s.into())),
+        map(delimited(tag("'"), take_while(|c| c != '\''), tag("'")), |s: Span<'a>| Pattern::Str(s.to_string())),
         map(delimited(
             tuple((tag("Arg("), multispace0)),
             separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(","), multispace0)), take_while1(|c| c != ')')),
             tuple((multispace0, tag(")")))
-        ), |(p, n)| Pattern::Arg(Box::new(p), n.into())),
+        ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
         map(tuple((
-            opt(map(take_while1(|c: char| c.is_digit(10)), |s: &'a str| s.parse::<usize>().unwrap())),
+            opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap())),
             delimited(tuple((tag("{"), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("}")))),
-            opt(map(take_while1(|c: char| c.is_digit(10)), |s: &'a str| s.parse::<usize>().unwrap()))
+            opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap()))
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
         map(delimited(tuple((tag("["), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
         delimited(tuple((tag("("), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(")")))),
@@ -288,7 +286,7 @@ impl std::str::FromStr for Pattern{
     type Err = String;
 
     fn from_str(string: &str) -> Result<Pattern, Self::Err>{
-        return Ok(parse_ndl_pattern(string, true, true).unwrap().1);
+        return Ok(parse_ndl_pattern(Span::new(string), true, true).unwrap().1);
     }
 }
 
@@ -305,9 +303,10 @@ mod tests {
     
     use nom::IResult;
 
+    use crate::parser::Span;
     use crate::patterns::Pattern;
 
-    fn ok_result<'a, T>(res: IResult<&'a str, T>) -> bool {
+    fn ok_result<'a, T>(res: IResult<Span<'a>, T>) -> bool {
         return res.is_ok() && res.unwrap().0.is_empty();
     }
 
@@ -315,17 +314,17 @@ mod tests {
     fn basic_patterns() {
         let u_pattern = Pattern::Str("test".into());
 
-        assert!(u_pattern.matches("utest").is_err());
-        assert!(ok_result(u_pattern.matches("test")));
+        assert!(u_pattern.matches(Span::new("utest")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("test"))));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
             Pattern::Str("1".into())
         ));
 
-        assert!(u_pattern.matches("utest").is_err());
-        assert!(u_pattern.matches("test").is_err());
-        assert!(ok_result(u_pattern.matches("test1")));
+        assert!(u_pattern.matches(Span::new("utest")).is_err());
+        assert!(u_pattern.matches(Span::new("test")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("test1"))));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("*".into()),
@@ -333,20 +332,20 @@ mod tests {
             Pattern::Str("1".into())
         ));
 
-        assert!(u_pattern.matches("utest").is_err());
-        assert!(u_pattern.matches("test").is_err());
-        assert!(u_pattern.matches("test1").is_err());
-        assert!(ok_result(u_pattern.matches("*test1")));
+        assert!(u_pattern.matches(Span::new("utest")).is_err());
+        assert!(u_pattern.matches(Span::new("test")).is_err());
+        assert!(u_pattern.matches(Span::new("test1")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("*test1"))));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("1".into()),
             Pattern::Str("2".into())
         ));
 
-        assert!(u_pattern.matches("test").is_err());
-        assert!(u_pattern.matches("*").is_err());
-        assert!(ok_result(u_pattern.matches("1")));
-        assert!(ok_result(u_pattern.matches("2")));
+        assert!(u_pattern.matches(Span::new("test")).is_err());
+        assert!(u_pattern.matches(Span::new("*")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("1"))));
+        assert!(ok_result(u_pattern.matches(Span::new("2"))));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("*".into()),
@@ -354,10 +353,10 @@ mod tests {
             Pattern::Str("2".into())
         ));
 
-        assert!(u_pattern.matches("test").is_err());
-        assert!(ok_result(u_pattern.matches("*")));
-        assert!(ok_result(u_pattern.matches("1")));
-        assert!(ok_result(u_pattern.matches("2")));
+        assert!(u_pattern.matches(Span::new("test")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("*"))));
+        assert!(ok_result(u_pattern.matches(Span::new("1"))));
+        assert!(ok_result(u_pattern.matches(Span::new("2"))));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Or(vec!(
@@ -371,15 +370,15 @@ mod tests {
             ))
         ));
         
-        assert!(u_pattern.matches("test").is_err());
-        assert!(u_pattern.matches(".test").is_err());
-        assert!(u_pattern.matches("#test").is_err());
-        assert!(u_pattern.matches("test1").is_err());
-        assert!(u_pattern.matches("test2").is_err());
-        assert!(ok_result(u_pattern.matches("#test1")));
-        assert!(ok_result(u_pattern.matches("#test2")));
-        assert!(ok_result(u_pattern.matches(".test1")));
-        assert!(ok_result(u_pattern.matches(".test2")));
+        assert!(u_pattern.matches(Span::new("test")).is_err());
+        assert!(u_pattern.matches(Span::new(".test")).is_err());
+        assert!(u_pattern.matches(Span::new("#test")).is_err());
+        assert!(u_pattern.matches(Span::new("test1")).is_err());
+        assert!(u_pattern.matches(Span::new("test2")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("#test1"))));
+        assert!(ok_result(u_pattern.matches(Span::new("#test2"))));
+        assert!(ok_result(u_pattern.matches(Span::new(".test1"))));
+        assert!(ok_result(u_pattern.matches(Span::new(".test2"))));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("test".into())),
@@ -387,12 +386,12 @@ mod tests {
             Some(3)
         );
         
-        assert!(u_pattern.matches("utest").is_err());
-        assert!(u_pattern.matches("").is_err());
-        assert!(ok_result(u_pattern.matches("test")));
-        assert!(ok_result(u_pattern.matches("testtest")));
-        assert!(ok_result(u_pattern.matches("testtesttest")));
-        assert!(!ok_result(u_pattern.matches("testtesttesttest")));
+        assert!(u_pattern.matches(Span::new("utest")).is_err());
+        assert!(u_pattern.matches(Span::new("")).is_err());
+        assert!(ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(ok_result(u_pattern.matches(Span::new("testtest"))));
+        assert!(ok_result(u_pattern.matches(Span::new("testtesttest"))));
+        assert!(!ok_result(u_pattern.matches(Span::new("testtesttesttest"))));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -400,11 +399,11 @@ mod tests {
             Some(2)
         );
         
-        assert!(!ok_result(u_pattern.matches("test")));
-        assert!(ok_result(u_pattern.matches("")));
-        assert!(ok_result(u_pattern.matches("a")));
-        assert!(ok_result(u_pattern.matches("aa")));
-        assert!(!ok_result(u_pattern.matches("aaa")));
+        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(ok_result(u_pattern.matches(Span::new(""))));
+        assert!(ok_result(u_pattern.matches(Span::new("a"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
+        assert!(!ok_result(u_pattern.matches(Span::new("aaa"))));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -412,14 +411,14 @@ mod tests {
             None
         );
         
-        assert!(!ok_result(u_pattern.matches("test")));
-        assert!(!ok_result(u_pattern.matches("")));
-        assert!(!ok_result(u_pattern.matches("a")));
-        assert!(ok_result(u_pattern.matches("aa")));
-        assert!(ok_result(u_pattern.matches("aaa")));
-        assert!(ok_result(u_pattern.matches("aaaa")));
-        assert!(ok_result(u_pattern.matches("aaaaa")));
-        assert!(ok_result(u_pattern.matches("aaaaaa")));
+        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(!ok_result(u_pattern.matches(Span::new(""))));
+        assert!(!ok_result(u_pattern.matches(Span::new("a"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaaaa"))));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -427,14 +426,14 @@ mod tests {
             None
         );
         
-        assert!(!ok_result(u_pattern.matches("test")));
-        assert!(ok_result(u_pattern.matches("")));
-        assert!(ok_result(u_pattern.matches("a")));
-        assert!(ok_result(u_pattern.matches("aa")));
-        assert!(ok_result(u_pattern.matches("aaa")));
-        assert!(ok_result(u_pattern.matches("aaaa")));
-        assert!(ok_result(u_pattern.matches("aaaaa")));
-        assert!(ok_result(u_pattern.matches("aaaaaa")));
+        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(ok_result(u_pattern.matches(Span::new(""))));
+        assert!(ok_result(u_pattern.matches(Span::new("a"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaaa"))));
+        assert!(ok_result(u_pattern.matches(Span::new("aaaaaa"))));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
@@ -443,9 +442,9 @@ mod tests {
             )
         ));
         
-        assert!(!ok_result(u_pattern.matches("utest")));
-        assert!(ok_result(u_pattern.matches("test")));
-        assert!(ok_result(u_pattern.matches("test?")));
+        assert!(!ok_result(u_pattern.matches(Span::new("utest"))));
+        assert!(ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(ok_result(u_pattern.matches(Span::new("test?"))));
     }
 
     #[test]
@@ -526,9 +525,9 @@ mod tests {
             ("Dec".into(), vec!("26".into())),
         )));
 
-        assert!(!ok_result(u_pattern.extract("+100".into())));
-        assert!(!ok_result(u_pattern.extract("123.".into())));
-        assert!(!ok_result(u_pattern.extract("test".into())));
+        assert!(!ok_result(u_pattern.extract(Span::new("+100"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("123."))));
+        assert!(!ok_result(u_pattern.extract(Span::new("test"))));
     }
 
     #[test]

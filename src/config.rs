@@ -60,13 +60,13 @@ fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Res
         let path_str = f.display().to_string();
 
         let file = fs::read_to_string(&path_str).unwrap();
-        let module_descriptors = nessa_module_header_parser(&file).unwrap().1;
+        let module_descriptors = nessa_module_header_parser(Span::new(&file)).unwrap().1;
 
         if module_descriptors.len() != 1 {
             return Err(format!("Invalid number of module descriptors in {} (found {}, expected 1)", &path_str, module_descriptors.len()));
         }
 
-        let imports = nessa_module_imports_parser(&file).unwrap().1;
+        let imports = nessa_module_imports_parser(Span::new(&file)).unwrap().1;
 
         res.entry(module_descriptors[0].0.clone()).or_insert(ModuleInfo {
             path: f.parent().unwrap().display().to_string(),
@@ -168,7 +168,7 @@ fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut Hash
 
     let config = fs::read_to_string(&config_path).expect("Error while reading config file");
     let main = fs::read_to_string(&main_path).expect("Error while reading main file");
-    let imports = nessa_module_imports_parser(&main).unwrap().1;
+    let imports = nessa_module_imports_parser(Span::new(&main)).unwrap().1;
 
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
 

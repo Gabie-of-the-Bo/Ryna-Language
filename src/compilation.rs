@@ -360,10 +360,10 @@ impl NessaContext {
 
                 if t.len() == 0 {
                     let arg_type_1 = self.infer_type(a).unwrap();
-                    let arg_type_2 = self.infer_type(b).unwrap();
+                    let arg_type = self.infer_type(b).unwrap();
 
-                    if self.is_binary_op_ambiguous(*id, arg_type_1.clone(), arg_type_2.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type_2.clone(), true) {
+                    if self.is_binary_op_ambiguous(*id, arg_type_1.clone(), arg_type.clone()).is_none() {
+                        if let Some((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type.clone(), true) {
                             if it_args.len() > 0 {
                                 *t = it_args;
                             }
@@ -1831,7 +1831,7 @@ impl NessaContext{
                 
                 self.define_type(n.clone(), t, a.clone(), p, Some(
                     |ctx, c_type, s| {
-                        if let Ok((_, o)) = ctx.parse_literal_type(c_type, s.as_str()) {
+                        if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
                             return Ok(o);
                         }
 
@@ -1965,7 +1965,7 @@ impl NessaContext{
         while needed {
             needed = false;
 
-            for i in self.nessa_class_parser(code).unwrap().1 {
+            for i in self.nessa_class_parser(Span::new(code)).unwrap().1 {
                 self.define_module_class(i, &mut needed)?;
             }
         }
@@ -1974,7 +1974,7 @@ impl NessaContext{
     }
     
     pub fn define_module_operators(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_operators_parser(code).unwrap().1;
+        let ops = self.nessa_operators_parser(Span::new(code)).unwrap().1;
 
         for i in ops {
             match i {
@@ -1991,7 +1991,7 @@ impl NessaContext{
     }
     
     pub fn define_module_functions(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_function_headers_parser(code).unwrap().1;
+        let ops = self.nessa_function_headers_parser(Span::new(code)).unwrap().1;
 
         for i in ops {
             self.define_function(i.0).unwrap_or_default();
@@ -2001,7 +2001,7 @@ impl NessaContext{
     }
     
     pub fn define_module_operations(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_operations_parser(code).unwrap().1;
+        let ops = self.nessa_operations_parser(Span::new(code)).unwrap().1;
 
         for i in ops {
             match i {
@@ -2032,8 +2032,21 @@ impl NessaContext{
         return Ok(());
     }
 
+    pub fn panic_error(error_type: &str, line: u32, column: u32) {
+        panic!("{} at line {}:{}", error_type, line, column);
+    }
+
     pub fn parse_nessa_module(&mut self, code: &String) -> Vec<NessaExpr> {
-        return self.nessa_parser(code).unwrap().1;
+        let code = self.nessa_parser(Span::new(code));
+
+        if let Ok((_, lines)) = code {
+            return lines;
+
+        } else if let nom::Err::Error(error) = code.err().unwrap() {
+            Self::panic_error("Syntax error", error.input.location_line(), error.input.get_column() as u32);
+        }
+
+        unreachable!();
     }
 
     fn map_nessa_class(&mut self, other: &NessaContext, id: usize, classes: &mut HashMap<usize, usize>) -> Result<usize, String> {
@@ -2547,7 +2560,7 @@ impl NessaContext{
     ) -> Result<(Vec<NessaExpr>, Vec<String>), String> {
         let mut res = vec!();
         let mut source = vec!();
-        let mut imports = nessa_module_imports_parser(&code).unwrap().1; // TODO: should cache this
+        let mut imports = nessa_module_imports_parser(Span::new(&code)).unwrap().1; // TODO: should cache this
         let mut current_imports = ImportMap::new();
 
         Self::cascade_imports(&mut imports, modules);
@@ -2632,11 +2645,11 @@ mod tests {
         inc(5);
         ";
         
-        let code_2_str = "
+        let code_str = "
         inc<Number>(5);
         ";
 
-        let (_, mut code) = ctx.nessa_parser(code_1_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(Span::new(code_1_str)).unwrap();
         ctx.compile_functions(&mut code).unwrap();
 
         assert_eq!(code, vec!(
@@ -2645,7 +2658,7 @@ mod tests {
             ))
         ));
         
-        let (_, mut code) = ctx.nessa_parser(code_2_str).unwrap();
+        let (_, mut code) = ctx.nessa_parser(Span::new(code_str)).unwrap();
 
         assert!(ctx.compile_functions(&mut code).is_ok());
     }

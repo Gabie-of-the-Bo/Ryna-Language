@@ -1,6 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
+use nom::combinator::cut;
 use nom::{
     IResult,
     combinator::{map, map_res, opt, eof, value},
@@ -338,7 +339,7 @@ impl NessaContext {
         return map(
             tuple((
                 tag("'"),
-                identifier_parser
+                cut(identifier_parser)
             )), 
             |(_, n)| Type::TemplateParamStr(n)
         )(input);
@@ -348,7 +349,7 @@ impl NessaContext {
         return map(
             tuple((
                 tag("&"),
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )), 
             |(_, t)| Type::Ref(Box::new(t))
         )(input);
@@ -358,7 +359,7 @@ impl NessaContext {
         return map(
             tuple((
                 tag("&&"),
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )), 
             |(_, t)| Type::MutRef(Box::new(t))
         )(input);
@@ -400,7 +401,7 @@ impl NessaContext {
                     |input| self.type_parser(input)
                 ),
                 multispace0,
-                tag(">")
+                cut(tag(">"))
             )),
             |(n, _, _, _, t, _, _)| Result::<_, String>::Ok(Type::Template(self.get_type_id(n)?, t))
         )(input);
@@ -413,7 +414,7 @@ impl NessaContext {
                 multispace0,
                 tag("=>"),
                 multispace0,
-                |input| self.type_parser_wrapper(input, false, or)
+                cut(|input| self.type_parser_wrapper(input, false, or))
             )),
             |(f, _, _, _, t)| Type::Function(Box::new(f), Box::new(t))
         )(input);
@@ -845,15 +846,15 @@ impl NessaContext {
                     tuple((
                         tag(":"),
                         multispace0,
-                        |input| self.type_parser(input),
+                        cut(|input| self.type_parser(input)),
                         multispace0
                     ))
                 ),
                 tag("="),
                 multispace0,
-                |input| self.nessa_expr_parser(input, op_cache),
+                cut(|input| self.nessa_expr_parser(input, op_cache)),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, n, _, t, _, _, e, _, _)| NessaExpr::VariableDefinition(n, t.unwrap_or(("".into(), "".into(), Type::InferenceMarker, "".into())).2, Box::new(e))
         )(input);
@@ -866,9 +867,9 @@ impl NessaContext {
                 multispace0,
                 tag("="),
                 multispace0,
-                |input| self.nessa_expr_parser(input, op_cache),
+                cut(|input| self.nessa_expr_parser(input, op_cache)),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(n, _, _, _, e, _, _)| NessaExpr::VariableAssignment(n, Box::new(e))
         )(input);
@@ -879,9 +880,9 @@ impl NessaContext {
             tuple((
                 tag("return"),
                 multispace0,
-                |input| self.nessa_expr_parser(input, op_cache),
+                cut(|input| self.nessa_expr_parser(input, op_cache)),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, e, _, _)| NessaExpr::Return(Box::new(e))
         )(input);
@@ -892,7 +893,7 @@ impl NessaContext {
             tuple((
                 tag("if"),
                 multispace1,
-                |input| self.nessa_expr_parser(input, op_cache)
+                cut(|input| self.nessa_expr_parser(input, op_cache))
             )),
             |(_, _, e)| e
         )(input);
@@ -903,7 +904,7 @@ impl NessaContext {
             tuple((
                 tag("while"),
                 multispace1,
-                |input| self.nessa_expr_parser(input, op_cache)
+                cut(|input| self.nessa_expr_parser(input, op_cache))
             )),
             |(_, _, e)| e
         )(input);
@@ -916,7 +917,7 @@ impl NessaContext {
                 multispace1,
                 tag("if"),
                 multispace1,
-                |input| self.nessa_expr_parser(input, op_cache)
+                cut(|input| self.nessa_expr_parser(input, op_cache))
             )),
             |(_, _, _, _, e)| e
         )(input);
@@ -927,7 +928,7 @@ impl NessaContext {
             tuple((
                 |input| self.if_header_parser(input, op_cache),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
                 separated_list0(
                     multispace0,
                     map(
@@ -935,7 +936,7 @@ impl NessaContext {
                             multispace0,
                             |input| self.else_if_header_parser(input, op_cache),
                             multispace0,
-                            |input| self.code_block_parser(input, op_cache)
+                            cut(|input| self.code_block_parser(input, op_cache))
                         )),
                         |(_, eih, _, eib)| (eih, eib)
                     )
@@ -946,7 +947,7 @@ impl NessaContext {
                             multispace0,
                             tag("else"),
                             multispace0,
-                            |input| self.code_block_parser(input, op_cache)
+                            cut(|input| self.code_block_parser(input, op_cache))
                         )),
                         |(_, _, _, e)| e   
                     )
@@ -961,11 +962,11 @@ impl NessaContext {
             tuple((
                 tag("for"),
                 multispace1,
-                identifier_parser,
+                cut(identifier_parser),
                 multispace1,
-                tag("in"),
+                cut(tag("in")),
                 multispace1,
-                |input| self.nessa_expr_parser(input, op_cache)
+                cut(|input| self.nessa_expr_parser(input, op_cache))
             )),
             |(_, _, n, _, _, _, e)| (n, e)
         )(input);
@@ -976,7 +977,7 @@ impl NessaContext {
             tuple((
                 |input| self.while_header_parser(input, op_cache),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |(c, _, b)| NessaExpr::While(Box::new(c), b)
         )(input);
@@ -987,7 +988,7 @@ impl NessaContext {
             tuple((
                 |input| self.for_header_parser(input, op_cache),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((n, c), _, b)| NessaExpr::For(n, Box::new(c), b)
         )(input);
@@ -1014,9 +1015,9 @@ impl NessaContext {
                     )
                 ),
                 multispace1,
-                identifier_parser,
+                cut(identifier_parser),
                 multispace0,
-                tag("("),
+                cut(tag("(")),
                 multispace0,
                 separated_list0(
                     tuple((multispace0, tag(","), multispace0)), 
@@ -1029,7 +1030,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1040,11 +1041,11 @@ impl NessaContext {
                     ))
                 ),
                 multispace0,
-                tag(")"),
+                cut(tag(")")),
                 multispace0,
-                tag("->"),
+                cut(tag("->")),
                 multispace0,
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )),
             |(_, t, _, n, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
         )(input);
@@ -1055,7 +1056,7 @@ impl NessaContext {
             tuple((
                 |input| self.function_header_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((n, t, mut a, mut r), _, mut b)| {
                 let u_t = t.unwrap_or_default();
@@ -1089,7 +1090,7 @@ impl NessaContext {
                     |s: Span<'a>| s.parse::<usize>().unwrap()
                 ),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PrefixOperatorDefinition(n, p)
         )(input);
@@ -1115,7 +1116,7 @@ impl NessaContext {
                     |s: Span<'a>| s.parse::<usize>().unwrap()
                 ),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PostfixOperatorDefinition(n, p)
         )(input);
@@ -1139,7 +1140,7 @@ impl NessaContext {
                     |s: Span<'a>| s.parse::<usize>().unwrap()
                 ),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, _, _, n, _, p, _, _)| NessaExpr::BinaryOperatorDefinition(n, p)
         )(input);
@@ -1169,7 +1170,7 @@ impl NessaContext {
                     |s: Span<'a>| s.parse::<usize>().unwrap()
                 ),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, _, _, _, _, f, _, _, _, t, _, p, _, _)| NessaExpr::NaryOperatorDefinition(f, t, p)
         )(input);
@@ -1248,7 +1249,7 @@ impl NessaContext {
                                                 multispace0,
                                                 tag(":"),
                                                 multispace0,
-                                                |input| self.type_parser(input),
+                                                cut(|input| self.type_parser(input)),
                                                 multispace0
                                             )),
                                             |(_, _, _, t, _)| t
@@ -1307,7 +1308,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1319,9 +1320,9 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
-                tag("->"),
+                cut(tag("->")),
                 multispace0,
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, id, _, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
@@ -1359,7 +1360,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1373,9 +1374,9 @@ impl NessaContext {
                 multispace0,
                 |input| self.postfix_operator_parser(input),
                 multispace0,
-                tag("->"),
+                cut(tag("->")),
                 multispace0,
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, (n, t), _, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
         )(input);
@@ -1413,7 +1414,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1438,7 +1439,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1450,9 +1451,9 @@ impl NessaContext {
                     tuple((multispace0, tag(")")))
                 ),
                 multispace0,
-                tag("->"),
+                cut(tag("->")),
                 multispace0,
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, a, _, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
@@ -1490,7 +1491,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1504,9 +1505,9 @@ impl NessaContext {
                 multispace0,
                 |input| self.nary_operator_parser(input),
                 multispace0,
-                tag("->"),
+                cut(tag("->")),
                 multispace0,
-                |input| self.type_parser(input)
+                cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, a, _, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
         )(input);
@@ -1517,7 +1518,7 @@ impl NessaContext {
             tuple((
                 |input| self.prefix_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((id, tm, n, mut t, mut r), _, mut b)| {
                 t.compile_templates(&tm);
@@ -1534,7 +1535,7 @@ impl NessaContext {
             tuple((
                 |input| self.postfix_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((id, tm, n, mut t, mut r), _, mut b)| {
                 t.compile_templates(&tm);
@@ -1551,7 +1552,7 @@ impl NessaContext {
             tuple((
                 |input| self.binary_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
                 a1.1.compile_templates(&tm);
@@ -1569,7 +1570,7 @@ impl NessaContext {
             tuple((
                 |input| self.nary_operation_header_definition_parser(input),
                 multispace0,
-                |input| self.code_block_parser(input, op_cache),
+                cut(|input| self.code_block_parser(input, op_cache)),
             )),
             |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
                 a1.1.compile_templates(&tm);
@@ -1608,7 +1609,7 @@ impl NessaContext {
                 multispace1,
                 |input| parse_ndl_pattern(input, true, true),
                 multispace0,
-                tag(";")
+                cut(tag(";"))
             )),
             |(_, _, _, _, p, _, _)| p
         )(input);
@@ -1656,7 +1657,7 @@ impl NessaContext {
                                             multispace0,
                                             tag(":"),
                                             multispace0,
-                                            |input| self.type_parser(input),
+                                            cut(|input| self.type_parser(input)),
                                             multispace0
                                         )),
                                         |(_, _, _, t, _)| t
@@ -1722,7 +1723,7 @@ impl NessaContext {
                                         multispace0,
                                         tag(":"),
                                         multispace0,
-                                        |input| self.type_parser(input),
+                                        cut(|input| self.type_parser(input)),
                                         multispace0
                                     )),
                                     |(_, _, _, t, _)| t
@@ -1733,14 +1734,14 @@ impl NessaContext {
                     ))
                 ),
                 multispace0,
-                tag(")"),
+                cut(tag(")")),
                 multispace0,
                 opt(
                     map(
                         tuple((
                             tag("->"),
                             multispace0,
-                            |input| self.type_parser(input),
+                            cut(|input| self.type_parser(input)),
                             multispace0,
                         )),
                         |(_, _, t, _)| t
@@ -1784,7 +1785,7 @@ impl NessaContext {
             |input| self.while_parser(input, op_cache),
             |input| self.for_parser(input, op_cache),
             |input| self.if_parser(input, op_cache),
-            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), tuple((multispace0, tag(";"))))(input)
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((multispace0, tag(";")))))(input)
         ))(input);
     }
 
@@ -1800,7 +1801,7 @@ impl NessaContext {
             |input| self.operator_definition_parser(input),
             |input| self.operation_definition_parser(input, op_cache),
             |input| self.class_definition_parser(input),
-            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), tuple((multispace0, tag(";"))))(input)
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((multispace0, tag(";")))))(input)
         ))(input);
     }
 

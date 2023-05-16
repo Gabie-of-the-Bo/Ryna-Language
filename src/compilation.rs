@@ -2042,7 +2042,10 @@ impl NessaContext{
         if let Ok((_, lines)) = code {
             return lines;
 
-        } else if let nom::Err::Error(error) = code.err().unwrap() {
+        } else if let nom::Err::Error(error) = code.as_ref().err().unwrap() {
+            Self::panic_error("Syntax error", error.input.location_line(), error.input.get_column() as u32);
+        
+        } else if let nom::Err::Failure(error) = code.as_ref().err().unwrap() {
             Self::panic_error("Syntax error", error.input.location_line(), error.input.get_column() as u32);
         }
 

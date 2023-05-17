@@ -1,5 +1,8 @@
 use std::collections::{ HashMap };
+use std::process;
 
+use colored::Colorize;
+use nom::error::VerboseErrorKind;
 use seq_macro::seq;
 
 use crate::config::ImportMap;
@@ -2032,22 +2035,47 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn panic_error(error_type: &str, line: u32, column: u32) {
-        panic!("{} at line {}:{}", error_type, line, column);
+    pub fn print_error_and_exit(error_type: &str, line: u32, column: u32, mut frag: &str, msg: &str) {
+        if let Some(pos) = frag.find('\n') {
+            frag = &frag[..pos];
+        }
+
+        if frag.len() > 20 {
+            frag = &frag[..20];
+        }
+
+        frag = frag.trim();
+
+        eprintln!(
+            "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
+            error_type.red().bold(), 
+            line.to_string().yellow(), column.to_string().yellow(), 
+            msg.italic(), frag,
+            "^".repeat(frag.len()).red()
+        );
+        
+        process::exit(1);
     }
 
     pub fn parse_nessa_module(&mut self, code: &String) -> Vec<NessaExpr> {
-        let code = self.nessa_parser(Span::new(code));
+        match self.nessa_parser(Span::new(code)) {
+            Ok((_, lines)) => return lines,
 
-        if let Ok((_, lines)) = code {
-            return lines;
+            Err(nom::Err::Error(error)) |
+            Err(nom::Err::Failure(error)) => {
+                let err = error.errors.last().unwrap();
 
-        } else if let nom::Err::Error(error) = code.as_ref().err().unwrap() {
-            Self::panic_error("Syntax error", error.input.location_line(), error.input.get_column() as u32);
-        
-        } else if let nom::Err::Failure(error) = code.as_ref().err().unwrap() {
-            Self::panic_error("Syntax error", error.input.location_line(), error.input.get_column() as u32);
-        }
+                let fragment = err.0;
+                let error_msg = match &err.1 {
+                    VerboseErrorKind::Context(ctx) => ctx,
+                    _ => "Unable to parse"
+                };
+    
+                Self::print_error_and_exit("Syntax error", err.0.location_line(), err.0.get_column() as u32, &fragment, error_msg);    
+            }
+
+            _ => unreachable!()
+        };
 
         unreachable!();
     }

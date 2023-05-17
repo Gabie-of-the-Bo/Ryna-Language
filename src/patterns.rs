@@ -1,7 +1,6 @@
 use std::collections::{ HashMap, HashSet };
 
 use nom::{
-    IResult,
     combinator::{map, opt, value},
     bytes::complete::{take_while, take_while1, tag},
     sequence::{tuple, delimited, separated_pair},
@@ -10,7 +9,7 @@ use nom::{
     multi::separated_list1
 };
 
-use crate::parser::Span;
+use crate::parser::{Span, verbose_error, PResult};
 
 /*
                                                   ╒══════════════════╕
@@ -47,7 +46,7 @@ impl Pattern{
         };
     }
 
-    pub fn matches<'a>(&self, text: Span<'a>) -> IResult<Span<'a>, ()> {
+    pub fn matches<'a>(&self, text: Span<'a>) -> PResult<'a, ()> {
         return match self {
             Pattern::Symbol('d') => value((), satisfy(|c| c.is_digit(10)))(text),
             Pattern::Symbol('l') => value((), satisfy(|c| c.is_lowercase()))(text),
@@ -70,7 +69,7 @@ impl Pattern{
                         input = i;
 
                     } else {
-                        return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                        return Err(verbose_error(text, "Unable to parse"))
                     }
                 }
                 
@@ -84,7 +83,7 @@ impl Pattern{
                     }
                 }
                 
-                Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                Err(verbose_error(text, "Unable to parse"))
             },
             
             Pattern::Repeat(p, from, to) => {
@@ -97,7 +96,7 @@ impl Pattern{
                             input = i;
     
                         } else {
-                            return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                            return Err(verbose_error(text, "Unable to parse"))
                         }
                     }
                 }
@@ -132,7 +131,7 @@ impl Pattern{
         };
     }
 
-    pub fn extract<'a>(&self, text: Span<'a>) -> IResult<Span<'a>, HashMap<String, Vec<&'a str>>> {
+    pub fn extract<'a>(&self, text: Span<'a>) -> PResult<'a, HashMap<String, Vec<&'a str>>> {
         fn merge<'a>(a: &mut HashMap<String, Vec<&'a str>>, b: HashMap<String, Vec<&'a str>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
@@ -163,7 +162,7 @@ impl Pattern{
                         merge(&mut res, o);
 
                     } else {
-                        return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                        return Err(verbose_error(text, "Unable to parse"))
                     }
                 }
                 
@@ -177,7 +176,7 @@ impl Pattern{
                     }
                 }
                 
-                Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                Err(verbose_error(text, "Unable to parse"))
             },
             
             Pattern::Repeat(p, from, to) => {
@@ -192,7 +191,7 @@ impl Pattern{
                             merge(&mut res, o);
     
                         } else {
-                            return Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::Alt)))
+                            return Err(verbose_error(text, "Unable to parse"))
                         }
                     }
                 }
@@ -236,7 +235,7 @@ impl Pattern{
     }
 }
 
-fn parse_and<'a>(text: Span<'a>, and: bool) -> IResult<Span<'a>, Pattern> {
+fn parse_and<'a>(text: Span<'a>, and: bool) -> PResult<'a, Pattern> {
     return if and {
         map(
             separated_list1(multispace1, |i| parse_ndl_pattern(i, false, false)), 
@@ -244,11 +243,11 @@ fn parse_and<'a>(text: Span<'a>, and: bool) -> IResult<Span<'a>, Pattern> {
         )(text)
         
     } else {
-        Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::SeparatedList)))
+        Err(verbose_error(text, "Unable to parse"))
     }
 }
 
-fn parse_or<'a>(text: Span<'a>, or: bool) -> IResult<Span<'a>, Pattern> {
+fn parse_or<'a>(text: Span<'a>, or: bool) -> PResult<'a, Pattern> {
     return if or {
         return map(
             separated_list1(tuple((multispace0, tag("|"), multispace0)), |i| parse_ndl_pattern(i, false, true)), 
@@ -256,11 +255,11 @@ fn parse_or<'a>(text: Span<'a>, or: bool) -> IResult<Span<'a>, Pattern> {
         )(text)
         
     } else {
-        Err(nom::Err::Error(nom::error::Error::new(text, nom::error::ErrorKind::SeparatedList)))
+        Err(verbose_error(text, "Unable to parse"))
     }
 }
 
-pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> IResult<Span<'a>, Pattern> {
+pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a, Pattern> {
     return alt((
         |i| parse_or(i, or),
         |i| parse_and(i, and),
@@ -301,12 +300,10 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::FromIterator;
     
-    use nom::IResult;
-
-    use crate::parser::Span;
+    use crate::parser::{Span, PResult};
     use crate::patterns::Pattern;
 
-    fn ok_result<'a, T>(res: IResult<Span<'a>, T>) -> bool {
+    fn ok_result<'a, T>(res: PResult<'a, T>) -> bool {
         return res.is_ok() && res.unwrap().0.is_empty();
     }
 

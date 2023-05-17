@@ -37,6 +37,42 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     });
 }
 
+#[derive(Debug, Clone)]
+pub struct Location {
+    pub line: usize,
+    pub column: usize,
+    pub span: String
+}
+
+impl Location {
+    pub fn new(line: usize, column: usize, span: String) -> Self {
+        return Location { line, column, span };
+    }
+
+    pub fn none() -> Self {
+        return Self::new(0, 0, "".into());
+    }
+}
+
+impl PartialEq for Location {
+    fn eq(&self, _: &Self) -> bool {
+        return true; // Always equal
+    }
+}
+
+// Parser combinator that allows to store the precise location of an element
+pub fn located<'a, O, P1: FnMut(Span<'a>) -> PResult<'a, O>>(mut parser: P1) -> impl FnMut(Span<'a>) -> PResult<'a, (Location, O)> {
+    return move |input| {
+        let (rest, res) = parser(input)?;
+
+        let line = input.location_line() as usize;
+        let column = input.get_column();
+        let span = &input[..(input.len() - rest.len())];
+
+        return Ok((rest, (Location::new(line, column, span.to_string()), res)));
+    };
+}
+
 /*
                                                   ╒══════════════════╕
     ============================================= │  IMPLEMENTATION  │ =============================================
@@ -46,43 +82,43 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 #[derive(Debug, PartialEq, Clone)]
 pub enum NessaExpr {
     // Compiled
-    FunctionName(usize),
-    Variable(usize, String, Type),
-    CompiledVariableDefinition(usize, String, Type, Box<NessaExpr>),
-    CompiledVariableAssignment(usize, String, Type, Box<NessaExpr>),
-    FunctionCall(usize, Vec<Type>, Vec<NessaExpr>),
-    CompiledFor(usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
+    FunctionName(Location, usize),
+    Variable(Location, usize, String, Type),
+    CompiledVariableDefinition(Location, usize, String, Type, Box<NessaExpr>),
+    CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
+    FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
+    CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
 
-    CompiledLambda(usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Uncompiled
-    Literal(Object),
-    Tuple(Vec<NessaExpr>),
-    Lambda(Vec<(String, Type)>, Type, Vec<NessaExpr>),
-    NameReference(String),
+    Literal(Location, Object),
+    Tuple(Location, Vec<NessaExpr>),
+    Lambda(Location, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    NameReference(Location, String),
 
-    UnaryOperation(usize, Vec<Type>, Box<NessaExpr>),
-    BinaryOperation(usize, Vec<Type>, Box<NessaExpr>, Box<NessaExpr>),
-    NaryOperation(usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
+    UnaryOperation(Location, usize, Vec<Type>, Box<NessaExpr>),
+    BinaryOperation(Location, usize, Vec<Type>, Box<NessaExpr>, Box<NessaExpr>),
+    NaryOperation(Location, usize, Vec<Type>, Box<NessaExpr>, Vec<NessaExpr>),
 
-    VariableDefinition(String, Type, Box<NessaExpr>),
-    VariableAssignment(String, Box<NessaExpr>),
-    FunctionDefinition(usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
-    PrefixOperatorDefinition(String, usize),
-    PostfixOperatorDefinition(String, usize),
-    BinaryOperatorDefinition(String, usize),
-    NaryOperatorDefinition(String, String, usize),
-    ClassDefinition(String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
+    VariableDefinition(Location, String, Type, Box<NessaExpr>),
+    VariableAssignment(Location, String, Box<NessaExpr>),
+    FunctionDefinition(Location, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    PrefixOperatorDefinition(Location, String, usize),
+    PostfixOperatorDefinition(Location, String, usize),
+    BinaryOperatorDefinition(Location, String, usize),
+    NaryOperatorDefinition(Location, String, String, usize),
+    ClassDefinition(Location, String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
 
-    PrefixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    PostfixOperationDefinition(usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    BinaryOperationDefinition(usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
-    NaryOperationDefinition(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    PostfixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    BinaryOperationDefinition(Location, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
+    NaryOperationDefinition(Location, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
-    If(Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
-    While(Box<NessaExpr>, Vec<NessaExpr>),
-    For(String, Box<NessaExpr>, Vec<NessaExpr>),
-    Return(Box<NessaExpr>)
+    If(Location, Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
+    While(Location, Box<NessaExpr>, Vec<NessaExpr>),
+    For(Location, String, Box<NessaExpr>, Vec<NessaExpr>),
+    Return(Location, Box<NessaExpr>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -239,32 +275,32 @@ pub fn nessa_module_imports_parser<'a>(mut input: Span<'a>) -> PResult<'a, Impor
 impl NessaExpr {
     pub fn compile_types(&mut self, templates: &Vec<String>) {
         match self {
-            NessaExpr::VariableDefinition(_, t, e) => {
+            NessaExpr::VariableDefinition(_, _, t, e) => {
                 t.compile_templates(templates);
                 e.compile_types(templates);
             }
 
-            NessaExpr::Tuple(e) => {
+            NessaExpr::Tuple(_, e) => {
                 e.iter_mut().for_each(|i| i.compile_types(templates));
             }
 
-            NessaExpr::UnaryOperation(_, t, e) => {
+            NessaExpr::UnaryOperation(_, _, t, e) => {
                 t.iter_mut().for_each(|i| i.compile_templates(templates));
                 e.compile_types(templates);
             },
 
-            NessaExpr::BinaryOperation(_, t, a, b) => {
+            NessaExpr::BinaryOperation(_, _, t, a, b) => {
                 t.iter_mut().for_each(|i| i.compile_templates(templates));
                 a.compile_types(templates);
                 b.compile_types(templates);
             },
-            NessaExpr::NaryOperation(_, t, a, b) => {
+            NessaExpr::NaryOperation(_, _, t, a, b) => {
                 t.iter_mut().for_each(|i| i.compile_templates(templates));
                 a.compile_types(templates);
                 b.iter_mut().for_each(|i| i.compile_types(templates));
             },
 
-            NessaExpr::If(h, ib, ei, eb) => {
+            NessaExpr::If(_, h, ib, ei, eb) => {
                 h.compile_types(templates);
                 ib.iter_mut().for_each(|i| i.compile_types(templates));
 
@@ -278,13 +314,13 @@ impl NessaExpr {
                 }
             }
             
-            NessaExpr::While(c, b) |
-            NessaExpr::For(_, c, b) => {
+            NessaExpr::While(_, c, b) |
+            NessaExpr::For(_, _, c, b) => {
                 c.compile_types(templates);
                 b.iter_mut().for_each(|i| i.compile_types(templates));
             },
 
-            NessaExpr::Return(e) => e.compile_types(templates),
+            NessaExpr::Return(_, e) => e.compile_types(templates),
 
             _ => {}
         }
@@ -568,64 +604,30 @@ impl NessaContext {
     
     fn literal_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            alt((
-                |input| self.custom_literal_parser(input),
-                map(|input| self.bool_parser(input), |b| Object::new(b)),
-                map(|input| self.number_parser(input), |n| Object::new(n)),
-                map(string_parser, |s| Object::new(s)),
-            )),
-            |o| NessaExpr::Literal(o)
+            located(
+                alt((
+                    |input| self.custom_literal_parser(input),
+                    map(|input| self.bool_parser(input), |b| Object::new(b)),
+                    map(|input| self.number_parser(input), |n| Object::new(n)),
+                    map(string_parser, |s| Object::new(s)),
+                ))
+            ),
+            |(l, o)| NessaExpr::Literal(l, o)
         )(input);
     }
     
     fn variable_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            identifier_parser,
-            NessaExpr::NameReference
+            located(identifier_parser),
+            |(l, v)| NessaExpr::NameReference(l, v)
         )(input);
     }
     
     fn prefix_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag(rep),
-                multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("<"),
-                            multispace0,
-                            separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
-                                |input| self.type_parser(input)
-                            ),
-                            multispace0,
-                            tag(">"),
-                            multispace0,
-                        )),
-                        |(_, _, t, _, _, _)| t
-                    )
-                ),
-                |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
-            )),
-            |(_, _, t, e)| NessaExpr::UnaryOperation(id, t.unwrap_or_default(), Box::new(e))
-        )(input);
-    }
-    
-    fn postfix_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
-        if let Some(r) = cache_post.get(&input.len()) {
-            return match r {
-                Ok(a) => Ok(a.clone()),
-                Err(_) => Err(verbose_error(input, "Unable to parse"))
-            };
-       
-        } else{
-            let mut post_cpy = post.clone();
-            post_cpy.insert(id);
-    
-            let res = map(
+            located(
                 tuple((
-                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache),
+                    tag(rep),
                     multispace0,
                     opt(
                         map(
@@ -643,9 +645,49 @@ impl NessaContext {
                             |(_, _, t, _, _, _)| t
                         )
                     ),
-                    tag(rep)
-                )),
-                |(e, _, t, _)| NessaExpr::UnaryOperation(id, t.unwrap_or_default(), Box::new(e))
+                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
+                ))
+            ),
+            |(l, (_, _, t, e))| NessaExpr::UnaryOperation(l, id, t.unwrap_or_default(), Box::new(e))
+        )(input);
+    }
+    
+    fn postfix_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
+        if let Some(r) = cache_post.get(&input.len()) {
+            return match r {
+                Ok(a) => Ok(a.clone()),
+                Err(_) => Err(verbose_error(input, "Unable to parse"))
+            };
+       
+        } else{
+            let mut post_cpy = post.clone();
+            post_cpy.insert(id);
+    
+            let res = map(
+                located(
+                    tuple((
+                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache),
+                        multispace0,
+                        opt(
+                            map(
+                                tuple((
+                                    tag("<"),
+                                    multispace0,
+                                    separated_list1(
+                                        tuple((multispace0, tag(","), multispace0)), 
+                                        |input| self.type_parser(input)
+                                    ),
+                                    multispace0,
+                                    tag(">"),
+                                    multispace0,
+                                )),
+                                |(_, _, t, _, _, _)| t
+                            )
+                        ),
+                        tag(rep)
+                    ))
+                ),
+                |(l, (e, _, t, _))| NessaExpr::UnaryOperation(l, id, t.unwrap_or_default(), Box::new(e))
             )(input);
 
             cache_post.insert(input.len(), match &res {
@@ -671,29 +713,31 @@ impl NessaContext {
             let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_cpy, nary, post, cache_bin, cache_nary, cache_post, op_cache)?;
     
             let res = map(
-                tuple((
-                    multispace0,
-                    opt(
-                        map(
-                            tuple((
-                                tag("<"),
-                                multispace0,
-                                separated_list1(
-                                    tuple((multispace0, tag(","), multispace0)), 
-                                    |input| self.type_parser(input)
-                                ),
-                                multispace0,
-                                tag(">"),
-                                multispace0,
-                            )),
-                            |(_, _, t, _, _, _)| t
-                        )
-                    ),
-                    tag(rep),
-                    multispace0,
-                    |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
-                )),
-                |(_, t, _, _, b)| NessaExpr::BinaryOperation(id, t.unwrap_or_default(), Box::new(a.clone()), Box::new(b))
+                located(
+                    tuple((
+                        multispace0,
+                        opt(
+                            map(
+                                tuple((
+                                    tag("<"),
+                                    multispace0,
+                                    separated_list1(
+                                        tuple((multispace0, tag(","), multispace0)), 
+                                        |input| self.type_parser(input)
+                                    ),
+                                    multispace0,
+                                    tag(">"),
+                                    multispace0,
+                                )),
+                                |(_, _, t, _, _, _)| t
+                            )
+                        ),
+                        tag(rep),
+                        multispace0,
+                        |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
+                    ))
+                ),
+                |(l, (_, t, _, _, b))| NessaExpr::BinaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), Box::new(b))
             )(input);
 
             cache_bin.insert(input.len(), match &res {
@@ -723,34 +767,36 @@ impl NessaContext {
             let (input, a) = self.nessa_expr_parser_wrapper(input, &bi_no_cmp, &nary_cpy, post, cache_bin, cache_nary, cache_post, op_cache)?;
     
             let res = map(
-                tuple((
-                    multispace0,
-                    opt(
-                        map(
-                            tuple((
-                                tag("<"),
-                                multispace0,
-                                separated_list1(
-                                    tuple((multispace0, tag(","), multispace0)), 
-                                    |input| self.type_parser(input)
-                                ),
-                                multispace0,
-                                tag(">"),
-                                multispace0,
-                            )),
-                            |(_, _, t, _, _, _)| t
-                        )
-                    ),
-                    tag(open),
-                    multispace0,
-                    separated_list0(
-                        tuple((multispace0, tag(","), multispace0)),
-                        |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
-                    ),
-                    multispace0,
-                    tag(close)
-                )),
-                |(_, t, _, _, b, _, _)| NessaExpr::NaryOperation(id, t.unwrap_or_default(), Box::new(a.clone()), b)
+                located(
+                    tuple((
+                        multispace0,
+                        opt(
+                            map(
+                                tuple((
+                                    tag("<"),
+                                    multispace0,
+                                    separated_list1(
+                                        tuple((multispace0, tag(","), multispace0)), 
+                                        |input| self.type_parser(input)
+                                    ),
+                                    multispace0,
+                                    tag(">"),
+                                    multispace0,
+                                )),
+                                |(_, _, t, _, _, _)| t
+                            )
+                        ),
+                        tag(open),
+                        multispace0,
+                        separated_list0(
+                            tuple((multispace0, tag(","), multispace0)),
+                            |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
+                        ),
+                        multispace0,
+                        tag(close)
+                    ))
+                ),
+                |(l, (_, t, _, _, b, _, _))| NessaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
             )(input);
 
             cache_nary.insert(input.len(), match &res {
@@ -847,54 +893,60 @@ impl NessaContext {
     
     fn variable_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("let"),
-                multispace0,
-                identifier_parser,
-                multispace0,
-                opt(
-                    tuple((
-                        tag(":"),
-                        multispace0,
-                        context("Invalid type on variable definition", cut(|input| self.type_parser(input))),
-                        multispace0
-                    ))
-                ),
-                tag("="),
-                multispace0,
-                context("Invalid right handside on variable definition", cut(|input| self.nessa_expr_parser(input, op_cache))),
-                multispace0,
-                context("Expected ';' at the end of variable definition", cut(tag(";")))
-            )),
-            |(_, _, n, _, t, _, _, e, _, _)| NessaExpr::VariableDefinition(n, t.unwrap_or(("".into(), "".into(), Type::InferenceMarker, "".into())).2, Box::new(e))
+            located(
+                tuple((
+                    tag("let"),
+                    multispace0,
+                    identifier_parser,
+                    multispace0,
+                    opt(
+                        tuple((
+                            tag(":"),
+                            multispace0,
+                            context("Invalid type on variable definition", cut(|input| self.type_parser(input))),
+                            multispace0
+                        ))
+                    ),
+                    tag("="),
+                    multispace0,
+                    context("Invalid right handside on variable definition", cut(|input| self.nessa_expr_parser(input, op_cache))),
+                    multispace0,
+                    context("Expected ';' at the end of variable definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, n, _, t, _, _, e, _, _))| NessaExpr::VariableDefinition(l, n, t.unwrap_or(("".into(), "".into(), Type::InferenceMarker, "".into())).2, Box::new(e))
         )(input);
     }
     
     fn variable_assignment_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                identifier_parser,
-                multispace0,
-                tag("="),
-                multispace0,
-                context("Invalid right handside on variable assignment", cut(|input| self.nessa_expr_parser(input, op_cache))),
-                multispace0,
-                context("Expected ';' at the end of variable assignment", cut(tag(";")))
-            )),
-            |(n, _, _, _, e, _, _)| NessaExpr::VariableAssignment(n, Box::new(e))
+            located(
+                tuple((
+                    identifier_parser,
+                    multispace0,
+                    tag("="),
+                    multispace0,
+                    context("Invalid right handside on variable assignment", cut(|input| self.nessa_expr_parser(input, op_cache))),
+                    multispace0,
+                    context("Expected ';' at the end of variable assignment", cut(tag(";")))
+                ))
+            ),
+            |(l, (n, _, _, _, e, _, _))| NessaExpr::VariableAssignment(l, n, Box::new(e))
         )(input);
     }
     
     fn return_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("return"),
-                multispace0,
-                cut(|input| self.nessa_expr_parser(input, op_cache)),
-                multispace0,
-                context("Expected ';' at the end of return statement", cut(tag(";")))
-            )),
-            |(_, _, e, _, _)| NessaExpr::Return(Box::new(e))
+            located(
+                tuple((
+                    tag("return"),
+                    multispace0,
+                    cut(|input| self.nessa_expr_parser(input, op_cache)),
+                    multispace0,
+                    context("Expected ';' at the end of return statement", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, e, _, _))| NessaExpr::Return(l, Box::new(e))
         )(input);
     }
     
@@ -935,35 +987,37 @@ impl NessaContext {
     
     fn if_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.if_header_parser(input, op_cache),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-                separated_list0(
+            located(
+                tuple((
+                    |input| self.if_header_parser(input, op_cache),
                     multispace0,
-                    map(
-                        tuple((
-                            multispace0,
-                            |input| self.else_if_header_parser(input, op_cache),
-                            multispace0,
-                            cut(|input| self.code_block_parser(input, op_cache))
-                        )),
-                        |(_, eih, _, eib)| (eih, eib)
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                    separated_list0(
+                        multispace0,
+                        map(
+                            tuple((
+                                multispace0,
+                                |input| self.else_if_header_parser(input, op_cache),
+                                multispace0,
+                                cut(|input| self.code_block_parser(input, op_cache))
+                            )),
+                            |(_, eih, _, eib)| (eih, eib)
+                        )
+                    ),
+                    opt(
+                        map(
+                            tuple((
+                                multispace0,
+                                tag("else"),
+                                multispace0,
+                                cut(|input| self.code_block_parser(input, op_cache))
+                            )),
+                            |(_, _, _, e)| e   
+                        )
                     )
-                ),
-                opt(
-                    map(
-                        tuple((
-                            multispace0,
-                            tag("else"),
-                            multispace0,
-                            cut(|input| self.code_block_parser(input, op_cache))
-                        )),
-                        |(_, _, _, e)| e   
-                    )
-                )
-            )),
-            |(ih, _, ib, ei, e)| NessaExpr::If(Box::new(ih), ib, ei, e)
+                ))
+            ),
+            |(l, (ih, _, ib, ei, e))| NessaExpr::If(l, Box::new(ih), ib, ei, e)
         )(input);
     }
     
@@ -984,23 +1038,27 @@ impl NessaContext {
     
     fn while_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.while_header_parser(input, op_cache),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |(c, _, b)| NessaExpr::While(Box::new(c), b)
+            located(
+                tuple((
+                    |input| self.while_header_parser(input, op_cache),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, (c, _, b))| NessaExpr::While(l, Box::new(c), b)
         )(input);
     }
     
     fn for_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.for_header_parser(input, op_cache),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((n, c), _, b)| NessaExpr::For(n, Box::new(c), b)
+            located(
+                tuple((
+                    |input| self.for_header_parser(input, op_cache),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((n, c), _, b))| NessaExpr::For(l, n, Box::new(c), b)
         )(input);
     }
 
@@ -1063,138 +1121,148 @@ impl NessaContext {
 
     fn function_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.function_header_parser(input),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((n, t, mut a, mut r), _, mut b)| {
+            located(
+                tuple((
+                    |input| self.function_header_parser(input),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((n, t, mut a, mut r), _, mut b))| {
                 let u_t = t.unwrap_or_default();
 
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
-                NessaExpr::FunctionDefinition(self.get_function_id(n), u_t, a, r, b)
+                NessaExpr::FunctionDefinition(l, self.get_function_id(n), u_t, a, r, b)
             }
         )(input);
     }
 
     fn prefix_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("unary"),
-                multispace1,
-                tag("prefix"),
-                multispace1,
-                context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
-                multispace1,
-                context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
-                multispace0,
-                map(
-                    context(
-                        "Expected precedence after operator representation in operator definition", 
-                        cut(delimited(
-                            tuple((tag("("), multispace0)),
-                            take_while1(|c: char| c.is_digit(10)),
-                            tuple((multispace0, tag(")")))
-                        ))
+            located(
+                tuple((
+                    tag("unary"),
+                    multispace1,
+                    tag("prefix"),
+                    multispace1,
+                    context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
+                    multispace1,
+                    context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
+                    multispace0,
+                    map(
+                        context(
+                            "Expected precedence after operator representation in operator definition", 
+                            cut(delimited(
+                                tuple((tag("("), multispace0)),
+                                take_while1(|c: char| c.is_digit(10)),
+                                tuple((multispace0, tag(")")))
+                            ))
+                        ),
+                        |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    |s: Span<'a>| s.parse::<usize>().unwrap()
-                ),
-                multispace0,
-                context("Expected ';' at the end of operator definition", cut(tag(";")))
-            )),
-            |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PrefixOperatorDefinition(n, p)
+                    multispace0,
+                    context("Expected ';' at the end of operator definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, _, _, _, _, n, _, p, _, _))| NessaExpr::PrefixOperatorDefinition(l, n, p)
         )(input);
     }
 
     fn postfix_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("unary"),
-                multispace1,
-                tag("postfix"),
-                multispace1,
-                context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
-                multispace1,
-                context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
-                multispace0,
-                map(
-                    context(
-                        "Expected precedence after operator representation in operator definition",
-                        cut(delimited(
-                            tuple((tag("("), multispace0)),
-                            take_while1(|c: char| c.is_digit(10)),
-                            tuple((multispace0, tag(")")))
-                        ))
+            located(
+                tuple((
+                    tag("unary"),
+                    multispace1,
+                    tag("postfix"),
+                    multispace1,
+                    context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
+                    multispace1,
+                    context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
+                    multispace0,
+                    map(
+                        context(
+                            "Expected precedence after operator representation in operator definition",
+                            cut(delimited(
+                                tuple((tag("("), multispace0)),
+                                take_while1(|c: char| c.is_digit(10)),
+                                tuple((multispace0, tag(")")))
+                            ))
+                        ),
+                        |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    |s: Span<'a>| s.parse::<usize>().unwrap()
-                ),
-                multispace0,
-                context("Expected ';' at the end of operator definition", cut(tag(";")))
-            )),
-            |(_, _, _, _, _, _, n, _, p, _, _)| NessaExpr::PostfixOperatorDefinition(n, p)
+                    multispace0,
+                    context("Expected ';' at the end of operator definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, _, _, _, _, n, _, p, _, _))| NessaExpr::PostfixOperatorDefinition(l, n, p)
         )(input);
     }
 
     fn binary_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("binary"),
-                multispace1,
-                context("Expected 'op' after operator type in binary operator definition", cut(tag("op"))),
-                multispace1,
-                context("Expected operator representation after 'op' in binary operator definition", cut(string_parser)),
-                multispace0,
-                map(
-                    context(
-                        "Expected precedence after operator representation in operator definition",
-                        cut(delimited(
-                            tuple((tag("("), multispace0)),
-                            take_while1(|c: char| c.is_digit(10)),
-                            tuple((multispace0, tag(")")))
-                        ))
+            located(
+                tuple((
+                    tag("binary"),
+                    multispace1,
+                    context("Expected 'op' after operator type in binary operator definition", cut(tag("op"))),
+                    multispace1,
+                    context("Expected operator representation after 'op' in binary operator definition", cut(string_parser)),
+                    multispace0,
+                    map(
+                        context(
+                            "Expected precedence after operator representation in operator definition",
+                            cut(delimited(
+                                tuple((tag("("), multispace0)),
+                                take_while1(|c: char| c.is_digit(10)),
+                                tuple((multispace0, tag(")")))
+                            ))
+                        ),
+                        |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    |s: Span<'a>| s.parse::<usize>().unwrap()
-                ),
-                multispace0,
-                context("Expected ';' at the end of operator definition", cut(tag(";")))
-            )),
-            |(_, _, _, _, n, _, p, _, _)| NessaExpr::BinaryOperatorDefinition(n, p)
+                    multispace0,
+                    context("Expected ';' at the end of operator definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, _, _, n, _, p, _, _))| NessaExpr::BinaryOperatorDefinition(l, n, p)
         )(input);
     }
 
     fn nary_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("nary"),
-                multispace1,
-                context("Expected 'op' after operator type in n-ary operator definition", cut(tag("op"))),
-                multispace1,
-                context("Expected 'from' after 'op' in n-ary operator definition", cut(tag("from"))),
-                multispace1,
-                context("Expected operator opening after 'from' in n-ary operator definition", cut(string_parser)),
-                multispace1,
-                context("Expected 'to' after operator opening in n-ary operator definition", cut(tag("to"))),
-                multispace1,
-                context("Expected operator closing after 'to' in n-ary operator definition", cut(string_parser)),
-                multispace0,
-                map(
-                    context(
-                        "Expected precedence after operator representation in operator definition",
-                        cut(delimited(
-                            tuple((tag("("), multispace0)),
-                            take_while1(|c: char| c.is_digit(10)),
-                            tuple((multispace0, tag(")")))
-                        ))
+            located(
+                tuple((
+                    tag("nary"),
+                    multispace1,
+                    context("Expected 'op' after operator type in n-ary operator definition", cut(tag("op"))),
+                    multispace1,
+                    context("Expected 'from' after 'op' in n-ary operator definition", cut(tag("from"))),
+                    multispace1,
+                    context("Expected operator opening after 'from' in n-ary operator definition", cut(string_parser)),
+                    multispace1,
+                    context("Expected 'to' after operator opening in n-ary operator definition", cut(tag("to"))),
+                    multispace1,
+                    context("Expected operator closing after 'to' in n-ary operator definition", cut(string_parser)),
+                    multispace0,
+                    map(
+                        context(
+                            "Expected precedence after operator representation in operator definition",
+                            cut(delimited(
+                                tuple((tag("("), multispace0)),
+                                take_while1(|c: char| c.is_digit(10)),
+                                tuple((multispace0, tag(")")))
+                            ))
+                        ),
+                        |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    |s: Span<'a>| s.parse::<usize>().unwrap()
-                ),
-                multispace0,
-                context("Expected ';' at the end of operator definition", cut(tag(";")))
-            )),
-            |(_, _, _, _, _, _, f, _, _, _, t, _, p, _, _)| NessaExpr::NaryOperatorDefinition(f, t, p)
+                    multispace0,
+                    context("Expected ';' at the end of operator definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, _, _, _, _, f, _, _, _, t, _, p, _, _))| NessaExpr::NaryOperatorDefinition(l, f, t, p)
         )(input);
     }
 
@@ -1537,70 +1605,78 @@ impl NessaContext {
 
     fn prefix_operation_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.prefix_operation_header_definition_parser(input),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((id, tm, n, mut t, mut r), _, mut b)| {
+            located(
+                tuple((
+                    |input| self.prefix_operation_header_definition_parser(input),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PrefixOperationDefinition(id, tm, n, t, r, b)
+                NessaExpr::PrefixOperationDefinition(l, id, tm, n, t, r, b)
             }
         )(input);
     }
 
     fn postfix_operation_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.postfix_operation_header_definition_parser(input),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((id, tm, n, mut t, mut r), _, mut b)| {
+            located(
+                tuple((
+                    |input| self.postfix_operation_header_definition_parser(input),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PostfixOperationDefinition(id, tm, n, t, r, b)
+                NessaExpr::PostfixOperationDefinition(l, id, tm, n, t, r, b)
             }
         )(input);
     }
 
     fn binary_operation_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.binary_operation_header_definition_parser(input),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
+            located(
+                tuple((
+                    |input| self.binary_operation_header_definition_parser(input),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.1.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::BinaryOperationDefinition(id, tm, a1, a2, r, b)
+                NessaExpr::BinaryOperationDefinition(l, id, tm, a1, a2, r, b)
             }
         )(input);
     }
 
     fn nary_operation_definition_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                |input| self.nary_operation_header_definition_parser(input),
-                multispace0,
-                cut(|input| self.code_block_parser(input, op_cache)),
-            )),
-            |((id, tm, mut a1, mut a2, mut r), _, mut b)| {
+            located(
+                tuple((
+                    |input| self.nary_operation_header_definition_parser(input),
+                    multispace0,
+                    cut(|input| self.code_block_parser(input, op_cache)),
+                ))
+            ),
+            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.iter_mut().for_each(|(_, i)| i.compile_templates(&tm));
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::NaryOperationDefinition(id, tm, a1, a2, r, b)
+                NessaExpr::NaryOperationDefinition(l, id, tm, a1, a2, r, b)
             }
         )(input);
     }
@@ -1639,37 +1715,108 @@ impl NessaContext {
 
     fn class_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            tuple((
-                tag("class"),
-                multispace1,
-                context("Invalid class identifier", cut(identifier_parser)),
-                multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("<"),
-                            multispace0,
-                            separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
-                                identifier_parser
-                            ),
-                            multispace0,
-                            tag(">"),
-                            multispace0,
-                        )),
-                        |(_, _, t, _, _, _)| t
-                    )
-                ),
-                tag("{"),
-                multispace0,
-                separated_list0(
+            located(
+                tuple((
+                    tag("class"),
+                    multispace1,
+                    context("Invalid class identifier", cut(identifier_parser)),
                     multispace0,
-                    |input| self.inline_class_syntax_parser(input)
-                ),
-                multispace0,
-                separated_list0(
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                multispace0,
+                                separated_list1(
+                                    tuple((multispace0, tag(","), multispace0)), 
+                                    identifier_parser
+                                ),
+                                multispace0,
+                                tag(">"),
+                                multispace0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    tag("{"),
                     multispace0,
-                    map(
+                    separated_list0(
+                        multispace0,
+                        |input| self.inline_class_syntax_parser(input)
+                    ),
+                    multispace0,
+                    separated_list0(
+                        multispace0,
+                        map(
+                            tuple((
+                                identifier_parser,
+                                map(
+                                    opt(
+                                        map(
+                                            tuple((
+                                                multispace0,
+                                                tag(":"),
+                                                multispace0,
+                                                cut(|input| self.type_parser(input)),
+                                                multispace0
+                                            )),
+                                            |(_, _, _, t, _)| t
+                                        )
+                                    ),
+                                    |t| t.unwrap_or(Type::Wildcard)
+                                ),
+                                multispace0,
+                                context("Expected ';' at the end of class attribute definition", cut(tag(";")))
+                            )),
+                            |(a, b, _, _)| (a, b)
+                        )
+                    ),
+                    multispace0,
+                    tag("}")
+                ))
+            ),
+            |(l, (_, _, n, _, t, _, _, p, _, mut f, _, _))| {
+                let u_t = t.unwrap_or_default();
+
+                f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
+
+                NessaExpr::ClassDefinition(l, n, u_t, f, p)
+            }
+        )(input);
+    }
+
+    fn tuple_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(
+                tuple((
+                    tag("("),
+                    multispace0,
+                    separated_list0(
+                        tuple((multispace0, tag(","), multispace0)),
+                        |input| self.nessa_expr_parser(input, &RefCell::default())
+                    ),
+                    multispace0,
+                    tag(")")
+                ))
+            ),
+            |(l, (_, _, mut e, _, _))| {
+                if e.len() == 1 {
+                    return e.pop().unwrap();
+
+                } else {
+                    return NessaExpr::Tuple(l, e);
+                }
+            }
+        )(input);
+    }
+
+    fn lambda_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(
+                tuple((
+                    tag("("),
+                    multispace0,
+                    separated_list0(
+                        tuple((multispace0, tag(","), multispace0)), 
                         tuple((
                             identifier_parser,
                             map(
@@ -1686,98 +1833,33 @@ impl NessaContext {
                                     )
                                 ),
                                 |t| t.unwrap_or(Type::Wildcard)
-                            ),
-                            multispace0,
-                            context("Expected ';' at the end of class attribute definition", cut(tag(";")))
-                        )),
-                        |(a, b, _, _)| (a, b)
-                    )
-                ),
-                multispace0,
-                tag("}")
-            )),
-            |(_, _, n, _, t, _, _, p, _, mut f, _, _)| {
-                let u_t = t.unwrap_or_default();
-
-                f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
-
-                NessaExpr::ClassDefinition(n, u_t, f, p)
-            }
-        )(input);
-    }
-
-    fn tuple_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
-        return map(
-            tuple((
-                tag("("),
-                multispace0,
-                separated_list0(
-                    tuple((multispace0, tag(","), multispace0)),
-                    |input| self.nessa_expr_parser(input, &RefCell::default())
-                ),
-                multispace0,
-                tag(")")
-            )),
-            |(_, _, mut e, _, _)| {
-                if e.len() == 1 {
-                    return e.pop().unwrap();
-
-                } else {
-                    return NessaExpr::Tuple(e);
-                }
-            }
-        )(input);
-    }
-
-    fn lambda_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
-        return map(
-            tuple((
-                tag("("),
-                multispace0,
-                separated_list0(
-                    tuple((multispace0, tag(","), multispace0)), 
-                    tuple((
-                        identifier_parser,
+                            )
+                        ))
+                    ),
+                    multispace0,
+                    cut(tag(")")),
+                    multispace0,
+                    opt(
                         map(
-                            opt(
-                                map(
-                                    tuple((
-                                        multispace0,
-                                        tag(":"),
-                                        multispace0,
-                                        cut(|input| self.type_parser(input)),
-                                        multispace0
-                                    )),
-                                    |(_, _, _, t, _)| t
-                                )
-                            ),
-                            |t| t.unwrap_or(Type::Wildcard)
+                            tuple((
+                                tag("->"),
+                                multispace0,
+                                cut(|input| self.type_parser(input)),
+                                multispace0,
+                            )),
+                            |(_, _, t, _)| t
+                        ),
+                    ),
+                    alt((
+                        |input| self.code_block_parser(input, &RefCell::default()),
+                        map(
+                            located(|input| self.nessa_expr_parser(input, &RefCell::default())),
+                            |(l, e)| vec!(NessaExpr::Return(l, Box::new(e))) // Implicit return
                         )
                     ))
-                ),
-                multispace0,
-                cut(tag(")")),
-                multispace0,
-                opt(
-                    map(
-                        tuple((
-                            tag("->"),
-                            multispace0,
-                            cut(|input| self.type_parser(input)),
-                            multispace0,
-                        )),
-                        |(_, _, t, _)| t
-                    ),
-                ),
-                alt((
-                    |input| self.code_block_parser(input, &RefCell::default()),
-                    map(
-                        |input| self.nessa_expr_parser(input, &RefCell::default()),
-                        |e| vec!(NessaExpr::Return(Box::new(e))) // Implicit return
-                    )
-                ))
-            )),
-            |(_, _, a, _, _, _, r, b)| NessaExpr::Lambda(a, r.unwrap_or(Type::Wildcard), b)
+                ))   
+            ),
+            |(l, (_, _, a, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::Wildcard), b)
         )(input);
     }
 
@@ -2004,10 +2086,10 @@ mod tests {
         let (_, string) = ctx.literal_parser(Span::new(string_str)).unwrap();
         let (_, escaped_string) = ctx.literal_parser(Span::new(escaped_string_str)).unwrap();
 
-        assert_eq!(number, NessaExpr::Literal(Object::new(Number::from(123))));
-        assert_eq!(bool_v, NessaExpr::Literal(Object::new(true)));
-        assert_eq!(string, NessaExpr::Literal(Object::new("test".to_string())));
-        assert_eq!(escaped_string, NessaExpr::Literal(Object::new("test\ntest2\ttest3\"\\".to_string())));
+        assert_eq!(number, NessaExpr::Literal(Location::none(), Object::new(Number::from(123))));
+        assert_eq!(bool_v, NessaExpr::Literal(Location::none(), Object::new(true)));
+        assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
+        assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));
 
         ctx.define_type("Dice".into(), vec!(), vec!(
             ("rolls".into(), Type::Basic(0)),
@@ -2035,7 +2117,7 @@ mod tests {
 
         let id = ctx.type_templates.iter().filter(|i| i.name == "Dice").next().unwrap().id;
 
-        assert_eq!(dice, NessaExpr::Literal(Object::new(TypeInstance {
+        assert_eq!(dice, NessaExpr::Literal(Location::none(), Object::new(TypeInstance {
             id: id,
             params: vec!(),
             attributes: vec!(
@@ -2078,7 +2160,7 @@ mod tests {
 
         let inner_id = ctx.type_templates.iter().filter(|i| i.name == "InnerDice").next().unwrap().id;
 
-        assert_eq!(inner_dice, NessaExpr::Literal(Object::new(TypeInstance {
+        assert_eq!(inner_dice, NessaExpr::Literal(Location::none(), Object::new(TypeInstance {
             id: inner_id,
             params: vec!(),
             attributes: vec!(
@@ -2114,70 +2196,70 @@ mod tests {
         let (_, def_6) = ctx.variable_definition_parser(Span::new(def_6_str), &RefCell::default()).unwrap();
         let (_, def_7) = ctx.variable_definition_parser(Span::new(def_7_str), &RefCell::default()).unwrap();
 
-        assert_eq!(def_1, NessaExpr::VariableDefinition("var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference("a".into()))));
-        assert_eq!(def, NessaExpr::VariableDefinition(
+        assert_eq!(def_1, NessaExpr::VariableDefinition(Location::none(), "var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference(Location::none(), "a".into()))));
+        assert_eq!(def, NessaExpr::VariableDefinition(Location::none(), 
             "foo".into(), 
             Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
-            Box::new(NessaExpr::Literal(Object::new(Number::from(5))))
+            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5))))
         ));
-        assert_eq!(def_3, NessaExpr::VariableDefinition("bar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Object::new("test".to_string())))));
-        assert_eq!(def_4, NessaExpr::VariableDefinition("foobar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Object::new(false)))));
-        assert_eq!(def_5, NessaExpr::VariableDefinition(
+        assert_eq!(def_3, NessaExpr::VariableDefinition(Location::none(), "bar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new("test".to_string())))));
+        assert_eq!(def_4, NessaExpr::VariableDefinition(Location::none(), "foobar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new(false)))));
+        assert_eq!(def_5, NessaExpr::VariableDefinition(Location::none(), 
             "lambda".into(), 
             Type::InferenceMarker, 
-            Box::new(NessaExpr::Lambda(
+            Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
                     ("a".into(), Type::Basic(0)),
                     ("b".into(), Type::Basic(0))
                 ),
                 Type::Basic(2),
                 vec!(
-                    NessaExpr::Return(Box::new(
-                        NessaExpr::BinaryOperation(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::BinaryOperation(Location::none(), 
                             LT_BINOP_ID, 
                             vec!(),
-                            Box::new(NessaExpr::NameReference("a".into())),
-                            Box::new(NessaExpr::NameReference("b".into()))
+                            Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
+                            Box::new(NessaExpr::NameReference(Location::none(), "b".into()))
                         )
                     ))
                 )
             ))
         ));
-        assert_eq!(def_6, NessaExpr::VariableDefinition(
+        assert_eq!(def_6, NessaExpr::VariableDefinition(Location::none(), 
             "lambda".into(), 
             Type::InferenceMarker, 
-            Box::new(NessaExpr::Lambda(
+            Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
                     ("n".into(), Type::Basic(0))
                 ),
                 Type::Basic(0),
                 vec!(
-                    NessaExpr::Return(Box::new(
-                        NessaExpr::BinaryOperation(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::BinaryOperation(Location::none(), 
                             2, 
                             vec!(),
-                            Box::new(NessaExpr::NameReference("n".into())),
-                            Box::new(NessaExpr::Literal(Object::new(Number::from(2))))
+                            Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2))))
                         )
                     ))
                 )
             ))
         ));
-        assert_eq!(def_7, NessaExpr::VariableDefinition(
+        assert_eq!(def_7, NessaExpr::VariableDefinition(Location::none(), 
             "lambda".into(), 
             Type::InferenceMarker, 
-            Box::new(NessaExpr::Lambda(
+            Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
                     ("n".into(), Type::Basic(0))
                 ),
                 Type::Wildcard,
                 vec!(
-                    NessaExpr::Return(Box::new(
-                        NessaExpr::BinaryOperation(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::BinaryOperation(Location::none(), 
                             0, 
                             vec!(),
-                            Box::new(NessaExpr::NameReference("n".into())),
-                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                            Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
                         )
                     ))
                 )
@@ -2207,62 +2289,62 @@ mod tests {
         let (_, template_postfix) = ctx.nessa_expr_parser(Span::new(template_postfix_str), &RefCell::default()).unwrap();
         let (_, template_binary) = ctx.nessa_expr_parser(Span::new(template_binary_str), &RefCell::default()).unwrap();
 
-        assert_eq!(number, NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(10))))));
+        assert_eq!(number, NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(10))))));
         assert_eq!(
             var, 
-            NessaExpr::UnaryOperation(0, vec!(), 
-            Box::new(NessaExpr::UnaryOperation(1, vec!(), Box::new(NessaExpr::NameReference("a".into()))))
+            NessaExpr::UnaryOperation(Location::none(), 0, vec!(), 
+            Box::new(NessaExpr::UnaryOperation(Location::none(), 1, vec!(), Box::new(NessaExpr::NameReference(Location::none(), "a".into()))))
         ));
-        assert_eq!(n_var, NessaExpr::BinaryOperation(
+        assert_eq!(n_var, NessaExpr::BinaryOperation(Location::none(), 
             0, 
             vec!(),
-            Box::new(NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))),
-            Box::new(NessaExpr::UnaryOperation(3, vec!(), Box::new(NessaExpr::NameReference("a".into())))),
+            Box::new(NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))),
+            Box::new(NessaExpr::UnaryOperation(Location::none(), 3, vec!(), Box::new(NessaExpr::NameReference(Location::none(), "a".into())))),
         ));
-        assert_eq!(n_call, NessaExpr::NaryOperation(
+        assert_eq!(n_call, NessaExpr::NaryOperation(Location::none(), 
             0, 
             vec!(),
-            Box::new(NessaExpr::Literal(Object::new(Number::from(5)))),
+            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))),
             vec!(
-                NessaExpr::BinaryOperation(
+                NessaExpr::BinaryOperation(Location::none(), 
                     0, 
                     vec!(),
-                    Box::new(NessaExpr::UnaryOperation(0, vec!(), Box::new(NessaExpr::NameReference("b".into())))),
-                    Box::new(NessaExpr::UnaryOperation(1, vec!(), Box::new(NessaExpr::Literal(Object::new(Number::from(10)))))),
+                    Box::new(NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::NameReference(Location::none(), "b".into())))),
+                    Box::new(NessaExpr::UnaryOperation(Location::none(), 1, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(10)))))),
                 )
             )
         ));
-        assert_eq!(template_func, NessaExpr::NaryOperation(
+        assert_eq!(template_func, NessaExpr::NaryOperation(Location::none(), 
             0, 
             vec!(Type::Basic(0)),
-            Box::new(NessaExpr::NameReference("funct".into())),
+            Box::new(NessaExpr::NameReference(Location::none(), "funct".into())),
             vec!(
-                NessaExpr::Literal(Object::new(Number::from(5)))
+                NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))
             )
         ));
         assert_eq!(
             template_prefix, 
-            NessaExpr::UnaryOperation(
+            NessaExpr::UnaryOperation(Location::none(), 
                 1, 
                 vec!(Type::Basic(0)), 
-                Box::new(NessaExpr::Literal(Object::new(Number::from(7))))
+                Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(7))))
             )
         );
         assert_eq!(
             template_postfix, 
-            NessaExpr::UnaryOperation(
+            NessaExpr::UnaryOperation(Location::none(), 
                 3, 
                 vec!(Type::Ref(Box::new(Type::Basic(1)))), 
-                Box::new(NessaExpr::Literal(Object::new(false)))
+                Box::new(NessaExpr::Literal(Location::none(), Object::new(false)))
             )
         );
         assert_eq!(
             template_binary, 
-            NessaExpr::BinaryOperation(
+            NessaExpr::BinaryOperation(Location::none(), 
                 0, 
                 vec!(Type::Basic(1), Type::Basic(2)), 
-                Box::new(NessaExpr::Literal(Object::new("test".to_string()))),
-                Box::new(NessaExpr::Literal(Object::new(true)))
+                Box::new(NessaExpr::Literal(Location::none(), Object::new("test".to_string()))),
+                Box::new(NessaExpr::Literal(Location::none(), Object::new(true)))
             )
         );
     }
@@ -2368,28 +2450,28 @@ mod tests {
 
         assert_eq!(
             test_1,
-            NessaExpr::FunctionDefinition(
+            NessaExpr::FunctionDefinition(Location::none(), 
                 0,
                 vec!(),
                 vec!(),
                 Type::Basic(0),
                 vec!(
-                    NessaExpr::VariableDefinition("res".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Object::new(Number::from(5))))),
-                    NessaExpr::For(
+                    NessaExpr::VariableDefinition(Location::none(), "res".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5))))),
+                    NessaExpr::For(Location::none(), 
                         "i".into(),
-                        Box::new(NessaExpr::NameReference("arr".into())),
+                        Box::new(NessaExpr::NameReference(Location::none(), "arr".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(7)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(7)))))
                         )
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::NameReference("res".into())))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "res".into())))
                 )
             ) 
         );
 
         assert_eq!(
             test,
-            NessaExpr::FunctionDefinition(
+            NessaExpr::FunctionDefinition(Location::none(), 
                 0,
                 vec!(),
                 vec!(
@@ -2403,58 +2485,58 @@ mod tests {
                     Type::Basic(1)
                 )),
                 vec!(
-                    NessaExpr::VariableDefinition(
+                    NessaExpr::VariableDefinition(Location::none(), 
                         "r".into(), 
                         Type::Basic(0), 
-                        Box::new(NessaExpr::BinaryOperation(
+                        Box::new(NessaExpr::BinaryOperation(Location::none(), 
                             0,
                             vec!(),
-                            Box::new(NessaExpr::NameReference("arg".into())),
-                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                            Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
                         ))
                     ),
-                    NessaExpr::If(
-                        Box::new(NessaExpr::BinaryOperation(
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::BinaryOperation(Location::none(), 
                             0,
                             vec!(),
-                            Box::new(NessaExpr::NameReference("r".into())),
-                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                            Box::new(NessaExpr::NameReference(Location::none(), "r".into())),
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
                         )),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new("a".to_string()))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new("a".to_string()))))
                         ),
                         vec!(
                             (
-                                NessaExpr::BinaryOperation(
+                                NessaExpr::BinaryOperation(Location::none(), 
                                     0,
                                     vec!(),
-                                    Box::new(NessaExpr::NameReference("arg".into())),
-                                    Box::new(NessaExpr::Literal(Object::new(Number::from(2))))
+                                    Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
+                                    Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2))))
                                 ),
                                 vec!(
-                                    NessaExpr::VariableAssignment(
+                                    NessaExpr::VariableAssignment(Location::none(), 
                                         "r".into(),
-                                        Box::new(NessaExpr::BinaryOperation(
+                                        Box::new(NessaExpr::BinaryOperation(Location::none(), 
                                             0,
                                             vec!(),
-                                            Box::new(NessaExpr::NameReference("r".into())),
-                                            Box::new(NessaExpr::Literal(Object::new(Number::from(1))))
+                                            Box::new(NessaExpr::NameReference(Location::none(), "r".into())),
+                                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
                                         ))
                                     )
                                 )
                             )
                         ),
                         Some(vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
                         ))
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::NameReference("r".into())))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "r".into())))
                 )
             ) 
         );
         assert_eq!(
             test_3,
-            NessaExpr::FunctionDefinition(
+            NessaExpr::FunctionDefinition(Location::none(), 
                 0,
                 vec!("K".into(), "V".into()),
                 vec!(
@@ -2463,20 +2545,20 @@ mod tests {
                 ),
                 Type::Template(4, vec!(Type::TemplateParam(0), Type::TemplateParam(1))),
                 vec!(
-                    NessaExpr::VariableDefinition(
+                    NessaExpr::VariableDefinition(Location::none(), 
                         "a".into(), 
                         Type::Or(vec!(
                             Type::TemplateParam(0),
                             Type::TemplateParam(1)
                         )), 
-                        Box::new(NessaExpr::BinaryOperation(
+                        Box::new(NessaExpr::BinaryOperation(Location::none(), 
                             0,
                             vec!(),
-                            Box::new(NessaExpr::NameReference("value".into())),
-                            Box::new(NessaExpr::NameReference("key".into())),
+                            Box::new(NessaExpr::NameReference(Location::none(), "value".into())),
+                            Box::new(NessaExpr::NameReference(Location::none(), "key".into())),
                         ))
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::NameReference("a".into())))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "a".into())))
                 )
             ) 
         );
@@ -2496,10 +2578,10 @@ mod tests {
         let (_, binary) = ctx.operator_definition_parser(Span::new(binary_str)).unwrap();
         let (_, nary) = ctx.operator_definition_parser(Span::new(nary_str)).unwrap();
 
-        assert_eq!(prefix, NessaExpr::PrefixOperatorDefinition("~".into(), 200));
-        assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition("&".into(), 300));
-        assert_eq!(binary, NessaExpr::BinaryOperatorDefinition("$".into(), 400));
-        assert_eq!(nary, NessaExpr::NaryOperatorDefinition("`".into(), "´".into(), 500));
+        assert_eq!(prefix, NessaExpr::PrefixOperatorDefinition(Location::none(), "~".into(), 200));
+        assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition(Location::none(), "&".into(), 300));
+        assert_eq!(binary, NessaExpr::BinaryOperatorDefinition(Location::none(), "$".into(), 400));
+        assert_eq!(nary, NessaExpr::NaryOperatorDefinition(Location::none(), "`".into(), "´".into(), 500));
     }
 
     #[test]
@@ -2553,29 +2635,29 @@ mod tests {
 
         assert_eq!(
             test_1,
-            NessaExpr::PrefixOperationDefinition(
+            NessaExpr::PrefixOperationDefinition(Location::none(), 
                 1,
                 vec!(),
                 "arg".into(),
                 Type::Basic(2),
                 Type::Basic(2),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("arg".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(false))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(true))))
                 )
             ) 
         );
 
         assert_eq!(
             test,
-            NessaExpr::PostfixOperationDefinition(
+            NessaExpr::PostfixOperationDefinition(Location::none(), 
                 3,
                 vec!(),
                 "arg".into(),
@@ -2585,67 +2667,67 @@ mod tests {
                     Type::Basic(2)
                 )),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("arg".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::For(
+                    NessaExpr::For(Location::none(), 
                         "i".into(),
-                        Box::new(NessaExpr::NameReference("arr".into())),
+                        Box::new(NessaExpr::NameReference(Location::none(), "arr".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::NameReference("i".into())))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "i".into())))
                         )
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(true))))
                 )
             ) 
         );
 
         assert_eq!(
             test_3,
-            NessaExpr::BinaryOperationDefinition(
+            NessaExpr::BinaryOperationDefinition(Location::none(), 
                 0,
                 vec!(),
                 ("a".into(), Type::Basic(2)),
                 ("b".into(), Type::Basic(2)),
                 Type::Basic(0),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("a".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
                         vec!(
-                            NessaExpr::If(
-                                Box::new(NessaExpr::NameReference("b".into())),
+                            NessaExpr::If(Location::none(), 
+                                Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                                 vec!(
-                                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(2)))))
+                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2)))))
                                 ),
                                 vec!(),
                                 None
                             ),
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("b".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(0)))))
                 )
             ) 
         );
 
         assert_eq!(
             test_4,
-            NessaExpr::NaryOperationDefinition(
+            NessaExpr::NaryOperationDefinition(Location::none(), 
                 1,
                 vec!(),
                 ("a".into(), Type::Basic(0)),
@@ -2655,20 +2737,20 @@ mod tests {
                 ),
                 Type::And(vec!(Type::Basic(0), Type::Basic(2))),
                 vec!(
-                    NessaExpr::Return(Box::new(
-                        NessaExpr::Tuple(vec!(
-                            NessaExpr::BinaryOperation(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::Tuple(Location::none(), vec!(
+                            NessaExpr::BinaryOperation(Location::none(), 
                                 0,
                                 vec!(),
-                                Box::new(NessaExpr::NameReference("a".into())),
-                                Box::new(NessaExpr::BinaryOperation(
+                                Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
+                                Box::new(NessaExpr::BinaryOperation(Location::none(), 
                                     2,
                                     vec!(),
-                                    Box::new(NessaExpr::NameReference("b".into())),
-                                    Box::new(NessaExpr::NameReference("c".into()))
+                                    Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
+                                    Box::new(NessaExpr::NameReference(Location::none(), "c".into()))
                                 )
                             )),
-                            NessaExpr::Literal(Object::new(true))
+                            NessaExpr::Literal(Location::none(), Object::new(true))
                         ))
                     ))
                 )
@@ -2722,29 +2804,29 @@ mod tests {
 
         assert_eq!(
             test_template_1,
-            NessaExpr::PrefixOperationDefinition(
+            NessaExpr::PrefixOperationDefinition(Location::none(), 
                 1,
                 vec!("T".into()),
                 "arg".into(),
                 Type::TemplateParam(0),
                 Type::TemplateParam(0),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("arg".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(false))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(false))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(true))))
                 )
             ) 
         );
 
         assert_eq!(
             test_template,
-            NessaExpr::PostfixOperationDefinition(
+            NessaExpr::PostfixOperationDefinition(Location::none(), 
                 3,
                 vec!("T".into()),
                 "arg".into(),
@@ -2754,67 +2836,67 @@ mod tests {
                     Type::TemplateParam(0)
                 )),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("arg".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::For(
+                    NessaExpr::For(Location::none(), 
                         "i".into(),
-                        Box::new(NessaExpr::NameReference("arr".into())),
+                        Box::new(NessaExpr::NameReference(Location::none(), "arr".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::NameReference("i".into())))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "i".into())))
                         )
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(true))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(true))))
                 )
             ) 
         );
 
         assert_eq!(
             test_template_3,
-            NessaExpr::BinaryOperationDefinition(
+            NessaExpr::BinaryOperationDefinition(Location::none(), 
                 0,
                 vec!("T".into(), "G".into()),
                 ("a".into(), Type::TemplateParam(0)),
                 ("b".into(), Type::TemplateParam(0)),
                 Type::TemplateParam(1),
                 vec!(
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("a".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
                         vec!(
-                            NessaExpr::If(
-                                Box::new(NessaExpr::NameReference("b".into())),
+                            NessaExpr::If(Location::none(), 
+                                Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                                 vec!(
-                                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(2)))))
+                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2)))))
                                 ),
                                 vec!(),
                                 None
                             ),
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::If(
-                        Box::new(NessaExpr::NameReference("b".into())),
+                    NessaExpr::If(Location::none(), 
+                        Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                         vec!(
-                            NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Box::new(NessaExpr::Literal(Object::new(Number::from(0)))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(0)))))
                 )
             ) 
         );
 
         assert_eq!(
             test_template_4,
-            NessaExpr::NaryOperationDefinition(
+            NessaExpr::NaryOperationDefinition(Location::none(), 
                 1,
                 vec!("T".into(), "G".into()),
                 ("a".into(), Type::TemplateParam(0)),
@@ -2824,20 +2906,20 @@ mod tests {
                 ),
                 Type::And(vec!(Type::TemplateParam(0), Type::Template(3, vec!(Type::TemplateParam(1))))),
                 vec!(
-                    NessaExpr::Return(Box::new(
-                        NessaExpr::Tuple(vec!(
-                            NessaExpr::BinaryOperation(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::Tuple(Location::none(), vec!(
+                            NessaExpr::BinaryOperation(Location::none(), 
                                 0,
                                 vec!(),
-                                Box::new(NessaExpr::NameReference("a".into())),
-                                Box::new(NessaExpr::BinaryOperation(
+                                Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
+                                Box::new(NessaExpr::BinaryOperation(Location::none(), 
                                     2,
                                     vec!(),
-                                    Box::new(NessaExpr::NameReference("b".into())),
-                                    Box::new(NessaExpr::NameReference("c".into()))
+                                    Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
+                                    Box::new(NessaExpr::NameReference(Location::none(), "c".into()))
                                 )
                             )),
-                            NessaExpr::Literal(Object::new(true))
+                            NessaExpr::Literal(Location::none(), Object::new(true))
                         ))
                     ))
                 )
@@ -2866,7 +2948,7 @@ mod tests {
         let (_, dice_roll) = ctx.class_definition_parser(Span::new(dice_roll_str)).unwrap();
         let (_, sync_lists) = ctx.class_definition_parser(Span::new(sync_lists_str)).unwrap();
 
-        assert_eq!(dice_roll, NessaExpr::ClassDefinition(
+        assert_eq!(dice_roll, NessaExpr::ClassDefinition(Location::none(), 
             "DiceRoll".into(),
             vec!(),
             vec!(
@@ -2876,7 +2958,7 @@ mod tests {
             vec!()
         ));
 
-        assert_eq!(sync_lists, NessaExpr::ClassDefinition(
+        assert_eq!(sync_lists, NessaExpr::ClassDefinition(Location::none(), 
             "SyncLists".into(),
             vec!("K".into(), "V".into()),
             vec!(

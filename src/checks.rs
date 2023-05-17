@@ -15,12 +15,12 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::CompiledLambda(_, _, _, body) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, body) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, body) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, body) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(_, _, _, _, body) => self.ensured_return_check_body(body),
+            NessaExpr::CompiledLambda(_, _, _, _, body) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, body) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, body) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, body) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, body) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, body) => self.ensured_return_check_body(body),
 
             _ => Ok(())
         };
@@ -29,9 +29,9 @@ impl NessaContext {
     fn ensured_return_check_body(&self, lines: &Vec<NessaExpr>) -> Result<(), String> {
         for line in lines {
             match line {
-                NessaExpr::Return(_) => return Ok(()),
+                NessaExpr::Return(_, _) => return Ok(()),
 
-                NessaExpr::If(_, ib, ei, eb) => {
+                NessaExpr::If(_, _, ib, ei, eb) => {
                     if let Some(eb_inner) = eb {
                         let mut returns = self.ensured_return_check_body(ib).is_ok() && self.ensured_return_check_body(eb_inner).is_ok();
 
@@ -59,7 +59,7 @@ impl NessaContext {
 
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), String> {
         return match (expr, ret_type) {
-            (NessaExpr::Literal(_), _) |
+            (NessaExpr::Literal(..), _) |
             (NessaExpr::Tuple(..), _) |
             (NessaExpr::Variable(..), _) |
             (NessaExpr::UnaryOperation(..), _) |
@@ -72,11 +72,11 @@ impl NessaContext {
             (NessaExpr::NaryOperatorDefinition(..), _) |
             (NessaExpr::ClassDefinition(..), _) => Ok(()),
 
-            (NessaExpr::CompiledVariableDefinition(_, _, _, e), ret) |
-            (NessaExpr::CompiledVariableAssignment(_, _, _, e), ret) => self.return_check(e, ret),
+            (NessaExpr::CompiledVariableDefinition(_, _, _, _, e), ret) |
+            (NessaExpr::CompiledVariableAssignment(_, _, _, _, e), ret) => self.return_check(e, ret),
 
-            (NessaExpr::Return(_), None) => Err("Return statements are only allowed inside function and operation definition bodies".into()),
-            (NessaExpr::Return(e), Some(expected_t)) => {
+            (NessaExpr::Return(_, _), None) => Err("Return statements are only allowed inside function and operation definition bodies".into()),
+            (NessaExpr::Return(_, e), Some(expected_t)) => {
                 self.return_check(e, ret_type)?;
 
                 if let Some(t) = self.infer_type(e) {
@@ -92,11 +92,11 @@ impl NessaContext {
                 }
             },
 
-            (NessaExpr::FunctionDefinition(_, t, _, ret, body), None) |
-            (NessaExpr::PrefixOperationDefinition(_, t, _, _, ret, body), None) |
-            (NessaExpr::PostfixOperationDefinition(_, t, _, _, ret, body), None) |
-            (NessaExpr::BinaryOperationDefinition(_, t, _, _, ret, body), None) |
-            (NessaExpr::NaryOperationDefinition(_, t, _, _, ret, body), None) => {
+            (NessaExpr::FunctionDefinition(_, _, t, _, ret, body), None) |
+            (NessaExpr::PrefixOperationDefinition(_, _, t, _, _, ret, body), None) |
+            (NessaExpr::PostfixOperationDefinition(_, _, t, _, _, ret, body), None) |
+            (NessaExpr::BinaryOperationDefinition(_, _, t, _, _, ret, body), None) |
+            (NessaExpr::NaryOperationDefinition(_, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
 
@@ -108,7 +108,7 @@ impl NessaContext {
                 self.ensured_return_check(expr)
             }
 
-            (NessaExpr::CompiledLambda(_, _, ret, body), None) => {
+            (NessaExpr::CompiledLambda(_, _, _, ret, body), None) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
@@ -120,8 +120,8 @@ impl NessaContext {
                 self.ensured_return_check(expr)
             }
 
-            (NessaExpr::While(cond, body), ret) |
-            (NessaExpr::CompiledFor(_, _, _, cond, body), ret) => {
+            (NessaExpr::While(_, cond, body), ret) |
+            (NessaExpr::CompiledFor(_, _, _, _, cond, body), ret) => {
                 self.return_check(cond, ret)?;
 
                 for line in body {
@@ -131,7 +131,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            (NessaExpr::If(ih, ib, ei, eb), ret) => {
+            (NessaExpr::If(_, ih, ib, ei, eb), ret) => {
                 self.return_check(ih, ret)?;
 
                 for line in ib {
@@ -161,7 +161,7 @@ impl NessaContext {
 
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::Literal(_) |
+            NessaExpr::Literal(..) |
             NessaExpr::CompiledLambda(..) |
             NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
@@ -171,8 +171,8 @@ impl NessaContext {
             NessaExpr::NaryOperatorDefinition(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
 
-            NessaExpr::CompiledVariableDefinition(_, n, t, e) |
-            NessaExpr::CompiledVariableAssignment(_, n, t, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, n, t, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, n, t, e) => {
                 self.ambiguity_check(e)?;
 
                 let inferred_type = self.infer_type(e);
@@ -195,7 +195,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::FunctionCall(id, _ , args) => {
+            NessaExpr::FunctionCall(_, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
                 for (i, arg) in args.iter().enumerate() {
@@ -226,7 +226,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, _, arg) => {
+            NessaExpr::UnaryOperation(_, id, _, arg) => {
                 self.ambiguity_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
@@ -275,7 +275,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(id, _, arg1, arg2) => {
+            NessaExpr::BinaryOperation(_, id, _, arg1, arg2) => {
                 self.ambiguity_check(arg1)?;
                 self.ambiguity_check(arg2)?;
 
@@ -326,7 +326,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::NaryOperation(id, _, first, args) => {
+            NessaExpr::NaryOperation(_, id, _, first, args) => {
                 self.ambiguity_check(first)?;
 
                 let first_type = self.infer_type(first);
@@ -388,7 +388,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(ih, ib, ei, eb) => {
+            NessaExpr::If(_, ih, ib, ei, eb) => {
                 self.ambiguity_check(ih)?;
 
                 let if_header_type = self.infer_type(ih);
@@ -434,7 +434,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::While(cond, body) => {
+            NessaExpr::While(_, cond, body) => {
                 self.ambiguity_check(cond)?;
 
                 let while_header_type = self.infer_type(cond);
@@ -455,7 +455,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::Return(e) => {
+            NessaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
 
                 if self.infer_type(e).is_some() {
@@ -466,11 +466,11 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::PrefixOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, t, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::FunctionDefinition(_, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.ambiguity_check(line)?;
@@ -480,7 +480,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledFor(_, _, _, _, b) => {
+            NessaExpr::CompiledFor(_, _, _, _, _, b) => {
                 for line in b {
                     self.ambiguity_check(line)?;
                 }
@@ -494,7 +494,7 @@ impl NessaContext {
 
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::Literal(_) |
+            NessaExpr::Literal(..) |
             NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -503,8 +503,8 @@ impl NessaContext {
             NessaExpr::NaryOperatorDefinition(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
 
-            NessaExpr::CompiledVariableDefinition(_, n, t, e) |
-            NessaExpr::CompiledVariableAssignment(_, n, t, e) => {
+            NessaExpr::CompiledVariableDefinition(_, _, n, t, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, n, t, e) => {
                 self.type_check(e)?;
 
                 let inferred_type = self.infer_type(e);
@@ -527,7 +527,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::FunctionCall(id, templates, args) => {
+            NessaExpr::FunctionCall(_, id, templates, args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
                 for (i, arg) in args.iter().enumerate() {
@@ -554,7 +554,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(id, _, arg) => {
+            NessaExpr::UnaryOperation(_, id, _, arg) => {
                 self.type_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
@@ -595,7 +595,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(id, _, arg1, arg2) => {
+            NessaExpr::BinaryOperation(_, id, _, arg1, arg2) => {
                 self.type_check(arg1)?;
                 self.type_check(arg2)?;
 
@@ -640,7 +640,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::NaryOperation(id, _, first, args) => {
+            NessaExpr::NaryOperation(_, id, _, first, args) => {
                 self.type_check(first)?;
 
                 let first_type = self.infer_type(first);
@@ -687,7 +687,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(ih, ib, ei, eb) => {
+            NessaExpr::If(_, ih, ib, ei, eb) => {
                 self.type_check(ih)?;
 
                 let if_header_type = self.infer_type(ih);
@@ -733,7 +733,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledFor(_, _, _, iter, body) => {
+            NessaExpr::CompiledFor(_, _, _, _, iter, body) => {
                 self.type_check(iter)?;
 
                 for line in body {
@@ -743,7 +743,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::While(cond, body) => {
+            NessaExpr::While(_, cond, body) => {
                 self.type_check(cond)?;
 
                 let while_header_type = self.infer_type(cond);
@@ -764,7 +764,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::Return(e) => {
+            NessaExpr::Return(_, e) => {
                 self.type_check(e)?;
 
                 if self.infer_type(e).is_some() {
@@ -775,7 +775,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledLambda(_, _, _, b) => {
+            NessaExpr::CompiledLambda(_, _, _, _, b) => {
                 for line in b {
                     self.type_check(line)?;
                 }                
@@ -783,11 +783,11 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, t, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::FunctionDefinition(_, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
@@ -825,7 +825,7 @@ impl NessaContext {
 
     pub fn class_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::ClassDefinition(n, _, attributes, _) => {
+            NessaExpr::ClassDefinition(_, n, _, attributes, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
                         return Err(format!("Repeated attribute \"{}\" in class {}", att, n));
@@ -862,15 +862,15 @@ impl NessaContext {
             NessaExpr::Literal(..) |
             NessaExpr::CompiledLambda(..) => Ok(()),
 
-            NessaExpr::Variable(_, _, t) => self.no_template_check_type(t),
+            NessaExpr::Variable(_, _, _, t) => self.no_template_check_type(t),
 
-            NessaExpr::CompiledVariableAssignment(_, _, t, e) |
-            NessaExpr::CompiledVariableDefinition(_, _, t, e) => {
+            NessaExpr::CompiledVariableAssignment(_, _, _, t, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, t, e) => {
                 self.no_template_check_type(t)?;
                 self.no_template_check(e)
             }
 
-            NessaExpr::Tuple(e) => {
+            NessaExpr::Tuple(_, e) => {
                 for i in e {
                     self.no_template_check(i)?;
                 }
@@ -878,18 +878,18 @@ impl NessaContext {
                 Ok(())
             }
             
-            NessaExpr::UnaryOperation(_, tm, e) => {
+            NessaExpr::UnaryOperation(_, _, tm, e) => {
                 self.no_template_check_types(tm)?;
                 self.no_template_check(e)
             }
             
-            NessaExpr::BinaryOperation(_, tm, a, b) => {
+            NessaExpr::BinaryOperation(_, _, tm, a, b) => {
                 self.no_template_check_types(tm)?;
                 self.no_template_check(a)?;
                 self.no_template_check(b)
             }
             
-            NessaExpr::NaryOperation(_, tm, a, b) => {
+            NessaExpr::NaryOperation(_, _, tm, a, b) => {
                 self.no_template_check_types(tm)?;
                 self.no_template_check(a)?;
 
@@ -900,7 +900,7 @@ impl NessaContext {
                 Ok(())
             }
             
-            NessaExpr::FunctionCall(_, tm, e) => {
+            NessaExpr::FunctionCall(_, _, tm, e) => {
                 self.no_template_check_types(tm)?;
 
                 for i in e {
@@ -910,8 +910,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledFor(_, _, _, e, b) |
-            NessaExpr::While(e, b) => {
+            NessaExpr::CompiledFor(_, _, _, _, e, b) |
+            NessaExpr::While(_, e, b) => {
                 self.no_template_check(e)?;
 
                 for i in b {
@@ -921,7 +921,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::If(ih, ib, ei, eb) => {
+            NessaExpr::If(_, ih, ib, ei, eb) => {
                 self.no_template_check(ih)?;
 
                 for i in ib {
@@ -945,14 +945,14 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::Return(e) => self.no_template_check(e),
+            NessaExpr::Return(_, e) => self.no_template_check(e),
             
             _ => unimplemented!("{:?}", expr)
         };
     }
 
     pub fn lambda_check(&self, expr: &NessaExpr) -> Result<(), String> {
-        if let NessaExpr::CompiledLambda(_, a, r, b) = expr {
+        if let NessaExpr::CompiledLambda(_, _, a, r, b) = expr {
             if r.has_templates() {
                 return Err("Parametric types are not allowed in lambda return types".into());
             }
@@ -988,18 +988,18 @@ impl NessaContext {
 
     pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), String> {
         return match expr {
-            NessaExpr::PostfixOperationDefinition(_, t, n, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, t, n, _, _, _) => {
+            NessaExpr::PostfixOperationDefinition(_, _, t, n, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, t, n, _, _, _) => {
                 self.repeated_args(&vec!(n))?;
                 self.repeated_args(&t.iter().collect())
             }
 
-            NessaExpr::BinaryOperationDefinition(_, t, (n1, _), (n2, _), _, _) => {
+            NessaExpr::BinaryOperationDefinition(_, _, t, (n1, _), (n2, _), _, _) => {
                 self.repeated_args(&vec!(n1, n2))?;
                 self.repeated_args(&t.iter().collect())
             }
 
-            NessaExpr::NaryOperationDefinition(_, t, (n1, _), n, _, _) => {
+            NessaExpr::NaryOperationDefinition(_, _, t, (n1, _), n, _, _) => {
                 let mut args = vec!(n1);
                 args.extend(n.iter().map(|(i, _)| i));
 
@@ -1007,12 +1007,12 @@ impl NessaContext {
                 self.repeated_args(&t.iter().collect())
             }
 
-            NessaExpr::FunctionDefinition(_, t, a, _, _) => {
+            NessaExpr::FunctionDefinition(_, _, t, a, _, _) => {
                 self.repeated_args(&a.iter().map(|(n, _)| n).collect())?;
                 self.repeated_args(&t.iter().collect())
             }
 
-            NessaExpr::CompiledLambda(_, a, _, _) => {
+            NessaExpr::CompiledLambda(_, _, a, _, _) => {
                 self.repeated_args(&a.iter().map(|(n, _)| n).collect())
             }
 

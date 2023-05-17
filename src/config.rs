@@ -154,7 +154,7 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config_aux(path: &String, already_compiled: &mut HashMap<String, NessaModule>) -> Result<NessaModule, String> {
+fn parse_nessa_module_with_config_aux<'a>(path: &String, already_compiled: &mut HashMap<String, NessaModule>) -> Result<NessaModule, String> {
     let config_path = format!("{}/nessa_config.yml", &path);
     let main_path = format!("{}/main.nessa", &path);
 

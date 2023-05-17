@@ -1,8 +1,7 @@
 use std::collections::{ HashMap };
-use std::process;
 
 use colored::Colorize;
-use nom::error::VerboseErrorKind;
+use nom::error::{VerboseErrorKind, VerboseError};
 use seq_macro::seq;
 
 use crate::config::ImportMap;
@@ -22,6 +21,118 @@ use crate::operations::*;
     ============================================= │  IMPLEMENTATION  │ =============================================
                                                   ╘══════════════════╛
 */
+
+/*
+    ╒══════════════════════════════╕
+    │ Compilation error management │
+    ╘══════════════════════════════╛
+*/
+
+#[derive(Debug)]
+pub struct NessaError {
+    pub err_type: String,
+    pub message: String,
+
+    pub has_location: bool,
+    pub line: usize,
+    pub column: usize,
+    pub fragment: String,
+
+    pub suggestions: Vec<String>
+}
+
+impl NessaError {
+    pub fn syntax_error(message: String, line: usize, column: usize, fragment: String, suggestions: Vec<String>) -> Self {
+        return NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, fragment, suggestions };
+    }
+
+    pub fn compiler_error(message: String, location: &Location, suggestions: Vec<String>) -> Self {
+        return NessaError { 
+            err_type: "Compilation error".into(), 
+            has_location: true,
+            message, 
+            line: location.line, 
+            column: location.column, 
+            fragment: location.span.clone(), 
+            suggestions 
+        };
+    }
+
+    pub fn execution_error(message: String) -> Self {
+        return NessaError { 
+            err_type: "Execution error".into(), 
+            has_location: false,
+            message, 
+            line: 0, 
+            column: 0, 
+            fragment: "".into(), 
+            suggestions: vec!()
+        };
+    }
+
+    pub fn emit(&self) {
+        if self.has_location {
+            let mut frag = self.fragment.as_str();
+            
+            if let Some(pos) = frag.find('\n') {
+                frag = &frag[..pos];
+            }
+    
+            if frag.len() > 20 {
+                frag = &frag[..20];
+            }
+    
+            frag = frag.trim();
+    
+            eprintln!(
+                "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
+                self.err_type.red().bold(), 
+                self.line.to_string().yellow(), self.column.to_string().yellow(), 
+                self.message.italic(), frag,
+                "^".repeat(frag.len()).red()
+            );
+
+        } else {
+            eprintln!(
+                "\n[{}] {}\n", 
+                self.err_type.red().bold(),
+                self.message.italic()
+            );
+        }
+        
+        panic!();
+    }
+}
+
+impl<'a> From<VerboseError<Span<'a>>> for NessaError {
+    fn from(error: VerboseError<Span<'a>>) -> Self {
+        let err = error.errors.last().unwrap();
+
+        let fragment = err.0;
+        let error_msg = match &err.1 {
+            VerboseErrorKind::Context(ctx) => ctx,
+            _ => "Unable to parse"
+        };
+
+        return NessaError::syntax_error(
+            error_msg.into(), 
+            fragment.location_line() as usize, fragment.get_column(), 
+            fragment.to_string(), 
+            vec!()
+        );
+    }
+}
+
+impl<'a> From<nom::Err<VerboseError<Span<'a>>>> for NessaError {
+    fn from(error: nom::Err<VerboseError<Span<'a>>>) -> Self {
+        return match error {
+            nom::Err::Error(err) |
+            nom::Err::Failure(err) => NessaError::from(err),
+
+            _ => unreachable!()
+        }
+    }
+}
 
 /*
     ╒═════════════════════════════════╕
@@ -1821,18 +1932,23 @@ impl NessaContext{
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, true)).flat_map(|i| i.unwrap()).collect());
     }
 
-    pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), String> {
+    pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), NessaError> {
         match definition {
             NessaExpr::ClassDefinition(_, n, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
-            NessaExpr::ClassDefinition(_, n, t, a, p) => {
+
+            NessaExpr::ClassDefinition(l, n, t, a, p) => {
                 *needed = true; // Repeat class parsing after creating a new one
 
-                self.implicit_syntax_check(&n, &t, &a, &p)?;
+                let err = self.implicit_syntax_check(&n, &t, &a, &p);
+
+                if let Err(msg) = err {
+                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                }
 
                 let n_templates = t.len();
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                 
-                self.define_type(n.clone(), t, a.clone(), p, Some(
+                let err = self.define_type(n.clone(), t, a.clone(), p, Some(
                     |ctx, c_type, s| {
                         if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
                             return Ok(o);
@@ -1840,7 +1956,11 @@ impl NessaContext{
 
                         return Err(format!("Unable to parse {} from {}", c_type.name, s));
                     }
-                ))?;
+                ));
+
+                if let Err(msg) = err {
+                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                }
 
                 self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
 
@@ -1849,7 +1969,7 @@ impl NessaContext{
 
                 if n_templates == 0 {
                     // Define constructor instance
-                    self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
+                    let err = self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
                         if let Type::Basic(id) = r {
                             return Ok(Object::new(TypeInstance {
                                 id: *id,
@@ -1859,7 +1979,11 @@ impl NessaContext{
                         }
 
                         unreachable!();
-                    })?;
+                    });
+
+                    if let Err(msg) = err {
+                        return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    }
                     
                     // Define constructor meber access
                     for (i, (att_name, att_type)) in a.into_iter().enumerate() {
@@ -1879,24 +2003,36 @@ impl NessaContext{
                         };
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
+                            let err = self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
                                 #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
+                            let err = self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
                                 #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
+                            let err = self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
                                 #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+                            
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
                     }
 
@@ -1904,7 +2040,7 @@ impl NessaContext{
                     let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
 
                     // Define constructor instance
-                    self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
+                    let err = self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
                         if let Type::Template(id, _) = r {
                             return Ok(Object::new(TypeInstance {
                                 id: *id,
@@ -1914,7 +2050,11 @@ impl NessaContext{
                         }
 
                         unreachable!();
-                    })?;
+                    });
+
+                    if let Err(msg) = err {
+                        return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    }
 
                     for (i, (att_name, att_type)) in a.into_iter().enumerate() {
                         self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
@@ -1933,24 +2073,36 @@ impl NessaContext{
                         };
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
+                            let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
                                 #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+                            
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
+                            let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
                                 #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+                            
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
 
                         seq!(N in 0..100 {
-                            self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
+                            let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
                                 #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            })?;
+                            });
+                            
+                            if let Err(msg) = err {
+                                return Err(NessaError::compiler_error(msg, &l, vec!()));
+                            }
                         });
                     }
                 }
@@ -1962,13 +2114,18 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn define_module_classes(&mut self, code: &String) -> Result<(), String> {
+    pub fn define_module_classes(&mut self, code: &String) -> Result<(), NessaError> {
         let mut needed = true;
 
         while needed {
             needed = false;
-
-            for i in self.nessa_class_parser(Span::new(code)).unwrap().1 {
+            let ops = self.nessa_class_parser(Span::new(code));
+            
+            if let Err(err) = ops {
+                return Err(NessaError::from(err));
+            }
+            
+            for i in ops.unwrap().1 {
                 self.define_module_class(i, &mut needed)?;
             }
         }
@@ -1976,56 +2133,80 @@ impl NessaContext{
         return Ok(());
     }
     
-    pub fn define_module_operators(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_operators_parser(Span::new(code)).unwrap().1;
+    pub fn define_module_operators(&mut self, code: &String) -> Result<(), NessaError> {
+        let ops = self.nessa_operators_parser(Span::new(code));
 
-        for i in ops {
-            match i {
-                NessaExpr::PrefixOperatorDefinition(_, n, p) => self.define_unary_operator(n.clone(), true, p)?,
-                NessaExpr::PostfixOperatorDefinition(_, n, p) => self.define_unary_operator(n.clone(), false, p)?,
-                NessaExpr::BinaryOperatorDefinition(_, n, p) => self.define_binary_operator(n.clone(), p)?,
-                NessaExpr::NaryOperatorDefinition(_, o, c, p) => self.define_nary_operator(o.clone(), c.clone(), p)?,
+        if let Err(err) = ops {
+            return Err(NessaError::from(err));
+        }
+
+        for i in ops.unwrap().1 {
+            let (l, err) = match &i {
+                NessaExpr::PrefixOperatorDefinition(l, n, p) => (l, self.define_unary_operator(n.clone(), true, *p)),
+                NessaExpr::PostfixOperatorDefinition(l, n, p) => (l, self.define_unary_operator(n.clone(), false, *p)),
+                NessaExpr::BinaryOperatorDefinition(l, n, p) => (l, self.define_binary_operator(n.clone(), *p)),
+                NessaExpr::NaryOperatorDefinition(l, o, c, p) => (l, self.define_nary_operator(o.clone(), c.clone(), *p)),
 
                 _ => unreachable!()
+            };
+
+            if let Err(msg) = err {
+                return Err(NessaError::compiler_error(msg, &l, vec!()));
             }
         }
 
         return Ok(());
     }
     
-    pub fn define_module_functions(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_function_headers_parser(Span::new(code)).unwrap().1;
+    pub fn define_module_functions(&mut self, code: &String) -> Result<(), NessaError> {
+        let ops = self.nessa_function_headers_parser(Span::new(code));
 
-        for i in ops {
+        if let Err(err) = ops {
+            return Err(NessaError::from(err));
+        }
+
+        for i in ops.unwrap().1 {
             self.define_function(i.0).unwrap_or_default();
         }
 
         return Ok(());
     }
     
-    pub fn define_module_operations(&mut self, code: &String) -> Result<(), String> {
-        let ops = self.nessa_operations_parser(Span::new(code)).unwrap().1;
+    pub fn define_module_operations(&mut self, code: &String) -> Result<(), NessaError> {
+        let ops = self.nessa_operations_parser(Span::new(code));
 
-        for i in ops {
-            match i {
-                NessaExpr::PrefixOperationDefinition(_, id, tm, _a, t, r, _) => self.define_unary_operation(id, tm.len(), t, r, None)?,
-                NessaExpr::PostfixOperationDefinition(_, id, tm, _a, t, r, _) => self.define_unary_operation(id, tm.len(), t, r, None)?,
-                NessaExpr::BinaryOperationDefinition(_, id, tm, (_a, ta), (_b, tb), r, _) => self.define_binary_operation(id, tm.len(), ta, tb, r, None)?,
-                NessaExpr::NaryOperationDefinition(_, id, tm, (_a, ta), v, r, _) => self.define_nary_operation(id, tm.len(), ta, &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r, None)?,
+        if let Err(err) = ops {
+            return Err(NessaError::from(err));
+        }
+
+        for i in ops.unwrap().1 {
+            let (l, err) = match &i {
+                NessaExpr::PrefixOperationDefinition(l, id, tm, _a, t, r, _) |
+                NessaExpr::PostfixOperationDefinition(l, id, tm, _a, t, r, _) => (l, self.define_unary_operation(*id, tm.len(), t.clone(), r.clone(), None)),
+                NessaExpr::BinaryOperationDefinition(l, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(*id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
+                NessaExpr::NaryOperationDefinition(l, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(*id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
 
                 _ => unreachable!()
+            };
+
+            if let Err(msg) = err {
+                return Err(NessaError::compiler_error(msg, &l, vec!()));
             }
         }
 
         return Ok(());
     }
 
-    pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), String> {
+    pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), NessaError> {
         for i in lines {
             match i {
-                NessaExpr::FunctionDefinition(_, id, t, a, r, _) => {
+                NessaExpr::FunctionDefinition(l, id, t, a, r, _) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                    self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None)?
+                    let err = self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None);
+
+                    if let Err(msg) = err {
+                        return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    }
                 },
 
                 _ => {}
@@ -2035,49 +2216,15 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn print_error_and_exit(error_type: &str, line: u32, column: u32, mut frag: &str, msg: &str) {
-        if let Some(pos) = frag.find('\n') {
-            frag = &frag[..pos];
-        }
-
-        if frag.len() > 20 {
-            frag = &frag[..20];
-        }
-
-        frag = frag.trim();
-
-        eprintln!(
-            "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
-            error_type.red().bold(), 
-            line.to_string().yellow(), column.to_string().yellow(), 
-            msg.italic(), frag,
-            "^".repeat(frag.len()).red()
-        );
-        
-        process::exit(1);
-    }
-
-    pub fn parse_nessa_module(&mut self, code: &String) -> Vec<NessaExpr> {
-        match self.nessa_parser(Span::new(code)) {
-            Ok((_, lines)) => return lines,
+    pub fn parse_nessa_module(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
+        return match self.nessa_parser(Span::new(code)) {
+            Ok((_, lines)) => Ok(lines),
 
             Err(nom::Err::Error(error)) |
-            Err(nom::Err::Failure(error)) => {
-                let err = error.errors.last().unwrap();
-
-                let fragment = err.0;
-                let error_msg = match &err.1 {
-                    VerboseErrorKind::Context(ctx) => ctx,
-                    _ => "Unable to parse"
-                };
-    
-                Self::print_error_and_exit("Syntax error", err.0.location_line(), err.0.get_column() as u32, &fragment, error_msg);    
-            }
+            Err(nom::Err::Failure(error)) => Err(NessaError::from(error)),
 
             _ => unreachable!()
         };
-
-        unreachable!();
     }
 
     fn map_nessa_class(&mut self, other: &NessaContext, id: usize, classes: &mut HashMap<usize, usize>) -> Result<usize, String> {
@@ -2343,7 +2490,7 @@ impl NessaContext{
                         let mut needed = false;
                         let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, p.clone());
 
-                        self.define_module_class(mapped_expr.clone(), &mut needed)?;
+                        self.define_module_class(mapped_expr.clone(), &mut needed).expect("TODO: handle this properly");
                         
                         res.push(mapped_expr);
                         new_source.push(module.clone());
@@ -2611,20 +2758,21 @@ impl NessaContext{
             res.append(&mut new_code);
         }
 
-        let mut main_code = self.parse_without_precompiling(code)?;
+        let mut main_code = self.parse_without_precompiling(code).expect("TODO: Handle this properly");
         source.extend(std::iter::repeat(name.clone()).take(main_code.len()));
         res.append(&mut main_code);
 
         return Ok((res, source));
     }
 
-    pub fn parse_without_precompiling(&mut self, code: &String) -> Result<Vec<NessaExpr>, String> {
+    pub fn parse_without_precompiling(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
         self.define_module_classes(code)?;
         self.define_module_operators(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;
 
-        let lines = self.parse_nessa_module(code);
+        let lines = self.parse_nessa_module(code)?;
+
         self.define_module_function_overloads(&lines)?;
 
         return Ok(lines);
@@ -2640,18 +2788,27 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn parse_and_precompile(&mut self, code: &String) -> Result<Vec<NessaExpr>, String> {
+    pub fn parse_and_precompile(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
         let mut lines = self.parse_without_precompiling(code)?;
 
-        self.precompile_module(&mut lines)?;
+        let err = self.precompile_module(&mut lines);
+
+        if let Err(msg) = err {
+            return Err(NessaError::compiler_error(msg, &Location::none(), vec!()));
+        }
 
         return Ok(lines);
     }
 
-    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, String> {
+    pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, NessaError> {
         let lines = self.parse_and_precompile(&code)?;
+        let err = self.compiled_form(&lines);
 
-        return self.compiled_form(&lines);
+        if let Err(msg) = err {
+            return Err(NessaError::compiler_error(msg, &Location::none(), vec!()));
+        }
+
+        return Ok(err.expect("TODO: Handle this properly"));
     }
 }
 

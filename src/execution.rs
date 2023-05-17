@@ -2,7 +2,7 @@ use crate::types::Type;
 use crate::object::Object;
 use crate::context::NessaContext;
 use crate::operations::Operator;
-use crate::compilation::CompiledNessaExpr;
+use crate::compilation::{CompiledNessaExpr, NessaError};
 
 /*
                                                   ╒══════════════════╕
@@ -11,7 +11,7 @@ use crate::compilation::CompiledNessaExpr;
 */
 
 impl NessaContext {
-    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), String> {
+    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), NessaError> {
         let compiled_code = self.parse_and_compile(code)?;
 
         for (idx, i) in compiled_code.iter().enumerate() {
@@ -23,7 +23,7 @@ impl NessaContext {
 }
 
 impl NessaContext {
-    pub fn execute_compiled_code(&mut self, program: &Vec<CompiledNessaExpr>) -> Result<(), String> {
+    pub fn execute_compiled_code(&mut self, program: &Vec<CompiledNessaExpr>) -> Result<(), NessaError> {
         use CompiledNessaExpr::*;
 
         fn check_bool_obj(obj: Object) -> bool {
@@ -126,7 +126,10 @@ impl NessaContext {
                             args.push(stack.pop().unwrap());
                         }
 
-                        stack.push(f(type_args, r, args)?);
+                        match f(type_args, r, args) {
+                            Ok(obj) => stack.push(obj),
+                            Err(msg) => return Err(NessaError::execution_error(msg))
+                        };
 
                         ip += 1;
                     
@@ -141,7 +144,10 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        stack.push(ov.3.unwrap()(type_args, &ov.2, obj)?);
+                        match ov.3.unwrap()(type_args, &ov.2, obj) {
+                            Ok(obj) => stack.push(obj),
+                            Err(msg) => return Err(NessaError::execution_error(msg))
+                        };
 
                         ip += 1;
                     
@@ -157,7 +163,10 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        stack.push(ov.3.unwrap()(type_args, &ov.2, a, b)?);
+                        match ov.3.unwrap()(type_args, &ov.2, a, b) {
+                            Ok(obj) => stack.push(obj),
+                            Err(msg) => return Err(NessaError::execution_error(msg))
+                        };
                         
                         ip += 1;
                     
@@ -169,7 +178,11 @@ impl NessaContext {
                 NaryOperatorCall(op_id, ov_id, type_args) => {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
                         if let (_, _, r, Some(f)) = &operations[*ov_id] {
-                            f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r)?;
+                            let res = f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r);
+
+                            if let Err(msg) = res {
+                                return Err(NessaError::execution_error(msg));
+                            }
 
                         } else {
                             unreachable!();

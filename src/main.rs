@@ -38,5 +38,9 @@ fn main() {
 
     let mut ctx = standard_ctx();
 
-    ctx.parse_and_execute_nessa_module(&file).expect("An unexpected error occurred");
+    let res = ctx.parse_and_execute_nessa_module(&file);
+
+    if let Err(err) = res {
+        err.emit();
+    }
 }

@@ -8,6 +8,7 @@ use md5::compute;
 use serde::{Serialize, Deserialize};
 use serde_yaml::from_str;
 
+use crate::compilation::NessaError;
 use crate::context::*;
 use crate::graph::DirectedGraph;
 use crate::parser::*;
@@ -53,7 +54,7 @@ impl NessaModule {
     }
 }
 
-fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Result<HashMap<String, ModuleInfo>, String> {
+fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Result<HashMap<String, ModuleInfo>, NessaError> {
     let mut res = HashMap::new();
 
     let mut analyze_path = |f: std::path::PathBuf| {
@@ -63,7 +64,7 @@ fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Res
         let module_descriptors = nessa_module_header_parser(Span::new(&file)).unwrap().1;
 
         if module_descriptors.len() != 1 {
-            return Err(format!("Invalid number of module descriptors in {} (found {}, expected 1)", &path_str, module_descriptors.len()));
+            return Err(NessaError::module_error(format!("Invalid number of module descriptors in {} (found {}, expected 1)", &path_str, module_descriptors.len())));
         }
 
         let imports = nessa_module_imports_parser(Span::new(&file)).unwrap().1;
@@ -90,7 +91,7 @@ fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Res
                 },
 
                 Err(_) => {
-                    return Err("Unable to extract file from module path".into())
+                    return Err(NessaError::module_error("Unable to extract file from module path".into()));
                 }
             }
         }
@@ -100,14 +101,14 @@ fn get_nessa_files(module_paths: &Vec<String>, curr_module_path: &String) -> Res
 }
 
 impl NessaConfig {
-    pub fn new(name: String, module_paths: Vec<String>, curr_module_path: &String) -> Result<NessaConfig, String> {
+    pub fn new(name: String, module_paths: Vec<String>, curr_module_path: &String) -> Result<NessaConfig, NessaError> {
         let modules = get_nessa_files(&module_paths, curr_module_path)?;
 
         let defined_modules = modules.iter().map(|(n, _)| n).collect::<HashSet<_>>();
         let referenced_modules = modules.iter().flat_map(|(_, m)| &m.dependencies).collect::<HashSet<_>>();
 
         for i in referenced_modules.difference(&defined_modules) {
-            return Err(format!("Unable to find module with name \"{}\"", i));
+            return Err(NessaError::module_error(format!("Unable to find module with name \"{}\"", i)));
         }
 
         return Ok(NessaConfig {
@@ -117,14 +118,14 @@ impl NessaConfig {
         });
     }
 
-    pub fn get_imports_topological_order(&self) -> Result<Vec<String>, String> {
-        fn topological_order(config: &NessaConfig, node: &String, res: &mut Vec<String>, temp: &mut HashSet<String>, perm: &mut HashSet<String>) -> Result<(), String> {
+    pub fn get_imports_topological_order(&self) -> Result<Vec<String>, NessaError> {
+        fn topological_order(config: &NessaConfig, node: &String, res: &mut Vec<String>, temp: &mut HashSet<String>, perm: &mut HashSet<String>) -> Result<(), NessaError> {
             if perm.contains(node) {
                 return Ok(());
             }
 
             if temp.contains(node) {
-                return Err("Dependency tree is cyclic".into());
+                return Err(NessaError::module_error("Dependency tree is cyclic".into()));
             }
 
             temp.insert(node.clone());
@@ -154,16 +155,16 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config_aux<'a>(path: &String, already_compiled: &mut HashMap<String, NessaModule>) -> Result<NessaModule, String> {
+fn parse_nessa_module_with_config_aux<'a>(path: &String, already_compiled: &mut HashMap<String, NessaModule>) -> Result<NessaModule, NessaError> {
     let config_path = format!("{}/nessa_config.yml", &path);
     let main_path = format!("{}/main.nessa", &path);
 
     if !Path::new(&config_path).is_file() {
-        return Err(format!("Configuration file ({}) does not exist", &config_path));
+        return Err(NessaError::module_error(format!("Configuration file ({}) does not exist", &config_path)));
     }
 
     if !Path::new(&main_path).is_file() {
-        return Err(format!("Main file ({}) does not exist", &main_path));
+        return Err(NessaError::module_error(format!("Main file ({}) does not exist", &main_path)));
     }
 
     let config = fs::read_to_string(&config_path).expect("Error while reading config file");
@@ -200,7 +201,7 @@ fn parse_nessa_module_with_config_aux<'a>(path: &String, already_compiled: &mut 
 }
 
 
-pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), String> {
+pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
     let mut module = parse_nessa_module_with_config_aux(path, &mut HashMap::new())?;
 
     module.ctx.precompile_module(&mut module.code)?;

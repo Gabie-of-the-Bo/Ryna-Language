@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use colored::Colorize;
+
 use crate::context::NessaContext;
 use crate::object::Object;
 use crate::patterns::Pattern;
@@ -96,17 +98,17 @@ impl Type {
             Type::Empty => "()".into(),
             Type::InferenceMarker => "[Inferred]".into(),
 
-            Type::Basic(id) => ctx.type_templates[*id].name.clone(),
-            Type::Ref(t) => format!("&{}", t.get_name(ctx)),
-            Type::MutRef(t) => format!("&&{}", t.get_name(ctx)),
+            Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
+            Type::Ref(t) => format!("{}{}", "&".magenta(), t.get_name(ctx)),
+            Type::MutRef(t) => format!("{}{}", "&&".magenta(), t.get_name(ctx)),
             Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
 
-            Type::Wildcard => "*".into(),
+            Type::Wildcard => "*".cyan().to_string(),
 
-            Type::TemplateParam(id) => format!("'T_{}", id),
-            Type::TemplateParamStr(name) => format!("'{}", name),
-            Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.clone(), 
+            Type::TemplateParam(id) => format!("'T_{}", id).green().to_string(),
+            Type::TemplateParamStr(name) => format!("'{}", name).green().to_string(),
+            Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.cyan().to_string().clone(), 
                                                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
             Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
         }

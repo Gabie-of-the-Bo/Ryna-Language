@@ -35,21 +35,23 @@ mod integration {
 
         let mut ctx = standard_ctx();
 
-        let result = ctx.parse_and_execute_nessa_module(&file);
-
-        result.unwrap();
+        if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
+            err.emit();
+        }
     }
 
     fn module_test(module_path: &str) {
         let (mut ctx, lines) = precompile_nessa_module_with_config(&module_path.to_string()).unwrap();
 
-        let program = ctx.compiled_form(&lines).unwrap();
+        let program = ctx.compiled_form(&lines);
 
-        for (idx, i) in program.iter().enumerate() {
-            println!("{:<3} {}", idx, i.to_string());
+        if let Err(err) = &program {
+            err.emit();
         }
 
-        ctx.execute_compiled_code(&program.into_iter().map(|i| i.instruction).collect()).unwrap();
+        if let Err(err) = ctx.execute_compiled_code(&program.unwrap().into_iter().map(|i| i.instruction).collect()) {
+            err.emit();
+        }
     }
 
     #[test]

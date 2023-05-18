@@ -1,6 +1,7 @@
 use std::collections::{ HashMap };
 
 use colored::Colorize;
+use levenshtein::levenshtein;
 use nom::error::{VerboseErrorKind, VerboseError};
 use seq_macro::seq;
 
@@ -70,6 +71,18 @@ impl NessaError {
         };
     }
 
+    pub fn module_error(message: String) -> Self {
+        return NessaError { 
+            err_type: "Module error".into(), 
+            has_location: false,
+            message, 
+            line: 0, 
+            column: 0, 
+            fragment: "".into(), 
+            suggestions: vec!()
+        };
+    }
+
     pub fn emit(&self) {
         if self.has_location {
             let mut frag = self.fragment.as_str();
@@ -78,8 +91,8 @@ impl NessaError {
                 frag = &frag[..pos];
             }
     
-            if frag.len() > 20 {
-                frag = &frag[..20];
+            if frag.len() > 50 {
+                frag = &frag[..50];
             }
     
             frag = frag.trim();
@@ -88,15 +101,25 @@ impl NessaError {
                 "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
                 self.err_type.red().bold(), 
                 self.line.to_string().yellow(), self.column.to_string().yellow(), 
-                self.message.italic(), frag,
+                self.message, frag,
                 "^".repeat(frag.len()).red()
             );
+
+            if self.suggestions.len() > 0 {
+                eprintln!("[{}]\n", "Suggestions".blue().bold());
+
+                for s in &self.suggestions {
+                    eprintln!(" • {}", s);                    
+                }
+
+                eprintln!();
+            }
 
         } else {
             eprintln!(
                 "\n[{}] {}\n", 
                 self.err_type.red().bold(),
-                self.message.italic()
+                self.message
             );
         }
         
@@ -213,7 +236,7 @@ impl NessaContext {
         }
     }
 
-    fn compile_expr_function_calls(&mut self, expr: &mut NessaExpr) -> Result<(), String> {
+    fn compile_expr_function_calls(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
         match expr {
             // Compile tuples
             NessaExpr::Tuple(_, e) => {
@@ -264,7 +287,7 @@ impl NessaContext {
                 self.compile_expr_function_calls(h)?;
                 ib.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
 
-                ei.iter_mut().map(|(ei_h, ei_b)| -> Result<(), String> {
+                ei.iter_mut().map(|(ei_h, ei_b)| -> Result<(), NessaError> {
                     self.compile_expr_function_calls(ei_h)?;
                     ei_b.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;
 
@@ -292,7 +315,7 @@ impl NessaContext {
         return Ok(());
     }
 
-    fn compile_expr_function_bodies(&mut self, expr: &mut NessaExpr) -> Result<(), String> {
+    fn compile_expr_function_bodies(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
         match expr {
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
@@ -389,7 +412,7 @@ impl NessaContext {
         return Ok(());
     }
 
-    pub fn compile_functions(&mut self, body: &mut Vec<NessaExpr>) -> Result<(), String> {
+    pub fn compile_functions(&mut self, body: &mut Vec<NessaExpr>) -> Result<(), NessaError> {
         body.iter_mut().for_each(|i| self.compile_expr_function_names(i));    
         body.iter_mut().map(|i| self.compile_expr_function_calls(i)).collect::<Result<_, _>>()?;   
         body.iter_mut().map(|i| self.compile_expr_function_bodies(i)).collect::<Result<_, _>>()?;   
@@ -403,13 +426,29 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
-    fn compile_expr_variables(&self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), String> {
+    fn compile_expr_variables(&self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), NessaError> {
         match expr {
             // Compile variable references
             NessaExpr::NameReference(l, n) if ctx_idx.contains_key(n) => {
                 let (idx, t) = ctx_idx.get(n).unwrap();
                 *expr = NessaExpr::Variable(l.clone(), *idx, n.clone(), t.clone());
             },
+
+            NessaExpr::NameReference(l, n) => {
+                let similar_vars = ctx_idx.keys().filter(|name| levenshtein(n, name) < 3)
+                                                 .map(|i| format!("{} (Variable)", i.cyan()))
+                                                 .collect::<Vec<_>>();
+
+                let similar_func = self.functions.iter().map(|f| &f.name)
+                                                        .filter(|name| levenshtein(n, name) < 3)
+                                                        .map(|i| format!("{} (Function)", i.green()))
+                                                        .collect::<Vec<_>>();
+
+                return Err(NessaError::compiler_error(
+                    format!("Identifier with name {} is not defined", n), l, 
+                    similar_vars.into_iter().chain(similar_func).map(|i| format!("Similar: {}", i)).collect()
+                ));
+            }
 
             NessaExpr::VariableAssignment(l, n, e) if ctx_idx.contains_key(n) => {
                 if ctx_idx.contains_key(n) {
@@ -420,7 +459,7 @@ impl NessaContext {
                     *expr = NessaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone());
                 
                 } else {
-                    return Err(format!("Variable with name {} is not defined", n));
+                    return Err(NessaError::compiler_error(format!("Variable with name {} is not defined", n), l, vec!()));
                 }
             },
 
@@ -555,13 +594,22 @@ impl NessaContext {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
                 let container_type = self.infer_type(c).unwrap();
-                let iterator_type = self.get_iterator_type(&container_type)?;
-                let element_type = self.get_iterator_output_type(&iterator_type)?;
+                let iterator_type = self.get_iterator_type(&container_type);
+
+                if let Err(msg) = &iterator_type {
+                    return Err(NessaError::compiler_error(msg.clone(), &l, vec!()));
+                }
+
+                let element_type = self.get_iterator_output_type(iterator_type.as_ref().unwrap());
+
+                if let Err(msg) = element_type {
+                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                }
 
                 let iterator_idx = *registers.last().unwrap();
                 let element_idx = *registers.get(registers.len() - 2).unwrap();
 
-                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type), (i.clone(), element_type)))?;
+                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type.unwrap()), (i.clone(), element_type.unwrap())))?;
 
                 *expr = NessaExpr::CompiledFor(l.clone(), iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
             }
@@ -576,7 +624,7 @@ impl NessaContext {
         return Ok(());
     }
     
-    fn compile_vars_and_infer_ctx(&self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+    fn compile_vars_and_infer_ctx(&self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
         let mut curr_ctx = HashMap::new();
 
         for (n, t) in args {
@@ -603,11 +651,11 @@ impl NessaContext {
         return Ok(max_var);
     }
 
-    pub fn compile_vars_and_infer(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, String> {
+    pub fn compile_vars_and_infer(&self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
         return self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args);
     }
 
-    pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), String> {
+    pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_functions(body)?;
         self.compile_vars_and_infer(body, args)?;
 
@@ -1198,7 +1246,7 @@ impl NessaContext{
         unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
         binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
         nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
-    ) -> Result<(), String> {
+    ) -> Result<(), NessaError> {
         return match line {
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
@@ -1287,7 +1335,7 @@ impl NessaContext{
         unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
         binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
         nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
-    ) -> Result<(), String> {
+    ) -> Result<(), NessaError> {
         for line in lines {
             self.compile_lambda_expr(line, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
         }
@@ -1295,7 +1343,7 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn compiled_form(&mut self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, String> {
+    pub fn compiled_form(&mut self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, NessaError> {
         let mut program_size = 1;
         let mut functions: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
         let mut unary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
@@ -1414,7 +1462,7 @@ impl NessaContext{
                                 if i == 0 {
                                     let comment = format!(
                                         "fn {}{}({}) -> {}",
-                                        self.functions[*id].name,
+                                        self.functions[*id].name.green(),
                                         if ov.is_empty() { "".into() } else { format!("<{}>", ov.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                                         a.iter().map(|(_, t)| t.get_name(self)).collect::<Vec<_>>().join(", "),
                                         r.get_name(self)
@@ -1654,7 +1702,7 @@ impl NessaContext{
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         lambda_positions: &HashMap<usize, usize>,
         root: bool
-    ) -> Result<Vec<NessaInstruction>, String> {
+    ) -> Result<Vec<NessaInstruction>, NessaError> {
         return match expr {
             NessaExpr::Literal(_, obj) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))),
 
@@ -1688,14 +1736,14 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::UnaryOperation(_, id, t, e) => {
+            NessaExpr::UnaryOperation(l, id, t, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, false)?;
 
                 let i_t = self.infer_type(e).unwrap();
                 let (ov_id, _, native, t_args) = self.get_first_unary_op(*id, i_t, false).unwrap();
 
                 if t.len() != t_args.len() {
-                    return Err(format!("Unary operation expected {} type arguments and got {}", t_args.len(), t.len()));
+                    return Err(NessaError::compiler_error(format!("Unary operation expected {} type arguments and got {}", t_args.len(), t.len()), l, vec!()));
                 }
 
                 if native {
@@ -1709,7 +1757,7 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::BinaryOperation(_, id, t, a, b) => {
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
                 let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, lambda_positions, false)?;
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, false)?);
                 
@@ -1719,7 +1767,7 @@ impl NessaContext{
                 let (ov_id, _, native, t_args) = self.get_first_binary_op(*id, a_t, b_t, false).unwrap();
 
                 if t.len() != t_args.len() {
-                    return Err(format!("Binary operation expected {} type arguments and got {}", t_args.len(), t.len()));
+                    return Err(NessaError::compiler_error(format!("Binary operation expected {} type arguments and got {}", t_args.len(), t.len()), l, vec!()));
                 }
 
                 if native {
@@ -1733,7 +1781,7 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::NaryOperation(_, id, tm, a, b) => {
+            NessaExpr::NaryOperation(l, id, tm, a, b) => {
                 let mut res = vec!();
 
                 for i in b.iter().rev() {
@@ -1748,7 +1796,7 @@ impl NessaContext{
                 let (ov_id, _, native, t_args) = self.get_first_nary_op(*id, a_t, b_t, false).unwrap();
 
                 if tm.len() != t_args.len() {
-                    return Err(format!("N-ary operation expected {} type arguments and got {}", t_args.len(), tm.len()));
+                    return Err(NessaError::compiler_error(format!("N-ary operation expected {} type arguments and got {}", t_args.len(), tm.len()), l, vec!()));
                 }
 
                 if native {
@@ -1800,7 +1848,7 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::CompiledFor(_, it_var_id, elem_var_id, _, c, b) => {
+            NessaExpr::CompiledFor(l, it_var_id, elem_var_id, _, c, b) => {
                 if let Some(t) = self.infer_type(c) {
                     let mut res = self.compiled_form_expr(c, functions, unary, binary, nary, lambda_positions, false)?;
 
@@ -1864,23 +1912,23 @@ impl NessaContext{
                                     Ok(res)
 
                                 } else {
-                                    Err(format!("Funtion overload is_consumed({}) returns {} (expected Bool)", it_mut.get_name(self), consumed_res.get_name(self)))
+                                    Err(NessaError::compiler_error(format!("Funtion overload is_consumed({}) returns {} (expected Bool)", it_mut.get_name(self), consumed_res.get_name(self)), l, vec!()))
                                 }
 
                             } else {
-                                Err(format!("Funtion overload for is_consumed({}) is not defined", it_mut.get_name(self)))
+                                Err(NessaError::compiler_error(format!("Funtion overload for is_consumed({}) is not defined", it_mut.get_name(self)), l, vec!()))
                             }
 
                         } else {
-                            Err(format!("Funtion overload for next({}) is not defined", it_mut.get_name(self)))
+                            Err(NessaError::compiler_error(format!("Funtion overload for next({}) is not defined", it_mut.get_name(self)), l, vec!()))
                         }
 
                     } else {
-                        Err(format!("Funtion overload for iterator({}) is not defined", t.get_name(self)))
+                        Err(NessaError::compiler_error(format!("Funtion overload for iterator({}) is not defined", t.get_name(self)), l, vec!()))
                     }
                     
                 } else {
-                    Err("Container expression does not return a valid value".into())
+                    Err(NessaError::compiler_error("Container expression does not return a valid value".into(), l, vec!()))
                 }
             },
             NessaExpr::Return(_, e) => {
@@ -1889,7 +1937,7 @@ impl NessaContext{
 
                 Ok(res)
             },
-            NessaExpr::FunctionCall(_, id, t, a) => {
+            NessaExpr::FunctionCall(l, id, t, a) => {
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
@@ -1900,7 +1948,7 @@ impl NessaContext{
                 let (ov_id, _, native, t_args) = self.get_first_function_overload(*id, args_types, false).unwrap();
 
                 if t.len() != t_args.len() {
-                    return Err(format!("Function call {} expected {} type arguments and got {}", self.functions[*id].name, t_args.len(), t.len()));
+                    return Err(NessaError::compiler_error(format!("Function call {} expected {} type arguments and got {}", self.functions[*id].name.green(), t_args.len(), t.len()), l, vec!()));
                 }
 
                 if native {
@@ -1928,7 +1976,7 @@ impl NessaContext{
         binary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         nary: &HashMap<(usize, usize, Vec<Type>), usize>, 
         lambda_positions: &HashMap<usize, usize>
-    ) -> Result<Vec<NessaInstruction>, String> {
+    ) -> Result<Vec<NessaInstruction>, NessaError> {
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, true)).flat_map(|i| i.unwrap()).collect());
     }
 
@@ -2249,7 +2297,7 @@ impl NessaContext{
         return Ok(classes[&id]);
     }
 
-    fn map_nessa_function(&mut self, other: &NessaContext, id: usize, functions: &mut HashMap<usize, usize>) -> Result<usize, String> {
+    fn map_nessa_function(&mut self, other: &NessaContext, id: usize, functions: &mut HashMap<usize, usize>, l: &Location) -> Result<usize, NessaError> {
         let f_name = &other.functions[id].name;
 
         if !functions.contains_key(&id) {
@@ -2261,7 +2309,10 @@ impl NessaContext{
 
             } else { // Else the function needs to be defined
                 fn_id = self.functions.len();
-                self.define_function(f_name.clone())?;
+
+                if let Err(err) = self.define_function(f_name.clone()) {
+                    return Err(NessaError::compiler_error(err, l, vec!()));
+                }
             }
 
             return Ok(*functions.entry(id).or_insert(fn_id));
@@ -2270,7 +2321,7 @@ impl NessaContext{
         return Ok(functions[&id]);
     }
 
-    fn map_nessa_unary_operator(&mut self, other: &NessaContext, id: usize, unary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+    fn map_nessa_unary_operator(&mut self, other: &NessaContext, id: usize, unary_operators: &mut HashMap<usize, usize>, l: &Location) -> Result<usize, NessaError> {
         if let Operator::Unary{representation: r, prefix, precedence, ..} = &other.unary_ops[id] {
             if !unary_operators.contains_key(&id) {
                 let mapped_op_id;
@@ -2284,20 +2335,23 @@ impl NessaContext{
     
                 } else { // Else the function needs to be defined
                     mapped_op_id = self.unary_ops.len();
-                    self.define_unary_operator(r.clone(), *prefix, *precedence)?;
+
+                    if let Err(err) = self.define_unary_operator(r.clone(), *prefix, *precedence) {
+                        return Err(NessaError::compiler_error(err, l, vec!()));
+                    }
                 }
     
                 return Ok(*unary_operators.entry(id).or_insert(mapped_op_id));
             }
         
         } else {
-            return Err(format!("Unable to find unary operator with id = {}", id));
+            return Err(NessaError::compiler_error(format!("Unable to find unary operator with id = {}", id), l, vec!()));
         }
 
         return Ok(unary_operators[&id]);
     }
 
-    fn map_nessa_binary_operator(&mut self, other: &NessaContext, id: usize, binary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+    fn map_nessa_binary_operator(&mut self, other: &NessaContext, id: usize, binary_operators: &mut HashMap<usize, usize>, l: &Location) -> Result<usize, NessaError> {
         if let Operator::Binary{representation: r, precedence, ..} = &other.binary_ops[id] {
             if !binary_operators.contains_key(&id) {
                 let mapped_op_id;
@@ -2311,20 +2365,23 @@ impl NessaContext{
     
                 } else { // Else the function needs to be defined
                     mapped_op_id = self.binary_ops.len();
-                    self.define_binary_operator(r.clone(), *precedence)?;
+
+                    if let Err(err) = self.define_binary_operator(r.clone(), *precedence) {
+                        return Err(NessaError::compiler_error(err, l, vec!()));
+                    }
                 }
     
                 return Ok(*binary_operators.entry(id).or_insert(mapped_op_id));
             }
         
         } else {
-            return Err(format!("Unable to find binary operator with id = {}", id));
+            return Err(NessaError::compiler_error(format!("Unable to find binary operator with id = {}", id), l, vec!()));
         }
 
         return Ok(binary_operators[&id]);
     }
 
-    fn map_nessa_nary_operator(&mut self, other: &NessaContext, id: usize, nary_operators: &mut HashMap<usize, usize>) -> Result<usize, String> {
+    fn map_nessa_nary_operator(&mut self, other: &NessaContext, id: usize, nary_operators: &mut HashMap<usize, usize>, l: &Location) -> Result<usize, NessaError> {
         if let Operator::Nary{open_rep: or, close_rep: cr, precedence, ..} = &other.nary_ops[id] {
             if !nary_operators.contains_key(&id) {
                 let mapped_op_id;
@@ -2338,14 +2395,17 @@ impl NessaContext{
     
                 } else { // Else the function needs to be defined
                     mapped_op_id = self.binary_ops.len();
-                    self.define_nary_operator(or.clone(), cr.clone(), *precedence)?;
+
+                    if let Err(err) = self.define_nary_operator(or.clone(), cr.clone(), *precedence) {
+                        return Err(NessaError::compiler_error(err, l, vec!()));
+                    }
                 }
     
                 return Ok(*nary_operators.entry(id).or_insert(mapped_op_id));
             }
         
         } else {
-            return Err(format!("Unable to find binary operator with id = {}", id));
+            return Err(NessaError::compiler_error(format!("Unable to find binary operator with id = {}", id), l, vec!()));
         }
 
         return Ok(nary_operators[&id]);
@@ -2358,7 +2418,7 @@ impl NessaContext{
         binary_operators: &mut HashMap<usize, usize>,
         nary_operators: &mut HashMap<usize, usize>,
         classes: &mut HashMap<usize, usize>
-    ) -> Result<(), String> {
+    ) -> Result<(), NessaError> {
         match expr {
             NessaExpr::Literal(..) |
             NessaExpr::NameReference(..) => {}
@@ -2374,8 +2434,8 @@ impl NessaContext{
                 self.map_nessa_expression(e, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
             }
 
-            NessaExpr::UnaryOperation(_, id, t, a) => {
-                *id = self.map_nessa_unary_operator(ctx, *id, unary_operators)?;
+            NessaExpr::UnaryOperation(l, id, t, a) => {
+                *id = self.map_nessa_unary_operator(ctx, *id, unary_operators, l)?;
 
                 let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
                 *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
@@ -2383,8 +2443,8 @@ impl NessaContext{
                 self.map_nessa_expression(a, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
             }
 
-            NessaExpr::BinaryOperation(_, id, t, a, b) => {
-                *id = self.map_nessa_binary_operator(ctx, *id, unary_operators)?;
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
+                *id = self.map_nessa_binary_operator(ctx, *id, unary_operators, l)?;
 
                 let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
                 *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
@@ -2393,8 +2453,8 @@ impl NessaContext{
                 self.map_nessa_expression(b, ctx, functions, unary_operators, binary_operators, nary_operators, classes)?;
             }
 
-            NessaExpr::NaryOperation(_, id, t, a, b) => {
-                *id = self.map_nessa_nary_operator(ctx, *id, nary_operators)?;
+            NessaExpr::NaryOperation(l, id, t, a, b) => {
+                *id = self.map_nessa_nary_operator(ctx, *id, nary_operators, l)?;
 
                 let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
                 *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
@@ -2406,8 +2466,8 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::FunctionCall(_, id, t, args) => {
-                *id = self.map_nessa_function(ctx, *id, functions)?;
+            NessaExpr::FunctionCall(l, id, t, args) => {
+                *id = self.map_nessa_function(ctx, *id, functions, l)?;
 
                 let mut mapping = |id| self.map_nessa_class(ctx, id, classes);
                 *t = t.iter().map(|t| t.map_basic_types(&mut mapping)).collect();
@@ -2466,7 +2526,7 @@ impl NessaContext{
         ctx: &NessaContext, 
         imports: &Imports,
         current_imports: &mut ImportMap
-    ) -> Result<(Vec<NessaExpr>, Vec<String>), String> {
+    ) -> Result<(Vec<NessaExpr>, Vec<String>), NessaError> {
         let mut res = vec!();
         let mut new_source = vec!();
         let mut functions: HashMap<usize, usize> = HashMap::new();
@@ -2490,7 +2550,7 @@ impl NessaContext{
                         let mut needed = false;
                         let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, p.clone());
 
-                        self.define_module_class(mapped_expr.clone(), &mut needed).expect("TODO: handle this properly");
+                        self.define_module_class(mapped_expr.clone(), &mut needed)?;
                         
                         res.push(mapped_expr);
                         new_source.push(module.clone());
@@ -2507,7 +2567,7 @@ impl NessaContext{
                     if imports.contains_key(&ImportType::Fn) && imports[&ImportType::Fn].contains(f_name) && 
                     (!foreign || !curr_mod_imports.contains_key(&ImportType::Fn) || !curr_mod_imports[&ImportType::Fn].contains(f_name)) {
 
-                        let fn_id = self.map_nessa_function(&ctx, *id, &mut functions)?;
+                        let fn_id = self.map_nessa_function(&ctx, *id, &mut functions, l)?;
 
                         let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
                         let mapped_args = a.iter().map(|(n, t)| (n.clone(), t.map_basic_types(&mut mapping))).collect::<Vec<_>>();
@@ -2521,7 +2581,10 @@ impl NessaContext{
                         }
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                        self.define_function_overload(fn_id, t.len(), &arg_types, mapped_return.clone(), None)?;
+
+                        if let Err(err) = self.define_function_overload(fn_id, t.len(), &arg_types, mapped_return.clone(), None) {
+                            return Err(NessaError::compiler_error(err, l, vec!()));
+                        }
 
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::FunctionDefinition(l.clone(), fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
@@ -2550,7 +2613,7 @@ impl NessaContext{
                     if imports.contains_key(&op_import_type) && imports[&op_import_type].contains(rep) && 
                     (!foreign || !curr_mod_imports.contains_key(&op_import_type) || !curr_mod_imports[&op_import_type].contains(rep)) {
                     
-                        let op_id = self.map_nessa_unary_operator(&ctx, *id, &mut unary_operators)?;
+                        let op_id = self.map_nessa_unary_operator(&ctx, *id, &mut unary_operators, l)?;
 
                         let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
                         let mapped_arg_t = arg_t.map_basic_types(&mut mapping);
@@ -2563,7 +2626,9 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
                         }
 
-                        self.define_unary_operation(*id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None)?;
+                        if let Err(err) = self.define_unary_operation(*id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None) {
+                            return Err(NessaError::compiler_error(err, l, vec!()));
+                        }
 
                         // Add the mapped function to the list of new expressions
                         if *op_prefix {
@@ -2585,7 +2650,7 @@ impl NessaContext{
                     if imports.contains_key(&ImportType::Binary) && imports[&ImportType::Binary].contains(&rep) && 
                     (!foreign || !curr_mod_imports.contains_key(&ImportType::Binary) || !curr_mod_imports[&ImportType::Binary].contains(&rep)) {
 
-                        let op_id = self.map_nessa_binary_operator(&ctx, *id, &mut binary_operators)?;
+                        let op_id = self.map_nessa_binary_operator(&ctx, *id, &mut binary_operators, l)?;
 
                         let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
                         let mapped_arg1 = (a.0.clone(), a.1.map_basic_types(&mut mapping));
@@ -2599,7 +2664,9 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut functions, &mut unary_operators, &mut binary_operators, &mut nary_operators, &mut classes)?;
                         }
 
-                        self.define_binary_operation(*id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None)?;
+                        if let Err(err) = self.define_binary_operation(*id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None) {
+                            return Err(NessaError::compiler_error(err, l, vec!()));
+                        }
 
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::BinaryOperationDefinition(l.clone(), op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
@@ -2616,7 +2683,7 @@ impl NessaContext{
                     if imports.contains_key(&ImportType::Nary) && imports[&ImportType::Nary].contains(&rep) && 
                     (!foreign || !curr_mod_imports.contains_key(&ImportType::Nary) || !curr_mod_imports[&ImportType::Nary].contains(&rep)) {
 
-                        let op_id = self.map_nessa_nary_operator(&ctx, *id, &mut nary_operators)?;
+                        let op_id = self.map_nessa_nary_operator(&ctx, *id, &mut nary_operators, l)?;
 
                         let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
                         let mapped_arg = (arg.0.clone(), arg.1.map_basic_types(&mut mapping));
@@ -2632,7 +2699,9 @@ impl NessaContext{
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                        self.define_nary_operation(*id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None)?;
+                        if let Err(err) = self.define_nary_operation(*id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None) {
+                            return Err(NessaError::compiler_error(err, l, vec!()));
+                        }
 
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::NaryOperationDefinition(l.clone(), op_id, t.clone(), mapped_arg, mapped_args, mapped_return, mapped_body));
@@ -2735,7 +2804,7 @@ impl NessaContext{
         name: &String,
         code: &String, 
         modules: &HashMap<String, NessaModule>
-    ) -> Result<(Vec<NessaExpr>, Vec<String>), String> {
+    ) -> Result<(Vec<NessaExpr>, Vec<String>), NessaError> {
         let mut res = vec!();
         let mut source = vec!();
         let mut imports = nessa_module_imports_parser(Span::new(&code)).unwrap().1; // TODO: should cache this
@@ -2758,7 +2827,7 @@ impl NessaContext{
             res.append(&mut new_code);
         }
 
-        let mut main_code = self.parse_without_precompiling(code).expect("TODO: Handle this properly");
+        let mut main_code = self.parse_without_precompiling(code)?;
         source.extend(std::iter::repeat(name.clone()).take(main_code.len()));
         res.append(&mut main_code);
 
@@ -2778,7 +2847,7 @@ impl NessaContext{
         return Ok(lines);
     }
 
-    pub fn precompile_module(&mut self, lines: &mut Vec<NessaExpr>) -> Result<(), String> {        
+    pub fn precompile_module(&mut self, lines: &mut Vec<NessaExpr>) -> Result<(), NessaError> {        
         self.compile(lines, &vec!())?;
 
         for expr in lines.iter_mut() {
@@ -2790,25 +2859,15 @@ impl NessaContext{
 
     pub fn parse_and_precompile(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
         let mut lines = self.parse_without_precompiling(code)?;
-
-        let err = self.precompile_module(&mut lines);
-
-        if let Err(msg) = err {
-            return Err(NessaError::compiler_error(msg, &Location::none(), vec!()));
-        }
+        self.precompile_module(&mut lines)?;
 
         return Ok(lines);
     }
 
     pub fn parse_and_compile(&mut self, code: &String) -> Result<Vec<NessaInstruction>, NessaError> {
         let lines = self.parse_and_precompile(&code)?;
-        let err = self.compiled_form(&lines);
 
-        if let Err(msg) = err {
-            return Err(NessaError::compiler_error(msg, &Location::none(), vec!()));
-        }
-
-        return Ok(err.expect("TODO: Handle this properly"));
+        return self.compiled_form(&lines);
     }
 }
 

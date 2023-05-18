@@ -26,6 +26,7 @@ serde_yaml = "0.8"
 glob = "0.2.8"
 md5 = "*"
 colored = "2"
+levenshtein = "1.0.5"
 
 [dev-dependencies]
 num-traits = "*"

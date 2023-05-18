@@ -161,16 +161,19 @@ fn module_header_parser<'a>(input: Span<'a>) -> PResult<'a, (String, String)> {
         tuple((
             tag("module"),
             multispace1,
-            identifier_parser,
+            context("Expected module name after 'module'", cut(identifier_parser)),
             multispace0,
-            tag("["),
+            context("Expected '[' after module name", cut(tag("["))),
             multispace0,
-            separated_list1(
-                tag("."), 
-                take_while1(|c: char| c.is_digit(10))
+            context(
+                "Expected version number after module name",
+                cut(separated_list1(
+                    tag("."), 
+                    take_while1(|c: char| c.is_digit(10))
+                ))
             ),
             multispace0,
-            tag("]")
+            context("Expected ']' after version number", cut(tag("]")))
         )),
         |(_, _, n, _, _, _, v, _, _)| (n, v.into_iter().map(|i| i.to_string()).collect::<Vec<_>>().join("."))
     )(input)
@@ -181,49 +184,55 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
         tuple((
             tag("import"),
             multispace1,
-            alt((
-                value(ImportType::Class, tag("class")),
-                value(ImportType::Fn, tag("fn")),
-                value(ImportType::Prefix, tuple((tag("prefix"), multispace1, tag("op")))),
-                value(ImportType::Postfix, tuple((tag("postfix"), multispace1, tag("op")))),
-                value(ImportType::Binary, tuple((tag("binary"), multispace1, tag("op")))),
-                value(ImportType::Nary, tuple((tag("nary"), multispace1, tag("op")))),
-            )),
+            context(
+                "Expected import type after 'import' keyword",
+                cut(alt((
+                    value(ImportType::Class, tag("class")),
+                    value(ImportType::Fn, tag("fn")),
+                    value(ImportType::Prefix, tuple((tag("prefix"), multispace1, tag("op")))),
+                    value(ImportType::Postfix, tuple((tag("postfix"), multispace1, tag("op")))),
+                    value(ImportType::Binary, tuple((tag("binary"), multispace1, tag("op")))),
+                    value(ImportType::Nary, tuple((tag("nary"), multispace1, tag("op")))),
+                )))
+            ),
             multispace1,
-            alt((
-                map(
-                    tuple((
-                        alt((
-                            string_parser,
-                            identifier_parser
-                        )),
-                        multispace1
-                    )),
-                    |(s, _)| vec!(s)
-                ),
-                map(
-                    tuple((
-                        tag("{"),
-                        multispace0,
-                        separated_list1(
-                            tuple((multispace0, tag(","), multispace0)),
+            context(
+                "Expected a String, an identifier or a brace-enclosed list of identifiers after import type",
+                cut(alt((
+                    map(
+                        tuple((
                             alt((
                                 string_parser,
                                 identifier_parser
-                            ))
-                        ),
-                        multispace0,
-                        tag("}"),
-                        multispace0
-                    )),
-                    |(_, _, v, _, _, _)| v
-                )
-            )),
-            tag("from"),
+                            )),
+                            multispace1
+                        )),
+                        |(s, _)| vec!(s)
+                    ),
+                    map(
+                        tuple((
+                            tag("{"),
+                            multispace0,
+                            separated_list1(
+                                tuple((multispace0, tag(","), multispace0)),
+                                alt((
+                                    string_parser,
+                                    identifier_parser
+                                ))
+                            ),
+                            multispace0,
+                            tag("}"),
+                            multispace0
+                        )),
+                        |(_, _, v, _, _, _)| v
+                    )
+                )))
+            ),
+            context("Expected 'from' after import type", cut(tag("from"))),
             multispace1,
-            identifier_parser,
+            context("Expected identifier after 'from' in import statement", cut(identifier_parser)),
             multispace0,
-            tag(";")
+            context("Expected ';' at the end of import statement", cut(tag(";")))
         )),
         |(_, _, t, _, v, _, _, n, _, _)| (n, t, v.into_iter().collect())
     )(input)

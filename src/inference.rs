@@ -225,7 +225,11 @@ impl NessaContext {
             NessaExpr::NaryOperation(_, id, t, a, b) => {
                 let t_sub_call = t.iter().cloned().enumerate().collect();
                 let a_type = self.infer_type(a)?.sub_templates(&t_sub_call);
-                let b_type = b.iter().map(|i| self.infer_type(i).unwrap().sub_templates(&t_sub_call)).collect();
+                let b_type = b.iter().map(|i| self.infer_type(i))
+                                     .collect::<Option<Vec<_>>>()?
+                                     .into_iter()
+                                     .map(|i| i.sub_templates(&t_sub_call))
+                                     .collect();
 
                 let (_, r, _, subs) = self.get_first_nary_op(*id, a_type, b_type, false)?;
                 let t_sub_ov = subs.iter().cloned().enumerate().collect();
@@ -235,7 +239,11 @@ impl NessaContext {
 
             NessaExpr::FunctionCall(_, id, t, args) => {
                 let t_sub_call = t.iter().cloned().enumerate().collect();
-                let arg_types = args.iter().map(|i| self.infer_type(i).unwrap().sub_templates(&t_sub_call)).collect();
+                let arg_types = args.iter().map(|i| self.infer_type(i))
+                                           .collect::<Option<Vec<_>>>()?
+                                           .into_iter()
+                                           .map(|i| i.sub_templates(&t_sub_call))
+                                           .collect();
 
                 let (_, r, _, subs) = self.get_first_function_overload(*id, arg_types, false)?;
                 let t_sub_ov = subs.iter().cloned().enumerate().collect();

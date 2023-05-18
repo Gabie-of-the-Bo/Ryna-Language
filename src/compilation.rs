@@ -470,7 +470,9 @@ impl NessaContext {
                 self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
 
                 if let Type::InferenceMarker = t {
-                    *t = self.infer_type(e).unwrap();
+                    *t = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of definition right handside".into(), l, vec!()
+                    ))?;
                 }
 
                 ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
@@ -491,11 +493,13 @@ impl NessaContext {
             }
 
             // Compile operations
-            NessaExpr::UnaryOperation(_, id, t, e) => {
+            NessaExpr::UnaryOperation(l, id, t, e) => {
                 self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
 
                 if t.len() == 0 {
-                    let arg_type = self.infer_type(e).unwrap();
+                    let arg_type = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of unary operation argument".into(), l, vec!()
+                    ))?;
 
                     if self.is_unary_op_ambiguous(*id, arg_type.clone()).is_none() {
                         if let Some((_, _, _, it_args)) = self.get_first_unary_op(*id, arg_type.clone(), true) {
@@ -507,16 +511,21 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::BinaryOperation(_, id, t, a, b) => {
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
                 self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
                 self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
 
                 if t.len() == 0 {
-                    let arg_type_1 = self.infer_type(a).unwrap();
-                    let arg_type = self.infer_type(b).unwrap();
+                    let arg_type_1 = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of binary operation argument".into(), &l, vec!()
+                    ))?;
 
-                    if self.is_binary_op_ambiguous(*id, arg_type_1.clone(), arg_type.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type.clone(), true) {
+                    let arg_type_2 = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of binary operation argument".into(), &l, vec!()
+                    ))?;
+
+                    if self.is_binary_op_ambiguous(*id, arg_type_1.clone(), arg_type_2.clone()).is_none() {
+                        if let Some((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type_2.clone(), true) {
                             if it_args.len() > 0 {
                                 *t = it_args;
                             }
@@ -525,7 +534,7 @@ impl NessaContext {
                 }
             }
             
-            NessaExpr::NaryOperation(_, id, t, a, b) => {
+            NessaExpr::NaryOperation(l, id, t, a, b) => {
                 self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
 
                 for i in b.iter_mut() {
@@ -533,8 +542,13 @@ impl NessaContext {
                 }
 
                 if t.len() == 0 {
-                    let arg_type = self.infer_type(a).unwrap();
-                    let arg_types: Vec<_> = b.iter().map(|a| self.infer_type(a).unwrap()).collect();
+                    let arg_type = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of n-ary operation argument".into(), &l, vec!()
+                    ))?;
+
+                    let arg_types: Vec<_> = b.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of unary operation argument".into(), &l, vec!()
+                    ))).collect::<Result<_, _>>()?;
                     
                     if self.is_nary_op_ambiguous(*id, arg_type.clone(), arg_types.clone()).is_none() {
                         if let Some((_, _, _, it_args)) = self.get_first_nary_op(*id, arg_type.clone(), arg_types, true) {
@@ -552,13 +566,15 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::FunctionCall(_, id, t, args) => {
+            NessaExpr::FunctionCall(l, id, t, args) => {
                 for i in args.iter_mut() {
                     self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
                 }
 
                 if t.len() == 0 {
-                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).unwrap()).collect();
+                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer type of function argument".into(), &l, vec!()
+                    ))).collect::<Result<_, _>>()?;
 
                     if self.is_function_overload_ambiguous(*id, arg_types.clone()).is_none() {
                         if let Some((_, _, _, it_args)) = self.get_first_function_overload(*id, arg_types.clone(), true) {
@@ -593,7 +609,10 @@ impl NessaContext {
             NessaExpr::For(l, i, c, b) => {
                 self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
 
-                let container_type = self.infer_type(c).unwrap();
+                let container_type = self.infer_type(c).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of for loop container".into(), &l, vec!()
+                ))?;
+
                 let iterator_type = self.get_iterator_type(&container_type);
 
                 if let Err(msg) = &iterator_type {
@@ -1484,7 +1503,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.compile(&mut sub_b, &vec!()).unwrap();    
+                                self.compile(&mut sub_b, &vec!())?;    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1530,7 +1549,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.compile(&mut sub_b, &vec!()).unwrap();    
+                                self.compile(&mut sub_b, &vec!())?;    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1567,7 +1586,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.compile(&mut sub_b, &vec!()).unwrap();    
+                                self.compile(&mut sub_b, &vec!())?;    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1619,7 +1638,7 @@ impl NessaContext{
                                 let templates = ov.iter().cloned().enumerate().collect();
 
                                 sub_b.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                                self.compile(&mut sub_b, &vec!()).unwrap();    
+                                self.compile(&mut sub_b, &vec!())?;    
 
                                 // Statically check the newly instantiated functions
                                 for line in &sub_b {
@@ -1714,12 +1733,15 @@ impl NessaContext{
                 ))))))
             },
 
-            NessaExpr::Tuple(_, e) => {
+            NessaExpr::Tuple(l, e) => {
                 let mut types = Vec::with_capacity(e.len());
                 let mut res = vec!();
 
                 for i in e.iter().rev() {
-                    types.push(self.infer_type(i).unwrap());
+                    types.push(self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
+                        "Unable to infer tuple argument type".into(), l, vec!()
+                    ))?);
+
                     res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
 
@@ -1739,7 +1761,10 @@ impl NessaContext{
             NessaExpr::UnaryOperation(l, id, t, e) => {
                 let mut res = self.compiled_form_expr(e, functions, unary, binary, nary, lambda_positions, false)?;
 
-                let i_t = self.infer_type(e).unwrap();
+                let i_t = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of unary operation argument".into(), l, vec!()
+                ))?;
+
                 let (ov_id, _, native, t_args) = self.get_first_unary_op(*id, i_t, false).unwrap();
 
                 if t.len() != t_args.len() {
@@ -1761,8 +1786,13 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(b, functions, unary, binary, nary, lambda_positions, false)?;
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, false)?);
                 
-                let a_t = self.infer_type(a).unwrap();
-                let b_t = self.infer_type(b).unwrap();
+                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of binary operation argument".into(), l, vec!()
+                ))?;
+
+                let b_t = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of binary operation argument".into(), l, vec!()
+                ))?;
 
                 let (ov_id, _, native, t_args) = self.get_first_binary_op(*id, a_t, b_t, false).unwrap();
 
@@ -1790,8 +1820,13 @@ impl NessaContext{
                 
                 res.extend(self.compiled_form_expr(a, functions, unary, binary, nary, lambda_positions, false)?);
 
-                let a_t = self.infer_type(a).unwrap();
-                let b_t = b.iter().map(|i| self.infer_type(i).unwrap()).collect();
+                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of n-ary operation argument".into(), l, vec!()
+                ))?;
+
+                let b_t = b.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of n-ary operation argument".into(), l, vec!()
+                ))).collect::<Result<_, _>>()?;
 
                 let (ov_id, _, native, t_args) = self.get_first_nary_op(*id, a_t, b_t, false).unwrap();
 
@@ -1944,7 +1979,10 @@ impl NessaContext{
                     res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
                 
-                let args_types = a.iter().map(|i| self.infer_type(i).unwrap()).collect();
+                let args_types = a.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of function argument".into(), l, vec!()
+                ))).collect::<Result<_, _>>()?;
+
                 let (ov_id, _, native, t_args) = self.get_first_function_overload(*id, args_types, false).unwrap();
 
                 if t.len() != t_args.len() {

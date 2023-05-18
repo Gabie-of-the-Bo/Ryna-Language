@@ -4,8 +4,9 @@ fn is_prime(n: &&Number) -> Bool {
     }
     
     let i: Number = 1;
+    let limit = ceil(sqrt(n - 1));
 
-    while i < n - 1 {
+    while i < limit {
         i = i + 1;
 
         if n % i == 0 {
@@ -19,7 +20,7 @@ fn is_prime(n: &&Number) -> Bool {
 let array = arr<Number>();
 let it: Number = 0;
 
-while it < 1000 {
+while it < 100000 {
     if is_prime(it) {
         array.push(it.deref());
     }
@@ -27,6 +28,6 @@ while it < 1000 {
     it = it + 1;
 }
 
-if array.len() != 168 {
+if array.len() != 9592 {
     panic("Invalid number of primes");
 }

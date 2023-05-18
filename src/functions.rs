@@ -246,18 +246,30 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     define_unary_function_overloads!(ctx, 15, Type::Basic(0), Type::Basic(0), Number, a, a.exp()?);
 
+    ctx.define_function("floor".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 16, Type::Basic(0), Type::Basic(0), Number, a, a.floor()?);
+
+    ctx.define_function("ceil".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 17, Type::Basic(0), Type::Basic(0), Number, a, a.ceil()?);
+
+    ctx.define_function("sqrt".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 18, Type::Basic(0), Type::Basic(0), Number, a, a.sqrt()?);
+
     ctx.define_function("rand".into()).unwrap();
 
-    ctx.define_native_function_overload(16, 0, &[], Type::Basic(0), |_, _, _| Ok(Object::new(Number::rand()))).unwrap();
+    ctx.define_native_function_overload(19, 0, &[], Type::Basic(0), |_, _, _| Ok(Object::new(Number::rand()))).unwrap();
 
     ctx.define_function("rand_int".into()).unwrap();
 
-    define_binary_function_overloads!(ctx, 17, Type::Basic(0), Type::Basic(0), Number, a, b, Number::rand_int_range(&a, &b)?);
+    define_binary_function_overloads!(ctx, 20, Type::Basic(0), Type::Basic(0), Number, a, b, Number::rand_int_range(&a, &b)?);
 
     ctx.define_function("is".into()).unwrap();
 
     ctx.define_native_function_overload(
-        18, 
+        21, 
         1,
         &[Type::Wildcard], 
         Type::Basic(2), 
@@ -267,7 +279,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("as".into()).unwrap();
 
     ctx.define_native_function_overload(
-        19, 
+        22, 
         1,
         &[Type::Wildcard], 
         Type::TemplateParam(0), 

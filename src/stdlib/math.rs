@@ -38,6 +38,27 @@ impl Number{
                                                       ╘══════════════════════╛
     */
     
+    pub fn floor(&self) -> Result<Number, String> {
+        return match self {
+            Number::Float(f) => Ok(Number::from(f.floor() as u64)),
+            Number::Int(i) => Ok(Number::Int(i.clone())),
+        };
+    }
+    
+    pub fn ceil(&self) -> Result<Number, String> {
+        return match self {
+            Number::Float(f) => Ok(Number::from(f.ceil() as u64)),
+            Number::Int(i) => Ok(Number::Int(i.clone())),
+        };
+    }
+    
+    pub fn sqrt(&self) -> Result<Number, String> {
+        return match self {
+            Number::Float(f) => Ok(Number::Float(f.sqrt())),
+            Number::Int(i) => Ok(Number::Float(i.to_f64().sqrt())),
+        };
+    }
+
     pub fn pow(&self, exponent: &Number) -> Result<Number, String> {
         return match (self, exponent) {
             (Number::Float(b), Number::Float(e)) => Ok(Number::Float(b.powf(*e))),

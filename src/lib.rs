@@ -41,7 +41,13 @@ mod integration {
     }
 
     fn module_test(module_path: &str) {
-        let (mut ctx, lines) = precompile_nessa_module_with_config(&module_path.to_string()).unwrap();
+        let err = precompile_nessa_module_with_config(&module_path.to_string());
+
+        if let Err(err) = &err {
+            err.emit();
+        }        
+
+        let (mut ctx, lines) = err.unwrap();
 
         let program = ctx.compiled_form(&lines);
 

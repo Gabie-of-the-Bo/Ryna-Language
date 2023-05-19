@@ -1088,7 +1088,7 @@ impl NessaContext{
                 self.get_template_calls_body_pass(args, functions, unary, binary, nary, changed);
             }
 
-            NessaExpr::FunctionDefinition(_, id, _, _, ret, b) => {
+            NessaExpr::FunctionDefinition(_, id, _, _, _, b) => {
                 if let Some(usages) = functions.get(id).cloned() {
                     for ov in usages {
                         // TODO: cache this
@@ -1097,11 +1097,6 @@ impl NessaContext{
                         if !ov.is_empty() {
                             let templates = ov.iter().cloned().enumerate().collect();
                             body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-                            
-                            // Statically check the newly instantiated functions
-                            for line in &body {
-                                self.static_check_expected(line, &Some(ret.sub_templates(&templates))).unwrap();
-                            }
                         }
 
                         self.get_template_calls_body_pass(&body, functions, unary, binary, nary, changed);
@@ -1109,8 +1104,8 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::PostfixOperationDefinition(_, id, _, _, _, ret, b) |
-            NessaExpr::PrefixOperationDefinition(_, id, _, _, _, ret, b) => {
+            NessaExpr::PostfixOperationDefinition(_, id, _, _, _, _, b) |
+            NessaExpr::PrefixOperationDefinition(_, id, _, _, _, _, b) => {
                 if let Some(usages) = unary.get(id).cloned() {
                     for ov in usages {
                         let mut body = b.clone();
@@ -1118,11 +1113,6 @@ impl NessaContext{
                         if !ov.is_empty() {
                             let templates = ov.iter().cloned().enumerate().collect();
                             body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-
-                            // Statically check the newly instantiated functions
-                            for line in &body {
-                                self.static_check_expected(line, &Some(ret.sub_templates(&templates))).unwrap();
-                            }
                         }
 
                         self.get_template_calls_body_pass(&body, functions, unary, binary, nary, changed);
@@ -1130,7 +1120,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::BinaryOperationDefinition(_, id, _, _, _, ret, b) => {
+            NessaExpr::BinaryOperationDefinition(_, id, _, _, _, _, b) => {
                 if let Some(usages) = binary.get(id).cloned() {
                     for ov in usages {
                         let mut body = b.clone();
@@ -1138,11 +1128,6 @@ impl NessaContext{
                         if !ov.is_empty() {
                             let templates = ov.iter().cloned().enumerate().collect();
                             body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-
-                            // Statically check the newly instantiated functions
-                            for line in &body {
-                                self.static_check_expected(line, &Some(ret.sub_templates(&templates))).unwrap();
-                            }
                         }
 
                         self.get_template_calls_body_pass(&body, functions, unary, binary, nary, changed);
@@ -1150,7 +1135,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::NaryOperationDefinition(_, id, _, _, _, ret, b) => {
+            NessaExpr::NaryOperationDefinition(_, id, _, _, _, _, b) => {
                 if let Some(usages) = nary.get(id).cloned() {
                     for ov in usages {
                         let mut body = b.clone();
@@ -1158,11 +1143,6 @@ impl NessaContext{
                         if !ov.is_empty() {
                             let templates = ov.iter().cloned().enumerate().collect();
                             body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
-
-                            // Statically check the newly instantiated functions
-                            for line in &body {
-                                self.static_check_expected(line, &Some(ret.sub_templates(&templates))).unwrap();
-                            }
                         }
 
                         self.get_template_calls_body_pass(&body, functions, unary, binary, nary, changed);

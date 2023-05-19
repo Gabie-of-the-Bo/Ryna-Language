@@ -10,7 +10,7 @@ use nom::{
     sequence::{tuple, delimited, terminated},
     branch::alt,
     character::complete::{multispace0, multispace1, satisfy},
-    multi::{separated_list0, separated_list1}
+    multi::{separated_list1, separated_list0}
 };
 
 use nom_locate::LocatedSpan;
@@ -71,6 +71,35 @@ pub fn located<'a, O, P1: FnMut(Span<'a>) -> PResult<'a, O>>(mut parser: P1) -> 
 
         return Ok((rest, (Location::new(line, column, span.to_string()), res)));
     };
+}
+
+pub fn many_separated0<
+    'a, OP, OS, 
+    P: FnMut(Span<'a>) -> PResult<'a, OP>, 
+    S: FnMut(Span<'a>) -> PResult<'a, OS>
+>(mut separator: S, mut parser: P) -> impl FnMut(Span<'a>) -> PResult<'a, Vec<OP>> {
+    return move |mut input| {
+        let mut res = vec!();
+        let mut first = true;
+        
+        loop {
+            if !first {
+                let (new_input, _) = separator(input)?;
+                input = new_input;    
+            }
+
+            match parser(input) {
+                Ok((new_input, elem)) => {
+                    res.push(elem);
+                    input = new_input;
+                },
+    
+                Err(_) => return Ok((input, res))
+            }
+
+            first = false;
+        }
+    } 
 }
 
 /*
@@ -1702,7 +1731,7 @@ impl NessaContext {
     fn code_block_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return delimited(
             tuple((tag("{"), multispace0)),
-            separated_list0(multispace0, |input| self.nessa_line_parser(input, op_cache)),
+            many_separated0(multispace0, |input| self.nessa_line_parser(input, op_cache)),
             tuple((multispace0, tag("}")))
         )(input);
     }
@@ -1991,7 +2020,7 @@ impl NessaContext {
 
         return delimited(
             multispace0,
-            separated_list0(multispace0, |input| self.nessa_global_parser(input, &cache)),
+            many_separated0(multispace0, |input| self.nessa_global_parser(input, &cache)),
             tuple((multispace0, eof))
         )(input);
     }

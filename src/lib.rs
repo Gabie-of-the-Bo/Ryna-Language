@@ -10,6 +10,7 @@ pub mod types;
 pub mod context;
 
 pub mod parser;
+pub mod macros;
 pub mod inference;
 pub mod checks;
 pub mod compilation;

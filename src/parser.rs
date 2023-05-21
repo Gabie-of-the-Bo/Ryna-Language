@@ -155,7 +155,7 @@ pub enum ImportType {
     Class, Fn, Prefix, Postfix, Binary, Nary, Outer
 }
 
-fn identifier_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
+pub fn identifier_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
     return map(
         tuple((
             take_while1(|c: char| c == '_' || c.is_alphabetic()),

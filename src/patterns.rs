@@ -1,4 +1,4 @@
-use std::collections::{ HashMap, HashSet };
+use std::{collections::{ HashMap, HashSet }, cell::RefCell};
 
 use nom::{
     combinator::{map, opt, value},
@@ -9,7 +9,7 @@ use nom::{
     multi::separated_list1
 };
 
-use crate::parser::{Span, verbose_error, PResult};
+use crate::{parser::{Span, verbose_error, PResult, identifier_parser}, context::NessaContext};
 
 /*
                                                   ╒══════════════════╕
@@ -26,6 +26,11 @@ pub enum Pattern{
     Str(String),
     Range(char, char),
     Symbol(char), // Digit (d), Letter (l/L), Alphabetic (a), Alphanumeric (A), Space (s), quote (q)
+
+    // High level patterns
+    Identifier,
+    Type,
+    Expr,
 
     // Combination patterns
     Or(Vec<Pattern>),
@@ -46,92 +51,7 @@ impl Pattern{
         };
     }
 
-    pub fn matches<'a>(&self, text: Span<'a>) -> PResult<'a, ()> {
-        return match self {
-            Pattern::Symbol('d') => value((), satisfy(|c| c.is_digit(10)))(text),
-            Pattern::Symbol('l') => value((), satisfy(|c| c.is_lowercase()))(text),
-            Pattern::Symbol('L') => value((), satisfy(|c| c.is_uppercase()))(text),
-            Pattern::Symbol('a') => value((), satisfy(|c| c.is_alphabetic()))(text),
-            Pattern::Symbol('A') => value((), satisfy(|c| c.is_alphanumeric()))(text),
-            Pattern::Symbol('s') => value((), satisfy(|c| c.is_whitespace()))(text),
-            Pattern::Symbol('q') => value((), satisfy(|c| c == '\''))(text),
-            Pattern::Symbol(_) => unreachable!(),
-
-            Pattern::Range(a, b) => value((), satisfy(|c| c >= *a && c <= *b))(text),
-
-            Pattern::Str(s) => value((), tag(s.as_str()))(text),
-
-            Pattern::And(patterns) => {
-                let mut input = text;
-
-                for p in patterns {
-                    if let Ok((i, _)) = p.matches(input) {
-                        input = i;
-
-                    } else {
-                        return Err(verbose_error(text, "Unable to parse"))
-                    }
-                }
-                
-                Ok((input, ()))
-            },
-
-            Pattern::Or(patterns) => {
-                for p in patterns {
-                    if let Ok((i, o)) = p.matches(text) {
-                        return Ok((i, o));
-                    }
-                }
-                
-                Err(verbose_error(text, "Unable to parse"))
-            },
-            
-            Pattern::Repeat(p, from, to) => {
-                let mut input = text;
-
-                // Minimum
-                if let Some(f) = from {
-                    for _ in 0..*f {
-                        if let Ok((i, _)) = p.matches(input) {
-                            input = i;
-    
-                        } else {
-                            return Err(verbose_error(text, "Unable to parse"))
-                        }
-                    }
-                }
-
-                // Maximum
-                if let Some(t) = to {
-                    for _ in 0..(t - from.unwrap_or(0)) {
-                        if let Ok((i, _)) = p.matches(input) {
-                            input = i;
-    
-                        } else {
-                            break;
-                        }
-                    }
-
-                } else {
-                    loop {
-                        if let Ok((i, _)) = p.matches(input) {
-                            input = i;
-    
-                        } else {
-                            break;
-                        }
-                    }
-                }
-
-                Ok((input, ()))
-            }
-
-            Pattern::Optional(p) => value((), opt(|i| p.matches(i)))(text),
-            Pattern::Arg(p, _) => p.matches(text)
-        };
-    }
-
-    pub fn extract<'a>(&self, text: Span<'a>) -> PResult<'a, HashMap<String, Vec<&'a str>>> {
+    pub fn extract<'a>(&self, text: Span<'a>, ctx: &NessaContext) -> PResult<'a, HashMap<String, Vec<&'a str>>> {
         fn merge<'a>(a: &mut HashMap<String, Vec<&'a str>>, b: HashMap<String, Vec<&'a str>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
@@ -150,6 +70,10 @@ impl Pattern{
 
             Pattern::Range(a, b) => value(HashMap::new(), satisfy(|c| c >= *a && c <= *b))(text),
 
+            Pattern::Identifier => value(HashMap::new(), identifier_parser)(text),
+            Pattern::Type => value(HashMap::new(), |input| ctx.type_parser(input))(text),
+            Pattern::Expr => value(HashMap::new(), |input| ctx.nessa_expr_parser(input, &RefCell::default()))(text),
+
             Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
 
             Pattern::And(patterns) => {
@@ -157,7 +81,7 @@ impl Pattern{
                 let mut input = text;
 
                 for p in patterns {
-                    if let Ok((i, o)) = p.extract(input) {
+                    if let Ok((i, o)) = p.extract(input, ctx) {
                         input = i;
                         merge(&mut res, o);
 
@@ -171,7 +95,7 @@ impl Pattern{
 
             Pattern::Or(patterns) => {
                 for p in patterns {
-                    if let Ok((i, o)) = p.extract(text) {
+                    if let Ok((i, o)) = p.extract(text, ctx) {
                         return Ok((i, o));
                     }
                 }
@@ -186,7 +110,7 @@ impl Pattern{
                 // Minimum
                 if let Some(f) = from {
                     for _ in 0..*f {
-                        if let Ok((i, o)) = p.extract(input) {
+                        if let Ok((i, o)) = p.extract(input, ctx) {
                             input = i;
                             merge(&mut res, o);
     
@@ -199,7 +123,7 @@ impl Pattern{
                 // Maximum
                 if let Some(t) = to {
                     for _ in 0..(t - from.unwrap_or(0)) {
-                        if let Ok((i, o)) = p.extract(input) {
+                        if let Ok((i, o)) = p.extract(input, ctx) {
                             input = i;
                             merge(&mut res, o);
     
@@ -210,7 +134,7 @@ impl Pattern{
 
                 } else {
                     loop {
-                        if let Ok((i, o)) = p.extract(input) {
+                        if let Ok((i, o)) = p.extract(input, ctx) {
                             input = i;
                             merge(&mut res, o);
     
@@ -223,9 +147,9 @@ impl Pattern{
                 Ok((input, res))
             }
 
-            Pattern::Optional(p) => map(opt(|i| p.extract(i)), Option::unwrap_or_default)(text),
+            Pattern::Optional(p) => map(opt(|i| p.extract(i, ctx)), Option::unwrap_or_default)(text),
             Pattern::Arg(p, k) => {
-                let (i, mut o) = p.extract(text)?;
+                let (i, mut o) = p.extract(text, ctx)?;
 
                 o.entry(k.clone()).or_default().push(&text[..(text.len() - i.len())]);
 
@@ -277,7 +201,10 @@ pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a,
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
         map(delimited(tuple((tag("["), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
         delimited(tuple((tag("("), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(")")))),
-        map(one_of("dlLaAsq"), Pattern::Symbol)
+        map(one_of("dlLaAsq"), Pattern::Symbol),
+        value(Pattern::Identifier, tag("<ident>")),
+        value(Pattern::Type, tag("<type>")),
+        value(Pattern::Expr, tag("<expr>"))
     ))(text);
 }
 
@@ -300,6 +227,7 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::FromIterator;
     
+    use crate::context::standard_ctx;
     use crate::parser::{Span, PResult};
     use crate::patterns::Pattern;
 
@@ -309,19 +237,21 @@ mod tests {
 
     #[test]
     fn basic_patterns() {
+        let ctx = standard_ctx();
+
         let u_pattern = Pattern::Str("test".into());
 
-        assert!(u_pattern.matches(Span::new("utest")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("test"))));
+        assert!(u_pattern.extract(Span::new("utest"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("test"), &ctx)));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
             Pattern::Str("1".into())
         ));
 
-        assert!(u_pattern.matches(Span::new("utest")).is_err());
-        assert!(u_pattern.matches(Span::new("test")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("test1"))));
+        assert!(u_pattern.extract(Span::new("utest"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("test"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("test1"), &ctx)));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("*".into()),
@@ -329,20 +259,20 @@ mod tests {
             Pattern::Str("1".into())
         ));
 
-        assert!(u_pattern.matches(Span::new("utest")).is_err());
-        assert!(u_pattern.matches(Span::new("test")).is_err());
-        assert!(u_pattern.matches(Span::new("test1")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("*test1"))));
+        assert!(u_pattern.extract(Span::new("utest"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("test"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("test1"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("*test1"), &ctx)));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("1".into()),
             Pattern::Str("2".into())
         ));
 
-        assert!(u_pattern.matches(Span::new("test")).is_err());
-        assert!(u_pattern.matches(Span::new("*")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("1"))));
-        assert!(ok_result(u_pattern.matches(Span::new("2"))));
+        assert!(u_pattern.extract(Span::new("test"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("*"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("1"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("2"), &ctx)));
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::Str("*".into()),
@@ -350,10 +280,10 @@ mod tests {
             Pattern::Str("2".into())
         ));
 
-        assert!(u_pattern.matches(Span::new("test")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("*"))));
-        assert!(ok_result(u_pattern.matches(Span::new("1"))));
-        assert!(ok_result(u_pattern.matches(Span::new("2"))));
+        assert!(u_pattern.extract(Span::new("test"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("*"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("1"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("2"), &ctx)));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Or(vec!(
@@ -367,15 +297,15 @@ mod tests {
             ))
         ));
         
-        assert!(u_pattern.matches(Span::new("test")).is_err());
-        assert!(u_pattern.matches(Span::new(".test")).is_err());
-        assert!(u_pattern.matches(Span::new("#test")).is_err());
-        assert!(u_pattern.matches(Span::new("test1")).is_err());
-        assert!(u_pattern.matches(Span::new("test2")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("#test1"))));
-        assert!(ok_result(u_pattern.matches(Span::new("#test2"))));
-        assert!(ok_result(u_pattern.matches(Span::new(".test1"))));
-        assert!(ok_result(u_pattern.matches(Span::new(".test2"))));
+        assert!(u_pattern.extract(Span::new("test"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new(".test"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("#test"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("test1"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new("test2"), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("#test1"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("#test2"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new(".test1"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new(".test2"), &ctx)));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("test".into())),
@@ -383,12 +313,12 @@ mod tests {
             Some(3)
         );
         
-        assert!(u_pattern.matches(Span::new("utest")).is_err());
-        assert!(u_pattern.matches(Span::new("")).is_err());
-        assert!(ok_result(u_pattern.matches(Span::new("test"))));
-        assert!(ok_result(u_pattern.matches(Span::new("testtest"))));
-        assert!(ok_result(u_pattern.matches(Span::new("testtesttest"))));
-        assert!(!ok_result(u_pattern.matches(Span::new("testtesttesttest"))));
+        assert!(u_pattern.extract(Span::new("utest"), &ctx).is_err());
+        assert!(u_pattern.extract(Span::new(""), &ctx).is_err());
+        assert!(ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("testtest"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("testtesttest"), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new("testtesttesttest"), &ctx)));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -396,11 +326,11 @@ mod tests {
             Some(2)
         );
         
-        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
-        assert!(ok_result(u_pattern.matches(Span::new(""))));
-        assert!(ok_result(u_pattern.matches(Span::new("a"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
-        assert!(!ok_result(u_pattern.matches(Span::new("aaa"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new(""), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("a"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aa"), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new("aaa"), &ctx)));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -408,14 +338,14 @@ mod tests {
             None
         );
         
-        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
-        assert!(!ok_result(u_pattern.matches(Span::new(""))));
-        assert!(!ok_result(u_pattern.matches(Span::new("a"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaaaa"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new(""), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new("a"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaaaa"), &ctx)));
 
         let u_pattern = Pattern::Repeat(
             Box::new(Pattern::Str("a".into())),
@@ -423,14 +353,14 @@ mod tests {
             None
         );
         
-        assert!(!ok_result(u_pattern.matches(Span::new("test"))));
-        assert!(ok_result(u_pattern.matches(Span::new(""))));
-        assert!(ok_result(u_pattern.matches(Span::new("a"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaaa"))));
-        assert!(ok_result(u_pattern.matches(Span::new("aaaaaa"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new(""), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("a"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaaa"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("aaaaaa"), &ctx)));
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Str("test".into()),
@@ -439,9 +369,9 @@ mod tests {
             )
         ));
         
-        assert!(!ok_result(u_pattern.matches(Span::new("utest"))));
-        assert!(ok_result(u_pattern.matches(Span::new("test"))));
-        assert!(ok_result(u_pattern.matches(Span::new("test?"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("utest"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+        assert!(ok_result(u_pattern.extract(Span::new("test?"), &ctx)));
     }
 
     #[test]
@@ -473,6 +403,8 @@ mod tests {
 
     #[test]
     fn arg_markers(){
+        let ctx = standard_ctx();
+
         let u_pattern = Pattern::And(vec!(
             Pattern::Arg(
                 Box::new(Pattern::Optional(
@@ -505,30 +437,82 @@ mod tests {
             ))
         ));
 
-        assert_eq!(u_pattern.extract("125".into()).unwrap().1, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("125".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("".into())),
             ("Int".into(), vec!("125".into())),
         )));
 
-        assert_eq!(u_pattern.extract("0.056".into()).unwrap().1, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("0.056".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("".into())),
             ("Int".into(), vec!("0".into())),
             ("Dec".into(), vec!("056".into())),
         )));
 
-        assert_eq!(u_pattern.extract("-13.26".into()).unwrap().1, HashMap::from_iter(vec!(
+        assert_eq!(u_pattern.extract("-13.26".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
             ("Sign".into(), vec!("-".into())),
             ("Int".into(), vec!("13".into())),
             ("Dec".into(), vec!("26".into())),
         )));
 
-        assert!(!ok_result(u_pattern.extract(Span::new("+100"))));
-        assert!(!ok_result(u_pattern.extract(Span::new("123."))));
-        assert!(!ok_result(u_pattern.extract(Span::new("test"))));
+        assert!(!ok_result(u_pattern.extract(Span::new("+100"), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new("123."), &ctx)));
+        assert!(!ok_result(u_pattern.extract(Span::new("test"), &ctx)));
+    }
+
+    #[test]
+    fn high_level_pattern_parsing() {
+        let pattern: Pattern = "<ident>".parse().expect("Error while parsing pattern");
+        
+        assert_eq!(pattern, Pattern::Identifier);
+
+        let pattern: Pattern = "<type>".parse().expect("Error while parsing pattern");
+        
+        assert_eq!(pattern, Pattern::Type);
+
+        let pattern: Pattern = "<expr>".parse().expect("Error while parsing pattern");
+        
+        assert_eq!(pattern, Pattern::Expr);
+    }
+
+    #[test]
+    fn high_level_patterns() {
+        let ctx = standard_ctx();
+
+        let pattern: Pattern = "<ident>".parse().expect("Error while parsing pattern");
+        
+        assert!(ok_result(pattern.extract("test".into(), &ctx)));
+        assert!(ok_result(pattern.extract("test2".into(), &ctx)));
+        assert!(ok_result(pattern.extract("test_3".into(), &ctx)));
+        assert!(pattern.extract("3test".into(), &ctx).is_err());
+
+        let pattern: Pattern = "<type>".parse().expect("Error while parsing pattern");
+        
+        assert!(ok_result(pattern.extract("Number".into(), &ctx)));
+        assert!(ok_result(pattern.extract("'Template".into(), &ctx)));
+        assert!(ok_result(pattern.extract("&&Bool".into(), &ctx)));
+        assert!(ok_result(pattern.extract("(Bool, &String)".into(), &ctx)));
+        assert!(ok_result(pattern.extract("(Bool, Number) => String".into(), &ctx)));
+        assert!(ok_result(pattern.extract("Array<Number, 'T>".into(), &ctx)));
+        assert!(pattern.extract("Test".into(), &ctx).is_err());
+        assert!(pattern.extract("+++".into(), &ctx).is_err());
+
+        let pattern: Pattern = "<expr>".parse().expect("Error while parsing pattern");
+        
+        assert_eq!(pattern, Pattern::Expr);
+
+        assert!(ok_result(pattern.extract("5".into(), &ctx)));
+        assert!(ok_result(pattern.extract("true".into(), &ctx)));
+        assert!(ok_result(pattern.extract("6 + 2".into(), &ctx)));
+        assert!(ok_result(pattern.extract("(6 + 2, true, false + \"Test\")".into(), &ctx)));
+        assert!(ok_result(pattern.extract("a * 6 + 5 - \"Test\"".into(), &ctx)));
+        assert!(pattern.extract("5 ++ true".into(), &ctx).unwrap().0.len() != 0);
+        assert!(pattern.extract("+8u76tt".into(), &ctx).is_err());
     }
 
     #[test]
     fn number_pattern() {
+        let ctx = standard_ctx();
+
         let str_pattern = "Arg(['-'], Sign) Arg(1{d}, Int) ['.' Arg(1{d}, Dec)]".parse::<Pattern>().unwrap();
 
         let u_pattern = Pattern::And(vec!(
@@ -565,16 +549,18 @@ mod tests {
 
         assert_eq!(u_pattern, str_pattern);
 
-        assert!(ok_result(u_pattern.matches("13".into())));
-        assert!(ok_result(u_pattern.matches("-156".into())));
-        assert!(ok_result(u_pattern.matches("0156".into())));
-        assert!(ok_result(u_pattern.matches("15.56".into())));
-        assert!(!ok_result(u_pattern.matches("15.".into())));
-        assert!(ok_result(u_pattern.matches("-56.176".into())));
+        assert!(ok_result(u_pattern.extract("13".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("-156".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("0156".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("15.56".into(), &ctx)));
+        assert!(!ok_result(u_pattern.extract("15.".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("-56.176".into(), &ctx)));
     }
 
     #[test]
     fn pattern_grouping() {
+        let ctx = standard_ctx();
+
         let str_pattern = "(l d) | (d d)".parse::<Pattern>().unwrap();
 
         let u_pattern = Pattern::Or(vec!(
@@ -591,9 +577,9 @@ mod tests {
 
         assert_eq!(u_pattern, str_pattern);
 
-        assert!(ok_result(u_pattern.matches("k1".into())));
-        assert!(ok_result(u_pattern.matches("90".into())));
-        assert!(ok_result(u_pattern.matches("b2".into())));
-        assert!(!ok_result(u_pattern.matches("yy".into())));
+        assert!(ok_result(u_pattern.extract("k1".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("90".into(), &ctx)));
+        assert!(ok_result(u_pattern.extract("b2".into(), &ctx)));
+        assert!(!ok_result(u_pattern.extract("yy".into(), &ctx)));
     }
 }

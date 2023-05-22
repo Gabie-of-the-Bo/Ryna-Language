@@ -556,7 +556,7 @@ impl NessaContext {
         };
     }
 
-    fn type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    pub fn type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
         return self.type_parser_wrapper(input, true, true);
     }
 
@@ -590,7 +590,7 @@ impl NessaContext {
     pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: Span<'a>) -> PResult<'a, Object> {
         for p in &c_type.patterns {
             let res = map_res(
-                |input| p.extract(input),
+                |input| p.extract(input, self),
                 |args| Result::<Object, String>::Ok(Object::new(TypeInstance {
                     id: c_type.id,
                     params: vec!(),
@@ -1911,7 +1911,7 @@ impl NessaContext {
         ))(input);
     }
 
-    fn nessa_expr_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
+    pub fn nessa_expr_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         return self.nessa_expr_parser_wrapper(
             input, 
             &self.get_bi_bitset(), &self.get_n_bitset(), &self.get_unary_bitset(), 

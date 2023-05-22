@@ -1,7 +1,10 @@
-use nom::{sequence::{delimited, tuple}, character::complete::{multispace0, multispace1}, bytes::complete::{tag, take_while1}, combinator::map, branch::alt};
+use std::collections::HashMap;
+
+use nom::{sequence::{delimited, tuple}, character::complete::{multispace0, multispace1, satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value}, branch::alt};
 
 use crate::parser::{many_separated0, Span, PResult, identifier_parser};
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum NessaMacro {
     Text(String),
     Var(String),
@@ -13,10 +16,19 @@ pub fn parse_text<'a>(input: Span<'a>) -> PResult<NessaMacro> {
     return map(
         delimited(
             tag("{#"),
-            take_while1(|i| !"{#}".contains(i)),
+            escaped_transform(
+                satisfy(|i| !"\\{#}".contains(i)), 
+                '\\', 
+                alt((
+                    value("\n", tag("n")),
+                    value("}", tag("}")),
+                    value("{", tag("{")),
+                    value("\\", tag("\\"))
+                ))
+            ),
             tag("}")
         ),
-        |i: Span<'a>| NessaMacro::Text(i.to_string())
+        |i| NessaMacro::Text(i)
     )(input);
 }
 
@@ -92,7 +104,57 @@ pub fn parse_nessa_macro<'a>(input: Span<'a>) -> PResult<NessaMacro> {
     )(input);
 }
 
+impl NessaMacro {
+    pub fn expand<'a>(&self, args: &HashMap<String, Vec<&'a str>>) -> Result<String, String> {
+        return match self {
+            NessaMacro::Text(s) => Ok(s.clone()),
+            
+            NessaMacro::Var(v) => match args.get(v) {
+                Some(r) => if r.len() == 1 {
+                    Ok(r[0].to_string())
+
+                } else {
+                    Err(format!("Extracted {} arguments with name {} instead of 1", r.len(), v))
+                },
+
+                None => Err(format!("Did not extract variable with name '{v}'")),
+            },
+
+            NessaMacro::Loop(i, c, b) => {
+                let cont = match args.get(c) {
+                    Some(r) => r.clone(),
+                    None => return Err(format!("Did not extract variable with name '{c}'")),
+                };
+
+                let mut args_cpy = args.clone();
+
+                let iters = cont.iter().map(|iv| {
+                    if let Some(v) = args_cpy.get_mut(i) {
+                        *v = vec!(iv);
+                    
+                    } else {
+                        args_cpy.entry(i.clone()).or_insert(vec!(iv));
+                    }
+
+                    b.iter().map(|i| i.expand(&args_cpy)).collect::<Result<Vec<_>, _>>()
+
+                }).collect::<Result<Vec<_>, _>>()?.into_iter().flat_map(|i| i).collect::<Vec<_>>();
+
+                Ok(iters.join(""))
+            },
+            
+            NessaMacro::Seq(b) => {
+                Ok(b.iter().map(|i| i.expand(args)).collect::<Result<Vec<_>, _>>()?.join(""))
+            },
+        };
+    }
+}
+
 mod tests {
+    use std::collections::HashMap;
+
+    use crate::macros::NessaMacro;
+
     #[test]
     fn macro_parsing() {
         let text_1 = "{# this is an example}";
@@ -143,5 +205,93 @@ mod tests {
         assert!(crate::macros::parse_nessa_macro(macro_1.into()).is_ok());
         assert!(crate::macros::parse_nessa_macro(macro_2.into()).is_ok());
         assert!(crate::macros::parse_nessa_macro(macro_3.into()).is_ok());
+    }
+
+    #[test]
+    fn macro_expansion() {
+        let macro_1_str = "
+        {#let res = arr<}{$type}{#>();\\n}
+        {@i in $values} {
+            {#res.push(}{$i}{#);\\n}
+        }
+        {#return res;}
+        ";
+
+        let macro_1 = crate::macros::parse_nessa_macro(macro_1_str.into()).unwrap().1;
+
+        let args = [
+            ("type".into(), vec!("Number")),
+            ("values".into(), vec!("5", "7", "8"))
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        let res = macro_1.expand(&args).unwrap();
+
+        assert_eq!(res, "let res = arr<Number>();\nres.push(5);\nres.push(7);\nres.push(8);\nreturn res;");
+
+        let args = [
+            ("type".into(), vec!("Number")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_1.expand(&args).is_err());
+
+        let args = [
+            ("values".into(), vec!("5", "7", "8"))
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_1.expand(&args).is_err());
+
+        let macro_2_str = "
+        {#let res = arr<}{$type}{#>();\\n}
+        {#let func = (}{$it}{#) }{$map}{#;\\n\\n}
+        {#for _it_ in }{$container}{#\\{\\n}
+            {#  res.push(map(_it_));\\n}
+        {#\\}\\n\\n}
+        {#return res;}
+        ";
+
+        let macro_2 = crate::macros::parse_nessa_macro(macro_2_str.into()).unwrap().1;
+
+        let args = [
+            ("type".into(), vec!("Number")),
+            ("it".into(), vec!("i")),
+            ("container".into(), vec!("range(0, 10)")),
+            ("map".into(), vec!("i * i")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        let res = macro_2.expand(&args).unwrap();
+
+        assert_eq!(res, "let res = arr<Number>();\nlet func = (i) i * i;\n\nfor _it_ in range(0, 10){\n  res.push(map(_it_));\n}\n\nreturn res;");
+
+        let args = [
+            ("type".into(), vec!("Number")),
+            ("it".into(), vec!("i")),
+            ("container".into(), vec!("range(0, 10)")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_2.expand(&args).is_err());
+
+        let args = [
+            ("type".into(), vec!("Number")),
+            ("container".into(), vec!("range(0, 10)")),
+            ("map".into(), vec!("i * i")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_2.expand(&args).is_err());
+
+        let args = [
+            ("it".into(), vec!("i")),
+            ("container".into(), vec!("range(0, 10)")),
+            ("map".into(), vec!("i * i")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_2.expand(&args).is_err());
+
+        let args = [
+            ("type".into(), vec!("Number")),
+            ("it".into(), vec!("i")),
+            ("map".into(), vec!("i * i")),
+        ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
+
+        assert!(macro_2.expand(&args).is_err());
     }
 }

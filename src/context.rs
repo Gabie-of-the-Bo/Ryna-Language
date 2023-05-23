@@ -1,5 +1,6 @@
 use colored::Colorize;
 
+use crate::macros::NessaMacro;
 use crate::types::*;
 use crate::operations::*;
 use crate::object::*;
@@ -22,6 +23,8 @@ pub struct NessaContext {
     pub sorted_ops: Vec<Operator>,
 
     pub functions: Vec<Function>,
+
+    pub macros: Vec<(String, Pattern, NessaMacro)>,
 
     pub variables: Vec<Option<Object>>,
 

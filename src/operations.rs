@@ -321,22 +321,55 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
 
     for n in 0..30 {
-        let args = (0..(n + 1)).map(Type::TemplateParam).collect::<Vec<_>>();
+        let args = (0..n).map(Type::TemplateParam).collect::<Vec<_>>();
+
+        let f_type = Type::Function(
+            Box::new(Type::And(args.clone())),
+            Box::new(Type::TemplateParam(n))
+        );
 
         ctx.define_native_nary_operation(
-            0, 
-            n + 2, 
-            Type::MutRef(Box::new(
-                Type::Function(
-                    Box::new(Type::And(args.clone())),
-                    Box::new(Type::TemplateParam(n + 1))
-                )
-            )), 
+            0, n + 1, 
+            Type::MutRef(Box::new(f_type.clone())), 
             args.as_slice(), 
-            Type::TemplateParam(n + 1), 
+            Type::TemplateParam(n), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.deref::<(usize, Type, Type)>();
+                
+                call_stack.push((*ip + 1, *off, -1));
+                *ip = f.0 as i32;
+                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+                
+                return Ok(());
+            }
+        ).unwrap();
+
+        ctx.define_native_nary_operation(
+            0, n + 1, 
+            Type::Ref(Box::new(f_type.clone())), 
+            args.as_slice(), 
+            Type::TemplateParam(n), 
+            |(s, off, call_stack, ip), _, _| {
+                let a = s.pop().unwrap();
+                let f = &a.deref::<(usize, Type, Type)>();
+                
+                call_stack.push((*ip + 1, *off, -1));
+                *ip = f.0 as i32;
+                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+                
+                return Ok(());
+            }
+        ).unwrap();
+
+        ctx.define_native_nary_operation(
+            0, n + 1, 
+            f_type, 
+            args.as_slice(), 
+            Type::TemplateParam(n), 
+            |(s, off, call_stack, ip), _, _| {
+                let a = s.pop().unwrap();
+                let f = &a.get::<(usize, Type, Type)>();
                 
                 call_stack.push((*ip + 1, *off, -1));
                 *ip = f.0 as i32;

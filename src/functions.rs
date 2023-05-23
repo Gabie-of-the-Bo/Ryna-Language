@@ -156,6 +156,16 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
+    ctx.define_native_function_overload(
+        5, 
+        1,
+        &[Type::Template(3, vec!(Type::TemplateParam(0)))], 
+        Type::Template(5, vec!(Type::MutRef(Box::new(Type::TemplateParam(0))))), 
+        |t, _, v| {
+            return Ok(Object::new((Type::MutRef(Box::new(t[0].clone())), v[0].get_ref(), 0)));
+        }
+    ).unwrap();
+
     ctx.define_function("next".into()).unwrap();
 
     ctx.define_native_function_overload(

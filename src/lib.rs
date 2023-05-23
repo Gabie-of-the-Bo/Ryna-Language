@@ -97,6 +97,16 @@ mod integration {
     }
 
     #[test]
+    fn array_init() {
+        integration_test("test/array_init.nessa");
+    }
+
+    #[test]
+    fn list_comprehension() {
+        integration_test("test/list_comprehension.nessa");
+    }
+
+    #[test]
     fn map_array() {
         integration_test("test/map_array.nessa");
     }

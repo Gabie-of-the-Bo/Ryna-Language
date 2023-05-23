@@ -1,0 +1,24 @@
+syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+    {#let res = arr<} {$type} {#>(} {#);\n}
+    {@i in $elems} {
+        {#res.push(} {$i} {#);\n}
+    }
+    {#return *res;}
+}
+
+syntax list_comprehension from '[' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '} 'in' {' '} Arg(<expr>, container) {' '} ']' {
+    {#let res = arr<} {$type} {#>();\n}
+    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
+    {#for _it_ in }{$container}{# \{\n}
+        {#  res.push(func(*_it_));\n}
+    {#\}\n\n}
+    {#return res;}
+}
+
+let array = [i * 2 for i: Number in <Number>[1, 2, 3, 4, 5]];
+
+if array[0] != 2 { panic("Invalid value"); }
+if array[1] != 4 { panic("Invalid value"); }
+if array[2] != 6 { panic("Invalid value"); }
+if array[3] != 8 { panic("Invalid value"); }
+if array[4] != 10 { panic("Invalid value"); }

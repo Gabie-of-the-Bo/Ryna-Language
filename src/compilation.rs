@@ -315,6 +315,57 @@ impl NessaContext {
         return Ok(());
     }
 
+    fn infer_lambda_return_type(&mut self, lines: &mut Vec<NessaExpr>) -> Option<Type> {
+        let merge_types = |a: Option<Type>, b: Option<Type>| -> Option<Type> {
+            if b.is_none() {
+                return a;
+            }
+            
+            return match &a {
+                Some(na) => {
+                    if na.bindable_to(b.as_ref().unwrap()) {
+                        return b;
+                    
+                    } else if b.as_ref().unwrap().bindable_to(&na) {
+                        return a;
+
+                    } else {
+                        return Some(Type::Or(vec!(na.clone(), b.unwrap())));
+                    }
+                },
+
+                None => b,
+            };
+        };
+
+        let mut res = None;
+
+        for expr in lines {
+            match expr {
+                NessaExpr::While(_, _, b) |
+                NessaExpr::CompiledFor(_, _, _, _, _, b) => res = merge_types(res, self.infer_lambda_return_type(b)),
+
+                NessaExpr::If(_, _, ib, ei, eb) => {
+                    res = merge_types(res, self.infer_lambda_return_type(ib));
+
+                    for (_, eib) in ei {
+                        res = merge_types(res, self.infer_lambda_return_type(eib));
+                    }
+
+                    if let Some(eb_inner) = eb {
+                        res = merge_types(res, self.infer_lambda_return_type(eb_inner));
+                    }
+                },
+
+                NessaExpr::Return(_, expr) => res = merge_types(res, self.infer_type(expr)),
+
+                _ => {}
+            }
+        }
+
+        return res;
+    }
+
     fn compile_expr_function_bodies(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
         match expr {
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -378,6 +429,11 @@ impl NessaContext {
 
             NessaExpr::Lambda(l, a, r, b) => {
                 self.compile(b, &a)?;
+
+                // Infer further
+                if *r == Type::Wildcard {
+                    *r = self.infer_lambda_return_type(b).unwrap();
+                }
 
                 *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, a.clone(), r.clone(), b.clone());
                 self.lambdas += 1;
@@ -572,6 +628,8 @@ impl NessaContext {
                 }
 
                 if t.len() == 0 {
+                    println!("{:?}", args);
+
                     let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
                         "Unable to infer type of function argument".into(), &l, vec!()
                     ))).collect::<Result<_, _>>()?;
@@ -1320,6 +1378,8 @@ impl NessaContext{
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, b) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, b) => self.compile_lambda(b, current_size, lambdas, lambda_positions, functions, unary, binary, nary),
 
+            NessaExpr::Macro(..) => { Ok(()) },
+
             _ => unimplemented!("{:?}", line)
         };
     }
@@ -1998,6 +2058,22 @@ impl NessaContext{
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, true)).flat_map(|i| i.unwrap()).collect());
     }
 
+    pub fn define_module_macro(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
+        match definition {
+            NessaExpr::Macro(l, n, p, m) => {
+                if self.macros.iter().any(|i| i.0 == n) {
+                    return Err(NessaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
+                }
+
+                self.macros.push((n, p, m));
+            }
+
+            _ => {}
+        }
+
+        return Ok(());
+    }
+
     pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), NessaError> {
         match definition {
             NessaExpr::ClassDefinition(_, n, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
@@ -2175,6 +2251,20 @@ impl NessaContext{
             },
 
             _ => unreachable!()
+        }
+
+        return Ok(());
+    }
+
+    pub fn define_module_macros(&mut self, code: &String) -> Result<(), NessaError> {
+        let ops = self.nessa_macros_parser(Span::new(code));
+        
+        if let Err(err) = ops {
+            return Err(NessaError::from(err));
+        }
+        
+        for i in ops.unwrap().1 {
+            self.define_module_macro(i)?;
         }
 
         return Ok(());
@@ -2857,6 +2947,7 @@ impl NessaContext{
         self.define_module_operators(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;
+        self.define_module_macros(code)?;
 
         let lines = self.parse_nessa_module(code)?;
 

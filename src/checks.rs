@@ -170,6 +170,8 @@ impl NessaContext {
                 Ok(())
             },
 
+            (NessaExpr::Macro(..), _) => { Ok(()) },
+
             _ => unimplemented!("{:?}", expr)
         }
     }
@@ -509,6 +511,8 @@ impl NessaContext {
                 Ok(())
             }
 
+            NessaExpr::Macro(..) => { Ok(()) },
+
             _ => unimplemented!("{:?}", expr)
         }
     }
@@ -817,6 +821,8 @@ impl NessaContext {
 
                 Ok(())
             },
+
+            NessaExpr::Macro(..) => { Ok(()) },
 
             _ => unimplemented!("{:?}", expr)
         };

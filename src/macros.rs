@@ -4,7 +4,7 @@ use nom::{sequence::{delimited, tuple}, character::complete::{multispace0, multi
 
 use crate::parser::{many_separated0, Span, PResult, identifier_parser};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NessaMacro {
     Text(String),
     Var(String),
@@ -151,8 +151,10 @@ impl NessaMacro {
 }
 
 mod tests {
+    #[allow(unused)] 
     use std::collections::HashMap;
-
+    
+    #[allow(unused)] 
     use crate::macros::NessaMacro;
 
     #[test]

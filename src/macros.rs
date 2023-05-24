@@ -1,8 +1,8 @@
 use std::{collections::{HashMap, HashSet}};
 
-use nom::{sequence::{delimited, tuple, preceded}, character::complete::{multispace0, multispace1, satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value, opt}, branch::alt};
+use nom::{sequence::{delimited, tuple, preceded}, character::complete::{satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value, opt}, branch::alt};
 
-use crate::parser::{many_separated0, Span, PResult, identifier_parser};
+use crate::parser::{many_separated0, Span, PResult, identifier_parser, empty0, empty1};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NessaMacro {
@@ -38,9 +38,9 @@ pub fn parse_var<'a>(input: Span<'a>) -> PResult<NessaMacro> {
         delimited(
             tag("{$"),
             delimited(
-                multispace0,
+                empty0,
                 take_while1(|i| !"{#}".contains(i)),
-                multispace0
+                empty0
             ),
             tag("}")
         ),
@@ -48,12 +48,12 @@ pub fn parse_var<'a>(input: Span<'a>) -> PResult<NessaMacro> {
     )(input);
 }
 
-pub fn parse_loop_header<'a>(input: Span<'a>) -> PResult<(String, Span<'a>, Span<'a>, Span<'a>, Span<'a>, String)> {
+pub fn parse_loop_header<'a>(input: Span<'a>) -> PResult<(String, (), Span<'a>, (), Span<'a>, String)> {
     return tuple((
         identifier_parser,
-        multispace1,
+        empty1,
         tag("in"),
-        multispace1,
+        empty1,
         tag("$"),
         identifier_parser
     ))(input);
@@ -64,11 +64,11 @@ pub fn parse_if<'a>(input: Span<'a>) -> PResult<NessaMacro> {
         tuple((
             delimited(
                 tag("{&"),
-                delimited(multispace0, identifier_parser, multispace0),
+                delimited(empty0, identifier_parser, empty0),
                 tag("}")
             ),
             preceded(
-                multispace0,
+                empty0,
                 delimited(
                     tag("{"),
                     parse_nessa_macro,
@@ -77,7 +77,7 @@ pub fn parse_if<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             ),
             opt(
                 preceded(
-                    multispace0,   
+                    empty0,   
                     delimited(
                         tag("{"),
                         parse_nessa_macro,
@@ -96,13 +96,13 @@ pub fn parse_loop<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             delimited(
                 tag("{@"),
                 delimited(
-                    multispace0,
+                    empty0,
                     parse_loop_header,
-                    multispace0
+                    empty0
                 ),
                 tag("}")
             ),
-            multispace0,
+            empty0,
             delimited(
                 tag("{"),
                 parse_nessa_macro,
@@ -124,9 +124,9 @@ pub fn parse_nessa_macro_line<'a>(input: Span<'a>) -> PResult<NessaMacro> {
 
 pub fn parse_nessa_macro_lines<'a>(input: Span<'a>) -> PResult<Vec<NessaMacro>> {
     return delimited(
-        multispace0,
-        many_separated0(multispace0, |input| parse_nessa_macro_line(input)),
-        multispace0
+        empty0,
+        many_separated0(empty0, |input| parse_nessa_macro_line(input)),
+        empty0
     )(input);
 }
 

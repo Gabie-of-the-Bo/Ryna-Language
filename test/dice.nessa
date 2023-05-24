@@ -1,4 +1,9 @@
 class Dice {
+    /*
+        This syntax is used automatically in the code.
+        The arguments are parsed as the corresponding types and 
+        assigned as needed
+    */
     syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
 
     rolls: Number;

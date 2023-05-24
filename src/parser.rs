@@ -1,6 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
+use nom::bytes::complete::take_until;
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::{
@@ -9,7 +10,7 @@ use nom::{
     bytes::complete::{take_while, take_while1, tag, escaped_transform},
     sequence::{tuple, delimited, terminated},
     branch::alt,
-    character::complete::{multispace0, multispace1, satisfy},
+    character::complete::{multispace1, satisfy},
     multi::{separated_list1, separated_list0}
 };
 
@@ -59,6 +60,54 @@ impl PartialEq for Location {
     fn eq(&self, _: &Self) -> bool {
         return true; // Always equal
     }
+}
+
+fn normal_comment<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
+    return delimited(
+        tag("//"),
+        take_until("\n"),
+        tag("\n")
+    )(input);
+}
+
+fn block_comment<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
+    return delimited(
+        tag("/*"),
+        take_until("*/"),
+        tag("*/")
+    )(input);
+}
+
+fn separator<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
+    return alt((
+        multispace1,
+        block_comment,
+        normal_comment
+    ))(input);
+}
+
+pub fn empty0<'a>(mut input: Span<'a>) -> PResult<'a, ()> {
+    loop {
+        match separator(input) {
+            Ok((i, _)) => input = i,
+            Err(_) => break,
+        }
+    }
+    
+    return Ok((input, ()));
+}
+
+pub fn empty1<'a>(mut input: Span<'a>) -> PResult<'a, ()> {
+    input = separator(input)?.0;
+
+    loop {
+        match separator(input) {
+            Ok((i, _)) => input = i,
+            Err(_) => break,
+        }
+    }
+    
+    return Ok((input, ()));
 }
 
 // Parser combinator that allows to store the precise location of an element
@@ -193,11 +242,11 @@ fn module_header_parser<'a>(input: Span<'a>) -> PResult<'a, (String, String)> {
     return map(
         tuple((
             tag("module"),
-            multispace1,
+            empty1,
             context("Expected module name after 'module'", cut(identifier_parser)),
-            multispace0,
+            empty0,
             context("Expected '[' after module name", cut(tag("["))),
-            multispace0,
+            empty0,
             context(
                 "Expected version number after module name",
                 cut(separated_list1(
@@ -205,7 +254,7 @@ fn module_header_parser<'a>(input: Span<'a>) -> PResult<'a, (String, String)> {
                     take_while1(|c: char| c.is_digit(10))
                 ))
             ),
-            multispace0,
+            empty0,
             context("Expected ']' after version number", cut(tag("]")))
         )),
         |(_, _, n, _, _, _, v, _, _)| (n, v.into_iter().map(|i| i.to_string()).collect::<Vec<_>>().join("."))
@@ -216,20 +265,20 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
     return map(
         tuple((
             tag("import"),
-            multispace1,
+            empty1,
             context(
                 "Expected import type after 'import' keyword",
                 cut(alt((
                     value(ImportType::Class, tag("class")),
                     value(ImportType::Fn, tag("fn")),
                     value(ImportType::Syntax, tag("syntax")),
-                    value(ImportType::Prefix, tuple((tag("prefix"), multispace1, tag("op")))),
-                    value(ImportType::Postfix, tuple((tag("postfix"), multispace1, tag("op")))),
-                    value(ImportType::Binary, tuple((tag("binary"), multispace1, tag("op")))),
-                    value(ImportType::Nary, tuple((tag("nary"), multispace1, tag("op")))),
+                    value(ImportType::Prefix, tuple((tag("prefix"), empty1, tag("op")))),
+                    value(ImportType::Postfix, tuple((tag("postfix"), empty1, tag("op")))),
+                    value(ImportType::Binary, tuple((tag("binary"), empty1, tag("op")))),
+                    value(ImportType::Nary, tuple((tag("nary"), empty1, tag("op")))),
                 )))
             ),
-            multispace1,
+            empty1,
             context(
                 "Expected a String, an identifier or a brace-enclosed list of identifiers after import type",
                 cut(alt((
@@ -239,33 +288,33 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
                                 string_parser,
                                 identifier_parser
                             )),
-                            multispace1
+                            empty1
                         )),
                         |(s, _)| vec!(s)
                     ),
                     map(
                         tuple((
                             tag("{"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)),
+                                tuple((empty0, tag(","), empty0)),
                                 alt((
                                     string_parser,
                                     identifier_parser
                                 ))
                             ),
-                            multispace0,
+                            empty0,
                             tag("}"),
-                            multispace0
+                            empty0
                         )),
                         |(_, _, v, _, _, _)| v
                     )
                 )))
             ),
             context("Expected 'from' after import type", cut(tag("from"))),
-            multispace1,
+            empty1,
             context("Expected identifier after 'from' in import statement", cut(identifier_parser)),
-            multispace0,
+            empty0,
             context("Expected ';' at the end of import statement", cut(tag(";")))
         )),
         |(_, _, t, _, v, _, _, n, _, _)| (n, t, v.into_iter().collect())
@@ -274,12 +323,12 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
 
 pub fn nessa_info_parser<'a>(input: Span<'a>) -> PResult<'a, ()> {
     return delimited(
-        multispace0,
+        empty0,
         alt((
             value((), module_import_parser),
             value((), module_header_parser)
         )),
-        multispace0
+        empty0
     )(input);
 }
 
@@ -457,7 +506,7 @@ impl NessaContext {
     fn or_type_parser<'a>(&self, input: Span<'a>, func: bool) -> PResult<'a, Type> {
         return map(
             separated_list1(
-                tuple((multispace0, tag("|"), multispace0)), 
+                tuple((empty0, tag("|"), empty0)), 
                 |input| self.type_parser_wrapper(input, func, false)
             ),
             |t| if t.len() > 1 { Type::Or(t) } else { t[0].clone() }
@@ -469,7 +518,7 @@ impl NessaContext {
             delimited(
                 tag("("),
                 separated_list1(
-                    tuple((multispace0, tag(","), multispace0)), 
+                    tuple((empty0, tag(","), empty0)), 
                     |input| self.type_parser(input)
                 ),
                 tag(")")
@@ -482,14 +531,14 @@ impl NessaContext {
         return map_res(
             tuple((
                 identifier_parser,
-                multispace0,
+                empty0,
                 tag("<"),
-                multispace0,
+                empty0,
                 separated_list1(
-                    tuple((multispace0, tag(","), multispace0)), 
+                    tuple((empty0, tag(","), empty0)), 
                     |input| self.type_parser(input)
                 ),
-                multispace0,
+                empty0,
                 context("Expected '>' at the end of parametric type", cut(tag(">")))
             )),
             |(n, _, _, _, t, _, _)| Result::<_, String>::Ok(Type::Template(self.get_type_id(n)?, t))
@@ -500,9 +549,9 @@ impl NessaContext {
         return map(
             tuple((
                 |input| self.type_parser_wrapper(input, false, or),
-                multispace0,
+                empty0,
                 tag("=>"),
-                multispace0,
+                empty0,
                 context("Invalid return on function type", cut(|input| self.type_parser_wrapper(input, false, or)))
             )),
             |(f, _, _, _, t)| Type::Function(Box::new(f), Box::new(t))
@@ -671,7 +720,7 @@ impl NessaContext {
                     Ok(code) => {
                         let parsed_code = cut(
                             many_separated0(
-                                multispace0, 
+                                empty0, 
                                 |input| self.nessa_line_parser(input, &RefCell::default()))
                         )(Span::new(&code));
                         
@@ -724,19 +773,19 @@ impl NessaContext {
             located(
                 tuple((
                     tag(rep),
-                    multispace0,
+                    empty0,
                     opt(
                         map(
                             tuple((
                                 tag("<"),
-                                multispace0,
+                                empty0,
                                 separated_list1(
-                                    tuple((multispace0, tag(","), multispace0)), 
+                                    tuple((empty0, tag(","), empty0)), 
                                     |input| self.type_parser(input)
                                 ),
-                                multispace0,
+                                empty0,
                                 tag(">"),
-                                multispace0,
+                                empty0,
                             )),
                             |(_, _, t, _, _, _)| t
                         )
@@ -763,19 +812,19 @@ impl NessaContext {
                 located(
                     tuple((
                         |input| self.nessa_expr_parser_wrapper(input, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache),
-                        multispace0,
+                        empty0,
                         opt(
                             map(
                                 tuple((
                                     tag("<"),
-                                    multispace0,
+                                    empty0,
                                     separated_list1(
-                                        tuple((multispace0, tag(","), multispace0)), 
+                                        tuple((empty0, tag(","), empty0)), 
                                         |input| self.type_parser(input)
                                     ),
-                                    multispace0,
+                                    empty0,
                                     tag(">"),
-                                    multispace0,
+                                    empty0,
                                 )),
                                 |(_, _, t, _, _, _)| t
                             )
@@ -811,25 +860,25 @@ impl NessaContext {
             let res = map(
                 located(
                     tuple((
-                        multispace0,
+                        empty0,
                         opt(
                             map(
                                 tuple((
                                     tag("<"),
-                                    multispace0,
+                                    empty0,
                                     separated_list1(
-                                        tuple((multispace0, tag(","), multispace0)), 
+                                        tuple((empty0, tag(","), empty0)), 
                                         |input| self.type_parser(input)
                                     ),
-                                    multispace0,
+                                    empty0,
                                     tag(">"),
-                                    multispace0,
+                                    empty0,
                                 )),
                                 |(_, _, t, _, _, _)| t
                             )
                         ),
                         tag(rep),
-                        multispace0,
+                        empty0,
                         |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
                     ))
                 ),
@@ -865,30 +914,30 @@ impl NessaContext {
             let res = map(
                 located(
                     tuple((
-                        multispace0,
+                        empty0,
                         opt(
                             map(
                                 tuple((
                                     tag("<"),
-                                    multispace0,
+                                    empty0,
                                     separated_list1(
-                                        tuple((multispace0, tag(","), multispace0)), 
+                                        tuple((empty0, tag(","), empty0)), 
                                         |input| self.type_parser(input)
                                     ),
-                                    multispace0,
+                                    empty0,
                                     tag(">"),
-                                    multispace0,
+                                    empty0,
                                 )),
                                 |(_, _, t, _, _, _)| t
                             )
                         ),
                         tag(open),
-                        multispace0,
+                        empty0,
                         separated_list0(
-                            tuple((multispace0, tag(","), multispace0)),
+                            tuple((empty0, tag(","), empty0)),
                             |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
                         ),
-                        multispace0,
+                        empty0,
                         tag(close)
                     ))
                 ),
@@ -992,25 +1041,25 @@ impl NessaContext {
             located(
                 tuple((
                     tag("let"),
-                    multispace0,
+                    empty0,
                     identifier_parser,
-                    multispace0,
+                    empty0,
                     opt(
                         tuple((
                             tag(":"),
-                            multispace0,
+                            empty0,
                             context("Invalid type on variable definition", cut(|input| self.type_parser(input))),
-                            multispace0
+                            empty0
                         ))
                     ),
                     tag("="),
-                    multispace0,
+                    empty0,
                     context("Invalid right handside on variable definition", cut(|input| self.nessa_expr_parser(input, op_cache))),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of variable definition", cut(tag(";")))
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, e, _, _))| NessaExpr::VariableDefinition(l, n, t.unwrap_or(("".into(), "".into(), Type::InferenceMarker, "".into())).2, Box::new(e))
+            |(l, (_, _, n, _, t, _, _, e, _, _))| NessaExpr::VariableDefinition(l, n, t.unwrap_or(("".into(), (), Type::InferenceMarker, ())).2, Box::new(e))
         )(input);
     }
     
@@ -1019,11 +1068,11 @@ impl NessaContext {
             located(
                 tuple((
                     identifier_parser,
-                    multispace0,
+                    empty0,
                     tag("="),
-                    multispace0,
+                    empty0,
                     context("Invalid right handside on variable assignment", cut(|input| self.nessa_expr_parser(input, op_cache))),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of variable assignment", cut(tag(";")))
                 ))
             ),
@@ -1036,9 +1085,9 @@ impl NessaContext {
             located(
                 tuple((
                     tag("return"),
-                    multispace0,
+                    empty0,
                     cut(|input| self.nessa_expr_parser(input, op_cache)),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of return statement", cut(tag(";")))
                 ))
             ),
@@ -1050,13 +1099,13 @@ impl NessaContext {
         map(
             tuple((
                 tag("syntax"),
-                multispace1,
+                empty1,
                 context("Expected identifier after 'syntax' in syntax definition", cut(identifier_parser)),
-                multispace1,
+                empty1,
                 context("Expected 'from' after identifier in syntax definition", cut(tag("from"))),
-                multispace1,
+                empty1,
                 cut(|input| parse_ndl_pattern(input, true, true)),
-                multispace0
+                empty0
             )),
             |(_, _,  n, _, _, _, p, _)| (n, p)
         )(input)
@@ -1066,7 +1115,7 @@ impl NessaContext {
         return map(
             tuple((
                 tag("if"),
-                multispace1,
+                empty1,
                 context("Invalid if condition", cut(|input| self.nessa_expr_parser(input, op_cache)))
             )),
             |(_, _, e)| e
@@ -1077,7 +1126,7 @@ impl NessaContext {
         return map(
             tuple((
                 tag("while"),
-                multispace1,
+                empty1,
                 context("Invalid while condition", cut(|input| self.nessa_expr_parser(input, op_cache)))
             )),
             |(_, _, e)| e
@@ -1088,9 +1137,9 @@ impl NessaContext {
         return map(
             tuple((
                 tag("else"),
-                multispace1,
+                empty1,
                 tag("if"),
-                multispace1,
+                empty1,
                 context("Invalid else if condition", cut(|input| self.nessa_expr_parser(input, op_cache)))
             )),
             |(_, _, _, _, e)| e
@@ -1102,7 +1151,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.macro_header_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
@@ -1115,15 +1164,15 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.if_header_parser(input, op_cache),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                     separated_list0(
-                        multispace0,
+                        empty0,
                         map(
                             tuple((
-                                multispace0,
+                                empty0,
                                 |input| self.else_if_header_parser(input, op_cache),
-                                multispace0,
+                                empty0,
                                 cut(|input| self.code_block_parser(input, op_cache))
                             )),
                             |(_, eih, _, eib)| (eih, eib)
@@ -1132,9 +1181,9 @@ impl NessaContext {
                     opt(
                         map(
                             tuple((
-                                multispace0,
+                                empty0,
                                 tag("else"),
-                                multispace0,
+                                empty0,
                                 cut(|input| self.code_block_parser(input, op_cache))
                             )),
                             |(_, _, _, e)| e   
@@ -1150,11 +1199,11 @@ impl NessaContext {
         return map(
             tuple((
                 tag("for"),
-                multispace1,
+                empty1,
                 context("Invalid for iterator identifier", cut(identifier_parser)),
-                multispace1,
+                empty1,
                 context("Expected 'in' after for iterator identifier", cut(tag("in"))),
-                multispace1,
+                empty1,
                 cut(|input| self.nessa_expr_parser(input, op_cache))
             )),
             |(_, _, n, _, _, _, e)| (n, e)
@@ -1166,7 +1215,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.while_header_parser(input, op_cache),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1179,7 +1228,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.for_header_parser(input, op_cache),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1194,37 +1243,37 @@ impl NessaContext {
                 opt(
                     map(
                         tuple((
-                            multispace0,
+                            empty0,
                             tag("<"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
+                                tuple((empty0, tag(","), empty0)), 
                                 identifier_parser
                             ),
-                            multispace0,
+                            empty0,
                             tag(">"),
                         )),
                         |(_, _, _, t, _, _)| t
                     )
                 ),
-                multispace1,
+                empty1,
                 context("Invalid function name", cut(identifier_parser)),
-                multispace0,
+                empty0,
                 context("Expected '(' after function name in function definition", cut(tag("("))),
-                multispace0,
+                empty0,
                 separated_list0(
-                    tuple((multispace0, tag(","), multispace0)), 
+                    tuple((empty0, tag(","), empty0)), 
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1233,11 +1282,11 @@ impl NessaContext {
                         )
                     ))
                 ),
-                multispace0,
+                empty0,
                 context("Expected ')' after parameters in function definition", cut(tag(")"))),
-                multispace0,
+                empty0,
                 context("Expected '->' after parentheses in function definition", cut(tag("->"))),
-                multispace0,
+                empty0,
                 cut(|input| self.type_parser(input))
             )),
             |(_, t, _, n, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
@@ -1249,7 +1298,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.function_header_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1270,25 +1319,25 @@ impl NessaContext {
             located(
                 tuple((
                     tag("unary"),
-                    multispace1,
+                    empty1,
                     tag("prefix"),
-                    multispace1,
+                    empty1,
                     context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
-                    multispace1,
+                    empty1,
                     context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
-                    multispace0,
+                    empty0,
                     map(
                         context(
                             "Expected precedence after operator representation in operator definition", 
                             cut(delimited(
-                                tuple((tag("("), multispace0)),
+                                tuple((tag("("), empty0)),
                                 take_while1(|c: char| c.is_digit(10)),
-                                tuple((multispace0, tag(")")))
+                                tuple((empty0, tag(")")))
                             ))
                         ),
                         |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of operator definition", cut(tag(";")))
                 ))
             ),
@@ -1301,25 +1350,25 @@ impl NessaContext {
             located(
                 tuple((
                     tag("unary"),
-                    multispace1,
+                    empty1,
                     tag("postfix"),
-                    multispace1,
+                    empty1,
                     context("Expected 'op' after operator type in unary operator definition", cut(tag("op"))),
-                    multispace1,
+                    empty1,
                     context("Expected operator representation after 'op' in unary operator definition", cut(string_parser)),
-                    multispace0,
+                    empty0,
                     map(
                         context(
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
-                                tuple((tag("("), multispace0)),
+                                tuple((tag("("), empty0)),
                                 take_while1(|c: char| c.is_digit(10)),
-                                tuple((multispace0, tag(")")))
+                                tuple((empty0, tag(")")))
                             ))
                         ),
                         |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of operator definition", cut(tag(";")))
                 ))
             ),
@@ -1332,23 +1381,23 @@ impl NessaContext {
             located(
                 tuple((
                     tag("binary"),
-                    multispace1,
+                    empty1,
                     context("Expected 'op' after operator type in binary operator definition", cut(tag("op"))),
-                    multispace1,
+                    empty1,
                     context("Expected operator representation after 'op' in binary operator definition", cut(string_parser)),
-                    multispace0,
+                    empty0,
                     map(
                         context(
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
-                                tuple((tag("("), multispace0)),
+                                tuple((tag("("), empty0)),
                                 take_while1(|c: char| c.is_digit(10)),
-                                tuple((multispace0, tag(")")))
+                                tuple((empty0, tag(")")))
                             ))
                         ),
                         |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of operator definition", cut(tag(";")))
                 ))
             ),
@@ -1361,29 +1410,29 @@ impl NessaContext {
             located(
                 tuple((
                     tag("nary"),
-                    multispace1,
+                    empty1,
                     context("Expected 'op' after operator type in n-ary operator definition", cut(tag("op"))),
-                    multispace1,
+                    empty1,
                     context("Expected 'from' after 'op' in n-ary operator definition", cut(tag("from"))),
-                    multispace1,
+                    empty1,
                     context("Expected operator opening after 'from' in n-ary operator definition", cut(string_parser)),
-                    multispace1,
+                    empty1,
                     context("Expected 'to' after operator opening in n-ary operator definition", cut(tag("to"))),
-                    multispace1,
+                    empty1,
                     context("Expected operator closing after 'to' in n-ary operator definition", cut(string_parser)),
-                    multispace0,
+                    empty0,
                     map(
                         context(
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
-                                tuple((tag("("), multispace0)),
+                                tuple((tag("("), empty0)),
                                 take_while1(|c: char| c.is_digit(10)),
-                                tuple((multispace0, tag(")")))
+                                tuple((empty0, tag(")")))
                             ))
                         ),
                         |s: Span<'a>| s.parse::<usize>().unwrap()
                     ),
-                    multispace0,
+                    empty0,
                     context("Expected ';' at the end of operator definition", cut(tag(";")))
                 ))
             ),
@@ -1452,20 +1501,20 @@ impl NessaContext {
                 let res = map(
                     tuple((
                         tag(open_rep.as_str()),
-                        multispace0,
+                        empty0,
                         separated_list0(
-                            tuple((multispace0, tag(","), multispace0)), 
+                            tuple((empty0, tag(","), empty0)), 
                             tuple((
                                 identifier_parser,
                                 map(
                                     opt(
                                         map(
                                             tuple((
-                                                multispace0,
+                                                empty0,
                                                 tag(":"),
-                                                multispace0,
+                                                empty0,
                                                 cut(|input| self.type_parser(input)),
-                                                multispace0
+                                                empty0
                                             )),
                                             |(_, _, _, t, _)| t
                                         )
@@ -1474,7 +1523,7 @@ impl NessaContext {
                                 )
                             ))
                         ),
-                        multispace0,
+                        empty0,
                         tag(close_rep.as_str())
                     )),
                     |(_, _, a, _, _)| (*id, a)
@@ -1496,35 +1545,35 @@ impl NessaContext {
                 opt(
                     map(
                         tuple((
-                            multispace0,
+                            empty0,
                             tag("<"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
+                                tuple((empty0, tag(","), empty0)), 
                                 identifier_parser
                             ),
-                            multispace0,
+                            empty0,
                             tag(">")
                         )),
                         |(_, _, _, t, _, _)| t
                     )
                 ),
-                multispace1,
+                empty1,
                 |input| self.prefix_operator_parser(input),
-                multispace0,
+                empty0,
                 delimited(
-                    context("Expected '(' in operation definition", cut(tuple((tag("("), multispace0)))),
+                    context("Expected '(' in operation definition", cut(tuple((tag("("), empty0)))),
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1532,11 +1581,11 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((multispace0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                multispace0,
+                empty0,
                 context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                multispace0,
+                empty0,
                 cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, id, _, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
@@ -1550,33 +1599,33 @@ impl NessaContext {
                 opt(
                     map(
                         tuple((
-                            multispace0,
+                            empty0,
                             tag("<"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
+                                tuple((empty0, tag(","), empty0)), 
                                 identifier_parser
                             ),
-                            multispace0,
+                            empty0,
                             tag(">"),
                         )),
                         |(_, _, _, t, _, _)| t
                     )
                 ),
-                multispace1,
+                empty1,
                 delimited(
-                    context("Expected '(' in operation definition", cut(tuple((tag("("), multispace0)))),
+                    context("Expected '(' in operation definition", cut(tuple((tag("("), empty0)))),
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1584,13 +1633,13 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected '(' in operation definition", cut(tuple((multispace0, tag(")")))))
+                    context("Expected '(' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                multispace0,
+                empty0,
                 |input| self.postfix_operator_parser(input),
-                multispace0,
+                empty0,
                 context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                multispace0,
+                empty0,
                 cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, (n, t), _, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
@@ -1604,33 +1653,33 @@ impl NessaContext {
                 opt(
                     map(
                         tuple((
-                            multispace0,
+                            empty0,
                             tag("<"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
+                                tuple((empty0, tag(","), empty0)), 
                                 identifier_parser
                             ),
-                            multispace0,
+                            empty0,
                             tag(">"),
                         )),
                         |(_, _, _, t, _, _)| t
                     )
                 ),
-                multispace1,
+                empty1,
                 delimited(
-                    context("Expected '(' in operation definition", cut(tuple((tag("("), multispace0)))),
+                    context("Expected '(' in operation definition", cut(tuple((tag("("), empty0)))),
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1638,24 +1687,24 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((multispace0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                multispace0,
+                empty0,
                 |input| self.binary_operator_parser(input),
-                multispace0,
+                empty0,
                 delimited(
-                    context("Expected '(' in operation definition", cut(tuple((tag("("), multispace0)))),
+                    context("Expected '(' in operation definition", cut(tuple((tag("("), empty0)))),
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1663,11 +1712,11 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((multispace0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                multispace0,
+                empty0,
                 context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                multispace0,
+                empty0,
                 cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, a, _, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
@@ -1681,33 +1730,33 @@ impl NessaContext {
                 opt(
                     map(
                         tuple((
-                            multispace0,
+                            empty0,
                             tag("<"),
-                            multispace0,
+                            empty0,
                             separated_list1(
-                                tuple((multispace0, tag(","), multispace0)), 
+                                tuple((empty0, tag(","), empty0)), 
                                 identifier_parser
                             ),
-                            multispace0,
+                            empty0,
                             tag(">"),
                         )),
                         |(_, _, _, t, _, _)| t
                     )
                 ),
-                multispace1,
+                empty1,
                 delimited(
-                    context("Expected '(' in operation definition", cut(tuple((tag("("), multispace0)))),
+                    context("Expected '(' in operation definition", cut(tuple((tag("("), empty0)))),
                     tuple((
                         identifier_parser,
                         map(
                             opt(
                                 map(
                                     tuple((
-                                        multispace0,
+                                        empty0,
                                         tag(":"),
-                                        multispace0,
+                                        empty0,
                                         cut(|input| self.type_parser(input)),
-                                        multispace0
+                                        empty0
                                     )),
                                     |(_, _, _, t, _)| t
                                 )
@@ -1715,13 +1764,13 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((multispace0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                multispace0,
+                empty0,
                 |input| self.nary_operator_parser(input),
-                multispace0,
+                empty0,
                 context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                multispace0,
+                empty0,
                 cut(|input| self.type_parser(input))
             )),
             |(_, tm, _, a, _, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
@@ -1733,7 +1782,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.prefix_operation_header_definition_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1752,7 +1801,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.postfix_operation_header_definition_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1771,7 +1820,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.binary_operation_header_definition_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1791,7 +1840,7 @@ impl NessaContext {
             located(
                 tuple((
                     |input| self.nary_operation_header_definition_parser(input),
-                    multispace0,
+                    empty0,
                     cut(|input| self.code_block_parser(input, op_cache)),
                 ))
             ),
@@ -1817,17 +1866,17 @@ impl NessaContext {
 
     fn code_block_parser<'a>(&self, input: Span<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return delimited(
-            tuple((tag("{"), multispace0)),
-            many_separated0(multispace0, |input| self.nessa_line_parser(input, op_cache)),
-            tuple((multispace0, tag("}")))
+            tuple((tag("{"), empty0)),
+            many_separated0(empty0, |input| self.nessa_line_parser(input, op_cache)),
+            tuple((empty0, tag("}")))
         )(input);
     }
 
     fn macro_body_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaMacro> {
         return delimited(
-            tuple((tag("{"), multispace0)),
+            tuple((tag("{"), empty0)),
             parse_nessa_macro,
-            tuple((multispace0, tag("}")))
+            tuple((empty0, tag("}")))
         )(input);
     }
 
@@ -1835,11 +1884,11 @@ impl NessaContext {
         return map(
             tuple((
                 tag("syntax"),
-                multispace1,
+                empty1,
                 context("Expected 'from' after 'syntax' in class syntax definition", cut(tag("from"))),
-                multispace1,
+                empty1,
                 cut(|input| parse_ndl_pattern(input, true, true)),
-                multispace0,
+                empty0,
                 context("Expected ';' at the end of class syntax definition", cut(tag(";")))
             )),
             |(_, _, _, _, p, _, _)| p
@@ -1851,34 +1900,34 @@ impl NessaContext {
             located(
                 tuple((
                     tag("class"),
-                    multispace1,
+                    empty1,
                     context("Invalid class identifier", cut(identifier_parser)),
-                    multispace0,
+                    empty0,
                     opt(
                         map(
                             tuple((
                                 tag("<"),
-                                multispace0,
+                                empty0,
                                 separated_list1(
-                                    tuple((multispace0, tag(","), multispace0)), 
+                                    tuple((empty0, tag(","), empty0)), 
                                     identifier_parser
                                 ),
-                                multispace0,
+                                empty0,
                                 tag(">"),
-                                multispace0,
+                                empty0,
                             )),
                             |(_, _, t, _, _, _)| t
                         )
                     ),
                     tag("{"),
-                    multispace0,
+                    empty0,
                     separated_list0(
-                        multispace0,
+                        empty0,
                         |input| self.inline_class_syntax_parser(input)
                     ),
-                    multispace0,
+                    empty0,
                     separated_list0(
-                        multispace0,
+                        empty0,
                         map(
                             tuple((
                                 identifier_parser,
@@ -1886,24 +1935,24 @@ impl NessaContext {
                                     opt(
                                         map(
                                             tuple((
-                                                multispace0,
+                                                empty0,
                                                 tag(":"),
-                                                multispace0,
+                                                empty0,
                                                 cut(|input| self.type_parser(input)),
-                                                multispace0
+                                                empty0
                                             )),
                                             |(_, _, _, t, _)| t
                                         )
                                     ),
                                     |t| t.unwrap_or(Type::Wildcard)
                                 ),
-                                multispace0,
+                                empty0,
                                 context("Expected ';' at the end of class attribute definition", cut(tag(";")))
                             )),
                             |(a, b, _, _)| (a, b)
                         )
                     ),
-                    multispace0,
+                    empty0,
                     tag("}")
                 ))
             ),
@@ -1922,12 +1971,12 @@ impl NessaContext {
             located(
                 tuple((
                     tag("("),
-                    multispace0,
+                    empty0,
                     separated_list0(
-                        tuple((multispace0, tag(","), multispace0)),
+                        tuple((empty0, tag(","), empty0)),
                         |input| self.nessa_expr_parser(input, &RefCell::default())
                     ),
-                    multispace0,
+                    empty0,
                     tag(")")
                 ))
             ),
@@ -1947,20 +1996,20 @@ impl NessaContext {
             located(
                 tuple((
                     tag("("),
-                    multispace0,
+                    empty0,
                     separated_list0(
-                        tuple((multispace0, tag(","), multispace0)), 
+                        tuple((empty0, tag(","), empty0)), 
                         tuple((
                             identifier_parser,
                             map(
                                 opt(
                                     map(
                                         tuple((
-                                            multispace0,
+                                            empty0,
                                             tag(":"),
-                                            multispace0,
+                                            empty0,
                                             cut(|input| self.type_parser(input)),
-                                            multispace0
+                                            empty0
                                         )),
                                         |(_, _, _, t, _)| t
                                     )
@@ -1969,16 +2018,16 @@ impl NessaContext {
                             )
                         ))
                     ),
-                    multispace0,
+                    empty0,
                     cut(tag(")")),
-                    multispace0,
+                    empty0,
                     opt(
                         map(
                             tuple((
                                 tag("->"),
-                                multispace0,
+                                empty0,
                                 cut(|input| self.type_parser(input)),
-                                multispace0,
+                                empty0,
                             )),
                             |(_, _, t, _)| t
                         ),
@@ -2023,7 +2072,7 @@ impl NessaContext {
             |input| self.while_parser(input, op_cache),
             |input| self.for_parser(input, op_cache),
             |input| self.if_parser(input, op_cache),
-            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((multispace0, tag(";")))))(input)
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((empty0, tag(";")))))(input)
         ))(input);
     }
 
@@ -2040,7 +2089,7 @@ impl NessaContext {
             |input| self.operation_definition_parser(input, op_cache),
             |input| self.class_definition_parser(input),
             |input| self.macro_parser(input), 
-            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((multispace0, tag(";")))))(input)
+            |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((empty0, tag(";")))))(input)
         ))(input);
     }
 
@@ -2132,9 +2181,9 @@ impl NessaContext {
         let cache = RefCell::default();
 
         return delimited(
-            multispace0,
-            many_separated0(multispace0, |input| self.nessa_global_parser(input, &cache)),
-            tuple((multispace0, eof))
+            empty0,
+            many_separated0(empty0, |input| self.nessa_global_parser(input, &cache)),
+            tuple((empty0, eof))
         )(input);
     }
 }

@@ -4,12 +4,12 @@ use nom::{
     combinator::{map, opt, value},
     bytes::complete::{take_while, take_while1, tag},
     sequence::{tuple, delimited, separated_pair},
-    character::complete::{multispace0, multispace1, one_of, satisfy},
+    character::complete::{one_of, satisfy},
     branch::alt,
     multi::separated_list1
 };
 
-use crate::{parser::{Span, verbose_error, PResult, identifier_parser}, context::NessaContext};
+use crate::{parser::{Span, verbose_error, PResult, identifier_parser, empty1, empty0}, context::NessaContext};
 
 /*
                                                   ╒══════════════════╕
@@ -162,7 +162,7 @@ impl Pattern{
 fn parse_and<'a>(text: Span<'a>, and: bool) -> PResult<'a, Pattern> {
     return if and {
         map(
-            separated_list1(multispace1, |i| parse_ndl_pattern(i, false, false)), 
+            separated_list1(empty1, |i| parse_ndl_pattern(i, false, false)), 
             |v| if v.len() > 1 { Pattern::And(v) } else { v[0].clone() }
         )(text)
         
@@ -174,7 +174,7 @@ fn parse_and<'a>(text: Span<'a>, and: bool) -> PResult<'a, Pattern> {
 fn parse_or<'a>(text: Span<'a>, or: bool) -> PResult<'a, Pattern> {
     return if or {
         return map(
-            separated_list1(tuple((multispace0, tag("|"), multispace0)), |i| parse_ndl_pattern(i, false, true)), 
+            separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true)), 
             |v| if v.len() > 1 { Pattern::Or(v) } else { v[0].clone() }
         )(text)
         
@@ -190,17 +190,17 @@ pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a,
         map(delimited(tag("["), separated_pair(satisfy(|c| c != '\''), tag("-"), satisfy(|c| c != '\'')), tag("]")), |(a, b)| Pattern::Range(a, b)),
         map(delimited(tag("'"), take_while(|c| c != '\''), tag("'")), |s: Span<'a>| Pattern::Str(s.to_string())),
         map(delimited(
-            tuple((tag("Arg("), multispace0)),
-            separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(","), multispace0)), take_while1(|c| c != ')')),
-            tuple((multispace0, tag(")")))
+            tuple((tag("Arg("), empty0)),
+            separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
+            tuple((empty0, tag(")")))
         ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
         map(tuple((
             opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap())),
-            delimited(tuple((tag("{"), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("}")))),
+            delimited(tuple((tag("{"), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("}")))),
             opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap()))
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
-        map(delimited(tuple((tag("["), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
-        delimited(tuple((tag("("), multispace0)), |i| parse_ndl_pattern(i, true, true), tuple((multispace0, tag(")")))),
+        map(delimited(tuple((tag("["), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
+        delimited(tuple((tag("("), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(")")))),
         map(one_of("dlLaAsq"), Pattern::Symbol),
         value(Pattern::Identifier, tag("<ident>")),
         value(Pattern::Type, tag("<type>")),

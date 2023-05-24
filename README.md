@@ -55,10 +55,10 @@ This is a _WIP_ list of features that Nessa will have when it is released:
   5.is_number<Number>() // You can also explicitly instantiate the template
   ```
 
-* **Custom syntaxes**: you will be able to create new tokens using an internal language called _NDL_ (_Nessa Definition Language_):
+* **Custom literals**: you will be able to create new literals using an internal language called _NDL_ (_Nessa Definition Language_):
 
   ```typescript
-  class Dice{
+  class Dice {
     // Syntax definition
     syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, faces)
 
@@ -68,6 +68,20 @@ This is a _WIP_ list of features that Nessa will have when it is released:
 
   //Usage
   dice = 4D20 // Four dice of twenty sides
+  ```
+
+* **Compile-time syntax extensions**: you will be able to extend the syntax of the language using _NDL_ by means of high level patterns:
+
+  ```typescript
+  syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+      {#let res = arr<} {$type} {#>(} {#);\n}
+      {@i in $elems} {
+          {#res.push(} {$i} {#);\n}
+      }
+      {#return *res;}
+  }
+
+  let array = <Number>[1, 2, 3, 4];
   ```
 
 * **Operator and operation definitions**: the language allows the definition of new operators and operations using an easy syntax:

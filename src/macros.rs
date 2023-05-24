@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::{HashMap, HashSet}};
 
-use nom::{sequence::{delimited, tuple}, character::complete::{multispace0, multispace1, satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value}, branch::alt};
+use nom::{sequence::{delimited, tuple, preceded}, character::complete::{multispace0, multispace1, satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value, opt}, branch::alt};
 
 use crate::parser::{many_separated0, Span, PResult, identifier_parser};
 
@@ -8,7 +8,8 @@ use crate::parser::{many_separated0, Span, PResult, identifier_parser};
 pub enum NessaMacro {
     Text(String),
     Var(String),
-    Loop(String, String, Vec<NessaMacro>),
+    If(String, Box<NessaMacro>, Box<NessaMacro>),
+    Loop(String, String, Box<NessaMacro>),
     Seq(Vec<NessaMacro>)
 }
 
@@ -58,6 +59,37 @@ pub fn parse_loop_header<'a>(input: Span<'a>) -> PResult<(String, Span<'a>, Span
     ))(input);
 }
 
+pub fn parse_if<'a>(input: Span<'a>) -> PResult<NessaMacro> {
+    return map(
+        tuple((
+            delimited(
+                tag("{&"),
+                delimited(multispace0, identifier_parser, multispace0),
+                tag("}")
+            ),
+            preceded(
+                multispace0,
+                delimited(
+                    tag("{"),
+                    parse_nessa_macro,
+                    tag("}")                
+                )
+            ),
+            opt(
+                preceded(
+                    multispace0,   
+                    delimited(
+                        tag("{"),
+                        parse_nessa_macro,
+                        tag("}")                
+                    )
+                )
+            )
+        )),
+        |(h, i, e)| NessaMacro::If(h, Box::new(i), Box::new(e.unwrap_or_else(|| NessaMacro::Text("".into()))))
+    )(input);
+}
+
 pub fn parse_loop<'a>(input: Span<'a>) -> PResult<NessaMacro> {
     return map(
         tuple((
@@ -73,11 +105,11 @@ pub fn parse_loop<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             multispace0,
             delimited(
                 tag("{"),
-                parse_nessa_macro_lines,
+                parse_nessa_macro,
                 tag("}")                
             )
         )),
-        |(h, _, b)| NessaMacro::Loop(h.0, h.5.to_string(), b)
+        |(h, _, b)| NessaMacro::Loop(h.0, h.5.to_string(), Box::new(b))
     )(input);
 }
 
@@ -85,6 +117,7 @@ pub fn parse_nessa_macro_line<'a>(input: Span<'a>) -> PResult<NessaMacro> {
     return alt((
         parse_var,
         parse_text,
+        parse_if,
         parse_loop
     ))(input);
 }
@@ -105,6 +138,27 @@ pub fn parse_nessa_macro<'a>(input: Span<'a>) -> PResult<NessaMacro> {
 }
 
 impl NessaMacro {
+    pub fn get_markers(&self) -> HashSet<(bool, String)> {
+        return match self {
+            NessaMacro::If(v, i, e) => i.get_markers().into_iter().chain(e.get_markers()).chain(vec!((false, v.clone()))).collect(),
+            NessaMacro::Loop(v, c, b) => {
+                let mut res = b.get_markers().into_iter().chain(vec!((true, v.clone()), (false, c.clone()))).collect::<HashSet<_>>();
+                let repeated = res.iter().filter(|(it, _)| *it).cloned().collect::<Vec<_>>();
+
+                // Delete referenced iterator variables
+                for (_, s) in repeated {
+                    res.remove(&(false, s.clone()));
+                }
+
+                res
+            },
+            NessaMacro::Seq(b) => b.iter().flat_map(NessaMacro::get_markers).collect(),
+            NessaMacro::Var(v) => vec!((false, v.clone())).into_iter().collect(),
+
+            _ => HashSet::new(),
+        };
+    }
+
     pub fn expand<'a>(&self, args: &HashMap<String, Vec<&'a str>>) -> Result<String, String> {
         return match self {
             NessaMacro::Text(s) => Ok(s.clone()),
@@ -118,6 +172,13 @@ impl NessaMacro {
                 },
 
                 None => Err(format!("Did not extract variable with name '{v}'")),
+            },
+
+            NessaMacro::If(n, i, e) => {
+                match args.get(n) {
+                    Some(v) if v.len() > 0 => i.expand(args),
+                    _ => e.expand(args)
+                }
             },
 
             NessaMacro::Loop(i, c, b) => {
@@ -136,9 +197,9 @@ impl NessaMacro {
                         args_cpy.entry(i.clone()).or_insert(vec!(iv));
                     }
 
-                    b.iter().map(|i| i.expand(&args_cpy)).collect::<Result<Vec<_>, _>>()
+                    b.expand(&args_cpy)
 
-                }).collect::<Result<Vec<_>, _>>()?.into_iter().flat_map(|i| i).collect::<Vec<_>>();
+                }).collect::<Result<Vec<_>, _>>()?;
 
                 Ok(iters.join(""))
             },
@@ -194,6 +255,36 @@ mod tests {
         assert!(crate::macros::parse_loop(loop_3.into()).is_ok());
         assert!(crate::macros::parse_loop(loop_4.into()).is_err());
         assert!(crate::macros::parse_loop(loop_5.into()).is_err());
+
+        let if_1 = "{&i} {
+            {# this is an example}
+        }";
+
+        let if_2 = "{&i} {
+            {# this is an example}
+        } {
+            {# this is another example}        
+        }";
+
+        let if_3 = "{&i} {} {
+            {# this is another example}        
+        }";
+
+        let if_4 = "{&i} {
+            {@ i in $a } {
+                {# this is an example}
+                {#this is another example}
+            }
+        } {
+            {&i} {
+                {# this is a final example}
+            }     
+        }";
+
+        assert!(crate::macros::parse_if(if_1.into()).is_ok());
+        assert!(crate::macros::parse_if(if_2.into()).is_ok());
+        assert!(crate::macros::parse_if(if_3.into()).is_ok());
+        assert!(crate::macros::parse_if(if_4.into()).is_ok());
 
         let macro_1 = "{#[}{$a}{#]}";
         let macro_2 = "{#[}{@i in $a}{ {#test} }";

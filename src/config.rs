@@ -191,7 +191,7 @@ fn parse_nessa_module_with_config_aux<'a>(path: &String, already_compiled: &mut 
         }
     
         let (module, source) = ctx.parse_and_precompile_with_dependencies(&config_yml.module_name, &main, &already_compiled)?;
-        let graph = ctx.get_inner_dep_graph(&module);
+        let graph = ctx.get_inner_dep_graph(&module)?;
     
         return Ok(NessaModule::new(config_yml.module_name, ctx, module, source, imports, graph));
 

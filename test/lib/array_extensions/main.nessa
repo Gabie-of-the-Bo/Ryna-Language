@@ -1,0 +1,18 @@
+module array_extensions [1.0]
+
+syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+    {#let res = arr<} {$type} {#>(} {#);\n}
+    {@i in $elems} {
+        {#res.push(} {$i} {#);\n}
+    }
+    {#return *res;}
+}
+
+syntax list_comprehension from '[' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '} 'in' {' '} Arg(<expr>, container) {' '} ']' {
+    {#let res = arr<} {$type} {#>();\n}
+    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
+    {#for _it_ in }{$container}{# \{\n}
+        {#  res.push(func(*_it_));\n}
+    {#\}\n\n}
+    {#return res;}
+}

@@ -1,4 +1,4 @@
-module_name: array_extensions
+module_name: syntax_test
 module_paths:
   - test/lib
 modules: {}

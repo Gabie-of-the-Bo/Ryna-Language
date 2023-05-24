@@ -156,7 +156,7 @@ pub enum NessaExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
-    Class, Fn, Prefix, Postfix, Binary, Nary, Outer
+    Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer
 }
 
 pub fn identifier_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
@@ -222,6 +222,7 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
                 cut(alt((
                     value(ImportType::Class, tag("class")),
                     value(ImportType::Fn, tag("fn")),
+                    value(ImportType::Syntax, tag("syntax")),
                     value(ImportType::Prefix, tuple((tag("prefix"), multispace1, tag("op")))),
                     value(ImportType::Postfix, tuple((tag("postfix"), multispace1, tag("op")))),
                     value(ImportType::Binary, tuple((tag("binary"), multispace1, tag("op")))),
@@ -661,6 +662,9 @@ impl NessaContext {
     fn custom_syntax_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, NessaExpr> {
         for (_, p, m) in &self.macros {
             if let Ok((new_input, args)) = p.extract(input, self) {
+                let span = &input[..input.len() - new_input.len()];
+                let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string());
+
                 input = new_input;
                 
                 match m.expand(&args) {
@@ -670,23 +674,31 @@ impl NessaContext {
                                 multispace0, 
                                 |input| self.nessa_line_parser(input, &RefCell::default()))
                         )(Span::new(&code));
-    
-                        if let Ok((rest, lines)) = parsed_code {
-                            if rest.trim().len() == 0 {
+                        
+                        match parsed_code {
+                            Ok((rest, lines)) if rest.trim().len() == 0 => {
                                 return Ok((
                                     input, 
                                     NessaExpr::NaryOperation(
-                                        Location::none(), 
+                                        loc.clone(), 
                                         CALL_OP, 
                                         vec!(Type::Wildcard), 
-                                        Box::new(NessaExpr::Lambda(Location::none(), vec!(), Type::Wildcard, lines)),
+                                        Box::new(NessaExpr::Lambda(loc, vec!(), Type::Wildcard, lines)),
                                         vec!()
                                     )
                                 ));
-                            
-                            } else {
-                                return Err(verbose_error(input, "Error while parsing expanded code"))
+                            },
+
+                            Ok(_) |
+                            Err(nom::Err::Error(_)) |
+                            Err(nom::Err::Failure(_)) => {                                
+                                return Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                    input, 
+                                    VerboseErrorKind::Context("Error while parsing expanded code")
+                                )) }));
                             }
+
+                            _ => unreachable!()
                         }
                     },
 

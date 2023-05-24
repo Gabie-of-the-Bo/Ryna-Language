@@ -1,0 +1,11 @@
+module syntax_test [1.0]
+
+import syntax { array_initialization, list_comprehension } from array_extensions;
+
+let array = [i * i for i: Number in <Number>[1, 2, 3, 4, 5]];
+
+if array[0] != 1 { panic("Invalid value"); }
+if array[1] != 4 { panic("Invalid value"); }
+if array[2] != 9 { panic("Invalid value"); }
+if array[3] != 16 { panic("Invalid value"); }
+if array[4] != 25 { panic("Invalid value"); }

@@ -628,8 +628,6 @@ impl NessaContext {
                 }
 
                 if t.len() == 0 {
-                    println!("{:?}", args);
-
                     let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
                         "Unable to infer type of function argument".into(), &l, vec!()
                     ))).collect::<Result<_, _>>()?;
@@ -815,15 +813,15 @@ impl NessaContext{
         return true;
     }
 
-    pub fn get_inner_dep_graph(&mut self, lines: &Vec<NessaExpr>) -> DirectedGraph<(ImportType, usize), ()> {
+    pub fn get_inner_dep_graph(&mut self, lines: &Vec<NessaExpr>) -> Result<DirectedGraph<(ImportType, usize), ()>, NessaError> {
         let mut res = DirectedGraph::new();
         let mut compiled = lines.clone();
 
-        self.compile(&mut compiled, &vec!()).unwrap(); // TODO: this seems costly...
+        self.compile(&mut compiled, &vec!())?; // TODO: this seems costly...
 
         self.get_inner_dep_graph_body(&compiled, &(ImportType::Outer, 0), &mut res);
 
-        return res;
+        return Ok(res);
     }
 
     pub fn get_inner_dep_graph_body(&self, lines: &Vec<NessaExpr>, parent: &(ImportType, usize), deps: &mut DirectedGraph<(ImportType, usize), ()>) {
@@ -2648,6 +2646,13 @@ impl NessaContext{
             let curr_mod_imports = current_imports.entry(module.clone()).or_default();
 
             match line {
+                NessaExpr::Macro(_, n, _, _) => {
+                    if imports.contains_key(&ImportType::Syntax) && imports[&ImportType::Syntax].contains(n) && 
+                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Syntax) || !curr_mod_imports[&ImportType::Syntax].contains(n)) {
+                        self.define_module_macro(line.clone())?
+                    }
+                }
+
                 NessaExpr::ClassDefinition(l, n, t, atts, p) => {
                     if imports.contains_key(&ImportType::Class) && imports[&ImportType::Class].contains(n) && 
                     (!foreign || !curr_mod_imports.contains_key(&ImportType::Class) || !curr_mod_imports[&ImportType::Class].contains(n)) {
@@ -2891,13 +2896,18 @@ impl NessaContext{
             let module = &modules.get(m).unwrap();
 
             for (t, names) in imps.iter() {
-                for name in names.iter() {
-                    let id = module.ctx.map_import(t, name);
+                if let ImportType::Syntax = t { // Syntaxes do not have to be mapped
+                    new_imports.entry(t.clone()).or_default().extend(names.iter().cloned());                    
 
-                    module.inner_dependencies.dfs(&(t.clone(), id), |(tp, id)| {
-                        let mapped_name = module.ctx.rev_map_import(tp, *id);
-                        new_imports.entry(tp.clone()).or_default().insert(mapped_name);
-                    });
+                } else {
+                    for name in names.iter() {
+                        let id = module.ctx.map_import(t, name);
+    
+                        module.inner_dependencies.dfs(&(t.clone(), id), |(tp, id)| {
+                            let mapped_name = module.ctx.rev_map_import(tp, *id);
+                            new_imports.entry(tp.clone()).or_default().insert(mapped_name);
+                        });
+                    }
                 }
             }
 

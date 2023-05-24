@@ -866,6 +866,37 @@ impl NessaContext {
         };
     }
 
+    pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+        return match expr {
+            NessaExpr::Macro(l, n, p, b) => {
+                let pattern_args = p.get_markers();
+                let macro_args = b.get_markers();
+                
+                for p in &pattern_args {
+                    if !macro_args.contains(&(false, p.clone())) {
+                        return Err(NessaError::compiler_error(
+                            format!("Argument {} is not used inside {} syntax", p.green(), n.blue()),
+                            &l, vec!()
+                        ));
+                    }
+                }
+                
+                for p in macro_args {
+                    if !p.0 && !pattern_args.contains(&p.1) {
+                        return Err(NessaError::compiler_error(
+                            format!("Argument {} is referenced inside {} syntax, but is not present in its NDL pattern", p.1.green(), n.blue()),
+                            &l, vec!()
+                        ));
+                    }
+                }
+
+                Ok(())
+            }
+
+            _ => Ok(())
+        };
+    }
+
     pub fn no_template_check_type(&self, t: &Type, l: &Location) -> Result<(), NessaError> {
         if t.has_templates() {
             Err(NessaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
@@ -1103,6 +1134,7 @@ impl NessaContext {
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
         self.class_check(expr)?;
+        self.macro_check(expr)?;
 
         return Ok(());
     }

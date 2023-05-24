@@ -135,4 +135,9 @@ mod integration {
     fn math_ops() {
         module_test("test/modules/math_ops");
     }
+
+    #[test]
+    fn syntax_test() {
+        module_test("test/modules/syntax_test");
+    }
 }

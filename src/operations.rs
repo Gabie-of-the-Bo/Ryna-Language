@@ -283,6 +283,18 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator("&&".into(), 1550).unwrap();
 
     define_binary_native_op_combinations!(ctx, 13, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 && *arg_2);
+
+    ctx.define_binary_operator(":=".into(), 100000).unwrap();
+
+    ctx.define_binary_operation(
+        14, 1, 
+        Type::MutRef(Box::new(Type::TemplateParam(0))), Type::TemplateParam(0), Type::Empty, 
+        Some(|_, _, mut a, b| {
+            a.get_mut::<Reference>().assign(b);
+
+            return Ok(Object::empty());
+        }
+    )).unwrap();
 }
 
 macro_rules! idx_op_definition {

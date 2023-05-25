@@ -29,7 +29,7 @@ impl NessaContext {
         };
     }
 
-    fn ensured_return_check_body(&self, lines: &Vec<NessaExpr>, l: &Location) -> Result<(), NessaError> {
+    pub fn ensured_return_check_body(&self, lines: &Vec<NessaExpr>, l: &Location) -> Result<(), NessaError> {
         for line in lines {
             match line {
                 NessaExpr::Return(_, _) => return Ok(()),
@@ -56,7 +56,7 @@ impl NessaContext {
                 _ => {}
             }
         }
-
+        
         return Err(NessaError::compiler_error("Function may not always return a value".into(), l, vec!()));
     }
 

@@ -112,6 +112,11 @@ mod integration {
     }
 
     #[test]
+    fn array_transform() {
+        integration_test("test/array_transform.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

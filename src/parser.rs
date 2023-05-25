@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use nom::bytes::complete::take_until;
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
+use nom::sequence::preceded;
 use nom::{
     IResult,
     combinator::{map, map_res, opt, eof, value},
@@ -1086,12 +1087,16 @@ impl NessaContext {
                 tuple((
                     tag("return"),
                     empty0,
-                    cut(|input| self.nessa_expr_parser(input, op_cache)),
-                    empty0,
+                    opt(
+                        terminated(
+                            |input| self.nessa_expr_parser(input, op_cache),
+                            empty0
+                        )
+                    ),
                     context("Expected ';' at the end of return statement", cut(tag(";")))
                 ))
             ),
-            |(l, (_, _, e, _, _))| NessaExpr::Return(l, Box::new(e))
+            |(l, (_, _, e, _))| NessaExpr::Return(l.clone(), Box::new(e.unwrap_or_else(|| NessaExpr::Literal(l, Object::empty()))))
         )(input);
     }
 
@@ -1284,12 +1289,14 @@ impl NessaContext {
                 ),
                 empty0,
                 context("Expected ')' after parameters in function definition", cut(tag(")"))),
-                empty0,
-                context("Expected '->' after parentheses in function definition", cut(tag("->"))),
-                empty0,
-                cut(|input| self.type_parser(input))
+                opt(
+                    preceded(
+                        tuple((empty0, tag("->"), empty0)),
+                        context("Expected return type after '->' in function definition", cut(|input| self.type_parser(input)))
+                    )
+                )
             )),
-            |(_, t, _, n, _, _, _, a, _, _, _, _, _, r)| (n, t, a, r)
+            |(_, t, _, n, _, _, _, a, _, _, r)| (n, t, a, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -1583,12 +1590,14 @@ impl NessaContext {
                     )),
                     context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                empty0,
-                context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                empty0,
-                cut(|input| self.type_parser(input))
+                opt(
+                    preceded(
+                        tuple((empty0, tag("->"), empty0)),
+                        context("Expected return type after '->' in operation definition", cut(|input| self.type_parser(input)))
+                    )
+                )
             )),
-            |(_, tm, _, id, _, (n, t), _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
+            |(_, tm, _, id, _, (n, t), r)| (id, tm.unwrap_or_default(), n, t, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -1637,12 +1646,14 @@ impl NessaContext {
                 ),
                 empty0,
                 |input| self.postfix_operator_parser(input),
-                empty0,
-                context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                empty0,
-                cut(|input| self.type_parser(input))
+                opt(
+                    preceded(
+                        tuple((empty0, tag("->"), empty0)),
+                        context("Expected return type after '->' in operation definition", cut(|input| self.type_parser(input)))
+                    )
+                )
             )),
-            |(_, tm, _, (n, t), _, id, _, _, _, r)| (id, tm.unwrap_or_default(), n, t, r)
+            |(_, tm, _, (n, t), _, id, r)| (id, tm.unwrap_or_default(), n, t, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -1714,12 +1725,14 @@ impl NessaContext {
                     )),
                     context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
                 ),
-                empty0,
-                context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                empty0,
-                cut(|input| self.type_parser(input))
+                opt(
+                    preceded(
+                        tuple((empty0, tag("->"), empty0)),
+                        context("Expected return type after '->' in operation definition", cut(|input| self.type_parser(input)))
+                    )
+                )
             )),
-            |(_, tm, _, a, _, id, _, b, _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
+            |(_, tm, _, a, _, id, _, b, r)| (id, tm.unwrap_or_default(), a, b, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -1768,12 +1781,14 @@ impl NessaContext {
                 ),
                 empty0,
                 |input| self.nary_operator_parser(input),
-                empty0,
-                context("Expected '->' after parentheses in operation definition", cut(tag("->"))),
-                empty0,
-                cut(|input| self.type_parser(input))
+                opt(
+                    preceded(
+                        tuple((empty0, tag("->"), empty0)),
+                        context("Expected return type after '->' in operation definition", cut(|input| self.type_parser(input)))
+                    )
+                )
             )),
-            |(_, tm, _, a, _, (id, b), _, _, _, r)| (id, tm.unwrap_or_default(), a, b, r)
+            |(_, tm, _, a, _, (id, b), r)| (id, tm.unwrap_or_default(), a, b, r.unwrap_or(Type::Empty))
         )(input);
     }
 

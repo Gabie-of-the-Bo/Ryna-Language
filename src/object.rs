@@ -33,6 +33,8 @@ pub trait NessaObject {
     fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>>;
     fn to_string(&self) -> String;
     fn equal_to(&self, b: &dyn NessaObject) -> bool;
+
+    fn assign(&mut self, other: Object);
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +100,10 @@ impl Object {
 
     pub fn get<T>(&self) -> Ref<T> where T: 'static {
         return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
+    }
+
+    pub fn get_mut<T>(&mut self) -> RefMut<T> where T: 'static {
+        return RefMut::map(self.inner.borrow_mut(), |i| i.as_any_mut().downcast_mut::<T>().unwrap());
     }
 
     pub fn get_ref(&self) -> Reference {
@@ -178,6 +184,12 @@ impl Reference {
     pub fn get_ptr(&self) -> *const dyn NessaObject{
         return self.inner.as_ptr();
     }
+
+    pub fn assign(&mut self, other: Object) {
+        assert!(self.mutable, "Cannot take mutate data from constant reference");
+
+        self.inner.borrow_mut().assign(other);
+    }
 }
 
 /*
@@ -231,6 +243,11 @@ impl NessaObject for Reference {
 
         return false;
     }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
 }
 
 impl NessaObject for Number {
@@ -259,6 +276,11 @@ impl NessaObject for Number {
         let tb = b.as_any().downcast_ref::<Number>();
 
         return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
     }
 }
 
@@ -289,6 +311,11 @@ impl NessaObject for String {
 
         return ta == tb;
     }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
 }
 
 impl NessaObject for bool {
@@ -317,6 +344,11 @@ impl NessaObject for bool {
         let tb = b.as_any().downcast_ref::<bool>();
 
         return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
     }
 }
 
@@ -351,6 +383,11 @@ impl NessaObject for Tuple {
 
         return ta == tb;
     }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
 }
 
 impl NessaObject for (usize, Type, Type) {
@@ -383,6 +420,11 @@ impl NessaObject for (usize, Type, Type) {
         let tb = b.as_any().downcast_ref::<(usize, usize, Type, Type)>();
 
         return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
     }
 }
 
@@ -417,6 +459,11 @@ impl NessaObject for (Type, Vec<Object>) {
 
         return ta == tb;
     }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
 }
 
 impl NessaObject for (Type, Reference, usize) {
@@ -449,6 +496,11 @@ impl NessaObject for (Type, Reference, usize) {
         let tb = b.as_any().downcast_ref::<(Type, Reference, usize)>();
 
         return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
     }
 }
 
@@ -488,6 +540,11 @@ impl NessaObject for TypeInstance {
 
         return ta == tb;
     }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
 }
 
 impl NessaObject for () {
@@ -520,6 +577,11 @@ impl NessaObject for () {
         let tb = b.as_any().downcast_ref::<()>();
 
         return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
     }
 }
 

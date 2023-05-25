@@ -439,27 +439,57 @@ impl NessaContext {
                 self.lambdas += 1;
             },
 
-            NessaExpr::FunctionDefinition(_, _, _, a, _, b) => {
-                self.compile(b, &a)?;                    
+            NessaExpr::FunctionDefinition(l, _, _, a, r, b) => {
+                self.compile(b, &a)?;
+
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
             },
 
-            NessaExpr::PrefixOperationDefinition(_, _, _, n, t, _, b) => {
-                self.compile(b, &vec!((n.clone(), t.clone())))?;                    
+            NessaExpr::PrefixOperationDefinition(l, _, _, n, t, r, b) => {
+                self.compile(b, &vec!((n.clone(), t.clone())))?;
+
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
             },
 
-            NessaExpr::PostfixOperationDefinition(_, _, _, n, t, _, b) => {
-                self.compile(b, &vec!((n.clone(), t.clone())))?;                    
+            NessaExpr::PostfixOperationDefinition(l, _, _, n, t, r, b) => {
+                self.compile(b, &vec!((n.clone(), t.clone())))?;
+
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
             },
 
-            NessaExpr::BinaryOperationDefinition(_, _, _, a1, a2, _, b) => {
-                self.compile(b, &vec!(a1.clone(), a2.clone()))?;                    
+            NessaExpr::BinaryOperationDefinition(l, _, _, a1, a2, r, b) => {
+                self.compile(b, &vec!(a1.clone(), a2.clone()))?;
+
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
             },
 
-            NessaExpr::NaryOperationDefinition(_, _, _, a, args, _, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, a, args, r, b) => {
                 let mut all_args = vec!(a.clone());
                 all_args.extend(args.iter().cloned());
 
-                self.compile(b, &all_args)?;   
+                self.compile(b, &all_args)?;
+
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
             }
 
             _ => {}

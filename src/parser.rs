@@ -189,7 +189,7 @@ pub enum NessaExpr {
     FunctionDefinition(Location, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(Location, String, usize),
     PostfixOperatorDefinition(Location, String, usize),
-    BinaryOperatorDefinition(Location, String, usize),
+    BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
 
@@ -207,6 +207,46 @@ pub enum NessaExpr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
     Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer
+}
+
+pub fn get_op_chain(expr: NessaExpr, id: usize) -> (Vec<NessaExpr>, Vec<Vec<Type>>) {
+    return match expr {
+        NessaExpr::BinaryOperation(_, id2, t, a, b) if id == id2 => {
+            let (mut chain_a, mut t_a) = get_op_chain(*a, id);
+            let (chain_b, t_b) = get_op_chain(*b, id);
+
+            t_a.push(t);
+            t_a.extend(t_b);
+            chain_a.extend(chain_b);
+
+            (chain_a, t_a)
+        }
+
+        _ => (vec!(expr), vec!())
+
+    }
+}
+
+pub fn to_right_assoc(expr: NessaExpr) -> NessaExpr {
+    let (l, id) = match &expr {
+        NessaExpr::BinaryOperation(l, id, _, _, _) => (l.clone(), *id),
+        _ => unreachable!()
+    };
+
+    let (exprs, ts) = get_op_chain(expr, id);
+    let mut chain = exprs.into_iter();
+    let mut res = chain.next().unwrap();
+    
+    if chain.len() > 0 {
+        for (e, t) in chain.zip(ts) {
+            res = NessaExpr::BinaryOperation(
+                l.clone(), id, t,
+                Box::new(res), Box::new(e)
+            );    
+        }
+    }
+
+    return res
 }
 
 pub fn identifier_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
@@ -883,7 +923,15 @@ impl NessaContext {
                         |input| self.nessa_expr_parser_wrapper(input, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
                     ))
                 ),
-                |(l, (_, t, _, _, b))| NessaExpr::BinaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), Box::new(b))
+                |(l, (_, t, _, _, b))| {
+                    let mut res = NessaExpr::BinaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), Box::new(b));
+                    
+                    if self.binary_ops[id].is_right_associative() {
+                        res = to_right_assoc(res);
+                    }
+
+                    res
+                }
             )(input);
 
             cache_bin.insert(input.len(), match &res {
@@ -1388,6 +1436,12 @@ impl NessaContext {
             located(
                 tuple((
                     tag("binary"),
+                    opt(
+                        tuple((
+                            empty1,
+                            tag("right")
+                        ))
+                    ),
                     empty1,
                     context("Expected 'op' after operator type in binary operator definition", cut(tag("op"))),
                     empty1,
@@ -1408,7 +1462,7 @@ impl NessaContext {
                     context("Expected ';' at the end of operator definition", cut(tag(";")))
                 ))
             ),
-            |(l, (_, _, _, _, n, _, p, _, _))| NessaExpr::BinaryOperatorDefinition(l, n, p)
+            |(l, (_, f, _, _, _, n, _, p, _, _))| NessaExpr::BinaryOperatorDefinition(l, n, f.is_some(), p)
         )(input);
     }
 
@@ -2795,7 +2849,7 @@ mod tests {
 
         assert_eq!(prefix, NessaExpr::PrefixOperatorDefinition(Location::none(), "~".into(), 200));
         assert_eq!(postfix, NessaExpr::PostfixOperatorDefinition(Location::none(), "&".into(), 300));
-        assert_eq!(binary, NessaExpr::BinaryOperatorDefinition(Location::none(), "$".into(), 400));
+        assert_eq!(binary, NessaExpr::BinaryOperatorDefinition(Location::none(), "$".into(), false, 400));
         assert_eq!(nary, NessaExpr::NaryOperatorDefinition(Location::none(), "`".into(), "´".into(), 500));
     }
 

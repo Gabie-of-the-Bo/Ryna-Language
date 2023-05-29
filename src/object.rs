@@ -225,12 +225,7 @@ impl NessaObject for Reference {
     }
 
     fn to_string(&self) -> String {
-        if self.mutable {
-            return format!("&&{}", self.inner.borrow().to_string());
-
-        } else {
-            return format!("&{}", self.inner.borrow().to_string());
-        }
+        return self.inner.borrow().to_string();
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
@@ -450,7 +445,7 @@ impl NessaObject for (Type, Vec<Object>) {
     }
 
     fn to_string(&self) -> String {
-        return format!("{{{}}}", self.1.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
+        return format!("[{}]", self.1.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {

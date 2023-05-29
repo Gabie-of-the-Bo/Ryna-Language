@@ -5,5 +5,5 @@ fn odd(n: Number) -> Bool {
 }
 
 fn even(n: Number) -> Bool {
-    return !odd(n.deref<Number>());
+    return !n.deref().odd();
 }

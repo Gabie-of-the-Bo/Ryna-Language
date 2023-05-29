@@ -133,7 +133,7 @@ impl NessaContext {
         ╘══════════════════════════════╛
     */
 
-    pub fn define_binary_operator(&mut self, representation: String, precedence: usize) -> Result<(), String> {
+    pub fn define_binary_operator(&mut self, representation: String, right_associative: bool, precedence: usize) -> Result<(), String> {
         for o in &self.binary_ops {
             if let Operator::Binary{representation: r, ..} = o {
                 if *r == representation {
@@ -144,6 +144,7 @@ impl NessaContext {
 
         let op = Operator::Binary {
             id: self.binary_ops.len(),
+            right_associative: right_associative,
             representation: representation,
             precedence: precedence,
             operations: vec!()
@@ -408,8 +409,8 @@ mod tests {
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
 
-        let def_1 = ctx.define_binary_operator("$".into(), 2);
-        let def_2 = ctx.define_binary_operator("+".into(), 3);
+        let def_1 = ctx.define_binary_operator("$".into(), false, 2);
+        let def_2 = ctx.define_binary_operator("+".into(), false, 3);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

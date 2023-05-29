@@ -7,11 +7,11 @@ fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
 }
 
 fn<T> next(it: &&DoubleIterator<'T>) -> Number {
-    return iter(it).next() * 2;
+    return it.iter().next() * 2;
 }
 
 fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
-    return iter(it).is_consumed();
+    return it.iter().is_consumed();
 }
 
 let a = arr<Number>();

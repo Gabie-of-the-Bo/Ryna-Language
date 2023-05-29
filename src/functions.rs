@@ -97,7 +97,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("print".into()).unwrap();
 
     ctx.define_native_function_overload(1, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
-        println!("{}", v[0].to_string());
+        print!("{}", v[0].to_string());
 
         return Ok(Object::empty());
     }).unwrap();
@@ -305,6 +305,20 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             }
         }
     ).unwrap();
+
+    ctx.define_function("println".into()).unwrap();
+
+    ctx.define_native_function_overload(23, 0, &[], Type::Empty, |_, _, _| { 
+        println!("");
+
+        return Ok(Object::empty());
+    }).unwrap();
+
+    ctx.define_native_function_overload(23, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+        println!("{}", v[0].to_string());
+
+        return Ok(Object::empty());
+    }).unwrap();
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {

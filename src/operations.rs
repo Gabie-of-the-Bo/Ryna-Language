@@ -30,6 +30,7 @@ pub enum Operator {
 
     Binary {
         id: usize,
+        right_associative: bool,
         representation: String,
         precedence: usize,
         operations: BinaryOperations
@@ -66,6 +67,13 @@ impl Operator {
             Operator::Unary { representation: r, .. } => r.into(),
             Operator::Binary { representation: r, .. } => r.into(),
             Operator::Nary { open_rep: o, close_rep: c, .. } => format!("{o}{c}")
+        }
+    }
+
+    pub fn is_right_associative(&self) -> bool {
+        return match self {
+            Operator::Binary { right_associative, .. } => *right_associative,
+            _ => unreachable!()
         }
     }
 }
@@ -207,24 +215,24 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         ╘═════════════════════════════╛
     */
 
-    ctx.define_binary_operator("+".into(), 650).unwrap();
+    ctx.define_binary_operator("+".into(), false, 650).unwrap();
 
     define_binary_native_op_combinations!(ctx, 0, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 + arg_2);
     define_binary_native_op_combinations!(ctx, 0, Type::Basic(1), Type::Basic(1), String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
 
-    ctx.define_binary_operator("-".into(), 700).unwrap();
+    ctx.define_binary_operator("-".into(), false, 700).unwrap();
 
     define_binary_native_op_combinations!(ctx, 1, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 - arg_2);
 
-    ctx.define_binary_operator("*".into(), 500).unwrap();
+    ctx.define_binary_operator("*".into(), false, 500).unwrap();
 
     define_binary_native_op_combinations!(ctx, 2, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 * arg_2);
 
-    ctx.define_binary_operator("/".into(), 550).unwrap();
+    ctx.define_binary_operator("/".into(), false, 550).unwrap();
 
     define_binary_native_op_combinations!(ctx, 3, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 / arg_2);
 
-    ctx.define_binary_operator("%".into(), 600).unwrap();
+    ctx.define_binary_operator("%".into(), false, 600).unwrap();
 
     define_binary_native_op_combinations!(ctx, 4, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 % arg_2);
 
@@ -234,7 +242,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         ╘══════════════════════╛
     */
 
-    ctx.define_binary_operator(".".into(), 100).unwrap();
+    ctx.define_binary_operator(".".into(), true, 100).unwrap();
 
     /*
         ╒═══════════════════════╕
@@ -242,29 +250,29 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         ╘═══════════════════════╛
     */
 
-    ctx.define_binary_operator("<".into(), 900).unwrap();
+    ctx.define_binary_operator("<".into(), false, 900).unwrap();
 
     define_binary_native_op_combinations!(ctx, 6, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 < arg_2);
 
-    ctx.define_binary_operator(">".into(), 950).unwrap();
+    ctx.define_binary_operator(">".into(), false, 950).unwrap();
 
     define_binary_native_op_combinations!(ctx, 7, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 > arg_2);
 
-    ctx.define_binary_operator("<=".into(), 1000).unwrap();
+    ctx.define_binary_operator("<=".into(), false, 1000).unwrap();
 
     define_binary_native_op_combinations!(ctx, 8, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 <= arg_2);
 
-    ctx.define_binary_operator(">=".into(), 1050).unwrap();
+    ctx.define_binary_operator(">=".into(), false, 1050).unwrap();
 
     define_binary_native_op_combinations!(ctx, 9, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 >= arg_2);
 
-    ctx.define_binary_operator("==".into(), 1100).unwrap();
+    ctx.define_binary_operator("==".into(), false, 1100).unwrap();
 
     define_binary_native_op_combinations!(ctx, 10, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 == arg_2);
     define_binary_native_op_combinations!(ctx, 10, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 == arg_2);
     define_binary_native_op_combinations!(ctx, 10, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, arg_1 == arg_2);
 
-    ctx.define_binary_operator("!=".into(), 1150).unwrap();
+    ctx.define_binary_operator("!=".into(), false, 1150).unwrap();
 
     define_binary_native_op_combinations!(ctx, 11, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 != arg_2);
     define_binary_native_op_combinations!(ctx, 11, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 != arg_2);
@@ -276,15 +284,15 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         ╘════════════════════╛
     */
 
-    ctx.define_binary_operator("||".into(), 1500).unwrap();
+    ctx.define_binary_operator("||".into(), false, 1500).unwrap();
 
     define_binary_native_op_combinations!(ctx, 12, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 || *arg_2);
 
-    ctx.define_binary_operator("&&".into(), 1550).unwrap();
+    ctx.define_binary_operator("&&".into(), false, 1550).unwrap();
 
     define_binary_native_op_combinations!(ctx, 13, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 && *arg_2);
 
-    ctx.define_binary_operator(":=".into(), 100000).unwrap();
+    ctx.define_binary_operator(":=".into(), false, 100000).unwrap();
 
     ctx.define_binary_operation(
         14, 1, 

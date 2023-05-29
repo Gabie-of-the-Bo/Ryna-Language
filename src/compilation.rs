@@ -2328,7 +2328,7 @@ impl NessaContext{
             let (l, err) = match &i {
                 NessaExpr::PrefixOperatorDefinition(l, n, p) => (l, self.define_unary_operator(n.clone(), true, *p)),
                 NessaExpr::PostfixOperatorDefinition(l, n, p) => (l, self.define_unary_operator(n.clone(), false, *p)),
-                NessaExpr::BinaryOperatorDefinition(l, n, p) => (l, self.define_binary_operator(n.clone(), *p)),
+                NessaExpr::BinaryOperatorDefinition(l, n, f, p) => (l, self.define_binary_operator(n.clone(), *f, *p)),
                 NessaExpr::NaryOperatorDefinition(l, o, c, p) => (l, self.define_nary_operator(o.clone(), c.clone(), *p)),
 
                 _ => unreachable!()
@@ -2488,7 +2488,7 @@ impl NessaContext{
     }
 
     fn map_nessa_binary_operator(&mut self, other: &NessaContext, id: usize, binary_operators: &mut HashMap<usize, usize>, l: &Location) -> Result<usize, NessaError> {
-        if let Operator::Binary{representation: r, precedence, ..} = &other.binary_ops[id] {
+        if let Operator::Binary{representation: r, right_associative, precedence, ..} = &other.binary_ops[id] {
             if !binary_operators.contains_key(&id) {
                 let mapped_op_id;
     
@@ -2502,7 +2502,7 @@ impl NessaContext{
                 } else { // Else the function needs to be defined
                     mapped_op_id = self.binary_ops.len();
 
-                    if let Err(err) = self.define_binary_operator(r.clone(), *precedence) {
+                    if let Err(err) = self.define_binary_operator(r.clone(), *right_associative, *precedence) {
                         return Err(NessaError::compiler_error(err, l, vec!()));
                     }
                 }

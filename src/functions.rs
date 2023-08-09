@@ -89,42 +89,42 @@ pub const NEXT_FUNC_ID: usize = 6;
 pub const IS_CONSUMED_FUNC_ID: usize = 7;
 
 pub fn standard_functions(ctx: &mut NessaContext) {
-    ctx.define_function("inc".into()).unwrap();
+    let idx = ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(0, 0, &[INT.to_mut()], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v| { 
         *v[0].get::<Reference>().get_mut::<Integer>() += Integer::from(1);
 
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_function("print".into()).unwrap();
+    let idx = ctx.define_function("print".into()).unwrap();
 
-    ctx.define_native_function_overload(1, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
         print!("{}", v[0].to_string());
 
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_function("deref".into()).unwrap();
+    let idx = ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(2, 1, &[T_0.to_mut()], T_0, |_, _, v| {
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v| {
         return Ok(v[0].deref_obj());
     }).unwrap();
 
-    ctx.define_function("arr".into()).unwrap();
+    let idx = ctx.define_function("arr".into()).unwrap();
 
     ctx.define_native_function_overload(
-        3, 
+        idx, 
         1,
         &[], 
         ARR_OF!(T_0), 
         |t, _, _| Ok(Object::new((t[0].clone(), vec!())))
     ).unwrap();
 
-    ctx.define_function("push".into()).unwrap();
+    let idx = ctx.define_function("push".into()).unwrap();
 
     ctx.define_native_function_overload(
-        4, 
+        idx, 
         1,
         &[ARR_OF!(T_0).to_mut(), T_0], 
         Type::Empty, 
@@ -137,10 +137,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("iterator".into()).unwrap();
+    let idx = ctx.define_function("iterator".into()).unwrap();
 
     ctx.define_native_function_overload(
-        5, 
+        idx, 
         1,
         &[ARR_OF!(T_0).to_mut()], 
         ARR_IT_OF!(T_0.to_mut()), 
@@ -150,7 +150,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ).unwrap();
 
     ctx.define_native_function_overload(
-        5, 
+        idx, 
         1,
         &[ARR_OF!(T_0).to_ref()], 
         ARR_IT_OF!(T_0.to_ref()), 
@@ -160,7 +160,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ).unwrap();
 
     ctx.define_native_function_overload(
-        5, 
+        idx, 
         1,
         &[ARR_OF!(T_0)], 
         ARR_IT_OF!(T_0.to_mut()), 
@@ -169,10 +169,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("next".into()).unwrap();
+    let idx = ctx.define_function("next".into()).unwrap();
 
     ctx.define_native_function_overload(
-        6, 
+        idx, 
         1,
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
         T_0, 
@@ -198,10 +198,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("is_consumed".into()).unwrap();
+    let idx = ctx.define_function("is_consumed".into()).unwrap();
 
     ctx.define_native_function_overload(
-        7, 
+        idx, 
         0,
         &[ARR_IT_OF!(Type::Wildcard).to_mut()], 
         BOOL, 
@@ -213,10 +213,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("panic".into()).unwrap();
+    let idx = ctx.define_function("panic".into()).unwrap();
 
     ctx.define_native_function_overload(
-        8, 
+        idx, 
         0,
         &[STR], 
         Type::Empty, 
@@ -225,10 +225,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("len".into()).unwrap();
+    let idx = ctx.define_function("len".into()).unwrap();
 
     ctx.define_native_function_overload(
-        9, 
+        idx, 
         0,
         &[ARR_OF!(Type::Wildcard).to_ref()], 
         INT, 
@@ -236,84 +236,119 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ).unwrap();
 
     ctx.define_native_function_overload(
-        9, 
+        idx, 
         0,
         &[ARR_OF!(Type::Wildcard).to_mut()], 
         INT, 
         |_, _, v| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
-    ctx.define_function("sin".into()).unwrap();
+    let idx = ctx.define_function("sin".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 10, INT, FLOAT, Integer, a, a.to_f64().sin());
-    define_unary_function_overloads!(ctx, 10, FLOAT, FLOAT, f64, a, a.sin());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sin());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sin());
 
-    ctx.define_function("cos".into()).unwrap();
+    let idx = ctx.define_function("cos".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 11, INT, FLOAT, Integer, a, a.to_f64().cos());
-    define_unary_function_overloads!(ctx, 11, FLOAT, FLOAT, f64, a, a.cos());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().cos());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.cos());
 
-    ctx.define_function("tan".into()).unwrap();
+    let idx = ctx.define_function("tan".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 12, INT, FLOAT, Integer, a, a.to_f64().tan());
-    define_unary_function_overloads!(ctx, 12, FLOAT, FLOAT, f64, a, a.tan());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().tan());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.tan());
 
-    ctx.define_function("fact".into()).unwrap();
+    let idx = ctx.define_function("sinh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 13, INT, INT, Integer, a, a.fact()?);
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sinh());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sinh());
 
-    ctx.define_function("ln".into()).unwrap();
+    let idx = ctx.define_function("cosh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 14, INT, FLOAT, Integer, a, a.to_f64().ln());
-    define_unary_function_overloads!(ctx, 14, FLOAT, FLOAT, f64, a, a.ln());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().cosh());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.cosh());
 
-    ctx.define_function("exp".into()).unwrap();
+    let idx = ctx.define_function("tanh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 15, INT, FLOAT, Integer, a, a.to_f64().exp());
-    define_unary_function_overloads!(ctx, 15, FLOAT, FLOAT, f64, a, a.exp());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().tanh());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.tanh());
 
-    ctx.define_function("floor".into()).unwrap();
+    let idx = ctx.define_function("fact".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 16, INT, FLOAT, Integer, a, a.to_f64().floor());
-    define_unary_function_overloads!(ctx, 16, FLOAT, FLOAT, f64, a, a.floor());
+    define_unary_function_overloads!(ctx, idx, INT, INT, Integer, a, a.fact()?);
 
-    ctx.define_function("ceil".into()).unwrap();
+    let idx = ctx.define_function("ln".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 17, INT, FLOAT, Integer, a, a.to_f64().ceil());
-    define_unary_function_overloads!(ctx, 17, FLOAT, FLOAT, f64, a, a.ceil());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().ln());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.ln());
 
-    ctx.define_function("sqrt".into()).unwrap();
+    let idx = ctx.define_function("log2".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 18, INT, FLOAT, Integer, a, a.to_f64().sqrt());
-    define_unary_function_overloads!(ctx, 18, FLOAT, FLOAT, f64, a, a.sqrt());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().log2());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.log2());
 
-    ctx.define_function("abs".into()).unwrap();
+    let idx = ctx.define_function("log10".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 19, INT, INT, Integer, a, a.abs());
-    define_unary_function_overloads!(ctx, 19, FLOAT, FLOAT, f64, a, a.abs());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().log10());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.log10());
 
-    ctx.define_function("rand".into()).unwrap();
+    let idx = ctx.define_function("exp".into()).unwrap();
 
-    ctx.define_native_function_overload(20, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().exp());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.exp());
 
-    ctx.define_function("rand_int".into()).unwrap();
+    let idx = ctx.define_function("floor".into()).unwrap();
 
-    define_binary_function_overloads!(ctx, 21, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
+    define_unary_function_overloads!(ctx, idx, FLOAT, INT, f64, a, Integer::from(a.floor() as u64));
 
-    ctx.define_function("is".into()).unwrap();
+    let idx = ctx.define_function("round".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, FLOAT, INT, f64, a, Integer::from(a.round() as u64));
+
+    let idx = ctx.define_function("ceil".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, FLOAT, INT, f64, a, Integer::from(a.ceil() as u64));
+
+    let idx = ctx.define_function("fract".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.fract());
+
+    let idx = ctx.define_function("sqrt".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sqrt());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sqrt());
+
+    let idx = ctx.define_function("abs".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, INT, INT, Integer, a, a.abs());
+    define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.abs());
+
+    let idx = ctx.define_function("rand".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
+
+    let idx = ctx.define_function("rand_int".into()).unwrap();
+
+    define_binary_function_overloads!(ctx, idx, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
+
+    let idx = ctx.define_function("as_float".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64());
+
+    let idx = ctx.define_function("is".into()).unwrap();
 
     ctx.define_native_function_overload(
-        22, 
+        idx, 
         1,
         &[Type::Wildcard], 
         BOOL, 
         |t, _, v| Ok(Object::new(v[0].get_type() == t[0]))
     ).unwrap();
 
-    ctx.define_function("as".into()).unwrap();
+    let idx = ctx.define_function("as".into()).unwrap();
 
     ctx.define_native_function_overload(
-        23, 
+        idx, 
         1,
         &[Type::Wildcard], 
         T_0, 
@@ -330,15 +365,15 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    ctx.define_function("println".into()).unwrap();
+    let idx = ctx.define_function("println".into()).unwrap();
 
-    ctx.define_native_function_overload(24, 0, &[], Type::Empty, |_, _, _| { 
+    ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _| { 
         println!("");
 
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_native_function_overload(24, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
         println!("{}", v[0].to_string());
 
         return Ok(Object::empty());
@@ -346,12 +381,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
-        let id = ctx.functions.len();
-        ctx.define_function(format!("get_{}", I)).unwrap();
+        let idx = ctx.define_function(format!("get_{}", I)).unwrap();
 
         seq!(J in 2..10 {
             ctx.define_native_function_overload(
-                id, 
+                idx, 
                 J,
                 &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
                 Type::Ref(Box::new(Type::TemplateParam(I))), 

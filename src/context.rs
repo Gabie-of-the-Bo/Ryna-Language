@@ -292,7 +292,7 @@ impl NessaContext {
         ╘═══════════════════════╛
     */
 
-    pub fn define_function(&mut self, name: String) -> Result<(), String> {
+    pub fn define_function(&mut self, name: String) -> Result<usize, String> {        
         for f in &self.functions {
             if f.name == name {
                 return Err(format!("Function \"{}\" is already defined", name))
@@ -305,7 +305,7 @@ impl NessaContext {
             overloads: vec!()
         });
 
-        return Ok(());
+        return Ok(self.functions.len() - 1);
     }
 
     pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(usize, Type, Type, FunctionOverload)> {

@@ -1,17 +1,17 @@
 module range [1.0]
 
 class Range {
-    start: Number;
-    current: Number;
-    end: Number;
+    start: Int;
+    current: Int;
+    end: Int;
 }
 
 fn iterator(it: Range) -> Range {
     return *it;
 }
 
-fn next(it: &&Range) -> Number {
-    let curr: &&Number = it.current();
+fn next(it: &&Range) -> Int {
+    let curr: &&Int = it.current();
     curr.inc();
 
     return *curr;
@@ -21,16 +21,16 @@ fn is_consumed(it: &&Range) -> Bool {
     return it.current() >= it.end();
 }
 
-fn range(from: Number, to: Number) -> Range {
+fn range(from: Int, to: Int) -> Range {
     return Range(*from, *from, *to);
 }
 
-fn irange(from: Number, to: Number) -> Range {
+fn irange(from: Int, to: Int) -> Range {
     return Range(*from, *from, *to + 1);
 }
 
 binary op "=>" (10000);
 
-op (from: Number) => (to: Number) -> Range {
+op (from: Int) => (to: Int) -> Range {
     return range(*from, *to);
 }

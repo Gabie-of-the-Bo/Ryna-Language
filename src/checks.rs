@@ -6,7 +6,7 @@ use crate::compilation::NessaError;
 use crate::context::NessaContext;
 use crate::parser::{NessaExpr, Location};
 use crate::operations::Operator;
-use crate::types::Type;
+use crate::types::{Type, BOOL};
 use crate::patterns::Pattern;
 
 /*
@@ -417,7 +417,7 @@ impl NessaContext {
                 let if_header_type = self.infer_type(ih);
 
                 if let Some(t) = if_header_type {
-                    if t != Type::Basic(2) {
+                    if t != BOOL {
                         return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
                     }
 
@@ -435,7 +435,7 @@ impl NessaContext {
                     let elif_header_type = self.infer_type(ei_h);
 
                     if let Some(t) = elif_header_type {
-                        if t != Type::Basic(2) {
+                        if t != BOOL {
                             return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));                            
                         }
     
@@ -463,7 +463,7 @@ impl NessaContext {
                 let while_header_type = self.infer_type(cond);
 
                 if let Some(t) = while_header_type {
-                    if t != Type::Basic(2) {
+                    if t != BOOL {
                         return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));                            
                     }
 
@@ -718,7 +718,7 @@ impl NessaContext {
                 let if_header_type = self.infer_type(ih);
 
                 if let Some(t) = if_header_type {
-                    if t != Type::Basic(2) {
+                    if t != BOOL {
                         return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
                     }
 
@@ -736,7 +736,7 @@ impl NessaContext {
                     let elif_header_type = self.infer_type(ei_h);
 
                     if let Some(t) = elif_header_type {
-                        if t != Type::Basic(2) {
+                        if t != BOOL {
                             return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
                         }
     
@@ -774,7 +774,7 @@ impl NessaContext {
                 let while_header_type = self.infer_type(cond);
 
                 if let Some(t) = while_header_type {
-                    if t != Type::Basic(2) {
+                    if t != BOOL {
                         return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
                     }
 
@@ -1159,15 +1159,15 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let n: Number = 10;
+            let n: Int = 10;
 
-            let a: Number = 5 + n;
+            let a: Int = 5 + n;
             let b: String = \"Test\";
-            let c: Array<Number> = arr<Number>();
+            let c: Array<Int> = arr<Int>();
 
             a = 3;
             b = \"Test 2\";
-            c = arr<Number>();
+            c = arr<Int>();
         ".to_string();
 
         ctx.parse_and_compile(&code_str).unwrap();
@@ -1183,7 +1183,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let a: Number = 5;
+            let a: Int = 5;
 
             a = \"Test\";
         ".to_string();
@@ -1193,7 +1193,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let a: Array<Number> = 5;
+            let a: Array<Int> = 5;
         ".to_string();
 
         assert!(ctx.parse_and_compile(&code_str).is_err());
@@ -1201,7 +1201,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let a: Array<Number> = arr<Number>();
+            let a: Array<Int> = arr<Int>();
 
             a = arr<String>();
         ".to_string();
@@ -1218,7 +1218,7 @@ mod tests {
                 return a;
             }
 
-            let a: Number = 5;
+            let a: Int = 5;
 
             a.inc();
             inc(\"Test\");
@@ -1232,7 +1232,7 @@ mod tests {
                 return \"Test\";
             }
             
-            fn test(a: Bool | Number) -> String {
+            fn test(a: Bool | Int) -> String {
                 return \"Test\";
             }
 
@@ -1258,11 +1258,11 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            op !(a: Number | String) -> String {
+            op !(a: Int | String) -> String {
                 return \"Test\";
             }
             
-            op !(a: Number | Array<*>) -> String {
+            op !(a: Int | Array<*>) -> String {
                 return \"Test\";
             }
 
@@ -1288,11 +1288,11 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            op (a: String) + (b: Number | Bool) -> String {
+            op (a: String) + (b: Int | Bool) -> String {
                 return \"Test\";
             }
             
-            op (a: String) + (b: Number | Array<*>) -> String {
+            op (a: String) + (b: Int | Array<*>) -> String {
                 return \"Test\";
             }
 
@@ -1348,7 +1348,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test(a: String) -> Number {
+            fn test(a: String) -> Int {
                 return a;
             }
 
@@ -1367,7 +1367,7 @@ mod tests {
                 return a;
             }
             
-            fn test(a: Number) -> Number {
+            fn test(a: Int) -> Int {
                 if true {
                     return 0;
                     
@@ -1376,7 +1376,7 @@ mod tests {
                 }
             }
             
-            fn test(a: Bool) -> Number {
+            fn test(a: Bool) -> Int {
                 if true {
                     let a = 0;
                     
@@ -1392,7 +1392,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test(a: Bool) -> Number {
+            fn test(a: Bool) -> Int {
                 if true {
                     let a = 0;
                     
@@ -1411,9 +1411,9 @@ mod tests {
         
         let code_str = "
             class Test {
-                att_1: Number;
-                att_2: (String, Number);
-                att_3: Number | Array<Number>;
+                att_1: Int;
+                att_2: (String, Int);
+                att_3: Int | Array<Int>;
             }
         ".to_string();
 
@@ -1423,9 +1423,9 @@ mod tests {
         
         let code_str = "
             class Test {
-                att_1: Number;
-                att_1: (String, Number);
-                att_3: Number | Array<Number>;
+                att_1: Int;
+                att_1: (String, Int);
+                att_3: Int | Array<Int>;
             }
         ".to_string();
 
@@ -1437,7 +1437,7 @@ mod tests {
             class Test {
                 syntax from Arg(1{d}, att_1) Arg('true' | 'false', att_2);
 
-                att_1: Number;
+                att_1: Int;
                 att_2: Bool;
             }
         ".to_string();
@@ -1450,7 +1450,7 @@ mod tests {
             class Test {
                 syntax from Arg(1{d}, att_1);
 
-                att_1: Number;
+                att_1: Int;
                 att_2: Bool;
             }
         ".to_string();

@@ -20,17 +20,17 @@ fn<T> filter(array: &&Array<'T>, f: (&&'T) => Bool) -> Array<'T> {
     return *<Array<'T>>res;
 }
 
-let a: Array<Number> = arr<Number>();
-a.push<Number>(1);
-a.push<Number>(2);
-a.push<Number>(3);
-a.push<Number>(4);
-a.push<Number>(5);
+let a: Array<Int> = arr<Int>();
+a.push<Int>(1);
+a.push<Int>(2);
+a.push<Int>(3);
+a.push<Int>(4);
+a.push<Int>(5);
 
-let b: Array<Number> = a.map<Number, Number>((n: &&Number) -> Number n * 2);
-let c: Array<Bool> = a.map<Number, Bool>((n: &&Number) -> Bool n > 2);
+let b: Array<Int> = a.map<Int, Int>((n: &&Int) -> Int n * 2);
+let c: Array<Bool> = a.map<Int, Bool>((n: &&Int) -> Bool n > 2);
 
-if b<Number>[0] != 2 || b<Number>[1] != 4 || b<Number>[2] != 6 || b<Number>[3] != 8 || b<Number>[4] != 10 {
+if b<Int>[0] != 2 || b<Int>[1] != 4 || b<Int>[2] != 6 || b<Int>[3] != 8 || b<Int>[4] != 10 {
     panic("Invalid array contents");
 }
 
@@ -38,10 +38,10 @@ if *<Bool>c<Bool>[0] || *<Bool>c<Bool>[1] || !*<Bool>c<Bool>[2] || !*<Bool>c<Boo
     panic("Invalid array contents");
 }
 
-let d: Array<Number> = a.filter<Number>((n: &&Number) -> Bool n % 2 == 0);
+let d: Array<Int> = a.filter<Int>((n: &&Int) -> Bool n % 2 == 0);
 
 print(d);
 
-if d<Number>[0] != 2 || d<Number>[1] != 4 {
+if d<Int>[0] != 2 || d<Int>[1] != 4 {
     panic("Invalid array contents");
 }

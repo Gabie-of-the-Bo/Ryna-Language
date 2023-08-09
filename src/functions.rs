@@ -2,7 +2,8 @@ use seq_macro::seq;
 
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
-use crate::number::Number;
+use crate::math::rand_f64;
+use crate::number::Integer;
 use crate::types::*;
 use crate::object::*;
 use crate::context::NessaContext;
@@ -90,8 +91,8 @@ pub const IS_CONSUMED_FUNC_ID: usize = 7;
 pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(0, 0, &[NUM.to_mut()], Type::Empty, |_, _, v| { 
-        *v[0].get::<Reference>().get_mut::<Number>() += Number::from(1);
+    ctx.define_native_function_overload(0, 0, &[INT.to_mut()], Type::Empty, |_, _, v| { 
+        *v[0].get::<Reference>().get_mut::<Integer>() += Integer::from(1);
 
         return Ok(Object::empty());
     }).unwrap();
@@ -230,61 +231,69 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         9, 
         0,
         &[ARR_OF!(Type::Wildcard).to_ref()], 
-        NUM, 
-        |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+        INT, 
+        |_, _, v| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
     ctx.define_native_function_overload(
         9, 
         0,
         &[ARR_OF!(Type::Wildcard).to_mut()], 
-        NUM, 
-        |_, _, v| Ok(Object::new(Number::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+        INT, 
+        |_, _, v| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
     ctx.define_function("sin".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 10, NUM, NUM, Number, a, a.sin()?);
+    define_unary_function_overloads!(ctx, 10, INT, FLOAT, Integer, a, a.to_f64().sin());
+    define_unary_function_overloads!(ctx, 10, FLOAT, FLOAT, f64, a, a.sin());
 
     ctx.define_function("cos".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 11, NUM, NUM, Number, a, a.cos()?);
+    define_unary_function_overloads!(ctx, 11, INT, FLOAT, Integer, a, a.to_f64().cos());
+    define_unary_function_overloads!(ctx, 11, FLOAT, FLOAT, f64, a, a.cos());
 
     ctx.define_function("tan".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 12, NUM, NUM, Number, a, a.tan()?);
+    define_unary_function_overloads!(ctx, 12, INT, FLOAT, Integer, a, a.to_f64().tan());
+    define_unary_function_overloads!(ctx, 12, FLOAT, FLOAT, f64, a, a.tan());
 
     ctx.define_function("fact".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 13, NUM, NUM, Number, a, a.fact()?);
+    define_unary_function_overloads!(ctx, 13, INT, INT, Integer, a, a.fact()?);
 
     ctx.define_function("ln".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 14, NUM, NUM, Number, a, a.ln()?);
+    define_unary_function_overloads!(ctx, 14, INT, FLOAT, Integer, a, a.to_f64().ln());
+    define_unary_function_overloads!(ctx, 14, FLOAT, FLOAT, f64, a, a.ln());
 
     ctx.define_function("exp".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 15, NUM, NUM, Number, a, a.exp()?);
+    define_unary_function_overloads!(ctx, 15, INT, FLOAT, Integer, a, a.to_f64().exp());
+    define_unary_function_overloads!(ctx, 15, FLOAT, FLOAT, f64, a, a.exp());
 
     ctx.define_function("floor".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 16, NUM, NUM, Number, a, a.floor()?);
+    define_unary_function_overloads!(ctx, 16, INT, FLOAT, Integer, a, a.to_f64().floor());
+    define_unary_function_overloads!(ctx, 16, FLOAT, FLOAT, f64, a, a.floor());
 
     ctx.define_function("ceil".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 17, NUM, NUM, Number, a, a.ceil()?);
+    define_unary_function_overloads!(ctx, 17, INT, FLOAT, Integer, a, a.to_f64().ceil());
+    define_unary_function_overloads!(ctx, 17, FLOAT, FLOAT, f64, a, a.ceil());
 
     ctx.define_function("sqrt".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, 18, NUM, NUM, Number, a, a.sqrt()?);
+    define_unary_function_overloads!(ctx, 18, INT, FLOAT, Integer, a, a.to_f64().sqrt());
+    define_unary_function_overloads!(ctx, 18, FLOAT, FLOAT, f64, a, a.sqrt());
 
     ctx.define_function("rand".into()).unwrap();
 
-    ctx.define_native_function_overload(19, 0, &[], NUM, |_, _, _| Ok(Object::new(Number::rand()))).unwrap();
+    ctx.define_native_function_overload(19, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
 
     ctx.define_function("rand_int".into()).unwrap();
 
-    define_binary_function_overloads!(ctx, 20, NUM, NUM, Number, a, b, Number::rand_int_range(&a, &b)?);
+    define_binary_function_overloads!(ctx, 20, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
 
     ctx.define_function("is".into()).unwrap();
 

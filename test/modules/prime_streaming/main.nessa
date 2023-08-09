@@ -6,7 +6,7 @@ import binary op "=>" from range;
 import fn primes from primes;
 import fn { iterator, next, is_consumed } from primes;
 
-fn stream_primes(limit: Number) -> Bool {
+fn stream_primes(limit: Int) -> Bool {
     let p = primes();
 
     for i in 0 => *limit {

@@ -487,12 +487,12 @@ mod tests {
 
         let pattern: Pattern = "<type>".parse().expect("Error while parsing pattern");
         
-        assert!(ok_result(pattern.extract("Number".into(), &ctx)));
+        assert!(ok_result(pattern.extract("Int".into(), &ctx)));
         assert!(ok_result(pattern.extract("'Template".into(), &ctx)));
         assert!(ok_result(pattern.extract("&&Bool".into(), &ctx)));
         assert!(ok_result(pattern.extract("(Bool, &String)".into(), &ctx)));
-        assert!(ok_result(pattern.extract("(Bool, Number) => String".into(), &ctx)));
-        assert!(ok_result(pattern.extract("Array<Number, 'T>".into(), &ctx)));
+        assert!(ok_result(pattern.extract("(Bool, Int) => String".into(), &ctx)));
+        assert!(ok_result(pattern.extract("Array<Int, 'T>".into(), &ctx)));
         assert!(pattern.extract("Test".into(), &ctx).is_err());
         assert!(pattern.extract("+++".into(), &ctx).is_err());
 

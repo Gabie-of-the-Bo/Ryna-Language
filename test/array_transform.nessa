@@ -4,7 +4,7 @@ fn<T> double(array: &&Array<'T>) {
     }
 } 
 
-let array = arr<Number>();
+let array = arr<Int>();
 
 array.push(1);
 array.push(2);

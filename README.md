@@ -21,15 +21,15 @@ This is a _WIP_ list of features that Nessa will have when it is released:
 * Full parametric algebraic types:
 
   ```typescript
-  a: Number | String;        // Either a number or a string
-  b: (Number, String);       // A number followed by a string
-  c: Array<Number | String>; // An array of elements that are either numbers of strings
+  a: Int | String;        // Either a number or a string
+  b: (Int, String);       // A number followed by a string
+  c: Array<Int | String>; // An array of elements that are either numbers of strings
   ```
 
 * **Powerful function overloading semantics**: you will be able to define functions using this rich type system and make use of call polymorphism semantics:
 
   ```typescript
-  fn this_is_a_test(a: Number) -> Bool {
+  fn this_is_a_test(a: Int) -> Bool {
     return true;
   }
 
@@ -46,13 +46,13 @@ This is a _WIP_ list of features that Nessa will have when it is released:
 
   ```typescript
   fn<T> is_number(a: T) -> Bool {
-    return a.is<Number>();
+    return a.is<Int>();
   }
 
   // Template arguments are automatically inferred from the parameters if possible
   5.is_number();        // This is true
   "Test".is_number();   // This is false
-  5.is_number<Number>() // You can also explicitly instantiate the template
+  5.is_number<Int>() // You can also explicitly instantiate the template
   ```
 
 * **Custom literals**: you will be able to create new literals using an internal language called _NDL_ (_Nessa Definition Language_):
@@ -62,8 +62,8 @@ This is a _WIP_ list of features that Nessa will have when it is released:
     // Syntax definition
     syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, faces)
 
-    faces: Number
-    rolls: Number
+    faces: Int
+    rolls: Int
   }
 
   //Usage
@@ -81,7 +81,7 @@ This is a _WIP_ list of features that Nessa will have when it is released:
       {#return *res;}
   }
 
-  let array = <Number>[1, 2, 3, 4];
+  let array = <Int>[1, 2, 3, 4];
   ```
 
 * **Operator and operation definitions**: the language allows the definition of new operators and operations using an easy syntax:
@@ -94,11 +94,11 @@ This is a _WIP_ list of features that Nessa will have when it is released:
   
   // Operation definition for each operator
   // These can be overloaded and templated just the same as functions
-  op (a: &Number) ++ {
+  op (a: &Int) ++ {
     return a + 1;
   }
   
-  op (a: &Number) <=> (b: &Number) {
+  op (a: &Int) <=> (b: &Int) {
     if a < b {
       return -1;
     }
@@ -110,7 +110,7 @@ This is a _WIP_ list of features that Nessa will have when it is released:
     return 0;
   }
   
-  op (a: &Number) `(b: &Number, c: &Number)´ {
+  op (a: &Int) `(b: &Int, c: &Int)´ {
     return a + b * c; // This one is pretty much made up
   }
   ```

@@ -2,7 +2,7 @@ module math_ops [1.0]
 
 import postfix op "++" from math;
 
-let n: Number = 10;
+let n: Int = 10;
 n ++;
 
 if n != 11 {

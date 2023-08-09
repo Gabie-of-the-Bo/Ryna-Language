@@ -625,7 +625,7 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 
     let mut f0 = r0;
 
-    // Number reconstruction
+    // Int reconstruction
 
     add_limbs_offset(&mut f0.limbs, &f1.limbs, shift);
     add_limbs_offset(&mut f0.limbs, &f2.limbs, shift*2);
@@ -1041,6 +1041,29 @@ pub fn modpow(b: &Integer, e: &Integer, m: &Integer) -> Result<Integer, String>{
 }
 
 /*
+    ╒════════════════════════════╕
+    │ Basic assignment operators │
+    ╘════════════════════════════╛
+*/
+
+macro_rules! generic_assignment_op_definition {
+    ($op_assign: tt, $op: tt) => {
+        impl_op_ex!($op_assign |a: &mut Integer, b: &Integer| { *a = &*a $op b; });
+    };
+}
+
+generic_assignment_op_definition!(+=, +);
+generic_assignment_op_definition!(-=, -);
+generic_assignment_op_definition!(*=, *);
+generic_assignment_op_definition!(/=, /);
+generic_assignment_op_definition!(|=, |);
+generic_assignment_op_definition!(&=, &);
+generic_assignment_op_definition!(^=, ^);
+
+impl_op_ex!(<<= |a: &mut Integer, b: &u64| { *a = &*a << b; });
+impl_op_ex!(>>= |a: &mut Integer, b: &u64| { *a = &*a >> b; });
+
+/*
     ╒═════════════════════════════════════════════════════════════════════════════════════════════════╕
     │ These lines define the basic arithmetic operators for all combinations of references and values │
     ╘═════════════════════════════════════════════════════════════════════════════════════════════════╛
@@ -1058,7 +1081,7 @@ impl_op_ex!(& |a: &Integer, b: &Integer| -> Integer { full_and(a, b) });
 impl_op_ex!(^ |a: &Integer, b: &Integer| -> Integer { full_xor(a, b) });
 impl_op_ex!(! |a: &Integer| -> Integer { full_not(a) });
 
-impl Integer{
+impl Integer {
     pub fn new(negative: bool, limbs: Vec<u64>) -> Integer{
         return Integer{
             negative: negative,
@@ -1142,60 +1165,14 @@ impl Integer{
 }
 
 /*
-    ╔════════════════════════════╗
-    ║     GENERAL ARITHMETIC     ║
-    ╠════════════════════════════╣
-    ║ This section uses the      ║
-    ║ Integer class to build a   ║
-    ║ Number class, which works  ║
-    ║ just like an Integer or a  ║
-    ║ f64 depending on the case  ║
-    ╚════════════════════════════╝
-*/
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Number {
-    Int(Integer),
-    Float(f64)
-}
-
-/*
-    ╒═════════════════════╕
-    │ Comparison routines │
-    ╘═════════════════════╛
-*/
-
-impl Eq for Number {}
-
-impl PartialOrd for Number {
-    fn partial_cmp(&self, other: &Number) -> Option<std::cmp::Ordering> {
-        return match (self, other) {
-            (Number::Int(a), Number::Int(b)) => Some(a.cmp(b)),
-            (Number::Float(a), Number::Float(b)) => a.partial_cmp(b),
-            (Number::Int(a), Number::Float(b)) => a.to_f64().partial_cmp(b),
-            (Number::Float(a), Number::Int(b)) => a.partial_cmp(&b.to_f64())
-        }
-    }
-}
-
-impl Ord for Number {
-    fn cmp(&self, other: &Number) -> std::cmp::Ordering {
-        return self.partial_cmp(other).unwrap();
-    }
-}
-
-/*
     ╒════════════════════════════════════╕
     │ Conversion routines to other types │
     ╘════════════════════════════════════╛
 */
 
-impl From<&Number> for String {
-    fn from(n: &Number) -> String {
-        return match n {
-            Number::Int(i) => i.to_string(),
-            Number::Float(f) => f.to_string(),
-        };
+impl From<&Integer> for String {
+    fn from(n: &Integer) -> String {
+        return n.to_string();
     }
 }
 
@@ -1205,235 +1182,41 @@ impl From<&Number> for String {
     ╘══════════════════════════════════════╛
 */
 
-fn check_number_format(mut s: &str) -> bool {
+fn check_integer_format(mut s: &str) -> bool {
     if s.starts_with('-') {
         s = &s[1..];
     }
 
-    let mut state = 0; // 0 -> integer part, 1 -> point, 2 -> decimals
-    let mut ints = 0;
-    let mut chars = s.chars();
-
-    while let Some(c) = chars.next() {
-        match state {
-            0 => {
-                if c == '.' {
-                    if ints == 0 {
-                        return false;
-                    }
-
-                    state = 1;
-                
-                } else if !c.is_digit(10) {
-                    return false;
-                }
-
-                ints += 1;
-            },
-
-            1 => {
-                if !c.is_digit(10) {
-                    return false;
-                
-                } else {
-                    state = 2;
-                }
-            }
-
-            2 => {
-                if !c.is_digit(10) {
-                    return false;
-                }
-            }
-
-            _ => {}
-        }
-    }
-
-    return state != 1;
+    return s.chars().all(|i| i.is_digit(10));
 }
 
-impl FromStr for Number {
+impl FromStr for Integer {
     type Err = String;
 
-    fn from_str(s: &str) -> Result<Number, Self::Err> {
-        if check_number_format(s) {
-            return Ok(Number::from(s));
+    fn from_str(s: &str) -> Result<Integer, Self::Err> {
+        if check_integer_format(s) {
+            return Ok(Integer::from(s));
         }
 
-        return Err(format!("Unable to parse number from {}", s));
+        return Err(format!("Unable to parse Integer from {}", s));
     }
 }
 
-impl From<&str> for Number{
-    fn from(string: &str) -> Self{
-        if string.contains('.') {
-            return Number::Float(string.parse().unwrap());
-        }
-
-        return Number::Int(Integer::from(string));
-    }
-}
-
-impl From<String> for Number{
-    fn from(string: String) -> Self{
-        return Number::from(string.as_str());
-    }
-}
-
-impl From<Integer> for Number{
-    fn from(obj: Integer) -> Number{
-        return Number::Int(obj);
-    }
-}
-
-macro_rules! number_conversion_float {
-    ($from_type: tt) => {
-        impl From<$from_type> for Number{
-            fn from(obj: $from_type) -> Number{
-                return Number::Float(obj.into());
+macro_rules! impl_int_conversion {
+    ($t: tt, $n: ident, $sign: expr, $op: expr) => {
+        impl From<$t> for Integer {
+            fn from($n: $t) -> Self {
+                return Integer { negative: $sign, limbs: vec!($op as u64) }
             }
-        }
+        }       
     };
 }
 
-macro_rules! number_conversion_signed {
-    ($from_type: tt) => {
-        impl From<$from_type> for Number {
-            fn from(obj: $from_type) -> Number{
-                let limb: i64 = obj.into();
-        
-                return Number::Int(Integer{
-                    negative: (obj as i64) < 0_i64,
-                    limbs: vec!(limb.abs() as u64)
-                });
-            }
-        }
-    };
-}
+impl_int_conversion!(i32, v, v < 0, v.abs());
+impl_int_conversion!(i64, v, v < 0, v.abs());
 
-macro_rules! number_conversion_unsigned {
-    ($from_type: tt) => {
-        impl From<$from_type> for Number {
-            fn from(obj: $from_type) -> Number{        
-                return Number::Int(Integer{
-                    negative: false,
-                    limbs: vec!(obj.into())
-                });
-            }
-        }
-    };
-}
-
-number_conversion_float!(f32);
-number_conversion_float!(f64);
-number_conversion_signed!(i8);
-number_conversion_signed!(i16);
-number_conversion_signed!(i32);
-number_conversion_signed!(i64);
-number_conversion_unsigned!(u8);
-number_conversion_unsigned!(u16);
-number_conversion_unsigned!(u32);
-number_conversion_unsigned!(u64);
-
-/*
-    ╒═════════════════════════════════════╕
-    │ Basic arithmetic on generic Numbers │
-    ╘═════════════════════════════════════╛
-*/
-
-macro_rules! generic_op_definition {
-    ($op: tt) => {
-        impl_op_ex!($op |a: &Number, b: &Number| -> Number {
-            return match(a, b) {
-                (Number::Int(aa), Number::Int(bb)) => Number::Int(aa $op bb),
-                (Number::Int(aa), Number::Float(bb)) => Number::Float(aa.to_f64() $op bb),
-                (Number::Float(aa), Number::Int(bb)) => Number::Float(aa $op bb.to_f64()),
-                (Number::Float(aa), Number::Float(bb)) => Number::Float(aa $op bb),
-            };
-        });
-    };
-}
-
-generic_op_definition!(+);
-generic_op_definition!(-);
-generic_op_definition!(*);
-generic_op_definition!(/);
-generic_op_definition!(%);
-
-macro_rules! generic_logic_op_definition {
-    ($op: tt) => {
-        impl_op_ex!($op |a: &Number, b: &Number| -> Number {
-            return match(a, b) {
-                (Number::Int(aa), Number::Int(bb)) => Number::Int(aa $op bb),
-                (_, _) => panic!("Cannot apply bitwise operators to floats")
-            };
-        });
-    };
-}
-
-generic_logic_op_definition!(|);
-generic_logic_op_definition!(&);
-generic_logic_op_definition!(^);
-
-impl_op_ex!(! |a: &Number| -> Number {
-    return match a {
-        Number::Int(aa) => Number::Int(!aa),
-        _ => panic!("Cannot apply bitwise operators to floats")
-    };
-});
-
-impl_op_ex!(<< |a: &Number, b: &u64| -> Number {
-    return match a {
-        Number::Int(aa) => Number::Int(aa << b),
-        _ => panic!("Cannot apply bitwise operators to floats")
-    };
-});
-
-impl_op_ex!(>> |a: &Number, b: &u64| -> Number {
-    return match a {
-        Number::Int(aa) => Number::Int(aa >> b),
-        _ => panic!("Cannot apply bitwise operators to floats")
-    };
-});
-
-/*
-    ╒════════════════════════════╕
-    │ Basic assignment operators │
-    ╘════════════════════════════╛
-*/
-
-macro_rules! generic_assignment_op_definition {
-    ($op_assign: tt, $op: tt) => {
-        impl_op_ex!($op_assign |a: &mut Number, b: &Number| { *a = &*a $op b; });
-    };
-}
-
-generic_assignment_op_definition!(+=, +);
-generic_assignment_op_definition!(-=, -);
-generic_assignment_op_definition!(*=, *);
-generic_assignment_op_definition!(/=, /);
-generic_assignment_op_definition!(|=, |);
-generic_assignment_op_definition!(&=, &);
-generic_assignment_op_definition!(^=, ^);
-
-impl_op_ex!(<<= |a: &mut Number, b: &u64| { *a = &*a << b; });
-impl_op_ex!(>>= |a: &mut Number, b: &u64| { *a = &*a >> b; });
-
-/*
-    ╒══════════════════════════════╕
-    │ Number manipulation routines │
-    ╘══════════════════════════════╛
-*/
-
-impl Number {
-    pub fn negate(&mut self) {
-        match self {
-            Number::Int(n) => n.negative = !n.negative,
-            Number::Float(n) => *n *= -1_f64
-        }
-    }
-}
+impl_int_conversion!(u32, v, false, v);
+impl_int_conversion!(u64, v, false, v);
 
 /*
                                                   ╒═════════╕
@@ -1444,14 +1227,12 @@ impl Number {
 #[cfg(test)]
 mod tests {
     use crate::number::*;
-    use num_bigint::{BigInt};
+    use num_bigint::BigInt;
 
-    use rand::{
-        distributions::{
+    use rand::distributions::{
             Distribution, 
             Uniform
-        }
-    };
+        };
 
     #[test]
     fn parsing_and_displaying() {

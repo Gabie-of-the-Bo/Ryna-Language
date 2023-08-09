@@ -1,4 +1,4 @@
-use crate::types::Type;
+use crate::types::{Type, BOOL_ID};
 use crate::object::Object;
 use crate::context::NessaContext;
 use crate::operations::Operator;
@@ -30,12 +30,12 @@ impl NessaContext {
             if obj.is_ref() {
                 let ref_obj = obj.deref_obj();
 
-                if let Type::Basic(2) = ref_obj.get_type() {
+                if let Type::Basic(BOOL_ID) = ref_obj.get_type() {
                     return *ref_obj.get::<bool>();
                 }
             }
 
-            if let Type::Basic(2) = obj.get_type() {
+            if let Type::Basic(BOOL_ID) = obj.get_type() {
                 return *obj.get::<bool>();
             }
 
@@ -219,10 +219,13 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let code_str = "
-            fn test(a: Number) -> Number {
+            fn test(a: Int) -> Int {
                 if 0 < a {
                     return test(a - 1) + a;
                 }
+
+                println(a);
+                println(0 < a);
 
                 return 0;
             }
@@ -232,7 +235,9 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str.into()).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5050))));
+        println!("{:?}", ctx.variables[..5].to_vec());
+
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(5050))));
     }
 
     #[test]
@@ -247,7 +252,7 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(0))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(0))));
         assert_eq!(ctx.variables[1], Some(Object::new(true)));
         assert_eq!(ctx.variables[2], Some(Object::new("test".to_string())));
     }
@@ -259,7 +264,7 @@ mod tests {
         let code_str = "
             let v_0 = !true;
             let v_1 = 3 + 4;
-            let v_2: Number = 2;
+            let v_2: Int = 2;
 
             inc(v_2);
             inc(v_2);
@@ -268,8 +273,8 @@ mod tests {
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(false)));
-        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(7))));
-        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(4))));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(7))));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(4))));
     }
 
     #[test]
@@ -277,40 +282,40 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            let array: Array<Number> = arr<Number>();
-            array.push<Number>(5);
+            let array: Array<Int> = arr<Int>();
+            array.push<Int>(5);
 
-            let iter: ArrayIterator<&&Number> = array.iterator<Number>();
+            let iter: ArrayIterator<&&Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
-            let elem: Number = iter.next<&&Number>();
+            let elem: Int = iter.next<&&Int>();
             let ended_2: Bool = iter.is_consumed();
 
-            let array_2: Array<Number> = arr<Number>();
-            array_2.push<Number>(0);
-            array_2.push<Number>(2);
-            array_2.push<Number>(4);
-            array_2.push<Number>(6);
-            array_2.push<Number>(8);
+            let array_2: Array<Int> = arr<Int>();
+            array_2.push<Int>(0);
+            array_2.push<Int>(2);
+            array_2.push<Int>(4);
+            array_2.push<Int>(6);
+            array_2.push<Int>(8);
 
-            let sum: Number = 0;
+            let sum: Int = 0;
 
             for i in array_2 {
                 sum = sum + i;
             }
 
-            let array_3: Array<Number> = arr<Number>();
-            array_3.push<Number>(0);
-            array_3.push<Number>(1);
-            array_3.push<Number>(2);
-            array_3.push<Number>(3);
-            array_3.push<Number>(4);
-            array_3.push<Number>(5);
-            array_3.push<Number>(6);
-            array_3.push<Number>(7);
-            array_3.push<Number>(8);
+            let array_3: Array<Int> = arr<Int>();
+            array_3.push<Int>(0);
+            array_3.push<Int>(1);
+            array_3.push<Int>(2);
+            array_3.push<Int>(3);
+            array_3.push<Int>(4);
+            array_3.push<Int>(5);
+            array_3.push<Int>(6);
+            array_3.push<Int>(7);
+            array_3.push<Int>(8);
 
-            let sum_2: Number = 0;
+            let sum_2: Int = 0;
 
             for i in array_3 {
                 if i % 2 != 0 {
@@ -321,58 +326,58 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!(Object::new(Number::from(5)))))));
-        assert_eq!(ctx.variables[1], Some(Object::new((Type::MutRef(Box::new(Type::Basic(0))), ctx.variables[0].as_ref().unwrap().get_ref_mut(), 1))));
+        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!(Object::new(Integer::from(5)))))));
+        assert_eq!(ctx.variables[1], Some(Object::new((Type::MutRef(Box::new(INT)), ctx.variables[0].as_ref().unwrap().get_ref_mut(), 1))));
         assert_eq!(ctx.variables[2], Some(Object::new(false)));
-        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(5)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(5)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[4], Some(Object::new(true)));
-        assert_eq!(ctx.variables[5], Some(Object::new((Type::Basic(0), vec!(
-            Object::new(Number::from(0)),
-            Object::new(Number::from(2)),
-            Object::new(Number::from(4)),
-            Object::new(Number::from(6)),
-            Object::new(Number::from(8)),
+        assert_eq!(ctx.variables[5], Some(Object::new((INT, vec!(
+            Object::new(Integer::from(0)),
+            Object::new(Integer::from(2)),
+            Object::new(Integer::from(4)),
+            Object::new(Integer::from(6)),
+            Object::new(Integer::from(8)),
         )))));
-        assert_eq!(ctx.variables[6], Some(Object::new(Number::from(20))));
+        assert_eq!(ctx.variables[6], Some(Object::new(Integer::from(20))));
 
         if let Type::Template(..) = ctx.variables[7].as_ref().unwrap().get_type() {
-            assert_eq!(ctx.variables[7], Some(Object::new((Type::Basic(0), vec!(
-                Object::new(Number::from(0)),
-                Object::new(Number::from(1)),
-                Object::new(Number::from(2)),
-                Object::new(Number::from(3)),
-                Object::new(Number::from(4)),
-                Object::new(Number::from(5)),
-                Object::new(Number::from(6)),
-                Object::new(Number::from(7)),
-                Object::new(Number::from(8)),
+            assert_eq!(ctx.variables[7], Some(Object::new((INT, vec!(
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(1)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(3)),
+                Object::new(Integer::from(4)),
+                Object::new(Integer::from(5)),
+                Object::new(Integer::from(6)),
+                Object::new(Integer::from(7)),
+                Object::new(Integer::from(8)),
             )))));
-            assert_eq!(ctx.variables[8], Some(Object::new(Number::from(16))));
+            assert_eq!(ctx.variables[8], Some(Object::new(Integer::from(16))));
 
         } else {
-            assert_eq!(ctx.variables[8], Some(Object::new((Type::Basic(0), vec!(
-                Object::new(Number::from(0)),
-                Object::new(Number::from(1)),
-                Object::new(Number::from(2)),
-                Object::new(Number::from(3)),
-                Object::new(Number::from(4)),
-                Object::new(Number::from(5)),
-                Object::new(Number::from(6)),
-                Object::new(Number::from(7)),
-                Object::new(Number::from(8)),
+            assert_eq!(ctx.variables[8], Some(Object::new((INT, vec!(
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(1)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(3)),
+                Object::new(Integer::from(4)),
+                Object::new(Integer::from(5)),
+                Object::new(Integer::from(6)),
+                Object::new(Integer::from(7)),
+                Object::new(Integer::from(8)),
             )))));
-            assert_eq!(ctx.variables[7], Some(Object::new(Number::from(16))));
+            assert_eq!(ctx.variables[7], Some(Object::new(Integer::from(16))));
         }
 
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn is_prime(n: &&Number) -> Bool {
+            fn is_prime(n: &&Int) -> Bool {
                 if n <= 1 {
                     return false;
                 }
                 
-                let i: Number = 1;
+                let i: Int = 1;
 
                 while i < n - 1 {
                     i = i + 1;
@@ -385,12 +390,12 @@ mod tests {
                 return true;
             }
 
-            let array: Array<Number> = arr<Number>();
-            let it: Number = 0;
+            let array: Array<Int> = arr<Int>();
+            let it: Int = 0;
 
             while it < 50 {
                 if is_prime(it) {
-                    array.push<Number>(it.deref<Number>());
+                    array.push<Int>(it.deref<Int>());
                 }
 
                 it = it + 1;
@@ -399,22 +404,22 @@ mod tests {
         
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!(
-            Object::new(Number::from(2)),
-            Object::new(Number::from(3)),
-            Object::new(Number::from(5)),
-            Object::new(Number::from(7)),
-            Object::new(Number::from(11)),
-            Object::new(Number::from(13)),
-            Object::new(Number::from(17)),
-            Object::new(Number::from(19)),
-            Object::new(Number::from(23)),
-            Object::new(Number::from(29)),
-            Object::new(Number::from(31)),
-            Object::new(Number::from(37)),
-            Object::new(Number::from(41)),
-            Object::new(Number::from(43)),
-            Object::new(Number::from(47)),
+        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!(
+            Object::new(Integer::from(2)),
+            Object::new(Integer::from(3)),
+            Object::new(Integer::from(5)),
+            Object::new(Integer::from(7)),
+            Object::new(Integer::from(11)),
+            Object::new(Integer::from(13)),
+            Object::new(Integer::from(17)),
+            Object::new(Integer::from(19)),
+            Object::new(Integer::from(23)),
+            Object::new(Integer::from(29)),
+            Object::new(Integer::from(31)),
+            Object::new(Integer::from(37)),
+            Object::new(Integer::from(41)),
+            Object::new(Integer::from(43)),
+            Object::new(Integer::from(47)),
         )))));
     }
 
@@ -425,32 +430,32 @@ mod tests {
         let code_str = "
             unary prefix op \"~\" (201);
 
-            op ~(arg: &&Number) -> &&Number {
+            op ~(arg: &&Int) -> &&Int {
                 return arg;
             }
 
             unary postfix op \"¡\" (301);
 
-            op (arg: &&Number)¡ -> &&Number {
+            op (arg: &&Int)¡ -> &&Int {
                 return arg;
             }
 
-            let a: Number = 3;
-            let b: &&Number = ~a¡;
+            let a: Int = 3;
+            let b: &&Int = ~a¡;
 
             binary op \"·\" (401);
             binary op \"$\" (501);
             binary op \"@\" (601);
 
-            op (a: &&Number) · (b: &&Number) -> Number {
+            op (a: &&Int) · (b: &&Int) -> Int {
                 return a + b;
             }
 
-            let c: Number = a · b;
+            let c: Int = a · b;
 
             nary op from \"`\" to \"´\" (701);
 
-            op (a: &&Number)`b: &&Number, c: &&Number´ -> Number {
+            op (a: &&Int)`b: &&Int, c: &&Int´ -> Int {
                 return a + b + ~c;
             }
 
@@ -465,12 +470,12 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test_1() -> Number {
+            fn test_1() -> Int {
                 return 5;
             }
         
-            fn test_2() -> &&Number {
-                let res: Number = 0;
+            fn test_2() -> &&Int {
+                let res: Int = 0;
 
                 return res;
             }
@@ -483,19 +488,19 @@ mod tests {
                 return res;
             }
         
-            fn test_4() -> &&Number {
-                let res: Number = test_1() + test_1();
+            fn test_4() -> &&Int {
+                let res: Int = test_1() + test_1();
 
                 return res;
             }
         
-            fn test_5(a: Number, b: Number) -> &&Number {
-                let res: Number = a + b;
+            fn test_5(a: Int, b: Int) -> &&Int {
+                let res: Int = a + b;
 
                 return res;
             }
         
-            fn test_6(a: Number) -> Number | &&Number {
+            fn test_6(a: Int) -> Int | &&Int {
                 if true {
                     return a;
 
@@ -504,7 +509,7 @@ mod tests {
                 }
             }
         
-            fn test_7(a: Number) -> Number {
+            fn test_7(a: Int) -> Int {
                 if 0 < a {
                     return test_7(a - 1) + a;
                 }
@@ -512,7 +517,7 @@ mod tests {
                 return 0;
             }
         
-            fn test_8(a: Number) -> Number {
+            fn test_8(a: Int) -> Int {
                 if a == 1 {
                     return 1;
 
@@ -536,14 +541,14 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(5))));
-        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(0)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(5))));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_ref_mut_obj()));
         assert_eq!(ctx.variables[2], Some(Object::new("Hello".to_string()).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(10)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[4], Some(Object::new(Number::from(6)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[5], Some(Object::new(Number::from(9)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[6], Some(Object::new(Number::from(55))));
-        assert_eq!(ctx.variables[7], Some(Object::new(Number::from(26))));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[4], Some(Object::new(Integer::from(6)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[5], Some(Object::new(Integer::from(9)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[6], Some(Object::new(Integer::from(55))));
+        assert_eq!(ctx.variables[7], Some(Object::new(Integer::from(26))));
     }
 
     #[test]
@@ -555,14 +560,14 @@ mod tests {
                 return arr<'T>();
             }
 
-            let a = test<Number>();
+            let a = test<Int>();
             let b = test<String>();
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((Type::Basic(0), vec!()))));
-        assert_eq!(ctx.variables[1], Some(Object::new((Type::Basic(1), vec!()))));
+        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!()))));
+        assert_eq!(ctx.variables[1], Some(Object::new((STR, vec!()))));
 
         let mut ctx = standard_ctx();
         
@@ -571,13 +576,13 @@ mod tests {
                 return a + b;
             }
 
-            let a = sum<Number>(5, 6);
+            let a = sum<Int>(5, 6);
             let b = sum<String>(\"test\", \"tset\");
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(11))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
     }
 
@@ -592,13 +597,13 @@ mod tests {
                 return a + a;
             }
             
-            let a = ~<Number>7;
+            let a = ~<Int>7;
             let b = ~<String>\"test\";
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(14))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(14))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtest".to_string())));
         
         let mut ctx = standard_ctx();
@@ -610,13 +615,13 @@ mod tests {
                 return a + a;
             }
             
-            let a = 7<Number>~;
+            let a = 7<Int>~;
             let b = \"test\"<String>~;
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(14))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(14))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtest".to_string())));
         
         let mut ctx = standard_ctx();
@@ -628,13 +633,13 @@ mod tests {
                 return a + b;
             }
 
-            let a = 5 <Number>@ 8;
+            let a = 5 <Int>@ 8;
             let b = \"test\" <String>@ \"tset\";
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(13))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(13))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtset".to_string())));
         
         let mut ctx = standard_ctx();
@@ -646,13 +651,13 @@ mod tests {
                 return a + b;
             }
 
-            let a = 2<Number, Number>`9´;
+            let a = 2<Int, Int>`9´;
             let b = \"test\"<String, String>`\"tttt\"´;
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(11))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(11))));
         assert_eq!(ctx.variables[1], Some(Object::new("testtttt".to_string())));
     }
 
@@ -661,20 +666,20 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-        fn iterator(it: Number) -> Number {
-            return it.deref<Number>();
+        fn iterator(it: Int) -> Int {
+            return it.deref<Int>();
         }
 
-        fn next(it: &&Number) -> Number {
+        fn next(it: &&Int) -> Int {
             it.inc();
-            return it.deref<Number>();
+            return it.deref<Int>();
         }
 
-        fn is_consumed(it: &&Number) -> Bool {
+        fn is_consumed(it: &&Int) -> Bool {
             return it >= 10;
         }
 
-        let sum: Number = 0;
+        let sum: Int = 0;
 
         for i in 0 {
             sum = sum + i;
@@ -683,33 +688,33 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(55))));
 
         let mut ctx = standard_ctx();
         
         let code_str = "
         class Range {
-            start: Number;
-            current: Number;
-            end: Number;
+            start: Int;
+            current: Int;
+            end: Int;
         }
 
         fn iterator(it: Range) -> Range {
             return it.deref<Range>();
         }
 
-        fn next(it: &&Range) -> Number {
-            let curr: &&Number = it.current();
+        fn next(it: &&Range) -> Int {
+            let curr: &&Int = it.current();
             curr.inc();
 
-            return curr.deref<Number>();
+            return curr.deref<Int>();
         }
 
         fn is_consumed(it: &&Range) -> Bool {
             return it.current() >= it.end();
         }
 
-        let sum: Number = 0;
+        let sum: Int = 0;
 
         for i in Range(0, 0, 10) {
             sum = sum + i;
@@ -718,7 +723,7 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new(Number::from(55))));
+        assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(55))));
     }
 
     #[test]
@@ -727,9 +732,9 @@ mod tests {
         
         let code_str = "
         class Range {
-            start: Number;
-            current: Number;
-            end: Number;
+            start: Int;
+            current: Int;
+            end: Int;
         }
 
         let r: Range = Range(0, 2, 10);
@@ -747,15 +752,15 @@ mod tests {
             id: id,
             params: vec!(),
             attributes: vec!(
-                Object::new(Number::from(0)),
-                Object::new(Number::from(2)),
-                Object::new(Number::from(10))
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(10))
             )
         })));
 
-        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(0)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(2)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(10)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(2)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_ref_mut_obj()));
 
         let mut ctx = standard_ctx();
         
@@ -765,10 +770,10 @@ mod tests {
             obj: 'T;
         }
 
-        let a: Option<Number> = Option<Number>(true, 5);
+        let a: Option<Int> = Option<Int>(true, 5);
 
-        let b = a.present<Number>();
-        let c = a.obj<Number>();
+        let b = a.present<Int>();
+        let c = a.obj<Int>();
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -777,15 +782,15 @@ mod tests {
 
         assert_eq!(ctx.variables[0], Some(Object::new(TypeInstance {
             id: id,
-            params: vec!(Type::Basic(0)),
+            params: vec!(INT),
             attributes: vec!(
                 Object::new(true),
-                Object::new(Number::from(5))
+                Object::new(Integer::from(5))
             )
         })));
 
         assert_eq!(ctx.variables[1], Some(Object::new(true).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(5)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(5)).get_ref_mut_obj()));
     }
 
     #[test]
@@ -793,11 +798,11 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-        let a: (Number) => Number = (n: Number) -> Number n * 2;
+        let a: (Int) => Int = (n: Int) -> Int n * 2;
 
-        let b = a<Number, Number>(4);
+        let b = a<Int, Int>(4);
 
-        let c: (Number, Bool) => Number = (n: Number, b: Bool) -> Number {
+        let c: (Int, Bool) => Int = (n: Int, b: Bool) -> Int {
             if *<Bool>b {
                 return n + 2;
             }
@@ -805,27 +810,27 @@ mod tests {
             return n + 1;
         };
 
-        let d = c<Number, Bool, Number>(5, true);
-        let e = c<Number, Bool, Number>(5, false);
+        let d = c<Int, Bool, Int>(5, true);
+        let e = c<Int, Bool, Int>(5, false);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[1], Some(Object::new(Number::from(8))));
-        assert_eq!(ctx.variables[3], Some(Object::new(Number::from(7))));
-        assert_eq!(ctx.variables[4], Some(Object::new(Number::from(6))));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(8))));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(7))));
+        assert_eq!(ctx.variables[4], Some(Object::new(Integer::from(6))));
 
         let mut ctx = standard_ctx();
         
         let code_str = "
-        let apply: (Number, &&(Number => Number)) => Number = (n: Number, f: &&(Number => Number)) -> Number f<Number, Number>(*<Number>n);
-        let f: (Number) => Number = (n: Number) -> Number n * n;
+        let apply: (Int, &&(Int => Int)) => Int = (n: Int, f: &&(Int => Int)) -> Int f<Int, Int>(*<Int>n);
+        let f: (Int) => Int = (n: Int) -> Int n * n;
 
-        let a = apply<Number, &&(Number => Number), Number>(5, f);
+        let a = apply<Int, &&(Int => Int), Int>(5, f);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[2], Some(Object::new(Number::from(25))));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(25))));
     }
 }

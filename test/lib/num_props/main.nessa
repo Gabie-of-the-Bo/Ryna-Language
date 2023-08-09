@@ -1,9 +1,9 @@
 module num_props [1.0]
 
-fn odd(n: Number) -> Bool {
+fn odd(n: Int) -> Bool {
     return n % 2 == 1;
 }
 
-fn even(n: Number) -> Bool {
+fn even(n: Int) -> Bool {
     return !n.deref().odd();
 }

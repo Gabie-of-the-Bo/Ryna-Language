@@ -6,20 +6,20 @@ class Dice {
     */
     syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
 
-    rolls: Number;
-    sides: Number;
+    rolls: Int;
+    sides: Int;
 }
 
-fn roll(dice: &&Dice) -> Number {
-    let res: Number = 0;
-    let it: Number = 0;
+fn roll(dice: &&Dice) -> Int {
+    let res: Int = 0;
+    let it: Int = 0;
 
     while it < dice.rolls() {
         res = res + rand_int(1, dice.sides());
         it.inc();
     }
 
-    return *<Number>res;
+    return *<Int>res;
 }
 
 let d1: Dice = 2D20;
@@ -38,10 +38,10 @@ if d3.rolls() != 9 || d3.sides() != 10 {
     panic("Invalid d3");
 }
 
-let it: Number = 0;
+let it: Int = 0;
 
 while it < 1000 {
-    let r: Number = d3.roll();
+    let r: Int = d3.roll();
 
     if r < d3.rolls() || r > d3.rolls() * d3.sides() {
         panic("Invalid roll");

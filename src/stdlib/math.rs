@@ -3,103 +3,22 @@ use std::cmp::Ordering;
 
 use crate::number::*;
 
-impl Number{
+pub fn rand_f64() -> f64 {
+    return rand::thread_rng().gen_range(0.0..1.0);
+}
 
-    /*
-                                                      ╒══════════════════════╕
-        ============================================= │  BASIC TRIGONOMETRY  │ =============================================
-                                                      ╘══════════════════════╛
-    */
+impl Integer {
+    pub fn fact(&self) -> Result<Integer, String> {
+        let one: Integer = Integer::new(false, vec!(1));
+        let mut res = one.clone();
+        let mut cpy = self.clone();
+        
+        while !cpy.is_zero() {
+            res = res * &cpy;
+            cpy = cpy - &one;
+        }
 
-    pub fn sin(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.sin())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().sin())),
-        };
-    }
-    
-    pub fn cos(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.cos())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().cos())),
-        };
-    }
-    
-    pub fn tan(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.tan())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().tan())),
-        };
-    }
-
-    /*
-                                                      ╒══════════════════════╕
-        ============================================= │  SIMPLE MATHEMATICS  │ =============================================
-                                                      ╘══════════════════════╛
-    */
-    
-    pub fn floor(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::from(f.floor() as u64)),
-            Number::Int(i) => Ok(Number::Int(i.clone())),
-        };
-    }
-    
-    pub fn ceil(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::from(f.ceil() as u64)),
-            Number::Int(i) => Ok(Number::Int(i.clone())),
-        };
-    }
-    
-    pub fn sqrt(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.sqrt())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().sqrt())),
-        };
-    }
-
-    pub fn pow(&self, exponent: &Number) -> Result<Number, String> {
-        return match (self, exponent) {
-            (Number::Float(b), Number::Float(e)) => Ok(Number::Float(b.powf(*e))),
-            (Number::Float(b), Number::Int(e)) => Ok(Number::Float(b.powf(e.to_f64()))),
-            (Number::Int(b), Number::Float(e)) => Ok(Number::Float(b.to_f64().powf(*e))),
-            (Number::Int(b), Number::Int(e)) if e.negative => Ok(Number::Float(b.to_f64().powf(e.to_f64()))),
-            (Number::Int(b), Number::Int(e)) => Ok(Number::Int(pow(b, e)?)),
-        };
-    }
-
-    pub fn exp(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.exp())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().exp())),
-        };
-    }
-    
-    pub fn ln(&self) -> Result<Number, String> {
-        return match self {
-            Number::Float(f) => Ok(Number::Float(f.ln())),
-            Number::Int(i) => Ok(Number::Float(i.to_f64().ln())),
-        };
-    }
-    
-    pub fn fact(&self) -> Result<Number, String> {
-        return match &self {
-            Number::Float(f) if f.fract() == 0.0 => Number::from(*f as u64).fact(),
-            Number::Float(_) => unimplemented!("Unable to calculate factorial of fractional numbers (WIP)"),
-            Number::Int(i) => {
-                let one: Integer = Integer::new(false, vec!(1));
-                let mut res = one.clone();
-                let mut cpy = i.clone();
-                
-                while !cpy.is_zero() {
-                    res = res * &cpy;
-                    cpy = cpy - &one;
-                }
-
-                Ok(Number::from(res))
-            }
-        };
+        Ok(Integer::from(res))
     }
 
     /*
@@ -108,11 +27,7 @@ impl Number{
                                                       ╘═══════════════════╛
     */
 
-    pub fn rand() -> Number {
-        return Number::from(rand::thread_rng().gen_range(0f64..1f64));
-    }
-
-    pub fn rand_int_range(from: &Number, to: &Number) -> Result<Number, String> {
+    pub fn rand_int_range(from: &Integer, to: &Integer) -> Result<Integer, String> {
         let mut rng = rand::thread_rng();
 
         let mut rand_limbs_range = |f: &Vec<u64>, t: &Vec<u64>| {
@@ -158,40 +73,33 @@ impl Number{
             return Err(format!("Invalid range for random generation [{}, {}]", String::from(from), String::from(to)));
         }
 
-        return match (from, to) {
-            (Number::Float(f), Number::Float(t)) if f.fract() == 0.0 && t.fract() == 0.0 => Ok(Number::from(rng.gen_range(*f..*t))),
-            (Number::Float(f), Number::Int(t)) if f.fract() == 0.0 => Ok(Number::from(rng.gen_range(*f..t.to_f64()))),
-            (Number::Int(f), Number::Float(t)) if t.fract() == 0.0 => Ok(Number::from(rng.gen_range(f.to_f64()..*t))),
-            (Number::Int(f), Number::Int(t)) => match (f.negative, t.negative) {
-                (false, false) => Ok(Number::from(Integer::new(false, rand_limbs_range(&f.limbs, &t.limbs)))),
-                (true, true) => Ok(Number::from(Integer::new(true, rand_limbs_range(&t.limbs, &f.limbs)))),
-                (true, false) => {
-                    let limbs;
+        return match (from.negative, to.negative) {
+            (false, false) => Ok(Integer::from(Integer::new(false, rand_limbs_range(&from.limbs, &to.limbs)))),
+            (true, true) => Ok(Integer::from(Integer::new(true, rand_limbs_range(&to.limbs, &from.limbs)))),
+            (true, false) => {
+                let limbs;
 
-                    if let Ordering::Less = comp_limbs(&f.limbs, &t.limbs) {
-                        limbs = rand_limbs_range(&vec!(0), &t.limbs);
+                if let Ordering::Less = comp_limbs(&from.limbs, &to.limbs) {
+                    limbs = rand_limbs_range(&vec!(0), &to.limbs);
 
-                    } else {
-                        limbs = rand_limbs_range(&vec!(0), &f.limbs);
-                    }
+                } else {
+                    limbs = rand_limbs_range(&vec!(0), &from.limbs);
+                }
 
-                    let mut res = Integer::new(false, limbs);
+                let mut res = Integer::new(false, limbs);
 
-                    // Set as negative uniformly
-                    if &res > t {
-                        res.negative = true;
-                        
-                    } else if &res <= f {
-                        res.negative = rng.gen::<bool>();
-                    }
+                // Set as negative uniformly
+                if &res > to {
+                    res.negative = true;
+                    
+                } else if &res <= from {
+                    res.negative = rng.gen::<bool>();
+                }
 
-                    Ok(Number::from(res))
-                },
-
-                _ => unreachable!()
+                Ok(Integer::from(res))
             },
 
-            _ => Err(format!("Invalid range for random generation"))
+            _ => unreachable!()
         };
     }
 }
@@ -205,14 +113,12 @@ impl Number{
 #[cfg(test)]
 mod tests {
     use crate::number::*;
-    use num_bigint::{BigInt};
+    use num_bigint::BigInt;
 
-    use rand::{
-        distributions::{
+    use rand::distributions::{
             Distribution, 
             Uniform
-        }
-    };
+        };
 
     #[test]
     fn integer_exponentiation() {

@@ -9,4 +9,4 @@ syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems)
 }
 
 // Now we can use this syntax
-print(<Number>[1, 2, 3, 4]);
+print(<Int>[1, 2, 3, 4]);

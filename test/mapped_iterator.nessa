@@ -6,7 +6,7 @@ fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
     return it.deref();
 }
 
-fn<T> next(it: &&DoubleIterator<'T>) -> Number {
+fn<T> next(it: &&DoubleIterator<'T>) -> Int {
     return it.iter().next() * 2;
 }
 
@@ -14,7 +14,7 @@ fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
     return it.iter().is_consumed();
 }
 
-let a = arr<Number>();
+let a = arr<Int>();
 a.push(0);
 a.push(1);
 a.push(2);

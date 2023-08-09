@@ -359,25 +359,25 @@ mod tests {
     fn operation_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_unary_operation(0, 0, Type::Basic(1), Type::Basic(1), |_, _, a| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_unary_operation(0, 0, Type::Basic(0), Type::Basic(1), |_, _, a| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_unary_operation(0, 0, STR, STR, |_, _, a| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_unary_operation(0, 0, INT, STR, |_, _, a| { Ok(a.clone()) });
         let def_3 = ctx.define_native_unary_operation(0, 0, Type::Wildcard, Type::Wildcard, |_, _, a| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_binary_operation(0, 0, Type::Basic(0), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_binary_operation(0, 0, Type::Basic(1), Type::Basic(1), Type::Basic(1), |_, _, a, _| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_binary_operation(0, 0, INT, STR, STR, |_, _, a, _| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_binary_operation(0, 0, STR, STR, STR, |_, _, a, _| { Ok(a.clone()) });
         let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_nary_operation(0, 0, Type::Basic(0), &[Type::Basic(0)], Type::Basic(0), |_, _, _| { Ok(()) });
-        let def_2 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Ref(Box::new(Type::Basic(1)))], Type::Basic(1), |_, _, _| { Ok(()) });
-        let def_3 = ctx.define_native_nary_operation(0, 0, Type::Basic(1), &[Type::Basic(1)], Type::Basic(1), |_, _, _| { Ok(()) });
+        let def_1 = ctx.define_native_nary_operation(0, 0, INT, &[INT], INT, |_, _, _| { Ok(()) });
+        let def_2 = ctx.define_native_nary_operation(0, 0, STR, &[Type::Ref(Box::new(STR))], STR, |_, _, _| { Ok(()) });
+        let def_3 = ctx.define_native_nary_operation(0, 0, STR, &[STR], STR, |_, _, _| { Ok(()) });
         let def_4 = ctx.define_native_nary_operation(0, 0, Type::Wildcard, &[Type::Wildcard], Type::Wildcard, |_, _, _| { Ok(()) });
 
         assert!(def_1.is_ok());
@@ -390,9 +390,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_function_overload(0, 0, &[Type::Basic(1)], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
-        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(Type::Basic(0)))], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
-        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], Type::Basic(0), |_, _, a| { Ok(a[0].clone()) });
+        let def_1 = ctx.define_native_function_overload(0, 0, &[STR], INT, |_, _, a| { Ok(a[0].clone()) });
+        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(INT))], INT, |_, _, a| { Ok(a[0].clone()) });
+        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], INT, |_, _, a| { Ok(a[0].clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
@@ -431,7 +431,7 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!(), vec!(), None);
-        let def_2 = ctx.define_type("Number".into(), vec!(), vec!(), vec!(), None);
+        let def_2 = ctx.define_type("Int".into(), vec!(), vec!(), vec!(), None);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

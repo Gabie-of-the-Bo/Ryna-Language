@@ -2,7 +2,7 @@ module primes [1.0]
 
 import fn { range, iterator, next, is_consumed } from range;
 
-fn is_prime(n: Number) -> Bool {
+fn is_prime(n: Int) -> Bool {
     if n <= 1 {
         return false;
     }
@@ -17,8 +17,8 @@ fn is_prime(n: Number) -> Bool {
 }
 
 class Primes {
-    start: Number;
-    current: Number;
+    start: Int;
+    current: Int;
 }
 
 fn primes() -> Primes {
@@ -29,8 +29,8 @@ fn iterator(it: Primes) -> Primes {
     return *it;
 }
 
-fn next(it: &&Primes) -> Number {
-    let curr: &&Number = it.current();
+fn next(it: &&Primes) -> Int {
+    let curr: &&Int = it.current();
     curr.inc();
 
     while !is_prime(*curr) {

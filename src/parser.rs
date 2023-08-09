@@ -23,7 +23,7 @@ use crate::config::ImportMap;
 use crate::macros::{NessaMacro, parse_nessa_macro};
 use crate::operations::Operator;
 use crate::object::Object;
-use crate::number::Number;
+use crate::number::Integer;
 use crate::types::*;
 use crate::operations::*;
 use crate::context::NessaContext;
@@ -668,17 +668,27 @@ impl NessaContext {
         ))(input);
     }
 
-    fn number_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Number> {
+    fn integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+        return map(
+            tuple((
+                opt(tag("-")),
+                take_while1(|c: char| c.is_digit(10))
+            )),
+            |(s, n)| Integer::from(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str())
+        )(input);
+    }
+
+    fn float_parser<'a>(&self, input: Span<'a>) -> PResult<'a, f64> {
         return map(
             tuple((
                 opt(tag("-")),
                 take_while1(|c: char| c.is_digit(10)),
-                opt(tuple((
+                tuple((
                     tag("."),
                     take_while1(|c: char| c.is_digit(10))
-                )))
+                ))
             )),
-            |(s, n, d)| Number::from(format!("{}{}{}", s.unwrap_or(Span::new("")), n, d.unwrap_or((Span::new(""), Span::new(""))).1).as_str())
+            |(s, n, d)| format!("{}{}{}{}", s.unwrap_or(Span::new("")), n, d.0, d.1).parse().unwrap()
         )(input);
     }
 
@@ -698,7 +708,7 @@ impl NessaContext {
                             return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
                         }
 
-                        if let Type::Template(3, t) = t {  
+                        if let Type::Template(ARR_ID, t) = t {  
                             if let &[Type::Basic(t_id)] = &t[..] {
                                 return args[n].iter().cloned()
                                     .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg.into()))
@@ -741,7 +751,8 @@ impl NessaContext {
                 alt((
                     |input| self.custom_literal_parser(input),
                     map(|input| self.bool_parser(input), |b| Object::new(b)),
-                    map(|input| self.number_parser(input), |n| Object::new(n)),
+                    map(|input| self.integer_parser(input), |n| Object::new(n)),
+                    map(|input| self.float_parser(input), |n| Object::new(n)),
                     map(string_parser, |s| Object::new(s)),
                 ))
             ),
@@ -2265,6 +2276,7 @@ impl NessaContext {
 
 #[cfg(test)]
 mod tests {
+    use crate::ARR_OF;
     use crate::context::*;
     use crate::parser::*;
     use crate::object::*;
@@ -2277,21 +2289,21 @@ mod tests {
         let wildcard_str = "*";
         let empty_str = "()";
 
-        let number_str = "Number";
-        let number_ref_str = "&Number";
+        let number_str = "Int";
+        let number_ref_str = "&Int";
         let string_mut_str = "&&String";
         let wildcard_mut_str = "&&*";
 
-        let or_str = "Number | &&String";
-        let and_str = "(Number, &&String, &Bool)";
-        let and_one_str = "(Number)";
+        let or_str = "Int | &&String";
+        let and_str = "(Int, &&String, &Bool)";
+        let and_one_str = "(Int)";
 
-        let array_str = "Array<Number>";
-        let map_str = "Map<(Number), String>";
-        let map_refs_str = "&Map<&Number, &&String>";
+        let array_str = "Array<Int>";
+        let map_str = "Map<(Int), String>";
+        let map_refs_str = "&Map<&Int, &&String>";
 
-        let basic_func_str = "Number => (String)";
-        let complex_func_str = "(Number, Array<Bool>) => Map<Number, *>";
+        let basic_func_str = "Int => (String)";
+        let complex_func_str = "(Int, Array<Bool>) => Map<Int, *>";
 
         let (_, wildcard) = ctx.type_parser(Span::new(wildcard_str)).unwrap();
         let (_, empty) = ctx.type_parser(Span::new(empty_str)).unwrap();
@@ -2304,38 +2316,38 @@ mod tests {
         let (_, string_mut) = ctx.type_parser(Span::new(string_mut_str)).unwrap();
         let (_, wildcard_mut) = ctx.type_parser(Span::new(wildcard_mut_str)).unwrap();
 
-        assert_eq!(number, Type::Basic(0));
-        assert_eq!(number_ref, Type::Ref(Box::new(Type::Basic(0))));
-        assert_eq!(string_mut, Type::MutRef(Box::new(Type::Basic(1))));
+        assert_eq!(number, INT);
+        assert_eq!(number_ref, Type::Ref(Box::new(INT)));
+        assert_eq!(string_mut, Type::MutRef(Box::new(STR)));
         assert_eq!(wildcard_mut, Type::MutRef(Box::new(Type::Wildcard)));
 
         let (_, or) = ctx.type_parser(Span::new(or_str)).unwrap();
         let (_, and) = ctx.type_parser(Span::new(and_str)).unwrap();
         let (_, and_one) = ctx.type_parser(Span::new(and_one_str)).unwrap();
 
-        assert_eq!(or, Type::Or(vec!(Type::Basic(0), Type::MutRef(Box::new(Type::Basic(1))))));
-        assert_eq!(and, Type::And(vec!(Type::Basic(0), Type::MutRef(Box::new(Type::Basic(1))), Type::Ref(Box::new(Type::Basic(2))))));
-        assert_eq!(and_one, Type::Basic(0));
+        assert_eq!(or, Type::Or(vec!(INT, Type::MutRef(Box::new(STR)))));
+        assert_eq!(and, Type::And(vec!(INT, Type::MutRef(Box::new(STR)), Type::Ref(Box::new(BOOL)))));
+        assert_eq!(and_one, INT);
 
         let (_, array) = ctx.type_parser(Span::new(array_str)).unwrap();
         let (_, map) = ctx.type_parser(Span::new(map_str)).unwrap();
         let (_, map_refs) = ctx.type_parser(Span::new(map_refs_str)).unwrap();
 
-        assert_eq!(array, Type::Template(3, vec!(Type::Basic(0))));
-        assert_eq!(map, Type::Template(4, vec!(Type::Basic(0), Type::Basic(1))));
-        assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(4, vec!(Type::Ref(Box::new(Type::Basic(0))), Type::MutRef(Box::new(Type::Basic(1))))))));
+        assert_eq!(array, ARR_OF!(INT));
+        assert_eq!(map, Type::Template(MAP_ID, vec!(INT, STR)));
+        assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(MAP_ID, vec!(Type::Ref(Box::new(INT)), Type::MutRef(Box::new(STR)))))));
         
         let (_, basic_func) = ctx.type_parser(Span::new(basic_func_str)).unwrap();
         let (_, complex_func) = ctx.type_parser(Span::new(complex_func_str)).unwrap();
 
-        assert_eq!(basic_func, Type::Function(Box::new(Type::Basic(0)), Box::new(Type::Basic(1))));
+        assert_eq!(basic_func, Type::Function(Box::new(INT), Box::new(STR)));
         assert_eq!(complex_func, Type::Function(
             Box::new(Type::And(vec!(
-                Type::Basic(0),
-                Type::Template(3, vec!(Type::Basic(2)))
+                INT,
+                ARR_OF!(BOOL)
             ))), 
-            Box::new(Type::Template(4, vec!(
-                Type::Basic(0),
+            Box::new(Type::Template(MAP_ID, vec!(
+                INT,
                 Type::Wildcard
             )))
         ));
@@ -2355,14 +2367,14 @@ mod tests {
         let (_, string) = ctx.literal_parser(Span::new(string_str)).unwrap();
         let (_, escaped_string) = ctx.literal_parser(Span::new(escaped_string_str)).unwrap();
 
-        assert_eq!(number, NessaExpr::Literal(Location::none(), Object::new(Number::from(123))));
+        assert_eq!(number, NessaExpr::Literal(Location::none(), Object::new(Integer::from(123))));
         assert_eq!(bool_v, NessaExpr::Literal(Location::none(), Object::new(true)));
         assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));
 
         ctx.define_type("Dice".into(), vec!(), vec!(
-            ("rolls".into(), Type::Basic(0)),
-            ("sides".into(), Type::Basic(0))
+            ("rolls".into(), INT),
+            ("sides".into(), INT)
         ), vec!(
             Pattern::And(vec!(
                 Pattern::Arg(Box::new(Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)), "rolls".into()),
@@ -2390,17 +2402,17 @@ mod tests {
             id: id,
             params: vec!(),
             attributes: vec!(
-                Object::new(Number::from(2)),
-                Object::new(Number::from(20))
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(20))
             )
         })));
 
-        assert_eq!(ctx.type_templates[6].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
+        assert_eq!(ctx.type_templates[7].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
             id: id,
             params: vec!(),
             attributes: vec!(
-                Object::new(Number::from(2)),
-                Object::new(Number::from(20))
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(20))
             )
         })));
 
@@ -2437,8 +2449,8 @@ mod tests {
                     id: id,
                     params: vec!(),
                     attributes: vec!(
-                        Object::new(Number::from(2)),
-                        Object::new(Number::from(20))
+                        Object::new(Integer::from(2)),
+                        Object::new(Integer::from(20))
                     )
                 })
             )
@@ -2449,13 +2461,13 @@ mod tests {
     fn variable_definition_parsing() {
         let ctx = standard_ctx();
 
-        let def_1_str = "let var: Number = a;";
-        let def_str = "let foo: Array<Number | &String> = 5;";
+        let def_1_str = "let var: Int = a;";
+        let def_str = "let foo: Array<Int | &String> = 5;";
         let def_3_str = "let bar = \"test\";";
         let def_4_str = "let foobar = false;";
-        let def_5_str = "let lambda = (a: Number, b: Number) -> Bool { return a < b; };";
-        let def_6_str = "let lambda = (n: Number) -> Number n * 2;";
-        let def_7_str = "let lambda = (n: Number) n + 1;";
+        let def_5_str = "let lambda = (a: Int, b: Int) -> Bool { return a < b; };";
+        let def_6_str = "let lambda = (n: Int) -> Int n * 2;";
+        let def_7_str = "let lambda = (n: Int) n + 1;";
 
         let (_, def_1) = ctx.variable_definition_parser(Span::new(def_1_str), &RefCell::default()).unwrap();
         let (_, def) = ctx.variable_definition_parser(Span::new(def_str), &RefCell::default()).unwrap();
@@ -2465,11 +2477,11 @@ mod tests {
         let (_, def_6) = ctx.variable_definition_parser(Span::new(def_6_str), &RefCell::default()).unwrap();
         let (_, def_7) = ctx.variable_definition_parser(Span::new(def_7_str), &RefCell::default()).unwrap();
 
-        assert_eq!(def_1, NessaExpr::VariableDefinition(Location::none(), "var".into(), Type::Basic(0), Box::new(NessaExpr::NameReference(Location::none(), "a".into()))));
+        assert_eq!(def_1, NessaExpr::VariableDefinition(Location::none(), "var".into(), INT, Box::new(NessaExpr::NameReference(Location::none(), "a".into()))));
         assert_eq!(def, NessaExpr::VariableDefinition(Location::none(), 
             "foo".into(), 
-            Type::Template(3, vec!(Type::Or(vec!(Type::Basic(0), Type::Ref(Box::new(Type::Basic(1))))))), 
-            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5))))
+            ARR_OF!(Type::Or(vec!(INT, STR.to_ref()))), 
+            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5))))
         ));
         assert_eq!(def_3, NessaExpr::VariableDefinition(Location::none(), "bar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new("test".to_string())))));
         assert_eq!(def_4, NessaExpr::VariableDefinition(Location::none(), "foobar".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new(false)))));
@@ -2478,10 +2490,10 @@ mod tests {
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
-                    ("a".into(), Type::Basic(0)),
-                    ("b".into(), Type::Basic(0))
+                    ("a".into(), INT),
+                    ("b".into(), INT)
                 ),
-                Type::Basic(2),
+                BOOL,
                 vec!(
                     NessaExpr::Return(Location::none(), Box::new(
                         NessaExpr::BinaryOperation(Location::none(), 
@@ -2499,16 +2511,16 @@ mod tests {
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
-                    ("n".into(), Type::Basic(0))
+                    ("n".into(), INT)
                 ),
-                Type::Basic(0),
+                INT,
                 vec!(
                     NessaExpr::Return(Location::none(), Box::new(
                         NessaExpr::BinaryOperation(Location::none(), 
                             2, 
                             vec!(),
                             Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
-                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2))))
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2))))
                         )
                     ))
                 )
@@ -2519,7 +2531,7 @@ mod tests {
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
                 vec!(
-                    ("n".into(), Type::Basic(0))
+                    ("n".into(), INT)
                 ),
                 Type::Wildcard,
                 vec!(
@@ -2528,7 +2540,7 @@ mod tests {
                             0, 
                             vec!(),
                             Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
-                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1))))
                         )
                     ))
                 )
@@ -2544,8 +2556,8 @@ mod tests {
         let var_str = "-!a";
         let n_var_str = "-5 + a?";
         let n_call_str = "5(-b + !10)";
-        let template_func_str = "funct<Number>(5)";
-        let template_prefix_str = "!<Number>7";
+        let template_func_str = "funct<Int>(5)";
+        let template_prefix_str = "!<Int>7";
         let template_postfix_str = "false<&String>?";
         let template_binary_str = "\"test\" <String, Bool>+ true";
 
@@ -2558,7 +2570,7 @@ mod tests {
         let (_, template_postfix) = ctx.nessa_expr_parser(Span::new(template_postfix_str), &RefCell::default()).unwrap();
         let (_, template_binary) = ctx.nessa_expr_parser(Span::new(template_binary_str), &RefCell::default()).unwrap();
 
-        assert_eq!(number, NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(10))))));
+        assert_eq!(number, NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(10))))));
         assert_eq!(
             var, 
             NessaExpr::UnaryOperation(Location::none(), 0, vec!(), 
@@ -2567,43 +2579,43 @@ mod tests {
         assert_eq!(n_var, NessaExpr::BinaryOperation(Location::none(), 
             0, 
             vec!(),
-            Box::new(NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))),
+            Box::new(NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))))),
             Box::new(NessaExpr::UnaryOperation(Location::none(), 3, vec!(), Box::new(NessaExpr::NameReference(Location::none(), "a".into())))),
         ));
         assert_eq!(n_call, NessaExpr::NaryOperation(Location::none(), 
             0, 
             vec!(),
-            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))),
+            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))),
             vec!(
                 NessaExpr::BinaryOperation(Location::none(), 
                     0, 
                     vec!(),
                     Box::new(NessaExpr::UnaryOperation(Location::none(), 0, vec!(), Box::new(NessaExpr::NameReference(Location::none(), "b".into())))),
-                    Box::new(NessaExpr::UnaryOperation(Location::none(), 1, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(10)))))),
+                    Box::new(NessaExpr::UnaryOperation(Location::none(), 1, vec!(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(10)))))),
                 )
             )
         ));
         assert_eq!(template_func, NessaExpr::NaryOperation(Location::none(), 
             0, 
-            vec!(Type::Basic(0)),
+            vec!(INT),
             Box::new(NessaExpr::NameReference(Location::none(), "funct".into())),
             vec!(
-                NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))
+                NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))
             )
         ));
         assert_eq!(
             template_prefix, 
             NessaExpr::UnaryOperation(Location::none(), 
                 1, 
-                vec!(Type::Basic(0)), 
-                Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(7))))
+                vec!(INT), 
+                Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(7))))
             )
         );
         assert_eq!(
             template_postfix, 
             NessaExpr::UnaryOperation(Location::none(), 
                 3, 
-                vec!(Type::Ref(Box::new(Type::Basic(1)))), 
+                vec!(Type::Ref(Box::new(STR))), 
                 Box::new(NessaExpr::Literal(Location::none(), Object::new(false)))
             )
         );
@@ -2611,7 +2623,7 @@ mod tests {
             template_binary, 
             NessaExpr::BinaryOperation(Location::none(), 
                 0, 
-                vec!(Type::Basic(1), Type::Basic(2)), 
+                vec!(STR, BOOL), 
                 Box::new(NessaExpr::Literal(Location::none(), Object::new("test".to_string()))),
                 Box::new(NessaExpr::Literal(Location::none(), Object::new(true)))
             )
@@ -2622,31 +2634,31 @@ mod tests {
     fn function_header_parsing() {
         let ctx = standard_ctx();
 
-        let number_header_str = "fn test(a: Number) -> Number";
-        let ref_header_str = "fn test(arg: &Number) -> &&Number";
-        let two_args_header_str = "fn test_3(arg_1: &Number, arg: String | Number) -> Number | String";
-        let complex_args_header_str = "fn test_4(a: String | &Number, b: &Array<(Bool, Number)>, c: &&*) -> Map<Number, String>";
+        let number_header_str = "fn test(a: Int) -> Int";
+        let ref_header_str = "fn test(arg: &Int) -> &&Int";
+        let two_args_header_str = "fn test_3(arg_1: &Int, arg: String | Int) -> Int | String";
+        let complex_args_header_str = "fn test_4(a: String | &Int, b: &Array<(Bool, Int)>, c: &&*) -> Map<Int, String>";
 
         let (_, number_header) = ctx.function_header_parser(Span::new(number_header_str)).unwrap();
         let (_, ref_header) = ctx.function_header_parser(Span::new(ref_header_str)).unwrap();
         let (_, two_args_header) = ctx.function_header_parser(Span::new(two_args_header_str)).unwrap();
         let (_, complex_args_header) = ctx.function_header_parser(Span::new(complex_args_header_str)).unwrap();
 
-        assert_eq!(number_header, ("test".into(), None, vec!(("a".into(), Type::Basic(0))), Type::Basic(0)));
-        assert_eq!(ref_header, ("test".into(), None, vec!(("arg".into(), Type::Ref(Box::new(Type::Basic(0))))), Type::MutRef(Box::new(Type::Basic(0)))));
+        assert_eq!(number_header, ("test".into(), None, vec!(("a".into(), INT)), INT));
+        assert_eq!(ref_header, ("test".into(), None, vec!(("arg".into(), Type::Ref(Box::new(INT)))), Type::MutRef(Box::new(INT))));
         assert_eq!(two_args_header, (
             "test_3".into(), 
             None,
             vec!(
-                ("arg_1".into(), Type::Ref(Box::new(Type::Basic(0)))),
+                ("arg_1".into(), Type::Ref(Box::new(INT))),
                 ("arg".into(), Type::Or(vec!(
-                    Type::Basic(0),
-                    Type::Basic(1)
+                    INT,
+                    STR
                 )))
             ),
             Type::Or(vec!(
-                Type::Basic(0),
-                Type::Basic(1)
+                INT,
+                STR
             ))
         ));
         assert_eq!(complex_args_header, (
@@ -2654,25 +2666,25 @@ mod tests {
             None, 
             vec!(
                 ("a".into(), Type::Or(vec!(
-                    Type::Ref(Box::new(Type::Basic(0))),
-                    Type::Basic(1)
+                    Type::Ref(Box::new(INT)),
+                    STR
                 ))),
                 ("b".into(), Type::Ref(Box::new(
                     Type::Template(
-                        3,
+                        ARR_ID,
                         vec!(Type::And(vec!(
-                            Type::Basic(2),
-                            Type::Basic(0)
+                            BOOL,
+                            INT
                         )))
                     ))
                 )),
                 ("c".into(), Type::MutRef(Box::new(Type::Wildcard)))
             ),
             Type::Template(
-                4,
+                MAP_ID,
                 vec!(
-                    Type::Basic(0),
-                    Type::Basic(1)
+                    INT,
+                    STR
                 )
             )
         ));
@@ -2682,7 +2694,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let ctx = standard_ctx();
 
-        let test_1_str = "fn inc() -> Number {
+        let test_1_str = "fn inc() -> Int {
             let res = 5;
 
             for i in arr {
@@ -2692,8 +2704,8 @@ mod tests {
             return res;
         }";
 
-        let test_str = "fn inc(arg: &Number) -> Number | String {
-            let r: Number = arg + 1;
+        let test_str = "fn inc(arg: &Int) -> Int | String {
+            let r: Int = arg + 1;
 
             if r + 1 {
                 return \"a\";
@@ -2723,14 +2735,14 @@ mod tests {
                 0,
                 vec!(),
                 vec!(),
-                Type::Basic(0),
+                INT,
                 vec!(
-                    NessaExpr::VariableDefinition(Location::none(), "res".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5))))),
+                    NessaExpr::VariableDefinition(Location::none(), "res".into(), Type::InferenceMarker, Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5))))),
                     NessaExpr::For(Location::none(), 
                         "i".into(),
                         Box::new(NessaExpr::NameReference(Location::none(), "arr".into())),
                         vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(7)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(7)))))
                         )
                     ),
                     NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "res".into())))
@@ -2746,22 +2758,22 @@ mod tests {
                 vec!(
                     (
                         "arg".into(), 
-                        Type::Ref(Box::new(Type::Basic(0)))
+                        Type::Ref(Box::new(INT))
                     )
                 ),
                 Type::Or(vec!(
-                    Type::Basic(0),
-                    Type::Basic(1)
+                    INT,
+                    STR
                 )),
                 vec!(
                     NessaExpr::VariableDefinition(Location::none(), 
                         "r".into(), 
-                        Type::Basic(0), 
+                        INT, 
                         Box::new(NessaExpr::BinaryOperation(Location::none(), 
                             0,
                             vec!(),
                             Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
-                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1))))
                         ))
                     ),
                     NessaExpr::If(Location::none(), 
@@ -2769,7 +2781,7 @@ mod tests {
                             0,
                             vec!(),
                             Box::new(NessaExpr::NameReference(Location::none(), "r".into())),
-                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
+                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1))))
                         )),
                         vec!(
                             NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new("a".to_string()))))
@@ -2780,7 +2792,7 @@ mod tests {
                                     0,
                                     vec!(),
                                     Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
-                                    Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2))))
+                                    Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2))))
                                 ),
                                 vec!(
                                     NessaExpr::VariableAssignment(Location::none(), 
@@ -2789,14 +2801,14 @@ mod tests {
                                             0,
                                             vec!(),
                                             Box::new(NessaExpr::NameReference(Location::none(), "r".into())),
-                                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1))))
+                                            Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1))))
                                         ))
                                     )
                                 )
                             )
                         ),
                         Some(vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))))
                         ))
                     ),
                     NessaExpr::Return(Location::none(), Box::new(NessaExpr::NameReference(Location::none(), "r".into())))
@@ -2809,17 +2821,14 @@ mod tests {
                 0,
                 vec!("K".into(), "V".into()),
                 vec!(
-                    ("key".into(), Type::TemplateParam(0)),
-                    ("value".into(), Type::TemplateParam(1))
+                    ("key".into(), T_0),
+                    ("value".into(), T_1)
                 ),
-                Type::Template(4, vec!(Type::TemplateParam(0), Type::TemplateParam(1))),
+                Type::Template(MAP_ID, vec!(T_0, T_1)),
                 vec!(
                     NessaExpr::VariableDefinition(Location::none(), 
                         "a".into(), 
-                        Type::Or(vec!(
-                            Type::TemplateParam(0),
-                            Type::TemplateParam(1)
-                        )), 
+                        Type::Or(vec!(T_0, T_1)), 
                         Box::new(NessaExpr::BinaryOperation(Location::none(), 
                             0,
                             vec!(),
@@ -2865,7 +2874,7 @@ mod tests {
             return true;
         }";
 
-        let test_str = "op (arg: Bool)? -> Number | Bool {
+        let test_str = "op (arg: Bool)? -> Int | Bool {
             if arg {
                 return 5;
             }
@@ -2877,7 +2886,7 @@ mod tests {
             return true;
         }";
 
-        let test_3_str = "op (a: Bool) + (b: Bool) -> Number {
+        let test_3_str = "op (a: Bool) + (b: Bool) -> Int {
             if a {
                 if b {
                     return 2;
@@ -2893,7 +2902,7 @@ mod tests {
             return 0;
         }";
 
-        let test_4_str = "op (a: Number)[b: Number, c: Number] -> (Number, Bool) {
+        let test_4_str = "op (a: Int)[b: Int, c: Int] -> (Int, Bool) {
             return (a + b * c, true);
         }";
 
@@ -2908,8 +2917,8 @@ mod tests {
                 1,
                 vec!(),
                 "arg".into(),
-                Type::Basic(2),
-                Type::Basic(2),
+                BOOL,
+                BOOL,
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
@@ -2930,16 +2939,16 @@ mod tests {
                 3,
                 vec!(),
                 "arg".into(),
-                Type::Basic(2),
+                BOOL,
                 Type::Or(vec!(
-                    Type::Basic(0),
-                    Type::Basic(2)
+                    INT,
+                    BOOL
                 )),
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))))
                         ),
                         vec!(),
                         None
@@ -2961,9 +2970,9 @@ mod tests {
             NessaExpr::BinaryOperationDefinition(Location::none(), 
                 0,
                 vec!(),
-                ("a".into(), Type::Basic(2)),
-                ("b".into(), Type::Basic(2)),
-                Type::Basic(0),
+                ("a".into(), BOOL),
+                ("b".into(), BOOL),
+                INT,
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
@@ -2971,12 +2980,12 @@ mod tests {
                             NessaExpr::If(Location::none(), 
                                 Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                                 vec!(
-                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2)))))
+                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2)))))
                                 ),
                                 vec!(),
                                 None
                             ),
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))))
                         ),
                         vec!(),
                         None
@@ -2984,12 +2993,12 @@ mod tests {
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                         vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(0)))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(0)))))
                 )
             ) 
         );
@@ -2999,12 +3008,12 @@ mod tests {
             NessaExpr::NaryOperationDefinition(Location::none(), 
                 1,
                 vec!(),
-                ("a".into(), Type::Basic(0)),
+                ("a".into(), INT),
                 vec!(
-                    ("b".into(), Type::Basic(0)),
-                    ("c".into(), Type::Basic(0))
+                    ("b".into(), INT),
+                    ("c".into(), INT)
                 ),
-                Type::And(vec!(Type::Basic(0), Type::Basic(2))),
+                Type::And(vec!(INT, BOOL)),
                 vec!(
                     NessaExpr::Return(Location::none(), Box::new(
                         NessaExpr::Tuple(Location::none(), vec!(
@@ -3034,7 +3043,7 @@ mod tests {
             return true;
         }";
 
-        let test_template_str = "op<T> (arg: 'T)? -> Number | 'T {
+        let test_template_str = "op<T> (arg: 'T)? -> Int | 'T {
             if arg {
                 return 5;
             }
@@ -3062,7 +3071,7 @@ mod tests {
             return 0;
         }";
 
-        let test_template_4_str = "op<T, G> (a: 'T)[b: 'G, c: Number] -> ('T, Array<'G>) {
+        let test_template_4_str = "op<T, G> (a: 'T)[b: 'G, c: Int] -> ('T, Array<'G>) {
             return (a + b * c, true);
         }";
 
@@ -3077,8 +3086,8 @@ mod tests {
                 1,
                 vec!("T".into()),
                 "arg".into(),
-                Type::TemplateParam(0),
-                Type::TemplateParam(0),
+                T_0,
+                T_0,
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
@@ -3099,16 +3108,16 @@ mod tests {
                 3,
                 vec!("T".into()),
                 "arg".into(),
-                Type::TemplateParam(0),
+                T_0,
                 Type::Or(vec!(
-                    Type::Basic(0),
-                    Type::TemplateParam(0)
+                    INT,
+                    T_0
                 )),
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "arg".into())),
                         vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))))
                         ),
                         vec!(),
                         None
@@ -3130,9 +3139,9 @@ mod tests {
             NessaExpr::BinaryOperationDefinition(Location::none(), 
                 0,
                 vec!("T".into(), "G".into()),
-                ("a".into(), Type::TemplateParam(0)),
-                ("b".into(), Type::TemplateParam(0)),
-                Type::TemplateParam(1),
+                ("a".into(), T_0),
+                ("b".into(), T_0),
+                T_1,
                 vec!(
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
@@ -3140,12 +3149,12 @@ mod tests {
                             NessaExpr::If(Location::none(), 
                                 Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                                 vec!(
-                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(2)))))
+                                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2)))))
                                 ),
                                 vec!(),
                                 None
                             ),
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))))
                         ),
                         vec!(),
                         None
@@ -3153,12 +3162,12 @@ mod tests {
                     NessaExpr::If(Location::none(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "b".into())),
                         vec!(
-                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(1)))))
+                            NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))))
                         ),
                         vec!(),
                         None
                     ),
-                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Number::from(0)))))
+                    NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(0)))))
                 )
             ) 
         );
@@ -3168,12 +3177,12 @@ mod tests {
             NessaExpr::NaryOperationDefinition(Location::none(), 
                 1,
                 vec!("T".into(), "G".into()),
-                ("a".into(), Type::TemplateParam(0)),
+                ("a".into(), T_0),
                 vec!(
-                    ("b".into(), Type::TemplateParam(1)),
-                    ("c".into(), Type::Basic(0))
+                    ("b".into(), T_1),
+                    ("c".into(), INT)
                 ),
-                Type::And(vec!(Type::TemplateParam(0), Type::Template(3, vec!(Type::TemplateParam(1))))),
+                Type::And(vec!(T_0, ARR_OF!(T_1))),
                 vec!(
                     NessaExpr::Return(Location::none(), Box::new(
                         NessaExpr::Tuple(Location::none(), vec!(
@@ -3201,8 +3210,8 @@ mod tests {
         let ctx = standard_ctx();
 
         let dice_roll_str = "class DiceRoll {
-            faces: Number;
-            rolls: Number;
+            faces: Int;
+            rolls: Int;
         }";
 
         let sync_lists_str = "class SyncLists<K, V> {
@@ -3221,8 +3230,8 @@ mod tests {
             "DiceRoll".into(),
             vec!(),
             vec!(
-                ("faces".into(), Type::Basic(0)),
-                ("rolls".into(), Type::Basic(0))
+                ("faces".into(), INT),
+                ("rolls".into(), INT)
             ),
             vec!()
         ));
@@ -3231,8 +3240,8 @@ mod tests {
             "SyncLists".into(),
             vec!("K".into(), "V".into()),
             vec!(
-                ("from".into(), Type::Template(3, vec!(Type::TemplateParam(0)))),
-                ("to".into(), Type::Template(3, vec!(Type::TemplateParam(1))))
+                ("from".into(), ARR_OF!(T_0)),
+                ("to".into(), ARR_OF!(T_1))
             ),
             vec!(
                 Pattern::Str("test".into()),

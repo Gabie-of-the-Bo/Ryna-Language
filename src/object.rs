@@ -2,8 +2,8 @@ use std::any::*;
 use std::rc::Rc;
 use std::cell::*;
 
-use crate::number::Number;
-use crate::types::*;
+use crate::number::Integer;
+use crate::{types::*, ARR_OF, ARR_IT_OF};
 
 /*
                                                   ╒══════════════════╕
@@ -245,9 +245,9 @@ impl NessaObject for Reference {
     }
 }
 
-impl NessaObject for Number {
+impl NessaObject for Integer {
     fn get_type_id(&self) -> usize {
-        return 0;
+        return INT_ID;
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -267,8 +267,42 @@ impl NessaObject for Number {
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<Number>();
-        let tb = b.as_any().downcast_ref::<Number>();
+        let ta = self.as_any().downcast_ref::<Integer>();
+        let tb = b.as_any().downcast_ref::<Integer>();
+
+        return ta == tb;
+    }
+
+    fn assign(&mut self, mut other: Object) {
+        // Swapping should be ok, since other will be destroyed after this function
+        std::mem::swap(self, &mut other.get_mut::<Self>());
+    }
+}
+
+impl NessaObject for f64 {
+    fn get_type_id(&self) -> usize {
+        return FLOAT_ID;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        return self;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        return self;
+    }
+
+    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
+        return Rc::new(RefCell::new(self.clone()));
+    }
+
+    fn to_string(&self) -> String {
+        return format!("{:.5}", self);
+    }
+
+    fn equal_to(&self, b: &dyn NessaObject) -> bool {
+        let ta = self.as_any().downcast_ref::<f64>();
+        let tb = b.as_any().downcast_ref::<f64>();
 
         return ta == tb;
     }
@@ -281,7 +315,7 @@ impl NessaObject for Number {
 
 impl NessaObject for String {
     fn get_type_id(&self) -> usize {
-        return 1;
+        return STR_ID;
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -315,7 +349,7 @@ impl NessaObject for String {
 
 impl NessaObject for bool {
     fn get_type_id(&self) -> usize {
-        return 2;
+        return BOOL_ID;
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -425,11 +459,11 @@ impl NessaObject for (usize, Type, Type) {
 
 impl NessaObject for (Type, Vec<Object>) {
     fn get_type_id(&self) -> usize {
-        return 3;
+        return ARR_ID;
     }
 
     fn get_type(&self) -> Type {
-        return Type::Template(3, vec!(self.0.clone()));
+        return ARR_OF!(self.0.clone());
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -463,11 +497,11 @@ impl NessaObject for (Type, Vec<Object>) {
 
 impl NessaObject for (Type, Reference, usize) {
     fn get_type_id(&self) -> usize {
-        return 5;
+        return ARR_IT_ID;
     }
 
     fn get_type(&self) -> Type {
-        return Type::Template(5, vec!(self.0.clone()));
+        return ARR_IT_OF!(self.0.clone());
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -588,14 +622,14 @@ impl NessaObject for () {
 
 #[cfg(test)]
 mod tests {
-    use crate::number::Number;
+    use crate::number::Integer;
     use crate::object::*;
 
     #[test]
     fn object_construction() {
-        let number = Object::new(Number::from(10));
+        let number = Object::new(Integer::from(10));
         
-        assert_eq!(*number.get::<Number>(), Number::from(10));
+        assert_eq!(*number.get::<Integer>(), Integer::from(10));
 
         let string = Object::new(String::from("Test"));
         
@@ -606,15 +640,15 @@ mod tests {
 
     #[test]
     fn references() {
-        let number = Object::new(Number::from(10));
+        let number = Object::new(Integer::from(10));
         
-        assert_eq!(*number.get::<Number>(), Number::from(10));
+        assert_eq!(*number.get::<Integer>(), Integer::from(10));
 
         let reference = number.get_ref_mut_obj();
         let ref_of_ref = reference.get_ref_obj();
 
-        assert_eq!(*reference.get::<Reference>().get::<Number>(), Number::from(10));
-        assert_eq!(*ref_of_ref.get::<Reference>().get::<Number>(), Number::from(10));
+        assert_eq!(*reference.get::<Reference>().get::<Integer>(), Integer::from(10));
+        assert_eq!(*ref_of_ref.get::<Reference>().get::<Integer>(), Integer::from(10));
 
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
@@ -624,10 +658,10 @@ mod tests {
         assert_eq!(number.get_ptr(), ref_of_ref.get::<Reference>().get_ptr());
 
         let struct_ref = reference.get::<Reference>();
-        *struct_ref.get_mut::<Number>() += Number::from(5);
+        *struct_ref.get_mut::<Integer>() += Integer::from(5);
 
-        assert_eq!(*number.get::<Number>(), Number::from(15));
-        assert_eq!(*reference.get::<Reference>().get::<Number>(), Number::from(15));
-        assert_eq!(*ref_of_ref.get::<Reference>().get::<Number>(), Number::from(15));
+        assert_eq!(*number.get::<Integer>(), Integer::from(15));
+        assert_eq!(*reference.get::<Reference>().get::<Integer>(), Integer::from(15));
+        assert_eq!(*ref_of_ref.get::<Reference>().get::<Integer>(), Integer::from(15));
     }
 }

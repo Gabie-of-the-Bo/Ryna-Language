@@ -15,7 +15,7 @@ syntax list_comprehension from '[' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(
     {#return res;}
 }
 
-let array = [i * 2 for i: Number in <Number>[1, 2, 3, 4, 5]];
+let array = [i * 2 for i: Int in <Int>[1, 2, 3, 4, 5]];
 
 if array[0] != 2 { panic("Invalid value"); }
 if array[1] != 4 { panic("Invalid value"); }

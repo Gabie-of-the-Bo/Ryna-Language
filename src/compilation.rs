@@ -1,4 +1,4 @@
-use std::collections::{ HashMap };
+use std::collections::HashMap;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
@@ -1961,7 +1961,7 @@ impl NessaContext{
 
                         if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), true) {
                             if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), true) {
-                                if let Type::Basic(2) = consumed_res {
+                                if let Type::Basic(BOOL_ID) = consumed_res {
                                     let for_body = self.compiled_form_body(b, functions, unary, binary, nary, lambda_positions)?;
 
                                     // Convert the iterable into an iterator
@@ -3042,7 +3042,7 @@ mod tests {
         ";
         
         let code_str = "
-        inc<Number>(5);
+        inc<Int>(5);
         ";
 
         let (_, mut code) = ctx.nessa_parser(Span::new(code_1_str)).unwrap();
@@ -3050,7 +3050,7 @@ mod tests {
 
         assert_eq!(code, vec!(
             NessaExpr::FunctionCall(Location::none(), 0, vec!(), vec!(
-                NessaExpr::Literal(Location::none(), Object::new(Number::from(5)))
+                NessaExpr::Literal(Location::none(), Object::new(Integer::from(5)))
             ))
         ));
         
@@ -3064,7 +3064,7 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let code_str = "
-            fn test(a: Number) -> Number {
+            fn test(a: Int) -> Int {
                 if 0 < a {
                     return test(a - 1) + a;
                 }

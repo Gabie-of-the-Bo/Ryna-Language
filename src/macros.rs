@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}};
+use std::collections::{HashMap, HashSet};
 
-use nom::{sequence::{delimited, tuple, preceded}, character::complete::{satisfy}, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value, opt}, branch::alt};
+use nom::{sequence::{delimited, tuple, preceded}, character::complete::satisfy, bytes::complete::{tag, take_while1, escaped_transform}, combinator::{map, value, opt}, branch::alt};
 
 use crate::parser::{many_separated0, Span, PResult, identifier_parser, empty0, empty1};
 
@@ -313,16 +313,16 @@ mod tests {
         let macro_1 = crate::macros::parse_nessa_macro(macro_1_str.into()).unwrap().1;
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
             ("values".into(), vec!("5", "7", "8"))
         ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
 
         let res = macro_1.expand(&args).unwrap();
 
-        assert_eq!(res, "let res = arr<Number>();\nres.push(5);\nres.push(7);\nres.push(8);\nreturn res;");
+        assert_eq!(res, "let res = arr<Int>();\nres.push(5);\nres.push(7);\nres.push(8);\nreturn res;");
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
         ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
 
         assert!(macro_1.expand(&args).is_err());
@@ -345,7 +345,7 @@ mod tests {
         let macro_2 = crate::macros::parse_nessa_macro(macro_2_str.into()).unwrap().1;
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
             ("it".into(), vec!("i")),
             ("container".into(), vec!("range(0, 10)")),
             ("map".into(), vec!("i * i")),
@@ -353,10 +353,10 @@ mod tests {
 
         let res = macro_2.expand(&args).unwrap();
 
-        assert_eq!(res, "let res = arr<Number>();\nlet func = (i) i * i;\n\nfor _it_ in range(0, 10){\n  res.push(map(_it_));\n}\n\nreturn res;");
+        assert_eq!(res, "let res = arr<Int>();\nlet func = (i) i * i;\n\nfor _it_ in range(0, 10){\n  res.push(map(_it_));\n}\n\nreturn res;");
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
             ("it".into(), vec!("i")),
             ("container".into(), vec!("range(0, 10)")),
         ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
@@ -364,7 +364,7 @@ mod tests {
         assert!(macro_2.expand(&args).is_err());
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
             ("container".into(), vec!("range(0, 10)")),
             ("map".into(), vec!("i * i")),
         ].iter().cloned().collect::<HashMap<_, Vec<_>>>();
@@ -380,7 +380,7 @@ mod tests {
         assert!(macro_2.expand(&args).is_err());
 
         let args = [
-            ("type".into(), vec!("Number")),
+            ("type".into(), vec!("Int")),
             ("it".into(), vec!("i")),
             ("map".into(), vec!("i * i")),
         ].iter().cloned().collect::<HashMap<_, Vec<_>>>();

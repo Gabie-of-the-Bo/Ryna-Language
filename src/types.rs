@@ -6,7 +6,7 @@ use colored::Colorize;
 use crate::context::NessaContext;
 use crate::object::Object;
 use crate::patterns::Pattern;
-use crate::number::Number;
+use crate::number::Integer;
 
 /*
                                                   ╒══════════════════╕
@@ -315,7 +315,7 @@ mod tests {
     fn basic_type_binding() {
         let number_t = TypeTemplate {
             id: 0,
-            name: "Number".into(),
+            name: "Int".into(),
             params: vec!(),
             attributes: vec!(),
             patterns: vec!(),
@@ -425,7 +425,7 @@ mod tests {
     fn template_binding() {
         let number_t = TypeTemplate {
             id: 0,
-            name: "Number".into(),
+            name: "Int".into(),
             params: vec!(),
             attributes: vec!(),
             patterns: vec!(),
@@ -558,14 +558,16 @@ mod tests {
 */
 
 // Constants for common types
-pub const NUM_ID: usize = 0;
-pub const STR_ID: usize = 1;
-pub const BOOL_ID: usize = 2;
-pub const ARR_ID: usize = 3;
-pub const MAP_ID: usize = 4;
-pub const ARR_IT_ID: usize = 5;
+pub const INT_ID: usize = 0;
+pub const FLOAT_ID: usize = 1;
+pub const STR_ID: usize = 2;
+pub const BOOL_ID: usize = 3;
+pub const ARR_ID: usize = 4;
+pub const MAP_ID: usize = 5;
+pub const ARR_IT_ID: usize = 6;
 
-pub const NUM: Type = Type::Basic(NUM_ID);
+pub const INT: Type = Type::Basic(INT_ID);
+pub const FLOAT: Type = Type::Basic(FLOAT_ID);
 pub const STR: Type = Type::Basic(STR_ID);
 pub const BOOL: Type = Type::Basic(BOOL_ID);
 
@@ -581,7 +583,8 @@ pub const T_2: Type = Type::TemplateParam(2);
 
 // Standard context
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Number".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<Number>().map(Object::new))).unwrap();
+    ctx.define_type("Int".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
+    ctx.define_type("Float".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
     ctx.define_type("String".into(), vec!(), vec!(), vec!(), None).unwrap();
 
     ctx.define_type("Bool".into(), vec!(), vec!(), vec!(), Some(|_, _, s| 

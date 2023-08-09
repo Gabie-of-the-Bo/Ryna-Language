@@ -297,7 +297,7 @@ impl NessaObject for f64 {
     }
 
     fn to_string(&self) -> String {
-        return format!("{:.5}", self);
+        return format!("{}", self);
     }
 
     fn equal_to(&self, b: &dyn NessaObject) -> bool {

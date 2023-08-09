@@ -287,18 +287,23 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     define_unary_function_overloads!(ctx, 18, INT, FLOAT, Integer, a, a.to_f64().sqrt());
     define_unary_function_overloads!(ctx, 18, FLOAT, FLOAT, f64, a, a.sqrt());
 
+    ctx.define_function("abs".into()).unwrap();
+
+    define_unary_function_overloads!(ctx, 19, INT, INT, Integer, a, a.abs());
+    define_unary_function_overloads!(ctx, 19, FLOAT, FLOAT, f64, a, a.abs());
+
     ctx.define_function("rand".into()).unwrap();
 
-    ctx.define_native_function_overload(19, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
+    ctx.define_native_function_overload(20, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
 
     ctx.define_function("rand_int".into()).unwrap();
 
-    define_binary_function_overloads!(ctx, 20, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
+    define_binary_function_overloads!(ctx, 21, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
 
     ctx.define_function("is".into()).unwrap();
 
     ctx.define_native_function_overload(
-        21, 
+        22, 
         1,
         &[Type::Wildcard], 
         BOOL, 
@@ -308,7 +313,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_function("as".into()).unwrap();
 
     ctx.define_native_function_overload(
-        22, 
+        23, 
         1,
         &[Type::Wildcard], 
         T_0, 
@@ -327,13 +332,13 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_function("println".into()).unwrap();
 
-    ctx.define_native_function_overload(23, 0, &[], Type::Empty, |_, _, _| { 
+    ctx.define_native_function_overload(24, 0, &[], Type::Empty, |_, _, _| { 
         println!("");
 
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_native_function_overload(23, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(24, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
         println!("{}", v[0].to_string());
 
         return Ok(Object::empty());

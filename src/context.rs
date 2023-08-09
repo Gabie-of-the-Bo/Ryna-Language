@@ -441,7 +441,7 @@ mod tests {
     fn function_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_function("abs".into());
+        let def_1 = ctx.define_function("example".into());
         let def_2 = ctx.define_function("inc".into());
 
         assert!(def_1.is_ok());

@@ -8,6 +8,13 @@ pub fn rand_f64() -> f64 {
 }
 
 impl Integer {
+    pub fn abs(&self) -> Integer {
+        let mut res = self.clone();
+        res.negative = false;
+        
+        return res;
+    }
+
     pub fn fact(&self) -> Result<Integer, String> {
         let one: Integer = Integer::new(false, vec!(1));
         let mut res = one.clone();

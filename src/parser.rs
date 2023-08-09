@@ -751,8 +751,8 @@ impl NessaContext {
                 alt((
                     |input| self.custom_literal_parser(input),
                     map(|input| self.bool_parser(input), |b| Object::new(b)),
-                    map(|input| self.integer_parser(input), |n| Object::new(n)),
                     map(|input| self.float_parser(input), |n| Object::new(n)),
+                    map(|input| self.integer_parser(input), |n| Object::new(n)),
                     map(string_parser, |s| Object::new(s)),
                 ))
             ),

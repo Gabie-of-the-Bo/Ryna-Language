@@ -118,6 +118,11 @@ mod integration {
     }
 
     #[test]
+    fn e_approximation() {
+        integration_test("test/e_approximation.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

@@ -93,6 +93,14 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
+    pub fn to_ref(self) -> Type {
+        return Type::Ref(Box::new(self));
+    }
+
+    pub fn to_mut(self) -> Type {
+        return Type::MutRef(Box::new(self));
+    }
+
     pub fn get_name(&self, ctx: &NessaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
@@ -549,6 +557,29 @@ mod tests {
                                                   ╘══════════════════╛
 */
 
+// Constants for common types
+pub const NUM_ID: usize = 0;
+pub const STR_ID: usize = 1;
+pub const BOOL_ID: usize = 2;
+pub const ARR_ID: usize = 3;
+pub const MAP_ID: usize = 4;
+pub const ARR_IT_ID: usize = 5;
+
+pub const NUM: Type = Type::Basic(NUM_ID);
+pub const STR: Type = Type::Basic(STR_ID);
+pub const BOOL: Type = Type::Basic(BOOL_ID);
+
+#[macro_export]
+macro_rules! ARR_OF { ($t: expr) => { Type::Template(crate::types::ARR_ID, vec!($t)) }; }
+
+#[macro_export]
+macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template(crate::types::ARR_IT_ID, vec!($t)) }; }
+
+pub const T_0: Type = Type::TemplateParam(0);
+pub const T_1: Type = Type::TemplateParam(1);
+pub const T_2: Type = Type::TemplateParam(2);
+
+// Standard context
 pub fn standard_types(ctx: &mut NessaContext) {
     ctx.define_type("Number".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<Number>().map(Object::new))).unwrap();
     ctx.define_type("String".into(), vec!(), vec!(), vec!(), None).unwrap();

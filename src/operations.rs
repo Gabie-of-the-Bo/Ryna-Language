@@ -1,5 +1,5 @@
-use crate::types::Type;
-use crate::object::*;
+use crate::types::{Type, NUM, BOOL, STR, T_0};
+use crate::{object::*, ARR_OF};
 use crate::context::NessaContext;
 
 use crate::number::*;
@@ -118,7 +118,7 @@ macro_rules! define_unary_native_op_combinations {
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 300).unwrap();
 
-    ctx.define_native_unary_operation(0, 0, Type::Basic(0), Type::Basic(0), |_, _, a| {
+    ctx.define_native_unary_operation(0, 0, NUM, NUM, |_, _, a| {
         let n_a = &*a.get::<Number>();
         let mut res = n_a.clone();
 
@@ -129,11 +129,11 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
     ctx.define_unary_operator("!".into(), true, 250).unwrap();
 
-    define_unary_native_op_combinations!(ctx, 1, Type::Basic(2), Type::Basic(2), bool, arg, !arg);
+    define_unary_native_op_combinations!(ctx, 1, BOOL, BOOL, bool, arg, !arg);
 
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 
-    ctx.define_native_unary_operation(2, 1, Type::MutRef(Box::new(Type::TemplateParam(0))), Type::TemplateParam(0), |_, _, a| {
+    ctx.define_native_unary_operation(2, 1, T_0.to_mut(), T_0, |_, _, a| {
         return Ok(Object {
             inner: a.get::<Reference>().inner.clone()
         });
@@ -217,24 +217,24 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("+".into(), false, 650).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 0, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 + arg_2);
-    define_binary_native_op_combinations!(ctx, 0, Type::Basic(1), Type::Basic(1), String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
+    define_binary_native_op_combinations!(ctx, 0, NUM, NUM, Number, arg_1, arg_2, arg_1 + arg_2);
+    define_binary_native_op_combinations!(ctx, 0, STR, STR, String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
 
     ctx.define_binary_operator("-".into(), false, 700).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 1, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 - arg_2);
+    define_binary_native_op_combinations!(ctx, 1, NUM, NUM, Number, arg_1, arg_2, arg_1 - arg_2);
 
     ctx.define_binary_operator("*".into(), false, 500).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 2, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 * arg_2);
+    define_binary_native_op_combinations!(ctx, 2, NUM, NUM, Number, arg_1, arg_2, arg_1 * arg_2);
 
     ctx.define_binary_operator("/".into(), false, 550).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 3, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 / arg_2);
+    define_binary_native_op_combinations!(ctx, 3, NUM, NUM, Number, arg_1, arg_2, arg_1 / arg_2);
 
     ctx.define_binary_operator("%".into(), false, 600).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 4, Type::Basic(0), Type::Basic(0), Number, arg_1, arg_2, arg_1 % arg_2);
+    define_binary_native_op_combinations!(ctx, 4, NUM, NUM, Number, arg_1, arg_2, arg_1 % arg_2);
 
     /*
         ╒══════════════════════╕
@@ -252,31 +252,31 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("<".into(), false, 900).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 6, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 < arg_2);
+    define_binary_native_op_combinations!(ctx, 6, NUM, BOOL, Number, arg_1, arg_2, arg_1 < arg_2);
 
     ctx.define_binary_operator(">".into(), false, 950).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 7, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 > arg_2);
+    define_binary_native_op_combinations!(ctx, 7, NUM, BOOL, Number, arg_1, arg_2, arg_1 > arg_2);
 
     ctx.define_binary_operator("<=".into(), false, 1000).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 8, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 <= arg_2);
+    define_binary_native_op_combinations!(ctx, 8, NUM, BOOL, Number, arg_1, arg_2, arg_1 <= arg_2);
 
     ctx.define_binary_operator(">=".into(), false, 1050).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 9, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 >= arg_2);
+    define_binary_native_op_combinations!(ctx, 9, NUM, BOOL, Number, arg_1, arg_2, arg_1 >= arg_2);
 
     ctx.define_binary_operator("==".into(), false, 1100).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 10, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 == arg_2);
-    define_binary_native_op_combinations!(ctx, 10, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 == arg_2);
-    define_binary_native_op_combinations!(ctx, 10, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, arg_1 == arg_2);
+    define_binary_native_op_combinations!(ctx, 10, NUM, BOOL, Number, arg_1, arg_2, arg_1 == arg_2);
+    define_binary_native_op_combinations!(ctx, 10, STR, BOOL, String, arg_1, arg_2, arg_1 == arg_2);
+    define_binary_native_op_combinations!(ctx, 10, BOOL, BOOL, bool, arg_1, arg_2, arg_1 == arg_2);
 
     ctx.define_binary_operator("!=".into(), false, 1150).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 11, Type::Basic(0), Type::Basic(2), Number, arg_1, arg_2, arg_1 != arg_2);
-    define_binary_native_op_combinations!(ctx, 11, Type::Basic(1), Type::Basic(2), String, arg_1, arg_2, arg_1 != arg_2);
-    define_binary_native_op_combinations!(ctx, 11, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, arg_1 != arg_2);
+    define_binary_native_op_combinations!(ctx, 11, NUM, BOOL, Number, arg_1, arg_2, arg_1 != arg_2);
+    define_binary_native_op_combinations!(ctx, 11, STR, BOOL, String, arg_1, arg_2, arg_1 != arg_2);
+    define_binary_native_op_combinations!(ctx, 11, BOOL, BOOL, bool, arg_1, arg_2, arg_1 != arg_2);
 
     /*
         ╒════════════════════╕
@@ -286,17 +286,17 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator("||".into(), false, 1500).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 12, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 || *arg_2);
+    define_binary_native_op_combinations!(ctx, 12, BOOL, BOOL, bool, arg_1, arg_2, *arg_1 || *arg_2);
 
     ctx.define_binary_operator("&&".into(), false, 1550).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 13, Type::Basic(2), Type::Basic(2), bool, arg_1, arg_2, *arg_1 && *arg_2);
+    define_binary_native_op_combinations!(ctx, 13, BOOL, BOOL, bool, arg_1, arg_2, *arg_1 && *arg_2);
 
     ctx.define_binary_operator(":=".into(), false, 100000).unwrap();
 
     ctx.define_binary_operation(
         14, 1, 
-        Type::MutRef(Box::new(Type::TemplateParam(0))), Type::TemplateParam(0), Type::Empty, 
+        T_0.to_mut(), T_0, Type::Empty, 
         Some(|_, _, mut a, b| {
             a.get_mut::<Reference>().assign(b);
 
@@ -404,65 +404,65 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
 
     // Indexing operations on arrays
     idx_op_definition!(
-        Type::Template(3, vec!(Type::TemplateParam(0))),
-        Type::Basic(0),
-        Type::TemplateParam(0),
+        ARR_OF!(T_0),
+        NUM,
+        T_0,
         ctx, deref, get, clone
     );
 
     idx_op_definition!(
-        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::Basic(0),
-        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_mut(),
+        NUM,
+        T_0.to_mut(),
         ctx, deref, get, get_ref_mut_obj
     );
 
     idx_op_definition!(
-        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::Basic(0),
-        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_ref(),
+        NUM,
+        T_0.to_ref(),
         ctx, deref, get, get_ref_obj
     );
 
     idx_op_definition!(
-        Type::Template(3, vec!(Type::TemplateParam(0))),
-        Type::MutRef(Box::new(Type::Basic(0))),
-        Type::TemplateParam(0),
+        ARR_OF!(T_0),
+        NUM.to_mut(),
+        T_0,
         ctx, deref, deref, clone
     );
 
     idx_op_definition!(
-        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::MutRef(Box::new(Type::Basic(0))),
-        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_mut(),
+        NUM.to_mut(),
+        T_0.to_mut(),
         ctx, deref, deref, get_ref_mut_obj
     );
 
     idx_op_definition!(
-        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::MutRef(Box::new(Type::Basic(0))),
-        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_ref(),
+        NUM.to_mut(),
+        T_0.to_ref(),
         ctx, deref, deref, get_ref_obj
     );
 
     idx_op_definition!(
-        Type::Template(3, vec!(Type::TemplateParam(0))),
-        Type::Ref(Box::new(Type::Basic(0))),
-        Type::TemplateParam(0),
+        ARR_OF!(T_0),
+        Type::Ref(Box::new(NUM)),
+        T_0,
         ctx, deref, deref, clone
     );
 
     idx_op_definition!(
-        Type::MutRef(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::Ref(Box::new(Type::Basic(0))),
-        Type::MutRef(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_mut(),
+        Type::Ref(Box::new(NUM)),
+        T_0.to_mut(),
         ctx, deref, deref, get_ref_mut_obj
     );
 
     idx_op_definition!(
-        Type::Ref(Box::new(Type::Template(3, vec!(Type::TemplateParam(0))))),
-        Type::Ref(Box::new(Type::Basic(0))),
-        Type::Ref(Box::new(Type::TemplateParam(0))),
+        ARR_OF!(T_0).to_ref(),
+        Type::Ref(Box::new(NUM)),
+        T_0.to_ref(),
         ctx, deref, deref, get_ref_obj
     );
 }

@@ -191,7 +191,7 @@ pub enum NessaExpr {
     PostfixOperatorDefinition(Location, String, usize),
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
-    ClassDefinition(Location, String, Vec<String>,Vec<(String, Type)>, Vec<Pattern>),
+    ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -1975,6 +1975,47 @@ impl NessaContext {
         )(input);
     }
 
+    fn alias_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(
+                tuple((
+                    tag("type"),
+                    empty1,
+                    context("Invalid type identifier", cut(identifier_parser)),
+                    empty0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                empty0,
+                                separated_list1(
+                                    tuple((empty0, tag(","), empty0)), 
+                                    identifier_parser
+                                ),
+                                empty0,
+                                tag(">"),
+                                empty0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    context("Expected '=' after type name", cut(tag("="))),
+                    empty0,
+                    cut(|input| self.type_parser(input)),
+                    empty0,
+                    context("Expected ';' at the end of type alias definition", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, n, _, tm, _, _, mut t, _, _))| {
+                let u_t = tm.unwrap_or_default();
+
+                t.compile_templates(&u_t);
+
+                NessaExpr::ClassDefinition(l, n, u_t, vec!(), Some(t), vec!())
+            }
+        )(input);
+    }
+
     fn class_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
             located(
@@ -2041,7 +2082,7 @@ impl NessaContext {
 
                 f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
 
-                NessaExpr::ClassDefinition(l, n, u_t, f, p)
+                NessaExpr::ClassDefinition(l, n, u_t, f, None, p)
             }
         )(input);
     }
@@ -2168,6 +2209,7 @@ impl NessaContext {
             |input| self.operator_definition_parser(input),
             |input| self.operation_definition_parser(input, op_cache),
             |input| self.class_definition_parser(input),
+            |input| self.alias_definition_parser(input),
             |input| self.macro_parser(input), 
             |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((empty0, tag(";")))))(input)
         ))(input);
@@ -2242,6 +2284,10 @@ impl NessaContext {
 
         while input.len() > 0 {
             if let Ok((i, o)) = self.class_definition_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else if let Ok((i, o)) = self.alias_definition_parser(input) {
                 input = i;
                 ops.push(o);
             
@@ -2375,7 +2421,9 @@ mod tests {
         ctx.define_type("Dice".into(), vec!(), vec!(
             ("rolls".into(), INT),
             ("sides".into(), INT)
-        ), vec!(
+        ), 
+        None,
+        vec!(
             Pattern::And(vec!(
                 Pattern::Arg(Box::new(Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)), "rolls".into()),
                 Pattern::Str("D".into()),
@@ -2418,7 +2466,9 @@ mod tests {
 
         ctx.define_type("InnerDice".into(), vec!(), vec!(
             ("inner_dice".into(), Type::Basic(id))
-        ), vec!(
+        ),
+        None,
+        vec!(
             Pattern::And(vec!(
                 Pattern::Str("[".into()),
                 Pattern::Arg(
@@ -3233,6 +3283,7 @@ mod tests {
                 ("faces".into(), INT),
                 ("rolls".into(), INT)
             ),
+            None,
             vec!()
         ));
 
@@ -3243,6 +3294,7 @@ mod tests {
                 ("from".into(), ARR_OF!(T_0)),
                 ("to".into(), ARR_OF!(T_1))
             ),
+            None,
             vec!(
                 Pattern::Str("test".into()),
                 Pattern::Optional(Box::new(Pattern::Or(vec!(
@@ -3281,6 +3333,25 @@ mod tests {
                     ))
                 ))
             )
+        ));
+    }
+
+    #[test]
+    fn alias_definition_parsing() {
+        let ctx = standard_ctx();
+
+        let number_str = "type Number = Int | Float;";
+
+        let (_, number) = ctx.alias_definition_parser(Span::new(number_str)).unwrap();
+
+        assert_eq!(number, NessaExpr::ClassDefinition(Location::none(), 
+            "Number".into(),
+            vec!(),
+            vec!(),
+            Some(Type::Or(vec!(
+                INT, FLOAT
+            ))),
+            vec!()
         ));
     }
 }

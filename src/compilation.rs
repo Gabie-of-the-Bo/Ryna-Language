@@ -316,17 +316,17 @@ impl NessaContext {
     }
 
     fn infer_lambda_return_type(&mut self, lines: &mut Vec<NessaExpr>) -> Option<Type> {
-        let merge_types = |a: Option<Type>, b: Option<Type>| -> Option<Type> {
+        let merge_types = |a: Option<Type>, b: Option<Type>, ctx: &mut NessaContext| -> Option<Type> {
             if b.is_none() {
                 return a;
             }
             
             return match &a {
                 Some(na) => {
-                    if na.bindable_to(b.as_ref().unwrap()) {
+                    if na.bindable_to(b.as_ref().unwrap(), ctx) {
                         return b;
                     
-                    } else if b.as_ref().unwrap().bindable_to(&na) {
+                    } else if b.as_ref().unwrap().bindable_to(&na, ctx) {
                         return a;
 
                     } else {
@@ -343,21 +343,21 @@ impl NessaContext {
         for expr in lines {
             match expr {
                 NessaExpr::While(_, _, b) |
-                NessaExpr::CompiledFor(_, _, _, _, _, b) => res = merge_types(res, self.infer_lambda_return_type(b)),
+                NessaExpr::CompiledFor(_, _, _, _, _, b) => res = merge_types(res, self.infer_lambda_return_type(b), self),
 
                 NessaExpr::If(_, _, ib, ei, eb) => {
-                    res = merge_types(res, self.infer_lambda_return_type(ib));
+                    res = merge_types(res, self.infer_lambda_return_type(ib), self);
 
                     for (_, eib) in ei {
-                        res = merge_types(res, self.infer_lambda_return_type(eib));
+                        res = merge_types(res, self.infer_lambda_return_type(eib), self);
                     }
 
                     if let Some(eb_inner) = eb {
-                        res = merge_types(res, self.infer_lambda_return_type(eb_inner));
+                        res = merge_types(res, self.infer_lambda_return_type(eb_inner), self);
                     }
                 },
 
-                NessaExpr::Return(_, expr) => res = merge_types(res, self.infer_type(expr)),
+                NessaExpr::Return(_, expr) => res = merge_types(res, self.infer_type(expr), self),
 
                 _ => {}
             }
@@ -1057,7 +1057,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::ClassDefinition(_, n, _, _, _) => {
+            NessaExpr::ClassDefinition(_, n, _, _, _, _) => {
                 if let Some(t) = self.type_templates.iter().find(|i| i.name == *n) {
                     deps.connect(parent.clone(), (ImportType::Class, t.id), ());
 
@@ -2104,9 +2104,9 @@ impl NessaContext{
 
     pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), NessaError> {
         match definition {
-            NessaExpr::ClassDefinition(_, n, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
+            NessaExpr::ClassDefinition(_, n, _, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
 
-            NessaExpr::ClassDefinition(l, n, t, a, p) => {
+            NessaExpr::ClassDefinition(l, n, t, a, al, p) => {
                 *needed = true; // Repeat class parsing after creating a new one
 
                 let err = self.implicit_syntax_check(&n, &t, &a, &p);
@@ -2118,7 +2118,7 @@ impl NessaContext{
                 let n_templates = t.len();
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                 
-                let err = self.define_type(n.clone(), t, a.clone(), p, Some(
+                let err = self.define_type(n.clone(), t, a.clone(), al, p, Some(
                     |ctx, c_type, s| {
                         if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
                             return Ok(o);
@@ -2424,7 +2424,7 @@ impl NessaContext{
 
             } else { // Else the function needs to be defined
                 class_id = self.type_templates.len();
-                self.define_type(c_name.clone(), other_cl.params.clone(), other_cl.attributes.clone(), other_cl.patterns.clone(), other_cl.parser)?;
+                self.define_type(c_name.clone(), other_cl.params.clone(), other_cl.attributes.clone(), other_cl.alias.clone(), other_cl.patterns.clone(), other_cl.parser)?;
             }
 
             return Ok(*classes.entry(id).or_insert(class_id));
@@ -2683,15 +2683,17 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::ClassDefinition(l, n, t, atts, p) => {
+                NessaExpr::ClassDefinition(l, n, t, atts, al, p) => {
                     if imports.contains_key(&ImportType::Class) && imports[&ImportType::Class].contains(n) && 
                     (!foreign || !curr_mod_imports.contains_key(&ImportType::Class) || !curr_mod_imports[&ImportType::Class].contains(n)) {
 
                         let mut mapping = |id| self.map_nessa_class(ctx, id, &mut classes);
                         let mapped_atts = atts.iter().map(|(n, t)| (n.clone(), t.map_basic_types(&mut mapping))).collect();
 
+                        let mapped_al = al.clone().map(|i| i.map_basic_types(&mut mapping));
+
                         let mut needed = false;
-                        let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, p.clone());
+                        let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, mapped_al, p.clone());
 
                         self.define_module_class(mapped_expr.clone(), &mut needed)?;
                         

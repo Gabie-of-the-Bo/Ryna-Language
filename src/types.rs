@@ -28,8 +28,19 @@ pub struct TypeTemplate {
     pub name: String,
     pub params: Vec<String>,
     pub attributes: Vec<(String, Type)>,
+    pub alias: Option<Type>,
     pub patterns: Vec<Pattern>,
     pub parser: Option<ParsingFunction>
+}
+
+impl TypeTemplate {
+    pub fn is_nominal(&self) -> bool {
+        return self.alias.is_none();
+    }
+
+    pub fn is_structural(&self) -> bool {
+        return self.alias.is_some();
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -175,38 +186,48 @@ impl Type {
         };
     }
 
-    pub fn bindable_to(&self, other: &Type) -> bool {
-        return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new());
+    pub fn bindable_to(&self, other: &Type, ctx: &NessaContext) -> bool {
+        return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new(), ctx);
     }
 
-    pub fn bindable_to_subtitutions(&self, other: &Type) -> (bool, HashMap<usize, Type>) {
+    pub fn bindable_to_subtitutions(&self, other: &Type, ctx: &NessaContext) -> (bool, HashMap<usize, Type>) {
         let mut assignments = HashMap::new();
-        let res = self.template_bindable_to(other, &mut assignments, &mut HashMap::new());
+        let res = self.template_bindable_to(other, &mut assignments, &mut HashMap::new(), ctx);
 
         return (res, assignments);
     }
 
-    pub fn bindable_to_template(&self, other: &Type, templates: &[Type]) -> bool {
-        return self.template_bindable_to(other, &mut templates.iter().cloned().enumerate().collect(), &mut HashMap::new());
+    pub fn bindable_to_template(&self, other: &Type, templates: &[Type], ctx: &NessaContext) -> bool {
+        return self.template_bindable_to(other, &mut templates.iter().cloned().enumerate().collect(), &mut HashMap::new(), ctx);
     }
 
-    pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
+    pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>, ctx: &NessaContext) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,
 
             (a, b) if a == b => true,
 
+            (Type::Basic(id), b) if ctx.type_templates[*id].is_structural() => {
+                let alias = ctx.type_templates[*id].alias.as_ref().unwrap();
+                return alias.template_bindable_to(b, t_assignments, t_deps, ctx);
+            },
+
+            (a, Type::Basic(id)) if ctx.type_templates[*id].is_structural() => {
+                let alias = ctx.type_templates[*id].alias.as_ref().unwrap();
+                return a.template_bindable_to(alias, t_assignments, t_deps, ctx);
+            },
+
             (_, Type::Empty) => false,
 
-            (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
-            (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps),
+            (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
+            (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
 
-            (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps)),
-            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps)),
+            (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps, ctx)),
+            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps, ctx)),
 
-            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
-            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps),
-            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps),
+            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
+            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),
+            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps, ctx),
             
             (Type::TemplateParam(id), b) |
             (b, Type::TemplateParam(id)) => {
@@ -221,9 +242,9 @@ impl Type {
             },
             
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
-                                                                    va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps)),
+                                                                    va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
 
-            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.template_bindable_to(fb, t_assignments, t_deps) && ta.template_bindable_to(tb, t_assignments, t_deps),
+            (Type::Function(fa, ta), Type::Function(fb, tb)) => fa.template_bindable_to(fb, t_assignments, t_deps, ctx) && ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
 
             _ => false
         }
@@ -309,15 +330,18 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::*;
+    use crate::{types::*, context::standard_ctx};
 
     #[test]
     fn basic_type_binding() {
+        let ctx = standard_ctx();
+
         let number_t = TypeTemplate {
             id: 0,
             name: "Int".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -327,6 +351,7 @@ mod tests {
             name: "String".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -336,6 +361,7 @@ mod tests {
             name: "Bool".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -345,6 +371,7 @@ mod tests {
             name: "Vector".into(),
             params: vec!("T".into()),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -353,81 +380,84 @@ mod tests {
         let string = Type::Basic(string_t.id);
         let boolean = Type::Basic(bool_t.id);
 
-        assert!(number.bindable_to(&number));
-        assert!(string.bindable_to(&string));
-        assert!(!number.bindable_to(&string));
+        assert!(number.bindable_to(&number, &ctx));
+        assert!(string.bindable_to(&string, &ctx));
+        assert!(!number.bindable_to(&string, &ctx));
 
         let number_ref = Type::Ref(Box::new(number.clone()));
         let number_mut = Type::MutRef(Box::new(number.clone()));
 
-        assert!(number_ref.bindable_to(&number_ref));
-        assert!(number_mut.bindable_to(&number_mut));
-        assert!(!number_mut.bindable_to(&number_ref));
-        assert!(!number_ref.bindable_to(&number_mut));
+        assert!(number_ref.bindable_to(&number_ref, &ctx));
+        assert!(number_mut.bindable_to(&number_mut, &ctx));
+        assert!(!number_mut.bindable_to(&number_ref, &ctx));
+        assert!(!number_ref.bindable_to(&number_mut, &ctx));
 
         let string_or_number = Type::Or(vec!(string.clone(), number.clone()));
         let number_or_string = Type::Or(vec!(number.clone(), string.clone()));
 
-        assert!(string_or_number.bindable_to(&string_or_number));
-        assert!(number_or_string.bindable_to(&number_or_string));
-        assert!(string_or_number.bindable_to(&number_or_string));
-        assert!(number_or_string.bindable_to(&string_or_number));
+        assert!(string_or_number.bindable_to(&string_or_number, &ctx));
+        assert!(number_or_string.bindable_to(&number_or_string, &ctx));
+        assert!(string_or_number.bindable_to(&number_or_string, &ctx));
+        assert!(number_or_string.bindable_to(&string_or_number, &ctx));
 
-        assert!(number.bindable_to(&string_or_number));
-        assert!(string.bindable_to(&string_or_number));
-        assert!(!boolean.bindable_to(&string_or_number));
+        assert!(number.bindable_to(&string_or_number, &ctx));
+        assert!(string.bindable_to(&string_or_number, &ctx));
+        assert!(!boolean.bindable_to(&string_or_number, &ctx));
 
-        assert!(!string_or_number.bindable_to(&string));
+        assert!(!string_or_number.bindable_to(&string, &ctx));
 
         let string_and_number = Type::And(vec!(string.clone(), number.clone()));
 
-        assert!(string_and_number.bindable_to(&string_and_number));
-        assert!(!string_or_number.bindable_to(&string_and_number));
-        assert!(!string.bindable_to(&string_and_number));
-        assert!(!number.bindable_to(&string_and_number));
+        assert!(string_and_number.bindable_to(&string_and_number, &ctx));
+        assert!(!string_or_number.bindable_to(&string_and_number, &ctx));
+        assert!(!string.bindable_to(&string_and_number, &ctx));
+        assert!(!number.bindable_to(&string_and_number, &ctx));
 
         let wildcard = Type::Wildcard;
 
-        assert!(number.bindable_to(&wildcard));
-        assert!(string.bindable_to(&wildcard));
-        assert!(boolean.bindable_to(&wildcard));
-        assert!(number_or_string.bindable_to(&wildcard));
-        assert!(string_and_number.bindable_to(&wildcard));
-        assert!(wildcard.bindable_to(&wildcard));
+        assert!(number.bindable_to(&wildcard, &ctx));
+        assert!(string.bindable_to(&wildcard, &ctx));
+        assert!(boolean.bindable_to(&wildcard, &ctx));
+        assert!(number_or_string.bindable_to(&wildcard, &ctx));
+        assert!(string_and_number.bindable_to(&wildcard, &ctx));
+        assert!(wildcard.bindable_to(&wildcard, &ctx));
 
         let empty = Type::Empty;
 
-        assert!(!number.bindable_to(&empty));
-        assert!(!string.bindable_to(&empty));
-        assert!(!boolean.bindable_to(&empty));
-        assert!(!number_or_string.bindable_to(&empty));
-        assert!(!string_and_number.bindable_to(&empty));
-        assert!(empty.bindable_to(&empty));
+        assert!(!number.bindable_to(&empty, &ctx));
+        assert!(!string.bindable_to(&empty, &ctx));
+        assert!(!boolean.bindable_to(&empty, &ctx));
+        assert!(!number_or_string.bindable_to(&empty, &ctx));
+        assert!(!string_and_number.bindable_to(&empty, &ctx));
+        assert!(empty.bindable_to(&empty, &ctx));
 
         let vector_number = Type::Template(vector_t.id, vec!(number.clone()));
         let vector_string = Type::Template(vector_t.id, vec!(string));
         let vector_number_or_string = Type::Template(vector_t.id, vec!(number_or_string.clone()));
 
-        assert!(vector_number.bindable_to(&vector_number));
-        assert!(vector_number.bindable_to(&vector_number_or_string));
-        assert!(!vector_number.bindable_to(&vector_string));
+        assert!(vector_number.bindable_to(&vector_number, &ctx));
+        assert!(vector_number.bindable_to(&vector_number_or_string, &ctx));
+        assert!(!vector_number.bindable_to(&vector_string, &ctx));
 
         let f_number_number = Type::Function(Box::new(number.clone()), Box::new(number.clone()));
         let f_number_or_string_number = Type::Function(Box::new(number_or_string.clone()), Box::new(number.clone()));
 
-        assert!(f_number_number.bindable_to(&f_number_number));
-        assert!(f_number_or_string_number.bindable_to(&f_number_or_string_number));
-        assert!(f_number_number.bindable_to(&f_number_or_string_number));
-        assert!(!f_number_or_string_number.bindable_to(&f_number_number));
+        assert!(f_number_number.bindable_to(&f_number_number, &ctx));
+        assert!(f_number_or_string_number.bindable_to(&f_number_or_string_number, &ctx));
+        assert!(f_number_number.bindable_to(&f_number_or_string_number, &ctx));
+        assert!(!f_number_or_string_number.bindable_to(&f_number_number, &ctx));
     }
 
     #[test]
     fn template_binding() {
+        let ctx = standard_ctx();
+
         let number_t = TypeTemplate {
             id: 0,
             name: "Int".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -437,6 +467,7 @@ mod tests {
             name: "String".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -446,6 +477,7 @@ mod tests {
             name: "Bool".into(),
             params: vec!(),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -455,6 +487,7 @@ mod tests {
             name: "Vector".into(),
             params: vec!("T".into()),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -464,6 +497,7 @@ mod tests {
             name: "Map".into(),
             params: vec!("T".into(), "G".into()),
             attributes: vec!(),
+            alias: None,
             patterns: vec!(),
             parser: None
         };
@@ -475,14 +509,14 @@ mod tests {
         let template_1 = Type::TemplateParam(0);
         let template_2 = Type::Ref(Box::new(Type::TemplateParam(0)));
 
-        assert!(number.bindable_to(&template_1));
-        assert!(string.bindable_to(&template_1));
-        assert!(boolean.bindable_to(&template_1));
-        assert!(!number.bindable_to(&template_2));
-        assert!(!string.bindable_to(&template_2));
-        assert!(!boolean.bindable_to(&template_2));
-        assert!(!template_1.bindable_to(&template_2));
-        assert!(!template_2.bindable_to(&template_1));
+        assert!(number.bindable_to(&template_1, &ctx));
+        assert!(string.bindable_to(&template_1, &ctx));
+        assert!(boolean.bindable_to(&template_1, &ctx));
+        assert!(!number.bindable_to(&template_2, &ctx));
+        assert!(!string.bindable_to(&template_2, &ctx));
+        assert!(!boolean.bindable_to(&template_2, &ctx));
+        assert!(!template_1.bindable_to(&template_2, &ctx));
+        assert!(!template_2.bindable_to(&template_1, &ctx));
 
         let template_1 = Type::Template(vector_t.id, vec!(Type::TemplateParam(0))); 
         let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(1))); 
@@ -490,10 +524,10 @@ mod tests {
         let binding_1 = Type::Template(vector_t.id, vec!(number.clone()));
         let binding_2 = Type::Template(map_t.id, vec!(number.clone(), string.clone()));
 
-        assert!(binding_1.bindable_to(&template_1));
-        assert!(binding_2.bindable_to(&template_2));
-        assert!(!binding_2.bindable_to(&template_1));
-        assert!(!binding_1.bindable_to(&template_2));
+        assert!(binding_1.bindable_to(&template_1, &ctx));
+        assert!(binding_2.bindable_to(&template_2, &ctx));
+        assert!(!binding_2.bindable_to(&template_1, &ctx));
+        assert!(!binding_1.bindable_to(&template_2, &ctx));
 
         let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(0))); 
 
@@ -501,9 +535,9 @@ mod tests {
         let binding_2 = Type::Template(map_t.id, vec!(boolean.clone(), boolean.clone()));
         let binding_3 = Type::Template(map_t.id, vec!(number.clone(), string.clone()));
         
-        assert!(binding_1.bindable_to(&template_1));
-        assert!(binding_2.bindable_to(&template_1));
-        assert!(!binding_3.bindable_to(&template_1));
+        assert!(binding_1.bindable_to(&template_1, &ctx));
+        assert!(binding_2.bindable_to(&template_1, &ctx));
+        assert!(!binding_3.bindable_to(&template_1, &ctx));
 
         let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))))); 
 
@@ -513,11 +547,11 @@ mod tests {
         let binding_4 = Type::Template(map_t.id, vec!(number.clone(), Type::Template(map_t.id, vec!(string.clone(), string.clone()))));
         let binding_5 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
         
-        assert!(binding_1.bindable_to(&template_1));
-        assert!(binding_2.bindable_to(&template_1));
-        assert!(binding_3.bindable_to(&template_1));
-        assert!(!binding_4.bindable_to(&template_1));
-        assert!(!binding_5.bindable_to(&template_1));
+        assert!(binding_1.bindable_to(&template_1, &ctx));
+        assert!(binding_2.bindable_to(&template_1, &ctx));
+        assert!(binding_3.bindable_to(&template_1, &ctx));
+        assert!(!binding_4.bindable_to(&template_1, &ctx));
+        assert!(!binding_5.bindable_to(&template_1, &ctx));
 
         let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Wildcard)))); 
 
@@ -528,26 +562,26 @@ mod tests {
         let binding_5 = Type::Template(map_t.id, vec!(string.clone(), Type::Template(map_t.id, vec!(string.clone(), number.clone()))));
         let binding_6 = Type::Template(map_t.id, vec!(boolean.clone(), Type::Template(map_t.id, vec!(boolean.clone(), number.clone()))));
         
-        assert!(binding_1.bindable_to(&template_1));
-        assert!(binding_2.bindable_to(&template_1));
-        assert!(!binding_3.bindable_to(&template_1));
-        assert!(!binding_4.bindable_to(&template_1));
-        assert!(binding_5.bindable_to(&template_1));
-        assert!(binding_6.bindable_to(&template_1));
+        assert!(binding_1.bindable_to(&template_1, &ctx));
+        assert!(binding_2.bindable_to(&template_1, &ctx));
+        assert!(!binding_3.bindable_to(&template_1, &ctx));
+        assert!(!binding_4.bindable_to(&template_1, &ctx));
+        assert!(binding_5.bindable_to(&template_1, &ctx));
+        assert!(binding_6.bindable_to(&template_1, &ctx));
 
         let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::TemplateParam(1))); 
         let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))); 
 
-        assert!(template_1.bindable_to(&template_1));
-        assert!(template_2.bindable_to(&template_2));
-        assert!(!template_1.bindable_to(&template_2));
-        assert!(!template_2.bindable_to(&template_1));
+        assert!(template_1.bindable_to(&template_1, &ctx));
+        assert!(template_2.bindable_to(&template_2, &ctx));
+        assert!(!template_1.bindable_to(&template_2, &ctx));
+        assert!(!template_2.bindable_to(&template_1, &ctx));
 
         let template_1 = Type::Template(map_t.id, vec!(Type::TemplateParam(0), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(0))))); 
         let template_2 = Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::Template(map_t.id, vec!(Type::TemplateParam(1), Type::TemplateParam(1))))); 
 
-        assert!(template_1.bindable_to(&template_2));
-        assert!(template_2.bindable_to(&template_1));
+        assert!(template_1.bindable_to(&template_2, &ctx));
+        assert!(template_2.bindable_to(&template_1, &ctx));
     }
 }
 
@@ -583,11 +617,11 @@ pub const T_2: Type = Type::TemplateParam(2);
 
 // Standard context
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Int".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
-    ctx.define_type("Float".into(), vec!(), vec!(), vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
-    ctx.define_type("String".into(), vec!(), vec!(), vec!(), None).unwrap();
+    ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
+    ctx.define_type("Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
+    ctx.define_type("String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 
-    ctx.define_type("Bool".into(), vec!(), vec!(), vec!(), Some(|_, _, s| 
+    ctx.define_type("Bool".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| 
         if s == "true" || s == "false" {
             Ok(Object::new(s.starts_with('t')))
 
@@ -596,7 +630,7 @@ pub fn standard_types(ctx: &mut NessaContext) {
         }
     )).unwrap();
 
-    ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();
-    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), vec!(), None).unwrap();
-    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), vec!(), None).unwrap();
+    ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
 } 

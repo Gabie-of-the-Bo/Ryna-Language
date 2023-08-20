@@ -123,6 +123,11 @@ mod integration {
     }
 
     #[test]
+    fn basic_alias() {
+        integration_test("test/basic_alias.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

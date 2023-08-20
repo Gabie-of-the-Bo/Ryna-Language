@@ -8,7 +8,7 @@ impl NessaContext {
     pub fn get_first_unary_op(&self, id: usize, arg_type: Type, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = arg_type.bindable_to_subtitutions(&a) { // Take first that matches
+                if let (true, subs) = arg_type.bindable_to_subtitutions(&a, self) { // Take first that matches
                     let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
@@ -22,7 +22,7 @@ impl NessaContext {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             let overloads = operations.iter()
                             .map(|(_, a, r, _)| (a.clone(), r.clone()))
-                            .filter(|(a, _)| arg_type.bindable_to(a)).collect::<Vec<_>>();
+                            .filter(|(a, _)| arg_type.bindable_to(a, self)).collect::<Vec<_>>();
 
             // Return Some(overloads) if the call is ambiguous, else return None
             if overloads.len() > 1 {
@@ -41,7 +41,7 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+                if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
                     let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
@@ -56,7 +56,7 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(&a))
+                            .filter(|(_, a, _, _)| t.bindable_to(&a, self))
                             .map(|(_, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1].clone(), r.clone())
@@ -87,7 +87,7 @@ impl NessaContext {
 
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+                if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
                     let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
@@ -105,7 +105,7 @@ impl NessaContext {
         
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(a))
+                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
                             .map(|(_, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1..].to_vec(), r.clone())
@@ -132,7 +132,7 @@ impl NessaContext {
         let t = Type::And(arg_type);
 
         for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
-            if let (true, subs) = t.bindable_to_subtitutions(&a) { // Take first that matches
+            if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
                 let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
                 return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
             }
@@ -146,7 +146,7 @@ impl NessaContext {
 
         let overloads = self.functions[id].overloads.iter()
                             .map(|(_, a, r, _)| (a.clone(), r.clone()))
-                            .filter(|(a, _)| t.bindable_to(a)).collect::<Vec<_>>();
+                            .filter(|(a, _)| t.bindable_to(a, self)).collect::<Vec<_>>();
 
         // Return Some(overloads) if the call is ambiguous, else return None
         if overloads.len() > 1 {

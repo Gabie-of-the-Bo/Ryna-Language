@@ -39,7 +39,7 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
-    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
                 return Err(format!("Type \"{}\" is already defined", representation))
@@ -51,6 +51,7 @@ impl NessaContext {
             name: representation,
             params: params,
             attributes: attributes,
+            alias: alias,
             patterns: patterns,
             parser: parser
         });
@@ -93,7 +94,7 @@ impl NessaContext {
 
     pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(usize, Type, Type, UnaryFunction)> {
         if let Operator::Unary{operations: o, ..} = &self.unary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| a.bindable_to(&t)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| a.bindable_to(&t, self)).collect::<Vec<_>>();
         }
 
         return vec!();
@@ -108,12 +109,12 @@ impl NessaContext {
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
-                if a.bindable_to(&t) {
+                if a.bindable_to(&t, self) {
                     return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                         r.green(), a.get_name(self), r.green(), t.get_name(self)));
                 }
     
-                if t.bindable_to(&a) {
+                if t.bindable_to(&a, self) {
                     return Err(format!("Unary operation {}{} subsumes {}{}, so it cannot be defined", 
                                         r.green(), a.get_name(self), r.green(), t.get_name(self)));
                 }
@@ -164,7 +165,7 @@ impl NessaContext {
         let and = Type::And(vec!(a, b));
 
         if let Operator::Binary{operations: o, ..} = &self.binary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t, self)).collect::<Vec<_>>();
         }
 
         return vec!();
@@ -181,13 +182,13 @@ impl NessaContext {
         if let Operator::Binary{operations: o, representation: r, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
-                    if and.bindable_to(&t) {
+                    if and.bindable_to(&t, self) {
                         return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
                                             a.get_name(self), r.green(), b.get_name(self), 
                                             v[0].get_name(self), r.green(), v[1].get_name(self)));
                     }
 
-                    if t.bindable_to(&and) {
+                    if t.bindable_to(&and, self) {
                         return Err(format!("Binary operation {} {} {} subsumes {} {} {}, so it cannot be defined", 
                                             a.get_name(self), r.green(), b.get_name(self), 
                                             v[0].get_name(self), r.green(), v[1].get_name(self)));
@@ -244,7 +245,7 @@ impl NessaContext {
         let and = Type::And(subtypes);
 
         if let Operator::Nary{operations: o, ..} = &self.nary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t, self)).collect::<Vec<_>>();
         }
 
         return vec!();
@@ -264,13 +265,13 @@ impl NessaContext {
         if let Operator::Nary{operations: o, open_rep: or, close_rep: cr, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
-                    if and.bindable_to(&t) {
+                    if and.bindable_to(&t, self) {
                         return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
                                             from.get_name(self), or.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green(), 
                                             v[0].get_name(self), or.green(), v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green()));
                     }
 
-                    if t.bindable_to(&and) {
+                    if t.bindable_to(&and, self) {
                         return Err(format!("N-ary operation {}{}{}{} subsumes {}{}{}{}, so it cannot be defined", 
                                             from.get_name(self), or.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green(), 
                                             v[0].get_name(self), or.green(), v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green()));
@@ -311,7 +312,7 @@ impl NessaContext {
     pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(usize, Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates, self)).collect::<Vec<_>>();
     }
 
     pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>) -> Result<Object, String>) -> Result<(), String> {
@@ -324,13 +325,13 @@ impl NessaContext {
 
         for (_, t, _, _) in &func.overloads{ // Check subsumption
             if let Type::And(v) = t {
-                if and.bindable_to(&t) {
+                if and.bindable_to(&t, self) {
                     return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
                                         func.name.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
                                         func.name.green(), v.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")));
                 }
 
-                if t.bindable_to(&and) {
+                if t.bindable_to(&and, self) {
                     return Err(format!("Function overload {}({}) subsumes {}({}), so it cannot be defined", 
                                         func.name.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
                                         func.name.green(), v.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")));
@@ -430,8 +431,8 @@ mod tests {
     fn type_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!(), vec!(), None);
-        let def_2 = ctx.define_type("Int".into(), vec!(), vec!(), vec!(), None);
+        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!(), None, vec!(), None);
+        let def_2 = ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), None);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

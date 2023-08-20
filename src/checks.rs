@@ -89,7 +89,7 @@ impl NessaContext {
                 self.return_check(e, ret_type)?;
 
                 if let Some(t) = self.infer_type(e) {
-                    if t.bindable_to(&expected_t) {
+                    if t.bindable_to(&expected_t, self) {
                         Ok(())
 
                     } else {
@@ -195,7 +195,7 @@ impl NessaContext {
                 let inferred_type = self.infer_type(e);
 
                 if let Some(it) = inferred_type {
-                    if it.bindable_to(t) {
+                    if it.bindable_to(t, self) {
                         Ok(())
 
                     } else{
@@ -535,7 +535,7 @@ impl NessaContext {
                 let inferred_type = self.infer_type(e);
 
                 if let Some(it) = inferred_type {
-                    if it.bindable_to(t) {
+                    if it.bindable_to(t, self) {
                         Ok(())
 
                     } else{
@@ -852,7 +852,7 @@ impl NessaContext {
 
     pub fn class_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
-            NessaExpr::ClassDefinition(l, n, _, attributes, _) => {
+            NessaExpr::ClassDefinition(l, n, _, attributes, _, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
                         return Err(NessaError::compiler_error(format!("Repeated attribute \"{}\" in class {}", att, n), l, vec!()));

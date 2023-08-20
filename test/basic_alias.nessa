@@ -1,0 +1,4 @@
+type Number = Int | Float;
+
+let a: Number = 3;
+let b: Number = 3.5;

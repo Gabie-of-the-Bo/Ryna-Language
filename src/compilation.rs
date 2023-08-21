@@ -1766,11 +1766,20 @@ impl NessaContext{
             },
             CompiledFor(_, _, _, _, c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 9,
             While(_, c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 2,
+            Tuple(_, b) => {
+                let mut res = 0;
+
+                for expr in b {
+                    res += self.compiled_form_size(&expr, true, root_counter);
+                }
+                
+                1 + res
+            },
             FunctionCall(_, _, _, a) => {
                 *root_counter += root as usize; // Add drop instruction
                 self.compiled_form_body_size(a, false) + 1
             }, 
-            _ => unreachable!()
+            _ => unreachable!("{:?}", expr)
         }
     }
 
@@ -1812,6 +1821,8 @@ impl NessaContext{
 
                     res.extend(self.compiled_form_expr(i, functions, unary, binary, nary, lambda_positions, false)?);
                 }
+
+                types.reverse();
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(types)));
 
@@ -2102,13 +2113,9 @@ impl NessaContext{
         return Ok(());
     }
 
-    pub fn define_module_class(&mut self, definition: NessaExpr, needed: &mut bool) -> Result<(), NessaError> {
+    pub fn define_module_class(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
         match definition {
-            NessaExpr::ClassDefinition(_, n, _, _, _, _) if self.type_templates.iter().filter(|t| t.name == n).next().is_some() => {},
-
             NessaExpr::ClassDefinition(l, n, t, a, al, p) => {
-                *needed = true; // Repeat class parsing after creating a new one
-
                 let err = self.implicit_syntax_check(&n, &t, &a, &p);
 
                 if let Err(msg) = err {
@@ -2118,15 +2125,30 @@ impl NessaContext{
                 let n_templates = t.len();
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                 
-                let err = self.define_type(n.clone(), t, a.clone(), al, p, Some(
-                    |ctx, c_type, s| {
-                        if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
-                            return Ok(o);
-                        }
+                let err;
 
-                        return Err(format!("Unable to parse {} from {}", c_type.name, s));
-                    }
-                ));
+                if self.type_templates.iter().filter(|t| t.name == n).next().is_some() {
+                    err = self.redefine_type(n.clone(), t, a.clone(), al, p, Some(
+                        |ctx, c_type, s| {
+                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
+                                return Ok(o);
+                            }
+    
+                            return Err(format!("Unable to parse {} from {}", c_type.name, s));
+                        }
+                    ));    
+
+                } else {
+                    err = self.define_type(n.clone(), t, a.clone(), al, p, Some(
+                        |ctx, c_type, s| {
+                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
+                                return Ok(o);
+                            }
+    
+                            return Err(format!("Unable to parse {} from {}", c_type.name, s));
+                        }
+                    ));    
+                }
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, &l, vec!()));
@@ -2139,7 +2161,7 @@ impl NessaContext{
 
                 if n_templates == 0 {
                     // Define constructor instance
-                    let err = self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a| {
+                    let err = self.define_native_function_overload(func_id, 0, &arg_types, Type::Basic(class_id), |_, r, a, _| {
                         if let Type::Basic(id) = r {
                             return Ok(Object::new(TypeInstance {
                                 id: *id,
@@ -2174,7 +2196,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
-                                #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                #( N => |_, _, a, _| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
 
@@ -2185,7 +2207,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
-                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
 
@@ -2196,7 +2218,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
-                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2210,7 +2232,7 @@ impl NessaContext{
                     let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
 
                     // Define constructor instance
-                    let err = self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a| {
+                    let err = self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a, _| {
                         if let Type::Template(id, _) = r {
                             return Ok(Object::new(TypeInstance {
                                 id: *id,
@@ -2244,7 +2266,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
-                                #( N => |_, _, a| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
+                                #( N => |_, _, a, _| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2255,7 +2277,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
-                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2266,7 +2288,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let err = self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
-                                #( N => |_, _, a| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2299,10 +2321,11 @@ impl NessaContext{
     }
 
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), NessaError> {
-        let mut needed = true;
+        if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
+            for name in names {
+                self.define_type(name, vec!(), vec!(), None, vec!(), None).unwrap();
+            }
 
-        while needed {
-            needed = false;
             let ops = self.nessa_class_parser(Span::new(code));
             
             if let Err(err) = ops {
@@ -2310,7 +2333,7 @@ impl NessaContext{
             }
             
             for i in ops.unwrap().1 {
-                self.define_module_class(i, &mut needed)?;
+                self.define_module_class(i)?;
             }
         }
 
@@ -2692,10 +2715,9 @@ impl NessaContext{
 
                         let mapped_al = al.clone().map(|i| i.map_basic_types(&mut mapping));
 
-                        let mut needed = false;
                         let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, mapped_al, p.clone());
 
-                        self.define_module_class(mapped_expr.clone(), &mut needed)?;
+                        self.define_module_class(mapped_expr.clone())?;
                         
                         res.push(mapped_expr);
                         new_source.push(module.clone());

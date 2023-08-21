@@ -207,6 +207,11 @@ impl Type {
 
             (a, b) if a == b => true,
 
+            (_, Type::Empty) => false,
+
+            (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
+            (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
+
             (Type::Basic(id), b) if ctx.type_templates[*id].is_structural() => {
                 let alias = ctx.type_templates[*id].alias.as_ref().unwrap();
                 return alias.template_bindable_to(b, t_assignments, t_deps, ctx);
@@ -217,18 +222,20 @@ impl Type {
                 return a.template_bindable_to(alias, t_assignments, t_deps, ctx);
             },
 
-            (_, Type::Empty) => false,
+            (Type::Template(id, v), b) if ctx.type_templates[*id].is_structural() => {
+                let alias = ctx.type_templates[*id].alias.as_ref().unwrap();
+                let sub_alias = alias.sub_templates(&v.iter().cloned().enumerate().collect());
 
-            (Type::Ref(ta), Type::Ref(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
-            (Type::MutRef(ta), Type::MutRef(tb)) => ta.template_bindable_to(tb, t_assignments, t_deps, ctx),
+                return sub_alias.template_bindable_to(b, t_assignments, t_deps, ctx);
+            },
 
-            (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps, ctx)),
-            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps, ctx)),
+            (a, Type::Template(id, v)) if ctx.type_templates[*id].is_structural() => {
+                let alias = ctx.type_templates[*id].alias.as_ref().unwrap();
+                let sub_alias = alias.sub_templates(&v.iter().cloned().enumerate().collect());   
 
-            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
-            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),
-            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps, ctx),
-            
+                return a.template_bindable_to(&sub_alias, t_assignments, t_deps, ctx);
+            },
+
             (Type::TemplateParam(id), b) |
             (b, Type::TemplateParam(id)) => {
                 if let Some(t) = t_assignments.get(id) {
@@ -240,7 +247,14 @@ impl Type {
                     return b.template_cyclic_reference_check(*id, t_deps);
                 }
             },
-            
+
+            (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps, ctx)),
+            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps, ctx)),
+
+            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
+            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),
+            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps, ctx),
+                        
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
                                                                     va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
 
@@ -582,6 +596,78 @@ mod tests {
 
         assert!(template_1.bindable_to(&template_2, &ctx));
         assert!(template_2.bindable_to(&template_1, &ctx));
+    }
+
+    #[test]
+    fn alias_type_binding() {
+        let mut ctx = standard_ctx();
+        let number_id = ctx.type_templates.len();
+        let number = Type::Basic(number_id);
+
+        ctx.define_type("Number".into(), vec!(), vec!(), Some(Type::Or(vec!(INT, FLOAT))), vec!(), None).unwrap();
+
+        assert!(INT.bindable_to(&number, &ctx));
+        assert!(FLOAT.bindable_to(&number, &ctx));
+        assert!(!STR.bindable_to(&number, &ctx));
+    }
+
+    #[test]
+    fn recursive_type_binding() {
+        let mut ctx = standard_ctx();
+        let list_id = ctx.type_templates.len();
+        let list = Type::Basic(list_id);
+
+        ctx.define_type("List".into(), vec!(), vec!(), Some(Type::Or(vec!(
+            INT,
+            Type::And(vec!(INT, list.clone()))
+        ))), vec!(), None).unwrap();
+
+        let tuple_1 = Type::And(vec!(INT, INT));
+        let tuple_2 = Type::And(vec!(INT, tuple_1.clone()));
+        let tuple_3 = Type::And(vec!(INT, tuple_2.clone()));
+        let tuple_4 = Type::And(vec!(INT, FLOAT));
+        let tuple_5 = Type::And(vec!(INT, tuple_4.clone()));
+
+        assert!(INT.bindable_to(&list, &ctx));
+        assert!(tuple_1.bindable_to(&list, &ctx));
+        assert!(tuple_2.bindable_to(&list, &ctx));
+        assert!(tuple_3.bindable_to(&list, &ctx));
+
+        assert!(!FLOAT.bindable_to(&list, &ctx));
+        assert!(!tuple_4.bindable_to(&list, &ctx));
+        assert!(!tuple_5.bindable_to(&list, &ctx));
+    }
+
+    #[test]
+    fn parametric_recursive_type_binding() {
+        let mut ctx = standard_ctx();
+        let nil_id = ctx.type_templates.len();
+        let list_id = nil_id + 1;
+        let nil = Type::Basic(nil_id);
+        let list = Type::Template(list_id, vec!(T_0));
+
+        ctx.define_type("Nil".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type("List".into(), vec!(), vec!(), Some(Type::Or(vec!(
+            nil.clone(),
+            Type::And(vec!(T_0, list.clone()))
+        ))), vec!(), None).unwrap();
+
+        let tuple_1 = Type::And(vec!(INT, nil.clone()));
+        let tuple_2 = Type::And(vec!(INT, tuple_1.clone()));
+        let tuple_3 = Type::And(vec!(INT, tuple_2.clone()));
+        let tuple_4 = Type::And(vec!(FLOAT, nil.clone()));
+        let tuple_5 = Type::And(vec!(FLOAT, tuple_4.clone()));
+        let tuple_6 = Type::And(vec!(INT, tuple_4.clone()));
+        let tuple_7 = Type::And(vec!(INT, tuple_6.clone()));
+
+        assert!(nil.bindable_to(&list, &ctx));
+        assert!(tuple_1.bindable_to(&list, &ctx));
+        assert!(tuple_2.bindable_to(&list, &ctx));
+        assert!(tuple_3.bindable_to(&list, &ctx));
+        assert!(tuple_4.bindable_to(&list, &ctx));
+        assert!(tuple_5.bindable_to(&list, &ctx));
+        assert!(!tuple_6.bindable_to(&list, &ctx));
+        assert!(!tuple_7.bindable_to(&list, &ctx));
     }
 }
 

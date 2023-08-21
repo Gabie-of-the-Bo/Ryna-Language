@@ -128,6 +128,21 @@ mod integration {
     }
 
     #[test]
+    fn adt_list() {
+        integration_test("test/adt_list.nessa");
+    }
+
+    #[test]
+    fn adt_generic_list() {
+        integration_test("test/adt_generic_list.nessa");
+    }
+
+    #[test]
+    fn adt_bin_tree() {
+        integration_test("test/adt_bin_tree.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

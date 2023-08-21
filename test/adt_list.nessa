@@ -1,0 +1,35 @@
+type List = Int | (Int, List);
+
+fn add(list: List, number: Int) -> List {
+    return (*number, *list);
+}
+
+fn rest(list: &&List) -> &&List {
+    return list.as<&&(Int, List)>().get_1();
+}
+
+fn size(list: &&List) -> Int {
+    if list.is<&&Int>() {
+        return 1;
+    }
+
+    return 1 + list.rest().size();
+}
+
+let list: List = 1.add(2).add(3).add(4).add(5).add(6);
+
+if list.size() != 6 {
+    panic("Incorrect size");
+}
+
+list = *list.rest();
+
+if list.size() != 5 {
+    panic("Incorrect size");
+}
+
+list = *list.rest();
+
+if list.size() != 4 {
+    panic("Incorrect size");
+}

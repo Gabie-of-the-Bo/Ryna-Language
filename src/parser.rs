@@ -1975,6 +1975,35 @@ impl NessaContext {
         )(input);
     }
 
+    fn alias_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+        return map(
+            tuple((
+                tag("type"),
+                empty1,
+                context("Invalid type identifier", cut(identifier_parser)),
+                empty0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            empty0,
+                            separated_list1(
+                                tuple((empty0, tag(","), empty0)), 
+                                identifier_parser
+                            ),
+                            empty0,
+                            tag(">"),
+                            empty0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
+                context("Expected '=' after type name", cut(tag("=")))
+            )),
+            |(_, _, n, _, _, _)| n
+        )(input);
+    }
+
     fn alias_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
             located(
@@ -2013,6 +2042,35 @@ impl NessaContext {
 
                 NessaExpr::ClassDefinition(l, n, u_t, vec!(), Some(t), vec!())
             }
+        )(input);
+    }
+
+    fn class_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+        return map(
+            tuple((
+                tag("class"),
+                empty1,
+                context("Invalid class identifier", cut(identifier_parser)),
+                empty0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            empty0,
+                            separated_list1(
+                                tuple((empty0, tag(","), empty0)), 
+                                identifier_parser
+                            ),
+                            empty0,
+                            tag(">"),
+                            empty0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
+                tag("{")
+            )),
+            |(_, _, n, _, _, _)| n
         )(input);
     }
 
@@ -2290,6 +2348,26 @@ impl NessaContext {
             } else if let Ok((i, o)) = self.alias_definition_parser(input) {
                 input = i;
                 ops.push(o);
+            
+            } else {
+                input = satisfy(|_| true)(input)?.0;
+            }
+        }
+
+        return Ok(("".into(), ops));
+    }
+
+    pub fn nessa_class_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, HashSet<String>> {
+        let mut ops = HashSet::new();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.class_name_definition_parser(input) {
+                input = i;
+                ops.insert(o);
+            
+            } else if let Ok((i, o)) = self.alias_name_definition_parser(input) {
+                input = i;
+                ops.insert(o);
             
             } else {
                 input = satisfy(|_| true)(input)?.0;

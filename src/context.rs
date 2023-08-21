@@ -39,6 +39,26 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
+    pub fn redefine_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+        for t in self.type_templates.iter_mut() {
+            if t.name == representation {
+                *t = TypeTemplate {
+                    id: t.id,
+                    name: representation,
+                    params: params,
+                    attributes: attributes,
+                    alias: alias,
+                    patterns: patterns,
+                    parser: parser
+                };
+
+                return Ok(());
+            }
+        }
+
+        return Err(format!("Class {} was not defined", representation));
+    }
+
     pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
@@ -315,7 +335,7 @@ impl NessaContext {
         return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates, self)).collect::<Vec<_>>();
     }
 
-    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>) -> Result<(), String> {
         return self.define_function_overload(id, templates, args, ret, Some(f));
     }
 
@@ -391,9 +411,9 @@ mod tests {
     fn function_subsumption() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_native_function_overload(0, 0, &[STR], INT, |_, _, a| { Ok(a[0].clone()) });
-        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(INT))], INT, |_, _, a| { Ok(a[0].clone()) });
-        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], INT, |_, _, a| { Ok(a[0].clone()) });
+        let def_1 = ctx.define_native_function_overload(0, 0, &[STR], INT, |_, _, a, _| { Ok(a[0].clone()) });
+        let def_2 = ctx.define_native_function_overload(0, 0, &[Type::MutRef(Box::new(INT))], INT, |_, _, a, _| { Ok(a[0].clone()) });
+        let def_3 = ctx.define_native_function_overload(0, 0, &[Type::Wildcard], INT, |_, _, a, _| { Ok(a[0].clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

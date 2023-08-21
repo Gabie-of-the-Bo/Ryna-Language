@@ -126,7 +126,7 @@ impl NessaContext {
                             args.push(stack.pop().unwrap());
                         }
 
-                        match f(type_args, r, args) {
+                        match f(type_args, r, args, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };

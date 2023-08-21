@@ -15,7 +15,7 @@ use crate::context::NessaContext;
 */
 
 // Takes type parameters, return type and arguments
-pub type FunctionOverload = Option<fn(&Vec<Type>, &Type, Vec<Object>) -> Result<Object, String>>;
+pub type FunctionOverload = Option<fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>>;
 
 pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
@@ -37,7 +37,7 @@ macro_rules! define_unary_function {
             $id, 0,
             &[$inner_type], 
             $return_type,
-            |_, _, v| {
+            |_, _, v, _| {
                 let $a = v[0].$deref::<$unwrap_type>();
                 return Ok(Object::new($result));
             }
@@ -51,7 +51,7 @@ macro_rules! define_binary_function {
             $id, 0,
             &[$inner_type_a, $inner_type_b], 
             $return_type,
-            |_, _, v| {
+            |_, _, v, _| {
                 let $a = v[0].$deref_a::<$unwrap_type>();
                 let $b = v[1].$deref_b::<$unwrap_type>();
 
@@ -91,7 +91,7 @@ pub const IS_CONSUMED_FUNC_ID: usize = 7;
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
         *v[0].get::<Reference>().get_mut::<Integer>() += Integer::from(1);
 
         return Ok(Object::empty());
@@ -99,7 +99,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("print".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v, _| { 
         print!("{}", v[0].to_string());
 
         return Ok(Object::empty());
@@ -107,7 +107,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v| {
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v, _| {
         return Ok(v[0].deref_obj());
     }).unwrap();
 
@@ -118,7 +118,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[], 
         ARR_OF!(T_0), 
-        |t, _, _| Ok(Object::new((t[0].clone(), vec!())))
+        |t, _, _, _| Ok(Object::new((t[0].clone(), vec!())))
     ).unwrap();
 
     let idx = ctx.define_function("push".into()).unwrap();
@@ -128,7 +128,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0).to_mut(), T_0], 
         Type::Empty, 
-        |_, _, v| {
+        |_, _, v, _| {
             let array = v[0].get::<Reference>();
 
             array.get_mut::<(Type, Vec<Object>)>().1.push(v[1].clone());
@@ -144,7 +144,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0).to_mut()], 
         ARR_IT_OF!(T_0.to_mut()), 
-        |t, _, v| {
+        |t, _, v, _| {
             return Ok(Object::new((Type::MutRef(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0)));
         }
     ).unwrap();
@@ -154,7 +154,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0).to_ref()], 
         ARR_IT_OF!(T_0.to_ref()), 
-        |t, _, v| {
+        |t, _, v, _| {
             return Ok(Object::new((Type::Ref(Box::new(t[0].clone())), v[0].get::<Reference>().clone(), 0)));
         }
     ).unwrap();
@@ -164,7 +164,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0)], 
         ARR_IT_OF!(T_0.to_mut()), 
-        |t, _, v| {
+        |t, _, v, _| {
             return Ok(Object::new((Type::MutRef(Box::new(t[0].clone())), v[0].get_ref(), 0)));
         }
     ).unwrap();
@@ -176,7 +176,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
         T_0, 
-        |t, _, v| {
+        |t, _, v, _| {
             let reference = v[0].get::<Reference>();
             let mut iterator = reference.get_mut::<(Type, Reference, usize)>();
 
@@ -205,7 +205,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[ARR_IT_OF!(Type::Wildcard).to_mut()], 
         BOOL, 
-        |_, _, v| {
+        |_, _, v, _| {
             let reference = v[0].get::<Reference>();
             let iterator = reference.get::<(Type, Reference, usize)>();
 
@@ -220,7 +220,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[STR], 
         Type::Empty, 
-        |_, _, v| {
+        |_, _, v, _| {
             return Err(v[0].get::<String>().clone());
         }
     ).unwrap();
@@ -232,7 +232,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[ARR_OF!(Type::Wildcard).to_ref()], 
         INT, 
-        |_, _, v| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
     ctx.define_native_function_overload(
@@ -240,7 +240,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[ARR_OF!(Type::Wildcard).to_mut()], 
         INT, 
-        |_, _, v| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<(Type, Vec<Object>)>().1.len() as u64)))
     ).unwrap();
 
     let idx = ctx.define_function("sin".into()).unwrap();
@@ -325,7 +325,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("rand".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[], FLOAT, |_, _, _| Ok(Object::new(rand_f64()))).unwrap();
+    ctx.define_native_function_overload(idx, 0, &[], FLOAT, |_, _, _, _| Ok(Object::new(rand_f64()))).unwrap();
 
     let idx = ctx.define_function("rand_int".into()).unwrap();
 
@@ -342,7 +342,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::Wildcard], 
         BOOL, 
-        |t, _, v| Ok(Object::new(v[0].get_type() == t[0]))
+        |t, _, v, ctx| Ok(Object::new(v[0].get_type().bindable_to(&t[0], ctx)))
     ).unwrap();
 
     let idx = ctx.define_function("as".into()).unwrap();
@@ -352,12 +352,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[Type::Wildcard], 
         T_0, 
-        |t, _, mut v| {
+        |t, _, mut v, ctx| {
             let obj = v.pop().unwrap();
             let obj_type = obj.get_type();
 
-            if obj_type != t[0] {
-                Err(format!("Invalid type coercion"))
+            if !obj_type.bindable_to(&t[0], ctx) {
+                Err(format!("Unable to get value of type {} as {}", obj_type.get_name(ctx), t[0].get_name(ctx)))
 
             } else {
                 Ok(obj)
@@ -367,13 +367,13 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("println".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _| { 
+    ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _, _| { 
         println!("");
 
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v| { 
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v, _| { 
         println!("{}", v[0].to_string());
 
         return Ok(Object::empty());
@@ -387,9 +387,25 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             ctx.define_native_function_overload(
                 idx, 
                 J,
-                &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
+                &[Type::And((0..J).into_iter().map(Type::TemplateParam).collect())], 
+                Type::TemplateParam(I), 
+                |_, _, v, _| Ok(v[0].get::<Tuple>().exprs[I].clone())
+            ).unwrap();
+            
+            ctx.define_native_function_overload(
+                idx, 
+                J,
+                &[Type::Ref(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
                 Type::Ref(Box::new(Type::TemplateParam(I))), 
-                |_, _, v| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_obj())
+                |_, _, v, _| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_obj())
+            ).unwrap();
+            
+            ctx.define_native_function_overload(
+                idx, 
+                J,
+                &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
+                Type::MutRef(Box::new(Type::TemplateParam(I))), 
+                |_, _, v, _| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_mut_obj())
             ).unwrap();
         });
     });

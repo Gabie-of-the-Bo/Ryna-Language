@@ -7,6 +7,7 @@ pub mod object;
 pub mod operations;
 pub mod functions;
 pub mod types;
+pub mod interfaces;
 pub mod context;
 
 pub mod debug;
@@ -140,6 +141,16 @@ mod integration {
     #[test]
     fn adt_bin_tree() {
         integration_test("test/adt_bin_tree.nessa");
+    }
+
+    #[test]
+    fn numeric_interface() {
+        integration_test("test/numeric_interface.nessa");
+    }
+
+    #[test]
+    fn parametric_interface() {
+        integration_test("test/parametric_interface.nessa");
     }
 
     #[test]

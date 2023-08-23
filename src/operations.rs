@@ -369,18 +369,18 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
 
     for n in 0..30 {
-        let args = (0..n).map(Type::TemplateParam).collect::<Vec<_>>();
+        let args = (0..n).map(|i| Type::TemplateParam(i, vec!())).collect::<Vec<_>>();
 
         let f_type = Type::Function(
             Box::new(Type::And(args.clone())),
-            Box::new(Type::TemplateParam(n))
+            Box::new(Type::TemplateParam(n, vec!()))
         );
 
         ctx.define_native_nary_operation(
             0, n + 1, 
             Type::MutRef(Box::new(f_type.clone())), 
             args.as_slice(), 
-            Type::TemplateParam(n), 
+            Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.deref::<(usize, Type, Type)>();
@@ -397,7 +397,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             0, n + 1, 
             Type::Ref(Box::new(f_type.clone())), 
             args.as_slice(), 
-            Type::TemplateParam(n), 
+            Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.deref::<(usize, Type, Type)>();
@@ -414,7 +414,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             0, n + 1, 
             f_type, 
             args.as_slice(), 
-            Type::TemplateParam(n), 
+            Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
                 let f = &a.get::<(usize, Type, Type)>();

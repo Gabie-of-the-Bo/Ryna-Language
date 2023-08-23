@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use colored::Colorize;
 
@@ -73,6 +73,8 @@ impl NessaContext {
             (NessaExpr::PostfixOperatorDefinition(..), _) |
             (NessaExpr::BinaryOperatorDefinition(..), _) |
             (NessaExpr::NaryOperatorDefinition(..), _) |
+            (NessaExpr::InterfaceDefinition(..), _) |
+            (NessaExpr::InterfaceImplementation(..), _) |
             (NessaExpr::ClassDefinition(..), _) => Ok(()),
 
             (NessaExpr::CompiledVariableDefinition(_, _, _, _, e), ret) |
@@ -186,6 +188,8 @@ impl NessaContext {
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
             NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::InterfaceDefinition(..) |
+            NessaExpr::InterfaceImplementation(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
 
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
@@ -526,6 +530,8 @@ impl NessaContext {
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
             NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::InterfaceDefinition(..) |
+            NessaExpr::InterfaceImplementation(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
 
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
@@ -897,6 +903,83 @@ impl NessaContext {
         };
     }
 
+    pub fn interface_impl_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+        return match expr {
+            NessaExpr::InterfaceImplementation(l, _, t, n, ts) => {
+                match self.get_interface_id(n.clone()) {
+                    Ok(int_id) => {
+                        let fns = &self.interfaces[int_id].fns;
+                        let max_tms = fns.iter().map(|i| i.1.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap() + self.interfaces[int_id].params.len();
+
+                        let mut offset_t = t.clone();
+                        let mut offset_ts = ts.clone();
+                        offset_t.offset_templates(max_tms);
+                        offset_ts.iter_mut().for_each(|i| i.offset_templates(max_tms));
+
+                        let t_subs = (0..offset_ts.len()).zip(offset_ts.clone()).collect::<HashMap<_, _>>();
+                        
+                        for (f_n, _, args, ret) in fns {
+                            match self.get_function_id(f_n.clone()) {
+                                Ok(fn_id) => {
+                                    let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
+                                    let args_sub = args.iter().map(|(_, tp)| tp.sub_self(&offset_t).sub_templates(&t_subs)).collect::<Vec<_>>();
+
+                                    match self.is_function_overload_ambiguous(fn_id, args_sub.clone()) {
+                                        None => {
+                                            if let Some((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), true) {
+                                                if !r.bindable_to(&ret_sub, self) {
+                                                    return Err(NessaError::compiler_error(
+                                                        format!(
+                                                            "Function overload for {}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
+                                                            f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                            n.green(), r.get_name(self), ret_sub.get_name(self)
+                                                        ), 
+                                                        l, vec!()
+                                                    ));    
+                                                }
+
+                                            } else {
+                                                return Err(NessaError::compiler_error(
+                                                    format!(
+                                                        "Unable to find the function overload for {}({}) needed by interface {}", 
+                                                        f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                        n.green()
+                                                    ), 
+                                                    l, vec!()
+                                                ));
+      
+                                            }
+                                        },
+                                        
+                                        Some(_) => {
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Function call {}({}) is ambiguous", 
+                                                    f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
+                                                ), 
+                                                l, vec!()
+                                            ));
+                                        },
+                                    }
+                                }
+
+                                Err(err) => {
+                                    return Err(NessaError::compiler_error(err, l, vec!()));
+                                }
+                            }
+                        }
+
+                        Ok(())
+                    }
+
+                    Err(err) => Err(NessaError::compiler_error(err, l, vec!()))
+                }
+            }
+
+            _ => Ok(())
+        };
+    }
+
     pub fn no_template_check_type(&self, t: &Type, l: &Location) -> Result<(), NessaError> {
         if t.has_templates() {
             Err(NessaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
@@ -1135,6 +1218,7 @@ impl NessaContext {
         self.return_check(expr, expected)?;
         self.class_check(expr)?;
         self.macro_check(expr)?;
+        self.interface_impl_check(expr)?;
 
         return Ok(());
     }

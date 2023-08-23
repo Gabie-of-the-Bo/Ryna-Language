@@ -387,24 +387,24 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             ctx.define_native_function_overload(
                 idx, 
                 J,
-                &[Type::And((0..J).into_iter().map(Type::TemplateParam).collect())], 
-                Type::TemplateParam(I), 
+                &[Type::And((0..J).into_iter().map(|i| Type::TemplateParam(i, vec!())).collect())], 
+                Type::TemplateParam(I, vec!()), 
                 |_, _, v, _| Ok(v[0].get::<Tuple>().exprs[I].clone())
             ).unwrap();
             
             ctx.define_native_function_overload(
                 idx, 
                 J,
-                &[Type::Ref(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
-                Type::Ref(Box::new(Type::TemplateParam(I))), 
+                &[Type::Ref(Box::new(Type::And((0..J).into_iter().map(|i| Type::TemplateParam(i, vec!())).collect())))], 
+                Type::Ref(Box::new(Type::TemplateParam(I, vec!()))), 
                 |_, _, v, _| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_obj())
             ).unwrap();
             
             ctx.define_native_function_overload(
                 idx, 
                 J,
-                &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(Type::TemplateParam).collect())))], 
-                Type::MutRef(Box::new(Type::TemplateParam(I))), 
+                &[Type::MutRef(Box::new(Type::And((0..J).into_iter().map(|i| Type::TemplateParam(i, vec!())).collect())))], 
+                Type::MutRef(Box::new(Type::TemplateParam(I, vec!()))), 
                 |_, _, v, _| Ok(v[0].deref::<Tuple>().exprs[I].get_ref_mut_obj())
             ).unwrap();
         });

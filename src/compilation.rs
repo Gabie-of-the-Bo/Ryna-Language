@@ -1336,6 +1336,8 @@ impl NessaContext{
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::ClassDefinition(..) |
+            NessaExpr::InterfaceDefinition(..) |
+            NessaExpr::InterfaceImplementation(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
@@ -2229,7 +2231,7 @@ impl NessaContext{
                     }
 
                 } else {
-                    let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i)).collect::<Vec<_>>();
+                    let templ = (0..n_templates).into_iter().map(|i| Type::TemplateParam(i, vec!())).collect::<Vec<_>>();
 
                     // Define constructor instance
                     let err = self.define_native_function_overload(func_id, n_templates, &arg_types, Type::Template(class_id, templ.clone()), |t, r, a, _| {
@@ -2321,19 +2323,37 @@ impl NessaContext{
     }
 
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), NessaError> {
-        if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
-            for name in names {
-                self.define_type(name, vec!(), vec!(), None, vec!(), None).unwrap();
+        if let Ok((_, i_names)) = self.nessa_interface_definition_names_parser(Span::new(code)) {
+            for i_name in i_names {
+                self.define_interface(i_name, vec!(), vec!()).unwrap();
             }
 
-            let ops = self.nessa_class_parser(Span::new(code));
-            
-            if let Err(err) = ops {
-                return Err(NessaError::from(err));
-            }
-            
-            for i in ops.unwrap().1 {
-                self.define_module_class(i)?;
+            if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
+                for name in names {
+                    self.define_type(name, vec!(), vec!(), None, vec!(), None).unwrap();
+                }
+    
+                let interfaces = self.nessa_interface_definition_parser(Span::new(code))?;
+
+                for i in interfaces.1 {
+                    if let NessaExpr::InterfaceDefinition(_, n, t, v) = i {
+                        self.redefine_interface(n, t, v).unwrap();
+                    }
+                }
+
+                let interfaces_impl = self.nessa_interface_implementation_parser(Span::new(code))?;
+
+                for i in interfaces_impl.1 {
+                    if let NessaExpr::InterfaceImplementation(_, tm, t, n, i_tm) = i {
+                        self.define_interface_impl(n, tm, t, i_tm).unwrap();
+                    }
+                }
+
+                let ops = self.nessa_class_parser(Span::new(code))?;
+                
+                for i in ops.1 {
+                    self.define_module_class(i)?;
+                }
             }
         }
 

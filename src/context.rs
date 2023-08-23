@@ -1,5 +1,9 @@
 use colored::Colorize;
 
+use crate::interfaces::Interface;
+use crate::interfaces::InterfaceConstraint;
+use crate::interfaces::InterfaceImpl;
+use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
 use crate::types::*;
 use crate::operations::*;
@@ -16,6 +20,8 @@ use crate::patterns::*;
 #[derive(Default)]
 pub struct NessaContext {
     pub type_templates: Vec<TypeTemplate>, 
+    pub interfaces: Vec<Interface>,
+    pub interface_impls: Vec<InterfaceImpl>,
 
     pub unary_ops: Vec<Operator>,
     pub binary_ops: Vec<Operator>,
@@ -77,6 +83,73 @@ impl NessaContext {
         });
 
         return Ok(());
+    }
+
+    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>) -> Result<(), String> {
+        for i in self.interfaces.iter_mut() {
+            if i.name == representation {
+                *i = Interface {
+                    id: i.id,
+                    name: representation,
+                    params: params,
+                    fns: fns
+                };
+
+                return Ok(());
+            }
+        }
+
+        return Err(format!("Interface {} was not defined", representation));
+    }
+
+    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>) -> Result<(), String> {
+        for i in &self.interfaces {
+            if i.name == representation {
+                return Err(format!("Interface \"{}\" is already defined", representation))
+            }
+        }
+
+        self.interfaces.push(Interface {
+            id: self.interfaces.len(),
+            name: representation,
+            params: params,
+            fns: fns
+        });
+
+        return Ok(());
+    }
+
+    pub fn define_interface_impl(&mut self, representation: String, templates: Vec<String>, mut tp: Type, mut t_args: Vec<Type>) -> Result<(), String> {
+        tp.compile_templates(&templates);
+        t_args.iter_mut().for_each(|t| {
+            t.compile_templates(&templates);
+        });
+
+        self.interface_impls.push(InterfaceImpl {
+            interface_id: self.get_interface_id(representation)?,
+            args: t_args,
+            interface_type: tp
+        });
+
+        return Ok(());
+    }
+
+    /*
+        ╒══════════════════╕
+        │ Interface checks │
+        ╘══════════════════╛
+    */
+
+    pub fn implements_interface(&self, t: &Type, constraint: &InterfaceConstraint) -> bool {
+        let cons_and = Type::And(constraint.args.clone());
+
+        return self.interface_impls.iter().filter(|&i| {
+            i.interface_id == constraint.id
+        }).filter(|&i| {
+            Type::And(i.args.clone()).bindable_to(&cons_and, self)
+        }).filter(|&i| {
+            i.interface_type.bindable_to(&t, self)
+        }).count() > 0;
     }
 
     /*
@@ -480,6 +553,7 @@ pub fn standard_ctx() -> NessaContext {
     let mut ctx = NessaContext::default();
 
     standard_types(&mut ctx);
+    standard_interfaces(&mut ctx);
 
     standard_unary_operations(&mut ctx);
     standard_binary_operations(&mut ctx);

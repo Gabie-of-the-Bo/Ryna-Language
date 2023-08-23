@@ -1,0 +1,30 @@
+interface Numeric {
+    fn add(a: Self, b: Self) -> Self;
+    fn sub(a: Self, b: Self) -> Self;
+}
+
+implement Numeric for Int;
+implement Numeric for Float;
+
+fn add(a: Int, b: Int) -> Int {
+    return 0;
+}
+
+fn sub(a: Int, b: Int) -> Int {
+    return 0;
+}
+
+fn add(a: Float, b: Float) -> Float {
+    return 0.0;
+}
+
+fn sub(a: Float, b: Float) -> Float {
+    return 0.0;
+}
+
+fn<T> test(n: 'T [Numeric]) -> Bool {
+    return true;
+}
+
+test(3);
+test(3.5);

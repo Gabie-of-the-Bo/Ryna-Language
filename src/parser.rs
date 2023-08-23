@@ -20,6 +20,7 @@ use nom_locate::LocatedSpan;
 use bit_set::BitSet;
 
 use crate::config::ImportMap;
+use crate::interfaces::InterfaceConstraint;
 use crate::macros::{NessaMacro, parse_nessa_macro};
 use crate::operations::Operator;
 use crate::object::Object;
@@ -192,6 +193,8 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
+    InterfaceDefinition(Location, String, Vec<String>, Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>),
+    InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -488,12 +491,16 @@ impl NessaContext {
         ╘═══════════════════╛
     */
     
-    fn get_type_id(&self, name: String) -> Result<usize, String> {
+    pub fn get_type_id(&self, name: String) -> Result<usize, String> {
         return self.type_templates.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No type with name {}", name));
     }
     
-    fn get_function_id(&self, name: String) -> usize {
-        return self.functions.iter().filter(|t| t.name == name).next().unwrap().id;
+    pub fn get_interface_id(&self, name: String) -> Result<usize, String> {
+        return self.interfaces.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No interface with name {}", name));
+    }
+    
+    pub fn get_function_id(&self, name: String) -> Result<usize, String> {
+        return self.functions.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No function with name {}", name));
     }
 
     /*
@@ -510,17 +517,48 @@ impl NessaContext {
         return map(tag("()"), |_| Type::Empty)(input);
     }
 
+    fn self_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+        return map(tag("Self"), |_| Type::SelfType)(input);
+    }
+
     fn basic_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
         return map_res(identifier_parser, |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input);
+    }
+
+    fn interface_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
+        return map_res(identifier_parser, |n| Result::<_, String>::Ok(self.get_interface_id(n)?))(input);
     }
 
     fn template_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             tuple((
                 tag("'"),
-                context("Invalid template identifier", cut(identifier_parser))
+                context("Invalid template identifier", cut(identifier_parser)),
+                opt(tuple((
+                    empty0,
+                    tag("["),
+                    empty0,
+                    separated_list1(
+                        tuple((empty0, tag(","), empty0)), 
+                        tuple((
+                            context("Invalid interface name", cut(|input| self.interface_parser(input))),
+                            opt(delimited(
+                                tuple((tag("<"), empty0)),
+                                separated_list1(
+                                    tuple((empty0, tag(","), empty0)), 
+                                    |input| self.type_parser(input)
+                                ),
+                                tuple((empty0, tag(">"))),
+                            ))
+                        ))
+                    ),
+                    empty0,
+                    tag("]"),
+                )))
             )), 
-            |(_, n)| Type::TemplateParamStr(n)
+            |(_, n, w)| Type::TemplateParamStr(n, w.map(|(_, _, _, v, _, _)| {
+                v.into_iter().map(|(id, t)| InterfaceConstraint::new(id, t.unwrap_or_default())).collect()
+            }).unwrap_or_default())
         )(input);
     }
 
@@ -604,6 +642,7 @@ impl NessaContext {
             (true, true) => alt((
                 |input| self.function_type_parser(input, or),
                 |input| self.empty_type_parser(input),
+                |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
@@ -616,6 +655,7 @@ impl NessaContext {
 
             (false, true) => alt((
                 |input| self.empty_type_parser(input),
+                |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
@@ -629,6 +669,7 @@ impl NessaContext {
             (true, false) => alt((
                 |input| self.function_type_parser(input, or),
                 |input| self.empty_type_parser(input),
+                |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
@@ -640,6 +681,7 @@ impl NessaContext {
             
             (false, false) => alt((
                 |input| self.empty_type_parser(input),
+                |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
@@ -1375,7 +1417,7 @@ impl NessaContext {
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
-                NessaExpr::FunctionDefinition(l, self.get_function_id(n), u_t, a, r, b)
+                NessaExpr::FunctionDefinition(l, self.get_function_id(n).unwrap(), u_t, a, r, b)
             }
         )(input);
     }
@@ -2145,6 +2187,150 @@ impl NessaContext {
         )(input);
     }
 
+    fn interface_definition_name_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+        return map(
+            tuple((
+                tag("interface"),
+                empty1,
+                context("Invalid interface identifier", cut(identifier_parser)),
+                empty0,
+                opt(
+                    map(
+                        tuple((
+                            tag("<"),
+                            empty0,
+                            separated_list1(
+                                tuple((empty0, tag(","), empty0)), 
+                                identifier_parser
+                            ),
+                            empty0,
+                            tag(">"),
+                            empty0,
+                        )),
+                        |(_, _, t, _, _, _)| t
+                    )
+                ),
+                tag("{")
+            )),
+            |(_, _, n, _, _, _)| n
+        )(input);
+    }
+
+    fn interface_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(
+                tuple((
+                    tag("interface"),
+                    empty1,
+                    context("Invalid interface identifier", cut(identifier_parser)),
+                    empty0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                empty0,
+                                separated_list1(
+                                    tuple((empty0, tag(","), empty0)), 
+                                    identifier_parser
+                                ),
+                                empty0,
+                                tag(">"),
+                                empty0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    tag("{"),
+                    empty0,
+                    separated_list0(
+                        empty0,
+                        delimited(
+                            empty0, 
+                            |input| self.function_header_parser(input),
+                            context("Expected ';' at the end of interface function signature", cut(tag(";")))
+                        )
+                    ),
+                    empty0,
+                    tag("}")
+                ))
+            ),
+            |(l, (_, _, n, _, t, _, _, mut p, _, _))| {
+                let u_t = t.unwrap_or_default();
+
+                p.iter_mut().for_each(|(_, tm, args, ret)| {
+                    let u_tm = tm.clone().unwrap_or_default();
+                    let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+
+                    args.iter_mut().for_each(|(_, tp)| {
+                        tp.compile_templates(&all_tm);
+                    });
+
+                    ret.compile_templates(&all_tm);
+                });
+
+                NessaExpr::InterfaceDefinition(l, n, u_t, p)
+            }
+        )(input);
+    }
+
+    fn interface_implementation_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(
+                tuple((
+                    tag("implement"),
+                    empty0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                empty0,
+                                separated_list1(
+                                    tuple((empty0, tag(","), empty0)), 
+                                    identifier_parser
+                                ),
+                                empty0,
+                                tag(">"),
+                                empty0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    context("Invalid interface name", cut(identifier_parser)),
+                    empty0,
+                    opt(
+                        map(
+                            tuple((
+                                tag("<"),
+                                empty0,
+                                separated_list1(
+                                    tuple((empty0, tag(","), empty0)), 
+                                    cut(|input|self.type_parser(input))
+                                ),
+                                empty0,
+                                tag(">"),
+                                empty0,
+                            )),
+                            |(_, _, t, _, _, _)| t
+                        )
+                    ),
+                    tag("for"),
+                    empty1,
+                    cut(|input|self.type_parser(input)),
+                    empty0,
+                    context("Expected ';' at the end of interface implementation", cut(tag(";")))
+                ))
+            ),
+            |(l, (_, _, t, n, _, ts, _, _, mut tf, _, _))| {
+                let u_tm = t.unwrap_or_default();
+                let mut u_ts = ts.unwrap_or_default();
+                tf.compile_templates(&u_tm);
+                u_ts.iter_mut().for_each(|i| i.compile_templates(&u_tm));
+
+                NessaExpr::InterfaceImplementation(l, u_tm, tf, n, u_ts)
+            }
+        )(input);
+    }
+
     fn tuple_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
             located(
@@ -2268,6 +2454,8 @@ impl NessaContext {
             |input| self.operation_definition_parser(input, op_cache),
             |input| self.class_definition_parser(input),
             |input| self.alias_definition_parser(input),
+            |input| self.interface_definition_parser(input),
+            |input| self.interface_implementation_parser(input),
             |input| self.macro_parser(input), 
             |input| terminated(|input| self.nessa_expr_parser(input, op_cache), cut(tuple((empty0, tag(";")))))(input)
         ))(input);
@@ -2326,6 +2514,54 @@ impl NessaContext {
 
         while input.len() > 0 {
             if let Ok((i, o)) = self.macro_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else {
+                input = satisfy(|_| true)(input)?.0;
+            }
+        }
+
+        return Ok(("".into(), ops));
+    }
+
+    pub fn nessa_interface_implementation_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.interface_implementation_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else {
+                input = satisfy(|_| true)(input)?.0;
+            }
+        }
+
+        return Ok(("".into(), ops));
+    }
+
+    pub fn nessa_interface_definition_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.interface_definition_parser(input) {
+                input = i;
+                ops.push(o);
+            
+            } else {
+                input = satisfy(|_| true)(input)?.0;
+            }
+        }
+
+        return Ok(("".into(), ops));
+    }
+
+    pub fn nessa_interface_definition_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<String>> {
+        let mut ops = vec!();
+
+        while input.len() > 0 {
+            if let Ok((i, o)) = self.interface_definition_name_parser(input) {
                 input = i;
                 ops.push(o);
             
@@ -2402,6 +2638,8 @@ impl NessaContext {
 mod tests {
     use crate::ARR_OF;
     use crate::context::*;
+    use crate::interfaces::ITERABLE_ID;
+    use crate::interfaces::PRINTABLE_ID;
     use crate::parser::*;
     use crate::object::*;
     use crate::number::*;
@@ -2428,6 +2666,9 @@ mod tests {
 
         let basic_func_str = "Int => (String)";
         let complex_func_str = "(Int, Array<Bool>) => Map<Int, *>";
+
+        let template_str = "'T";
+        let template_bounded_str = "'T [Printable, Iterable<Int>]";
 
         let (_, wildcard) = ctx.type_parser(Span::new(wildcard_str)).unwrap();
         let (_, empty) = ctx.type_parser(Span::new(empty_str)).unwrap();
@@ -2475,6 +2716,15 @@ mod tests {
                 Type::Wildcard
             )))
         ));
+
+        let (_, template) = ctx.type_parser(Span::new(template_str)).unwrap();
+        let (_, template_bounded) = ctx.type_parser(Span::new(template_bounded_str)).unwrap();
+
+        assert_eq!(template, Type::TemplateParamStr("T".into(), vec!()));
+        assert_eq!(template_bounded, Type::TemplateParamStr("T".into(), vec!(
+            InterfaceConstraint::new(PRINTABLE_ID, vec!()),
+            InterfaceConstraint::new(ITERABLE_ID, vec!(INT))
+        )));
     }
 
     #[test]

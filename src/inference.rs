@@ -9,7 +9,7 @@ impl NessaContext {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = arg_type.bindable_to_subtitutions(&a, self) { // Take first that matches
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
@@ -42,7 +42,7 @@ impl NessaContext {
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
@@ -88,7 +88,7 @@ impl NessaContext {
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
                     return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
                 }
             }
@@ -133,7 +133,7 @@ impl NessaContext {
 
         for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
             if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
-                let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i))).collect();
+                let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
                 return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
             }
         }

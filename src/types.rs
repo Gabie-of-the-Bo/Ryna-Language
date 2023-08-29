@@ -121,7 +121,7 @@ impl Type {
     pub fn get_name(&self, ctx: &NessaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
-            Type::SelfType => "Self".into(),
+            Type::SelfType => format!("{}", "Self".green()),
             Type::InferenceMarker => "[Inferred]".into(),
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
@@ -178,6 +178,29 @@ impl Type {
             Type::TemplateParam(..) => true,
             
             Type::Function(a, b) => a.has_templates() || b.has_templates(),
+
+            _ => unimplemented!()
+        };
+    }
+
+    pub fn has_self(&self) -> bool {
+        return match self {
+            Type::SelfType => true,
+
+            Type::Wildcard |
+            Type::Empty |
+            Type::Basic(_) => false,
+
+            Type::Ref(a) |
+            Type::MutRef(a) => a.has_self(),
+
+            Type::Template(_, a) |
+            Type::Or(a) |
+            Type::And(a) => a.iter().any(Type::has_self),
+
+            Type::TemplateParam(_, c) => c.iter().flat_map(|i| &i.args).any(Type::has_self),
+
+            Type::Function(a, b) => a.has_self() || b.has_self(),
 
             _ => unimplemented!()
         };
@@ -241,7 +264,15 @@ impl Type {
                 res
             }
 
-            Type::TemplateParam(_, v) => v.iter().map(|i| i.id).collect(),
+            Type::TemplateParam(_, v) => {
+                let mut res = v.iter().map(|i| i.id).collect::<Vec<_>>();
+
+                for i in v {
+                    res.extend(i.args.iter().flat_map(|i| i.interface_dependencies()));
+                }
+
+                res
+            },
 
             Type::Template(_, ts) => {
                 let mut res = vec!();

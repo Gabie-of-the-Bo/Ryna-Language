@@ -572,7 +572,7 @@ impl NessaContext {
                     }
                 }
 
-                if self.get_first_function_overload(*id, arg_types.clone(), false).is_none() {
+                if self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false).is_none() {
                     Err(NessaError::compiler_error(format!(
                         "Unable to get function overload for {}{}({})",
                         self.functions[*id].name.green(),
@@ -585,13 +585,13 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(l, id, _, arg) => {
+            NessaExpr::UnaryOperation(l, id, templates, arg) => {
                 self.type_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
 
                 if let Some(t) = inferred_type {
-                    if self.get_first_unary_op(*id, t.clone(), false).is_none() {
+                    if self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false).is_none() {
                         if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
                             if *prefix {
                                 Err(NessaError::compiler_error(format!(
@@ -626,7 +626,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(l, id, _, arg1, arg2) => {
+            NessaExpr::BinaryOperation(l, id, templates, arg1, arg2) => {
                 self.type_check(arg1)?;
                 self.type_check(arg2)?;
 
@@ -635,7 +635,7 @@ impl NessaContext {
 
                 if let Some(t1) = inferred_type_1 {
                     if let Some(t2) = inferred_type_2 {
-                        if self.get_first_binary_op(*id, t1.clone(), t2.clone(), false).is_none() {
+                        if self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false).is_none() {
                             if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
                                 Err(NessaError::compiler_error(format!(
                                     "Unable to get binary operator overload for ({}){}({})",
@@ -671,7 +671,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::NaryOperation(l, id, _, first, args) => {
+            NessaExpr::NaryOperation(l, id, templates, first, args) => {
                 self.type_check(first)?;
 
                 let first_type = self.infer_type(first);
@@ -690,7 +690,7 @@ impl NessaContext {
                         }
                     }
     
-                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone(), false).is_none() {
+                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false).is_none() {
                         if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
                             Err(NessaError::compiler_error(format!(
                                 "Unable to get n-ary operator overload for {}{}{}{}",
@@ -926,7 +926,7 @@ impl NessaContext {
 
                                     match self.is_function_overload_ambiguous(fn_id, args_sub.clone()) {
                                         None => {
-                                            if let Some((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), true) {
+                                            if let Some((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), None, true) {
                                                 if !r.bindable_to(&ret_sub, self) {
                                                     return Err(NessaError::compiler_error(
                                                         format!(

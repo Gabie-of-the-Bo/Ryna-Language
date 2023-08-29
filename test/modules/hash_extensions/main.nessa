@@ -1,0 +1,25 @@
+module hash_extensions [1.0]
+
+import interface Hashable from hash;
+import interface Castable from cast;
+
+fn hash(n: Float) -> Int {
+    return floor(*n);
+}
+
+fn cast(b: Bool) -> Int {
+    return hash(*b);
+}
+
+implement Hashable for Float;
+implement Castable<Int> for Bool;
+
+fn<T> for_hashable(a: 'T [Hashable]) {}
+fn<T, G> for_castable(a: 'T [Castable<'G>]) {}
+
+for_hashable(3);
+for_hashable(3.5);
+for_hashable(true);
+
+for_castable<Bool, Int>(true);
+for_castable<Float, Int>(5.5);

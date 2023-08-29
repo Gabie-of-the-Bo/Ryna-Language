@@ -134,7 +134,11 @@ impl Type {
 
             Type::TemplateParam(id, v) => {
                 if v.len() > 0 {
-                    format!("'T_{} {{{}}}", id, "").green().to_string()
+                    format!(
+                        "{} [{}]", 
+                        format!("'T_{}", id).green(), 
+                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+                    )
 
                 } else {
                     format!("'T_{}", id).green().to_string()
@@ -142,8 +146,12 @@ impl Type {
             },
             Type::TemplateParamStr(name, v) => {
                 if v.len() > 0 {
-                    format!("'{} {{{}}}", name, "").green().to_string()
-
+                    format!(
+                        "{} [{}]", 
+                        format!("'{}", name).green(), 
+                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+                    )
+                    
                 } else {
                     format!("'{}", name).green().to_string()
                 }   
@@ -181,7 +189,6 @@ impl Type {
             Type::Empty  |
             Type::InferenceMarker  |
             Type::SelfType  |
-            Type::TemplateParam(..)  |
             Type::TemplateParamStr(..) => vec!(),
 
             Type::Basic(id) => vec!(*id),
@@ -199,9 +206,46 @@ impl Type {
                 res
             }
 
+            Type::TemplateParam(_, v) => {
+                v.iter().flat_map(|i| i.args.clone()).flat_map(|i| i.type_dependencies()).collect()
+            }
+
             Type::Template(id, ts) => {
                 let mut res = vec!(*id);
                 res.append(&mut ts.iter().flat_map(|t| t.type_dependencies()).collect());
+
+                res
+            }
+        };
+    }
+
+    pub fn interface_dependencies(&self) -> Vec<usize> {
+        return match self {
+            Type::Wildcard |
+            Type::Empty  |
+            Type::InferenceMarker  |
+            Type::SelfType  |
+            Type::Basic(..) |
+            Type::TemplateParamStr(..) => vec!(),
+
+            Type::Ref(a) |
+            Type::MutRef(a) => a.interface_dependencies(),
+
+            Type::Or(ts) |
+            Type::And(ts) => ts.iter().flat_map(|t| t.interface_dependencies()).collect(),
+
+            Type::Function(a, b) => {
+                let mut res = a.interface_dependencies();
+                res.append(&mut b.interface_dependencies());
+
+                res
+            }
+
+            Type::TemplateParam(_, v) => v.iter().map(|i| i.id).collect(),
+
+            Type::Template(_, ts) => {
+                let mut res = vec!();
+                res.append(&mut ts.iter().flat_map(|t| t.interface_dependencies()).collect());
 
                 res
             }
@@ -265,7 +309,8 @@ impl Type {
                 
                 } else {
                     for c in cs {
-                        if !ctx.implements_interface(b, c) {
+                        if !ctx.implements_interface(b, c, t_assignments, t_deps) {
+                            println!("No -> {} - {}", b.get_name(ctx), c.get_name(ctx));
                             return false;
                         }
                     }
@@ -357,7 +402,7 @@ impl Type {
                 });
             },
             
-            Type::Template(i, v) => v.iter_mut().for_each(|i| i.offset_templates(offset)),
+            Type::Template(_, v) => v.iter_mut().for_each(|i| i.offset_templates(offset)),
 
             Type::Function(f, t) => {
                 f.offset_templates(offset); 
@@ -375,7 +420,14 @@ impl Type {
             Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_templates(args)).collect()),
             Type::And(t) => Type::And(t.iter().map(|i| i.sub_templates(args)).collect()),
             Type::Function(f, t) => Type::Function(Box::new(f.sub_templates(args)), Box::new(t.sub_templates(args))),
-            Type::TemplateParam(id, _) => args.get(id).unwrap_or(self).clone(),
+            Type::TemplateParam(id, v) => {
+                args.get(id).cloned().unwrap_or_else(||
+                    Type::TemplateParam(*id, v.iter().map(|i| {
+                        let mapped_args = i.args.iter().map(|j| j.sub_templates(args)).collect();
+                        InterfaceConstraint::new(i.id, mapped_args)
+                    }).collect())
+                )
+            },
             Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates(args)).collect()),
             _ => self.clone()
         };
@@ -389,9 +441,20 @@ impl Type {
             Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_self(sub)).collect()),
             Type::And(t) => Type::And(t.iter().map(|i| i.sub_self(sub)).collect()),
             Type::Function(f, t) => Type::Function(Box::new(f.sub_self(sub)), Box::new(t.sub_self(sub))),
+            Type::TemplateParam(id, v) => {
+                Type::TemplateParam(*id, v.iter().map(|i| {
+                    let mapped_args = i.args.iter().map(|j| j.sub_self(sub)).collect();
+                    InterfaceConstraint::new(i.id, mapped_args)
+                }).collect())
+            }
             Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_self(sub)).collect()),
             _ => self.clone()
         };
+    }
+
+    pub fn map_type(&self, ctx: &mut NessaContext, other_ctx: &NessaContext, classes: &mut HashMap<usize, usize>, interfaces: &mut HashMap<usize, usize>) -> Type {
+        self.map_basic_types(&mut |id| ctx.map_nessa_class(other_ctx, id, classes, interfaces))
+            .map_interfaces(&mut |id| ctx.map_nessa_interface(other_ctx, id, classes, interfaces))
     }
 
     pub fn map_basic_types(&self, mapping: &mut impl FnMut(usize) -> Result<usize, String>) -> Type {
@@ -403,7 +466,32 @@ impl Type {
             Type::Or(t) => Type::Or(t.iter().map(|i| i.map_basic_types(mapping)).collect()),
             Type::And(t) => Type::And(t.iter().map(|i| i.map_basic_types(mapping)).collect()),
             Type::Function(f, t) => Type::Function(Box::new(f.map_basic_types(mapping)), Box::new(t.map_basic_types(mapping))),
-            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.map_basic_types(mapping)).collect()),
+            Type::TemplateParam(id, v) => {
+                Type::TemplateParam(*id, v.iter().map(|i| {
+                    let mapped_args = i.args.iter().map(|j| j.map_basic_types(mapping)).collect();
+                    InterfaceConstraint::new(i.id, mapped_args)
+                }).collect())
+            }
+            Type::Template(id, t) => Type::Template(mapping(*id).unwrap(), t.iter().map(|i| i.map_basic_types(mapping)).collect()),
+
+            _ => self.clone()
+        };
+    }
+
+    pub fn map_interfaces(&self, mapping: &mut impl FnMut(usize) -> Result<usize, String>) -> Type {
+        return match self {            
+            Type::Ref(t) => Type::Ref(Box::new(t.map_interfaces(mapping))),
+            Type::MutRef(t) => Type::MutRef(Box::new(t.map_interfaces(mapping))),
+            Type::Or(t) => Type::Or(t.iter().map(|i| i.map_interfaces(mapping)).collect()),
+            Type::And(t) => Type::And(t.iter().map(|i| i.map_interfaces(mapping)).collect()),
+            Type::Function(f, t) => Type::Function(Box::new(f.map_interfaces(mapping)), Box::new(t.map_interfaces(mapping))),
+            Type::TemplateParam(id, v) => {
+                Type::TemplateParam(*id, v.iter().map(|i| {
+                    let mapped_args = i.args.iter().map(|j| j.map_interfaces(mapping)).collect();
+                    InterfaceConstraint::new(mapping(i.id).unwrap(), mapped_args)
+                }).collect())
+            }
+            Type::Template(id, t) => Type::Template(mapping(*id).unwrap(), t.iter().map(|i| i.map_interfaces(mapping)).collect()),
 
             _ => self.clone()
         };

@@ -1,0 +1,4 @@
+module_name: cast
+module_paths:
+  - test/lib
+modules: {}

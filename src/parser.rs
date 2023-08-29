@@ -209,7 +209,7 @@ pub enum NessaExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
-    Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer
+    Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer
 }
 
 pub fn get_op_chain(expr: NessaExpr, id: usize) -> (Vec<NessaExpr>, Vec<Vec<Type>>) {
@@ -313,6 +313,7 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
             context(
                 "Expected import type after 'import' keyword",
                 cut(alt((
+                    value(ImportType::Interface, tag("interface")),
                     value(ImportType::Class, tag("class")),
                     value(ImportType::Fn, tag("fn")),
                     value(ImportType::Syntax, tag("syntax")),
@@ -825,7 +826,7 @@ impl NessaContext {
                                     NessaExpr::NaryOperation(
                                         loc.clone(), 
                                         CALL_OP, 
-                                        vec!(Type::Wildcard), 
+                                        vec!(), 
                                         Box::new(NessaExpr::Lambda(loc, vec!(), Type::Wildcard, lines)),
                                         vec!()
                                     )

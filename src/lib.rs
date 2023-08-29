@@ -182,4 +182,9 @@ mod integration {
     fn syntax_test() {
         module_test("test/modules/syntax_test");
     }
+
+    #[test]
+    fn hash_extensions() {
+        module_test("test/modules/hash_extensions");
+    }
 }

@@ -2,7 +2,7 @@ fn<T, G> map(array: &&Array<'T>, f: (&&'T) => 'G) -> Array<'G> {
     let res: Array<'G> = arr<'G>();
 
     for i in array {
-        res.push<'G>(f<'T, 'G>(i));
+        res.push<'G>(f<&&'T, 'G>(i));
     }
 
     return *<Array<'G>>res;

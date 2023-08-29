@@ -1,0 +1,16 @@
+module cast [1.0]
+
+interface Castable<T> {
+    fn cast(obj: Self) -> 'T;
+}
+
+fn cast(n: Float) -> Int {
+    return floor(n);
+}
+
+fn cast(n: Int) -> Float {
+    return n * 1.0;
+}
+
+implement Castable<Float> for Int;
+implement Castable<Int> for Float;

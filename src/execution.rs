@@ -288,7 +288,7 @@ mod tests {
             let iter: ArrayIterator<&&Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
-            let elem: Int = iter.next<&&Int>();
+            let elem: Int = iter.next<Int>();
             let ended_2: Bool = iter.is_consumed();
 
             let array_2: Array<Int> = arr<Int>();
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!(Object::new(Integer::from(5)))))));
         assert_eq!(ctx.variables[1], Some(Object::new((Type::MutRef(Box::new(INT)), ctx.variables[0].as_ref().unwrap().get_ref_mut(), 1))));
         assert_eq!(ctx.variables[2], Some(Object::new(false)));
-        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(5)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(5))));
         assert_eq!(ctx.variables[4], Some(Object::new(true)));
         assert_eq!(ctx.variables[5], Some(Object::new((INT, vec!(
             Object::new(Integer::from(0)),

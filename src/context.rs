@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use colored::Colorize;
 
 use crate::interfaces::Interface;
@@ -140,16 +143,27 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
-    pub fn implements_interface(&self, t: &Type, constraint: &InterfaceConstraint) -> bool {
+    pub fn implements_interface(&self, t: &Type, constraint: &InterfaceConstraint, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
         let cons_and = Type::And(constraint.args.clone());
 
-        return self.interface_impls.iter().filter(|&i| {
-            i.interface_id == constraint.id
-        }).filter(|&i| {
-            Type::And(i.args.clone()).bindable_to(&cons_and, self)
-        }).filter(|&i| {
-            i.interface_type.bindable_to(&t, self)
-        }).count() > 0;
+        for i in &self.interface_impls {
+            if i.interface_id == constraint.id {
+                let mut t_assignments_cpy = t_assignments.clone();
+                let mut t_deps_cpy = t_deps.clone();
+
+                let args_match = Type::And(i.args.clone()).template_bindable_to(&cons_and, &mut t_assignments_cpy, &mut t_deps_cpy, self);
+                let type_matches = i.interface_type.template_bindable_to(&t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
+
+                if args_match && type_matches {
+                    *t_assignments = t_assignments_cpy;
+                    *t_deps = t_deps_cpy;
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /*

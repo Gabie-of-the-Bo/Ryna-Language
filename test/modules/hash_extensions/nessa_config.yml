@@ -1,0 +1,4 @@
+module_name: hash_extensions
+module_paths:
+  - test/lib
+modules: {}

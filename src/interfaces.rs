@@ -1,3 +1,5 @@
+use colored::Colorize;
+
 use crate::{types::Type, context::NessaContext};
 
 pub struct Interface {
@@ -24,6 +26,21 @@ impl InterfaceConstraint {
             id: id,
             args: args
         };
+    }
+}
+
+impl InterfaceConstraint {
+    pub fn get_name(&self, ctx: &NessaContext) -> String {
+        if self.args.len() > 0 {
+            return format!(
+                "{}<{}>", 
+                ctx.interfaces[self.id].name.green(),
+                self.args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            );
+
+        } else {
+            return format!("{}", ctx.interfaces[self.id].name.green());
+        }
     }
 }
 

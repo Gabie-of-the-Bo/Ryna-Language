@@ -88,6 +88,17 @@ fn separator<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
     ))(input);
 }
 
+fn skip_token<'a>(input: Span<'a>) -> PResult<'a, ()> {
+    return alt((
+        map(block_comment, |_| ()),
+        map(normal_comment, |_| ()),
+        map(multispace1, |_| ()),
+        map(|input| identifier_parser(input), |_| ()),
+        map(|input| string_parser(input), |_| ()),
+        map(satisfy(|_| true), |_| ()), // skip one char
+    ))(input);
+}
+
 pub fn empty0<'a>(mut input: Span<'a>) -> PResult<'a, ()> {
     loop {
         match separator(input) {
@@ -386,7 +397,7 @@ pub fn nessa_module_header_parser<'a>(mut input: Span<'a>) -> PResult<'a, Vec<(S
             ops.push(o);
         
         } else {
-            input = satisfy(|_| true)(input)?.0;
+            input = skip_token(input)?.0;
         }
     }
 
@@ -402,7 +413,7 @@ pub fn nessa_module_imports_parser<'a>(mut input: Span<'a>) -> PResult<'a, Impor
             ops.entry(n).or_default().entry(t).or_default().extend(v);
         
         } else {
-            input = satisfy(|_| true)(input)?.0;
+            input = skip_token(input)?.0;
         }
     }
 
@@ -2471,7 +2482,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2487,7 +2498,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2503,7 +2514,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2519,7 +2530,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2535,7 +2546,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2551,7 +2562,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2567,7 +2578,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2587,7 +2598,7 @@ impl NessaContext {
                 ops.push(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 
@@ -2607,7 +2618,7 @@ impl NessaContext {
                 ops.insert(o);
             
             } else {
-                input = satisfy(|_| true)(input)?.0;
+                input = skip_token(input)?.0;
             }
         }
 

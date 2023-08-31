@@ -341,7 +341,6 @@ impl Type {
                 } else {
                     for c in cs {
                         if !ctx.implements_interface(b, c, t_assignments, t_deps) {
-                            println!("No -> {} - {}", b.get_name(ctx), c.get_name(ctx));
                             return false;
                         }
                     }
@@ -353,7 +352,22 @@ impl Type {
             },
 
             (Type::Or(v), b) => v.iter().all(|i| i.template_bindable_to(b, t_assignments, t_deps, ctx)),
-            (a, Type::Or(v)) => v.iter().any(|i| a.template_bindable_to(i, t_assignments, t_deps, ctx)),
+
+            (a, Type::Or(v)) => {
+                let mut t_assignments_cpy = t_assignments.clone();
+                let mut t_deps_cpy = t_deps.clone();
+
+                for i in v {
+                    if a.template_bindable_to(i, &mut t_assignments_cpy, &mut t_deps_cpy, ctx) {
+                        *t_assignments = t_assignments_cpy;
+                        *t_deps = t_deps_cpy;
+    
+                        return true;
+                    }
+                }
+
+                return false;
+            },
 
             (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
             (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),

@@ -679,6 +679,8 @@ mod tests {
             return it >= 10;
         }
 
+        implement Iterable<Int, Int> for Int;
+
         let sum: Int = 0;
 
         for i in 0 {
@@ -713,6 +715,8 @@ mod tests {
         fn is_consumed(it: &&Range) -> Bool {
             return it.current() >= it.end();
         }
+
+        implement Iterable<Range, Int> for Range;
 
         let sum: Int = 0;
 

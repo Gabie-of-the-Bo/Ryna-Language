@@ -21,6 +21,8 @@ fn is_consumed(it: &&Range) -> Bool {
     return it.current() >= it.end();
 }
 
+implement Iterable<Range, Int> for Range;
+
 fn range(from: Int, to: Int) -> Range {
     return Range(*from, *from, *to);
 }

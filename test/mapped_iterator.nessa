@@ -14,6 +14,8 @@ fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
     return it.iter().is_consumed();
 }
 
+implement<T> Iterable<DoubleIterator<'T>, 'T> for DoubleIterator<'T>;
+
 let a = arr<Int>();
 a.push(0);
 a.push(1);

@@ -40,8 +40,6 @@ if *<Bool>c<Bool>[0] || *<Bool>c<Bool>[1] || !*<Bool>c<Bool>[2] || !*<Bool>c<Boo
 
 let d: Array<Int> = a.filter<Int>((n: &&Int) -> Bool n % 2 == 0);
 
-print(d);
-
 if d<Int>[0] != 2 || d<Int>[1] != 4 {
     panic("Invalid array contents");
 }

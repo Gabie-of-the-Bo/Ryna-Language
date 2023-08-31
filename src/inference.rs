@@ -1,4 +1,5 @@
 use crate::context::NessaContext;
+use crate::interfaces::ITERABLE_ID;
 use crate::parser::NessaExpr;
 use crate::functions::*;
 use crate::operations::*;
@@ -195,6 +196,16 @@ impl NessaContext {
         } else {
             return None;
         }
+    }
+
+    pub fn implements_iterable(&self, container_type: &Type) -> bool {
+        for i in &self.interface_impls {
+            if i.interface_id == ITERABLE_ID && container_type.bindable_to(&i.interface_type, self) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {

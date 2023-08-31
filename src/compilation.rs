@@ -11,6 +11,7 @@ use crate::config::NessaModule;
 use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
+use crate::interfaces::ITERABLE_ID;
 use crate::parser::*;
 use crate::types::*;
 use crate::object::Object;
@@ -699,6 +700,13 @@ impl NessaContext {
                     "Unable to infer type of for loop container".into(), &l, vec!()
                 ))?;
 
+                if !self.implements_iterable(&container_type) {
+                    return Err(NessaError::compiler_error(
+                        format!("type {} does not implement {} interface", container_type.get_name(self), self.interfaces[ITERABLE_ID].name.green()), 
+                        &l, vec!()
+                    ));
+                }
+
                 let iterator_type = self.get_iterator_type(&container_type);
 
                 if let Err(msg) = &iterator_type {
@@ -972,6 +980,7 @@ impl NessaContext{
                 self.get_inner_dep_graph_body(b, parent, deps);
 
                 // Iteration functions, since they are used implicitly
+                deps.connect(parent.clone(), (ImportType::Interface, ITERABLE_ID), ());
                 deps.connect(parent.clone(), (ImportType::Fn, ITERATOR_FUNC_ID), ());
                 deps.connect(parent.clone(), (ImportType::Fn, NEXT_FUNC_ID), ());
                 deps.connect(parent.clone(), (ImportType::Fn, IS_CONSUMED_FUNC_ID), ());
@@ -1133,6 +1142,36 @@ impl NessaContext{
                 }
             }
 
+            NessaExpr::InterfaceImplementation(_, _, t_i, n, a) => {
+                if let Some(t) = self.interfaces.iter().find(|i| i.name == *n) {
+                    match t_i {
+                        Type::Basic(id) | Type::Template(id, _) => {
+                            deps.connect((ImportType::Class, *id), (ImportType::Interface, t.id), ());
+                        }
+                        
+                        _ => {}
+                    }
+
+                    for tp in a {
+                        for t_dep in tp.type_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Class, t_dep), ());
+                        }
+    
+                        for id in tp.interface_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
+                        }
+                    }
+    
+                    for t_dep in t_i.type_dependencies() {
+                        deps.connect((ImportType::Interface, t.id), (ImportType::Class, t_dep), ());
+                    }
+
+                    for id in t_i.interface_dependencies() {
+                        deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
+                    }
+                }
+            }
+
             NessaExpr::InterfaceDefinition(_, n, _, fns) => {
                 if let Some(t) = self.interfaces.iter().find(|i| i.name == *n) {
                     for (f_n, _, a, r) in fns {
@@ -1146,7 +1185,7 @@ impl NessaContext{
                             }
     
                             for id in tp.interface_dependencies() {
-                                deps.connect(parent.clone(), (ImportType::Interface, id), ());
+                                deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
                             }
                         }
     
@@ -1155,7 +1194,7 @@ impl NessaContext{
                         }
     
                         for id in r.interface_dependencies() {
-                            deps.connect(parent.clone(), (ImportType::Interface, id), ());
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
                         }
                     }
                 }

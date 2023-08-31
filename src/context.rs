@@ -153,7 +153,7 @@ impl NessaContext {
 
                 let args_match = Type::And(i.args.clone()).template_bindable_to(&cons_and, &mut t_assignments_cpy, &mut t_deps_cpy, self);
                 let type_matches = i.interface_type.template_bindable_to(&t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
-
+    
                 if args_match && type_matches {
                     *t_assignments = t_assignments_cpy;
                     *t_deps = t_deps_cpy;

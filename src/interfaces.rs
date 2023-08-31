@@ -1,6 +1,6 @@
 use colored::Colorize;
 
-use crate::{types::Type, context::NessaContext};
+use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaContext, ARR_OF, ARR_IT_OF};
 
 pub struct Interface {
     pub id: usize,
@@ -56,9 +56,24 @@ pub const PRINTABLE_ID: usize = 1;
 
 // Standard context
 pub fn standard_interfaces(ctx: &mut NessaContext) {
-    ctx.define_interface("Iterable".into(), vec!("T".into()), vec!(/* TODO */)).unwrap();
+    
+    // Definitions
+    ctx.define_interface("Iterable".into(), vec!("Iter".into(), "Elem".into()), vec!(
+        ("iterator".into(), None, vec!(("".into(), Type::SelfType)), T_0),
+        ("next".into(), None, vec!(("".into(), T_0.to_mut())), T_1),
+        ("is_consumed".into(), None, vec!(("".into(), T_0.to_mut())), BOOL)        
+    )).unwrap();
 
     ctx.define_interface("Printable".into(), vec!(), vec!(
-        ("Print".into(), None, vec!(("".into(), Type::SelfType)), Type::Empty)
+        ("print".into(), None, vec!(("".into(), Type::SelfType)), Type::Empty)
     )).unwrap();
+
+    // Implementations
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2), vec!(ARR_IT_OF!(T_2.to_mut()), T_2)).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2).to_mut(), vec!(ARR_IT_OF!(T_2.to_mut()), T_2)).unwrap();
+
+    ctx.define_interface_impl("Printable".into(), vec!(), BOOL, vec!()).unwrap();
+    ctx.define_interface_impl("Printable".into(), vec!(), INT, vec!()).unwrap();
+    ctx.define_interface_impl("Printable".into(), vec!(), FLOAT, vec!()).unwrap();
+    ctx.define_interface_impl("Printable".into(), vec!(), STR, vec!()).unwrap();
 } 

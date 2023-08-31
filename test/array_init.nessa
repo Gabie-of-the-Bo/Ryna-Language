@@ -9,4 +9,4 @@ syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems)
 }
 
 // Now we can use this syntax
-print(<Int>[1, 2, 3, 4]);
+let arr = <Int>[1, 2, 3, 4];

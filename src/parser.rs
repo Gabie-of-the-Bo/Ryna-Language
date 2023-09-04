@@ -20,7 +20,8 @@ use nom_locate::LocatedSpan;
 use bit_set::BitSet;
 
 use crate::config::ImportMap;
-use crate::interfaces::InterfaceConstraint;
+use crate::functions::Function;
+use crate::interfaces::{InterfaceConstraint, Interface};
 use crate::macros::{NessaMacro, parse_nessa_macro};
 use crate::operations::Operator;
 use crate::object::Object;
@@ -41,7 +42,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     });
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -171,7 +172,7 @@ pub fn many_separated0<
                                                   ╘══════════════════╛
 */
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum NessaExpr {
     // Compiled
     FunctionName(Location, usize),
@@ -504,15 +505,42 @@ impl NessaContext {
     */
     
     pub fn get_type_id(&self, name: String) -> Result<usize, String> {
-        return self.type_templates.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No type with name {}", name));
+        return self.cache.class_id.get(name, |name| {
+            self.type_templates.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No type with name {}", name))
+        });
     }
     
     pub fn get_interface_id(&self, name: String) -> Result<usize, String> {
-        return self.interfaces.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No interface with name {}", name));
+        return self.cache.interface_id.get(name, |name| {
+            self.interfaces.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No interface with name {}", name))
+        });
     }
     
     pub fn get_function_id(&self, name: String) -> Result<usize, String> {
-        return self.functions.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No function with name {}", name));
+        return self.cache.function_id.get(name, |name| {
+            self.functions.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No function with name {}", name))
+        });
+    }
+    
+    pub fn get_function(&self, name: &str) -> Option<&Function> {
+        return match self.get_function_id(name.to_string()) {
+            Ok(id) => return Some(&self.functions[id]),
+            Err(_) => None,
+        };
+    }
+    
+    pub fn get_interface(&self, name: &str) -> Option<&Interface> {
+        return match self.get_interface_id(name.to_string()) {
+            Ok(id) => return Some(&self.interfaces[id]),
+            Err(_) => None,
+        };
+    }
+    
+    pub fn get_type_template(&self, name: &str) -> Option<&TypeTemplate> {
+        return match self.get_type_id(name.to_string()) {
+            Ok(id) => return Some(&self.type_templates[id]),
+            Err(_) => None,
+        };
     }
 
     /*
@@ -2784,7 +2812,7 @@ mod tests {
 
         let (_, dice) = ctx.literal_parser(Span::new(dice_str)).unwrap();
 
-        let id = ctx.type_templates.iter().filter(|i| i.name == "Dice").next().unwrap().id;
+        let id = ctx.get_type_id("Dice".into()).unwrap();
 
         assert_eq!(dice, NessaExpr::Literal(Location::none(), Object::new(TypeInstance {
             id: id,
@@ -2829,7 +2857,7 @@ mod tests {
         
         let (_, inner_dice) = ctx.literal_parser(Span::new(inner_dice_str)).unwrap();
 
-        let inner_id = ctx.type_templates.iter().filter(|i| i.name == "InnerDice").next().unwrap().id;
+        let inner_id = ctx.get_type_id("InnerDice".into()).unwrap();
 
         assert_eq!(inner_dice, NessaExpr::Literal(Location::none(), Object::new(TypeInstance {
             id: inner_id,

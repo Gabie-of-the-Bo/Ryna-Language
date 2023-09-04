@@ -2,6 +2,7 @@
 extern crate nom;
 
 pub mod number;
+pub mod cache;
 pub mod patterns;
 pub mod object;
 pub mod operations;
@@ -44,7 +45,8 @@ mod integration {
     }
 
     fn module_test(module_path: &str) {
-        let err = precompile_nessa_module_with_config(&module_path.to_string());
+        let path_str = &module_path.to_string();
+        let err = precompile_nessa_module_with_config(path_str);
 
         if let Err(err) = &err {
             err.emit();

@@ -1,4 +1,5 @@
 use std::any::*;
+use std::hash::Hash;
 use std::rc::Rc;
 use std::cell::*;
 
@@ -42,6 +43,12 @@ pub struct Object {
     pub inner: Rc<RefCell<dyn NessaObject>>
 }
 
+impl Hash for Object {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to_string().hash(state);
+    }
+}
+
 impl std::fmt::Debug for dyn NessaObject {
     fn fmt(&self, out: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         out.write_str(self.to_string().as_str()).unwrap();
@@ -55,6 +62,8 @@ impl PartialEq for Object {
         return self.inner.borrow().equal_to(&*b.inner.borrow());
     }
 }
+
+impl Eq for Object {}
 
 impl Object {
     pub fn new<T>(inner: T) -> Object where T: NessaObject + 'static {

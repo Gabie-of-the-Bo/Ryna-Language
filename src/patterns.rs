@@ -17,7 +17,7 @@ use crate::{parser::{Span, verbose_error, PResult, identifier_parser, empty1, em
                                                   ╘══════════════════╛
 */
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Pattern{
     // Markers
     Arg(Box<Pattern>, String),

@@ -2,12 +2,15 @@ use colored::Colorize;
 
 use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaContext, ARR_OF, ARR_IT_OF};
 
+#[derive(Clone)]
 pub struct Interface {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
     pub fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>
 }
+
+#[derive(Clone)]
 pub struct InterfaceImpl {
     pub interface_id: usize,
     pub args: Vec<Type>,

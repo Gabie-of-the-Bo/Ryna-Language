@@ -19,6 +19,7 @@ pub type FunctionOverload = Option<fn(&Vec<Type>, &Type, Vec<Object>, &NessaCont
 
 pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
+#[derive(Clone)]
 pub struct Function {
     pub id: usize,
     pub name: String,

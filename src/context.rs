@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use colored::Colorize;
 
+use crate::cache::NessaCache;
 use crate::interfaces::Interface;
 use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::InterfaceImpl;
@@ -20,7 +21,7 @@ use crate::patterns::*;
                                                   ╘══════════════════╛
 */
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct NessaContext {
     pub type_templates: Vec<TypeTemplate>, 
     pub interfaces: Vec<Interface>,
@@ -37,7 +38,9 @@ pub struct NessaContext {
 
     pub variables: Vec<Option<Object>>,
 
-    pub lambdas: usize
+    pub lambdas: usize,
+
+    pub cache: NessaCache
 }
 
 impl NessaContext {
@@ -75,6 +78,8 @@ impl NessaContext {
             }
         }
 
+        self.cache.class_id.insert(representation.clone(), Ok(self.type_templates.len()));
+
         self.type_templates.push(TypeTemplate {
             id: self.type_templates.len(),
             name: representation,
@@ -111,6 +116,8 @@ impl NessaContext {
                 return Err(format!("Interface \"{}\" is already defined", representation))
             }
         }
+
+        self.cache.interface_id.insert(representation.clone(), Ok(self.interfaces.len()));
 
         self.interfaces.push(Interface {
             id: self.interfaces.len(),
@@ -407,6 +414,8 @@ impl NessaContext {
             }
         }
 
+        self.cache.function_id.insert(name.clone(), Ok(self.functions.len()));
+        
         self.functions.push(Function {
             id: self.functions.len(),
             name: name,

@@ -8,7 +8,6 @@ use seq_macro::seq;
 use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::NessaModule;
-use crate::functions::Function;
 use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
 use crate::interfaces::ITERABLE_ID;
@@ -172,15 +171,11 @@ impl NessaContext {
         ╘══════════════════════╛
     */
 
-    fn get_func_name(&self, name: &String) -> Option<&Function>{
-        return self.functions.iter().filter(|i| i.name == *name).next();
-    }
-
     fn compile_expr_function_names(&mut self, expr: &mut NessaExpr) {
         match expr {
             // Compile function name references
             NessaExpr::NameReference(l, n) => {
-                if let Some(f) = self.get_func_name(n) {
+                if let Some(f) = self.get_function(n) {
                     *expr = NessaExpr::FunctionName(l.clone(), f.id);
                 }
             },
@@ -1143,7 +1138,7 @@ impl NessaContext{
             }
 
             NessaExpr::InterfaceImplementation(_, _, t_i, n, a) => {
-                if let Some(t) = self.interfaces.iter().find(|i| i.name == *n) {
+                if let Some(t) = self.get_interface(n) {
                     match t_i {
                         Type::Basic(id) | Type::Template(id, _) => {
                             deps.connect((ImportType::Class, *id), (ImportType::Interface, t.id), ());
@@ -1173,9 +1168,9 @@ impl NessaContext{
             }
 
             NessaExpr::InterfaceDefinition(_, n, _, fns) => {
-                if let Some(t) = self.interfaces.iter().find(|i| i.name == *n) {
+                if let Some(t) = self.get_interface(n) {
                     for (f_n, _, a, r) in fns {
-                        if let Some(f) = self.functions.iter().find(|i| i.name == *f_n) {
+                        if let Some(f) = self.get_function(f_n) {
                             deps.connect((ImportType::Interface, t.id), (ImportType::Fn, f.id), ());                        
                         }
 
@@ -1201,7 +1196,7 @@ impl NessaContext{
             }
 
             NessaExpr::ClassDefinition(_, n, _, _, _, _) => {
-                if let Some(t) = self.type_templates.iter().find(|i| i.name == *n) {
+                if let Some(t) = self.get_type_template(n) {
                     deps.connect(parent.clone(), (ImportType::Class, t.id), ());
 
                     // Dependencies from the attributes
@@ -2276,7 +2271,7 @@ impl NessaContext{
                 
                 let err;
 
-                if self.type_templates.iter().filter(|t| t.name == n).next().is_some() {
+                if self.get_type_template(&n).is_some() {
                     err = self.redefine_type(n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
                             if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
@@ -2303,10 +2298,8 @@ impl NessaContext{
                     return Err(NessaError::compiler_error(msg, &l, vec!()));
                 }
 
-                self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
-
-                let func_id = self.functions.iter().filter(|i| i.name == n).next().unwrap().id;
-                let class_id = self.type_templates.iter().filter(|t| t.name == n).next().unwrap().id;
+                let func_id = self.define_function(n.clone()).unwrap_or_default(); // Define constructor function
+                let class_id = self.get_type_id(n).unwrap();
 
                 if n_templates == 0 {
                     // Define constructor instance
@@ -2329,7 +2322,7 @@ impl NessaContext{
                     // Define constructor meber access
                     for (i, (att_name, att_type)) in a.into_iter().enumerate() {
                         self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                        let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+                        let att_func_id = self.get_function_id(att_name).unwrap();
 
                         let ref_type = match &att_type {
                             Type::MutRef(t) => Type::Ref(t.clone()),
@@ -2399,7 +2392,7 @@ impl NessaContext{
 
                     for (i, (att_name, att_type)) in a.into_iter().enumerate() {
                         self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                        let att_func_id = self.functions.iter().filter(|i| i.name == *att_name).next().unwrap().id;
+                        let att_func_id = self.get_function_id(att_name).unwrap();
 
                         let ref_type = match &att_type {
                             Type::MutRef(t) => Type::Ref(t.clone()),
@@ -2609,7 +2602,7 @@ impl NessaContext{
             let interface_id;
 
             // If the function has another id in the target context
-            if let Some(f) = self.interfaces.iter().filter(|f| f.name == *i_name).next() {
+            if let Some(f) = self.get_interface(i_name) {
                 interface_id = f.id;
 
             } else { // Else the function needs to be defined
@@ -2642,7 +2635,7 @@ impl NessaContext{
             let class_id;
 
             // If the function has another id in the target context
-            if let Some(f) = self.type_templates.iter().filter(|f| f.name == *c_name).next() {
+            if let Some(f) = self.get_type_template(c_name) {
                 class_id = f.id;
 
             } else { // Else the function needs to be defined
@@ -2668,7 +2661,7 @@ impl NessaContext{
             let fn_id;
 
             // If the function has another id in the target context
-            if let Some(f) = self.functions.iter().filter(|f| f.name == *f_name).next() {
+            if let Some(f) = self.get_function(&f_name) {
                 fn_id = f.id;
 
             } else { // Else the function needs to be defined
@@ -3150,9 +3143,9 @@ impl NessaContext{
 
     fn map_import(&self, import: &ImportType, name: &String) -> usize {
         return match import {
-            ImportType::Interface => self.interfaces.iter().find(|i| i.name == *name).unwrap().id,
-            ImportType::Class => self.type_templates.iter().find(|i| i.name == *name).unwrap().id,
-            ImportType::Fn => self.functions.iter().find(|i| i.name == *name).unwrap().id,
+            ImportType::Interface => self.get_interface_id(name.clone()).unwrap(),
+            ImportType::Class => self.get_type_id(name.clone()).unwrap(),
+            ImportType::Fn => self.get_function_id(name.clone()).unwrap(),
 
             ImportType::Prefix |
             ImportType::Postfix => self.unary_ops.iter().find(|i| i.get_repr() == *name).unwrap().get_id(),

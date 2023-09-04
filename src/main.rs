@@ -1,6 +1,6 @@
-use clap::{App, Arg};
 use std::fs;
 
+use clap::{Arg, Command};
 use nessa::context::*;
 
 fn main() {
@@ -10,11 +10,11 @@ fn main() {
         ╘══════════════════════════╛
     */
 
-    let args = App::new("Nessa Interpreter")
+    let args = Command::new("Nessa Interpreter")
         .version("0.1 alpha")
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
-        .arg(Arg::with_name("INPUT")
+        .arg(Arg::new("INPUT")
             .help("Specifies the file you want to execute")
             .required(true)
             .index(1))
@@ -26,7 +26,7 @@ fn main() {
         ╘══════════════╛
     */
 
-    let path = args.value_of("INPUT").expect("No input file was provided");
+    let path = args.get_one::<String>("INPUT").expect("No input file was provided");
     let mut file = fs::read_to_string(path).expect("Unable to locate file");
     file.push('\n');
 

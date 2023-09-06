@@ -14,9 +14,9 @@ impl NessaContext {
     pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<(), NessaError> {
         let compiled_code = self.parse_and_compile(code)?;
 
-        /*for (idx, i) in compiled_code.iter().enumerate() {
+        for (idx, i) in compiled_code.iter().enumerate() {
             println!("{:<3} {}", idx, i.to_string());
-        }*/
+        }
         
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
@@ -234,8 +234,6 @@ mod tests {
         ";
 
         ctx.parse_and_execute_nessa_module(&code_str.into()).unwrap();
-
-        println!("{:?}", ctx.variables[..5].to_vec());
 
         assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(5050))));
     }

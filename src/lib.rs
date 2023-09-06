@@ -34,9 +34,7 @@ mod integration {
     use crate::config::precompile_nessa_module_with_config;
 
     fn integration_test(file_path: &str) {
-        let mut file = read_to_string(file_path).expect("Unable to locate file");
-        file.push('\n');
-
+        let file = read_to_string(file_path).expect("Unable to locate file");
         let mut ctx = standard_ctx();
 
         if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
@@ -153,6 +151,11 @@ mod integration {
     #[test]
     fn parametric_interface() {
         integration_test("test/parametric_interface.nessa");
+    }
+
+    #[test]
+    fn peano_arithmetic() {
+        integration_test("test/peano_arithmetic.nessa");
     }
 
     #[test]

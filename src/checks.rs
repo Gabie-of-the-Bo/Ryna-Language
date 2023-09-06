@@ -736,17 +736,19 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(l, _, _, args, ret, b) => {
-                for i in b {
-                    self.invalid_type_check(i)?;    
-                }
-
-                for t in args.iter().map(|(_, t)| t).chain([ret]) {
-                    if t.has_self() {
-                        return Err(NessaError::compiler_error(
-                            format!("{} type found outside an interface", Type::SelfType.get_name(self)),
-                            l, vec!()
-                        ));    
+            NessaExpr::FunctionDefinition(l, _, tm, args, ret, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.invalid_type_check(i)?;    
+                    }
+    
+                    for t in args.iter().map(|(_, t)| t).chain([ret]) {
+                        if t.has_self() {
+                            return Err(NessaError::compiler_error(
+                                format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                                l, vec!()
+                            ));    
+                        }
                     }
                 }
                 
@@ -796,7 +798,6 @@ impl NessaContext {
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
             NessaExpr::Literal(..) |
-            NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
@@ -805,6 +806,14 @@ impl NessaContext {
             NessaExpr::InterfaceDefinition(..) |
             NessaExpr::InterfaceImplementation(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
+
+            NessaExpr::Tuple(_, args) => {
+                for arg in args {
+                    self.type_check(arg)?;
+                }
+
+                Ok(())
+            }
 
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
             NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
@@ -844,16 +853,20 @@ impl NessaContext {
                     }
                 }
 
-                if self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false).is_none() {
+                if let Some((ov_id, _, _, _)) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false) {
+                    // Update caches
+                    self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
+                    self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
+
+                    Ok(())
+
+                } else {
                     Err(NessaError::compiler_error(format!(
                         "Unable to get function overload for {}{}({})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
                     ), &l, vec!()))
-
-                } else {
-                    Ok(())
                 }
             },
 
@@ -863,7 +876,14 @@ impl NessaContext {
                 let inferred_type = self.infer_type(arg);
 
                 if let Some(t) = inferred_type {
-                    if self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false).is_none() {
+                    if let Some((ov_id, _, _, _)) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false) {
+                        // Update caches
+                        self.cache.usages.unary.add_new(*id, vec!(t.clone()), templates.clone());
+                        self.cache.overloads.unary.insert((*id, vec!(t.clone()), templates.clone()), ov_id);
+
+                        Ok(())
+
+                    } else {
                         if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
                             if *prefix {
                                 Err(NessaError::compiler_error(format!(
@@ -883,9 +903,6 @@ impl NessaContext {
                         } else {
                             unreachable!()
                         }
-
-                    } else {
-                        Ok(())
                     }
 
                 } else {
@@ -907,7 +924,14 @@ impl NessaContext {
 
                 if let Some(t1) = inferred_type_1 {
                     if let Some(t2) = inferred_type_2 {
-                        if self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false).is_none() {
+                        if let Some((ov_id, _, _, _)) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false) {
+                            // Update caches
+                            self.cache.usages.binary.add_new(*id, vec!(t1.clone(), t2.clone()), templates.clone());
+                            self.cache.overloads.binary.insert((*id, vec!(t1.clone(), t2.clone()), templates.clone()), ov_id);
+
+                            Ok(())
+    
+                        } else {
                             if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
                                 Err(NessaError::compiler_error(format!(
                                     "Unable to get binary operator overload for ({}){}({})",
@@ -919,9 +943,6 @@ impl NessaContext {
                             } else {
                                 unreachable!()
                             }
-    
-                        } else {
-                            Ok(())
                         }
                         
                     } else {
@@ -962,7 +983,17 @@ impl NessaContext {
                         }
                     }
     
-                    if self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false).is_none() {
+                    if let Some((ov_id, _, _, _)) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false) {
+                        let mut all_args = vec!(t.clone());
+                        all_args.extend(arg_types);
+
+                        // Update caches
+                        self.cache.usages.nary.add_new(*id, all_args.clone(), templates.clone());
+                        self.cache.overloads.nary.insert((*id, all_args, templates.clone()), ov_id);
+                        
+                        Ok(())
+    
+                    } else {
                         if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
                             Err(NessaError::compiler_error(format!(
                                 "Unable to get n-ary operator overload for {}{}{}{}",
@@ -975,9 +1006,6 @@ impl NessaContext {
                         } else {
                             unreachable!()
                         }
-    
-                    } else {
-                        Ok(())
                     }
 
                 } else {

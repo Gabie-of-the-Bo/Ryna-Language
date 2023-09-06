@@ -173,7 +173,7 @@ impl NessaContext {
                         }
                     }
                 }
-
+                
                 let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
                 return Some((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
             }

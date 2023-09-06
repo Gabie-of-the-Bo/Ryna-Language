@@ -1660,7 +1660,6 @@ impl NessaContext{
                             if Type::And(args.clone()).bindable_to(&and, self) {                                
                                 // Find function overload id    
                                 if let Some(_) = self.cache.overloads.functions.get_checked(&(*id, args.clone(), ov.clone())) {
-                                    println!("SET {}<{}>{}: {}", self.functions[*id].name, Type::And(ov.clone()).get_name(self), Type::And(args.clone()).get_name(self), program_size);
                                     self.cache.locations.functions.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {

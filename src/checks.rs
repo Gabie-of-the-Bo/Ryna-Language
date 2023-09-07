@@ -854,11 +854,23 @@ impl NessaContext {
                 }
 
                 if let Some((ov_id, _, _, _)) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false) {
-                    // Update caches
-                    self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
-                    self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
+                    //Invalid number of template arguments
+                    if self.functions[*id].overloads[ov_id].0 != templates.len() {
+                        Err(NessaError::compiler_error(format!(
+                            "Function overload for {}{}({}) expected {} type arguments (got {})",
+                            self.functions[*id].name.green(),
+                            if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
+                            arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                            self.functions[*id].overloads[ov_id].0, templates.len()
+                        ), &l, vec!()))
+                    
+                    } else {
+                        // Update caches
+                        self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
+                        self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
 
-                    Ok(())
+                        Ok(())
+                    }
 
                 } else {
                     Err(NessaError::compiler_error(format!(
@@ -877,11 +889,36 @@ impl NessaContext {
 
                 if let Some(t) = inferred_type {
                     if let Some((ov_id, _, _, _)) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false) {
-                        // Update caches
-                        self.cache.usages.unary.add_new(*id, vec!(t.clone()), templates.clone());
-                        self.cache.overloads.unary.insert((*id, vec!(t.clone()), templates.clone()), ov_id);
-
-                        Ok(())
+                        if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
+                            if operations[ov_id].0 != templates.len() {
+                                if *prefix {
+                                    Err(NessaError::compiler_error(format!(
+                                        "Unary operator overload for {}({}) expected {} type arguments (got {})",
+                                        representation,
+                                        t.get_name(self),
+                                        operations[ov_id].0, templates.len()
+                                    ), &l, vec!()))
+    
+                                } else {
+                                    Err(NessaError::compiler_error(format!(
+                                        "Unary operator overload for ({}){} expected {} type arguments (got {})",
+                                        t.get_name(self),
+                                        representation,
+                                        operations[ov_id].0, templates.len()
+                                    ), &l, vec!()))
+                                }
+    
+                            } else {
+                                // Update caches
+                                self.cache.usages.unary.add_new(*id, vec!(t.clone()), templates.clone());
+                                self.cache.overloads.unary.insert((*id, vec!(t.clone()), templates.clone()), ov_id);
+        
+                                Ok(())                            
+                            }
+                        
+                        } else {
+                            unreachable!()
+                        }
 
                     } else {
                         if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
@@ -925,11 +962,27 @@ impl NessaContext {
                 if let Some(t1) = inferred_type_1 {
                     if let Some(t2) = inferred_type_2 {
                         if let Some((ov_id, _, _, _)) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false) {
-                            // Update caches
-                            self.cache.usages.binary.add_new(*id, vec!(t1.clone(), t2.clone()), templates.clone());
-                            self.cache.overloads.binary.insert((*id, vec!(t1.clone(), t2.clone()), templates.clone()), ov_id);
+                            if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
+                                if operations[ov_id].0 != templates.len() {
+                                    Err(NessaError::compiler_error(format!(
+                                        "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
+                                        t1.get_name(self),
+                                        representation,
+                                        t2.get_name(self),
+                                        operations[ov_id].0, templates.len()
+                                    ), &l, vec!()))    
 
-                            Ok(())
+                                } else {
+                                    // Update caches
+                                    self.cache.usages.binary.add_new(*id, vec!(t1.clone(), t2.clone()), templates.clone());
+                                    self.cache.overloads.binary.insert((*id, vec!(t1.clone(), t2.clone()), templates.clone()), ov_id);
+    
+                                    Ok(())
+                                }
+    
+                            } else {
+                                unreachable!()
+                            }
     
                         } else {
                             if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
@@ -984,14 +1037,31 @@ impl NessaContext {
                     }
     
                     if let Some((ov_id, _, _, _)) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false) {
-                        let mut all_args = vec!(t.clone());
-                        all_args.extend(arg_types);
+                        if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
+                            if operations[ov_id].0 != templates.len() {
+                                Err(NessaError::compiler_error(format!(
+                                    "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
+                                    t.get_name(self),
+                                    open_rep,
+                                    arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                    close_rep,
+                                    operations[ov_id].0, templates.len()
+                                ), &l, vec!()))
 
-                        // Update caches
-                        self.cache.usages.nary.add_new(*id, all_args.clone(), templates.clone());
-                        self.cache.overloads.nary.insert((*id, all_args, templates.clone()), ov_id);
-                        
-                        Ok(())
+                            } else {
+                                let mut all_args = vec!(t.clone());
+                                all_args.extend(arg_types);
+        
+                                // Update caches
+                                self.cache.usages.nary.add_new(*id, all_args.clone(), templates.clone());
+                                self.cache.overloads.nary.insert((*id, all_args, templates.clone()), ov_id);
+                                
+                                Ok(())    
+                            }
+
+                        } else {
+                            unreachable!()
+                        }
     
                     } else {
                         if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {

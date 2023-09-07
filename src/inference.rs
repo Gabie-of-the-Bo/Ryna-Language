@@ -208,19 +208,19 @@ impl NessaContext {
         return false;
     }
 
-    pub fn get_iterator_type(&self, container_type: &Type) -> Result<Type, String> {
-        if let Some((_, it_type, _, _)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone()), None, true) {
-            return Ok(it_type.clone());
+    pub fn get_iterator_type(&self, container_type: &Type) -> Result<(usize, Type, Vec<Type>), String> {
+        if let Some((ov, it_type, _, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(container_type.clone()), None, true) {
+            return Ok((ov, it_type, it_args));
         }
 
         return Err(format!("Unable to infer iterator type from container of type {}", container_type.get_name(self)));
     }
 
-    pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<Type, String> {
+    pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<(usize, Type, Vec<Type>), String> {
         let it_mut = Type::MutRef(Box::new(iterator_type.clone()));
 
-        if let Some((_, r, _, _)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true) {
-            return Ok(r);
+        if let Some((ov, r, _, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true) {
+            return Ok((ov, r, next_args));
         }
 
         return Err(format!("Unable to infer element type from iterator of type {}", iterator_type.get_name(self)));

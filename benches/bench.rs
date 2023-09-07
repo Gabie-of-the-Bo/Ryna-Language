@@ -22,7 +22,8 @@ pub fn execution_benchmarks(c: &mut Criterion) {
         "test/adt_generic_list.nessa",
         "test/adt_bin_tree.nessa",
         "test/numeric_interface.nessa",
-        "test/parametric_interface.nessa"
+        "test/parametric_interface.nessa",
+        "test/peano_arithmetic.nessa"
     
     ].iter().map(|path| {
         (path, read_to_string(path).expect("Unable to locate file"))
@@ -56,7 +57,7 @@ pub fn execution_benchmarks(c: &mut Criterion) {
         ctx.precompile_module(&mut parsed).unwrap();
         let compiled = ctx.compiled_form(&parsed).unwrap().into_iter().map(|i| i.instruction).collect();
 
-        group.sample_size(100);
+        group.sample_size(10);
 
         group.bench_function("Execution", |b| b.iter(|| {
             let mut ctx_cpy = ctx.clone();

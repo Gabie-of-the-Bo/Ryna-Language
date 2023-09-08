@@ -234,7 +234,6 @@ impl NessaContext {
                     let f_name = &self.functions[*id].name;
                     let possibilities = ov.iter().map(|(a, r)| format!("{}{} -> {}", f_name, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
                     
-                    // TODO: possibilities as suggestions
                     Err(NessaError::compiler_error(
                         format!(
                             "Function call {}({}) is ambiguous",

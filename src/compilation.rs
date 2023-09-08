@@ -5,6 +5,7 @@ use levenshtein::levenshtein;
 use nom::error::{VerboseErrorKind, VerboseError};
 use seq_macro::seq;
 
+use crate::cache::needs_import;
 use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::NessaModule;
@@ -2677,12 +2678,10 @@ impl NessaContext{
 
     pub fn import_code(
         &mut self, 
-        module_name: &String,
         code: &Vec<NessaExpr>, 
         source: &Vec<String>, 
         ctx: &NessaContext, 
-        imports: &Imports,
-        current_imports: &mut ImportMap
+        imports: &Imports
     ) -> Result<(Vec<NessaExpr>, Vec<String>), NessaError> {
         let mut res = vec!();
         let mut new_source = vec!();
@@ -2694,21 +2693,15 @@ impl NessaContext{
         let mut interfaces: HashMap<usize, usize> = HashMap::new();
 
         for (line, module) in code.iter().zip(source) {
-            let foreign = module != module_name;
-            let curr_mod_imports = current_imports.entry(module.clone()).or_default();
-
             match line {
-                NessaExpr::Macro(_, n, _, _) => {
-                    if imports.contains_key(&ImportType::Syntax) && imports[&ImportType::Syntax].contains(n) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Syntax) || !curr_mod_imports[&ImportType::Syntax].contains(n)) {
+                NessaExpr::Macro(_, n, p, _) => {
+                    if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
                         self.define_module_macro(line.clone())?
                     }
                 }
 
                 NessaExpr::InterfaceImplementation(l, t, tp, n, ts) => {
-                    if imports.contains_key(&ImportType::Interface) && imports[&ImportType::Interface].contains(n) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Interface) || !curr_mod_imports[&ImportType::Interface].contains(n)) {
-                        
+                    if needs_import(module, ImportType::Interface, n, imports, &mut self.cache.imports.interface_impl, (t.clone(), tp.clone(), n.clone(), ts.clone())) {
                         let mapped_type = tp.map_type(self, ctx, &mut classes, &mut interfaces);
                         let mapped_args = ts.iter().map(|i| i.map_type(self, ctx, &mut classes, &mut interfaces)).collect::<Vec<_>>();
 
@@ -2718,16 +2711,11 @@ impl NessaContext{
 
                         res.push(mapped_expr);
                         new_source.push(module.clone());
-
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Interface).or_default().insert(n.clone());
                     }
                 }
 
                 NessaExpr::InterfaceDefinition(l, n, t, fns) => {
-                    if imports.contains_key(&ImportType::Interface) && imports[&ImportType::Interface].contains(n) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Interface) || !curr_mod_imports[&ImportType::Interface].contains(n)) {
-                        
+                    if needs_import(module, ImportType::Interface, n, imports, &mut self.cache.imports.interface_def, (n.clone(), t.clone())) {
                         self.map_nessa_interface(ctx, ctx.get_interface_id(n.clone()).unwrap(), &mut classes, &mut interfaces).unwrap();
 
                         let mapped_fns = fns.iter().map(|(n, t, a, r)| {
@@ -2743,16 +2731,11 @@ impl NessaContext{
 
                         res.push(mapped_expr);
                         new_source.push(module.clone());
-
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Interface).or_default().insert(n.clone());
                     }
                 }
 
                 NessaExpr::ClassDefinition(l, n, t, atts, al, p) => {
-                    if imports.contains_key(&ImportType::Class) && imports[&ImportType::Class].contains(n) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Class) || !curr_mod_imports[&ImportType::Class].contains(n)) {
-
+                    if needs_import(module, ImportType::Class, n, imports, &mut self.cache.imports.classes, (n.clone(), t.clone())) {
                         let mapped_atts = atts.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect();
                         let mapped_al = al.clone().map(|i| i.map_type(self, ctx, &mut classes, &mut interfaces));
                         let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, mapped_al, p.clone());
@@ -2761,19 +2744,13 @@ impl NessaContext{
                         
                         res.push(mapped_expr);
                         new_source.push(module.clone());
-
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Class).or_default().insert(n.clone());
                     }
                 }
 
                 NessaExpr::FunctionDefinition(l, id, t, a, r, b) => {
                     let f_name = &ctx.functions[*id].name;
 
-                    // If the function needs to be imported
-                    if imports.contains_key(&ImportType::Fn) && imports[&ImportType::Fn].contains(f_name) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Fn) || !curr_mod_imports[&ImportType::Fn].contains(f_name)) {
-
+                    if needs_import(module, ImportType::Fn, f_name, imports, &mut self.cache.imports.functions, (*id, t.clone(), a.clone(), r.clone())) {
                         let fn_id = self.map_nessa_function(&ctx, *id, &mut functions, l)?;
 
                         let mapped_args = a.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
@@ -2795,14 +2772,11 @@ impl NessaContext{
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::FunctionDefinition(l.clone(), fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
                         new_source.push(module.clone());
-
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Fn).or_default().insert(f_name.clone());
                     }
                 }
 
-                NessaExpr::PrefixOperationDefinition(l, id, t, arg, arg_t, ret, body) |
-                NessaExpr::PostfixOperationDefinition(l, id, t, arg, arg_t, ret, body) => {
+                NessaExpr::PrefixOperationDefinition(l, id, t, arg, arg_t, r, body) |
+                NessaExpr::PostfixOperationDefinition(l, id, t, arg, arg_t, r, body) => {
                     let rep;
                     let op_prefix;
                     let op_import_type;
@@ -2816,13 +2790,11 @@ impl NessaContext{
                         unreachable!();
                     }
 
-                    if imports.contains_key(&op_import_type) && imports[&op_import_type].contains(rep) && 
-                    (!foreign || !curr_mod_imports.contains_key(&op_import_type) || !curr_mod_imports[&op_import_type].contains(rep)) {
-                    
+                    if needs_import(module, op_import_type, rep, imports, &mut self.cache.imports.unary, (*id, t.clone(), arg_t.clone(), r.clone())) {
                         let op_id = self.map_nessa_unary_operator(&ctx, *id, &mut unary_operators, l)?;
 
                         let mapped_arg_t = arg_t.map_type(self, ctx, &mut classes, &mut interfaces);
-                        let mapped_return = ret.map_type(self, ctx, &mut classes, &mut interfaces);
+                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
                         let mut mapped_body = body.clone();
 
@@ -2838,28 +2810,24 @@ impl NessaContext{
                         // Add the mapped function to the list of new expressions
                         if *op_prefix {
                             res.push(NessaExpr::PrefixOperationDefinition(l.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
-                            current_imports.entry(module.clone()).or_default().entry(ImportType::Prefix).or_default().insert(rep.clone());
 
                         } else {
                             res.push(NessaExpr::PostfixOperationDefinition(l.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
-                            current_imports.entry(module.clone()).or_default().entry(ImportType::Postfix).or_default().insert(rep.clone());
                         }
 
                         new_source.push(module.clone());
                     }
                 },
 
-                NessaExpr::BinaryOperationDefinition(l, id, t, a, b, ret, body) => {
+                NessaExpr::BinaryOperationDefinition(l, id, t, a, b, r, body) => {
                     let rep = ctx.binary_ops[*id].get_repr();
 
-                    if imports.contains_key(&ImportType::Binary) && imports[&ImportType::Binary].contains(&rep) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Binary) || !curr_mod_imports[&ImportType::Binary].contains(&rep)) {
-
+                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.binary, (*id, t.clone(), a.1.clone(), b.1.clone(), r.clone())) {
                         let op_id = self.map_nessa_binary_operator(&ctx, *id, &mut binary_operators, l)?;
 
                         let mapped_arg1 = (a.0.clone(), a.1.map_type(self, ctx, &mut classes, &mut interfaces));
                         let mapped_arg2 = (b.0.clone(), b.1.map_type(self, ctx, &mut classes, &mut interfaces));
-                        let mapped_return = ret.map_type(self, ctx, &mut classes, &mut interfaces);
+                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
                         let mut mapped_body = body.clone();
 
@@ -2875,23 +2843,18 @@ impl NessaContext{
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::BinaryOperationDefinition(l.clone(), op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
                         new_source.push(module.clone());
-                        
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Binary).or_default().insert(rep.clone());
                     }
                 },
 
-                NessaExpr::NaryOperationDefinition(l, id, t, arg, args, ret, body) => {
+                NessaExpr::NaryOperationDefinition(l, id, t, arg, args, r, body) => {
                     let rep = ctx.nary_ops[*id].get_repr();
 
-                    if imports.contains_key(&ImportType::Nary) && imports[&ImportType::Nary].contains(&rep) && 
-                    (!foreign || !curr_mod_imports.contains_key(&ImportType::Nary) || !curr_mod_imports[&ImportType::Nary].contains(&rep)) {
-
+                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.nary, (*id, t.clone(), arg.1.clone(), args.clone(), r.clone())) {
                         let op_id = self.map_nessa_nary_operator(&ctx, *id, &mut nary_operators, l)?;
 
                         let mapped_arg = (arg.0.clone(), arg.1.map_type(self, ctx, &mut classes, &mut interfaces));
                         let mapped_args = args.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
-                        let mapped_return = ret.map_type(self, ctx, &mut classes, &mut interfaces);
+                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
                         let mut mapped_body = body.clone();
 
@@ -2909,9 +2872,6 @@ impl NessaContext{
                         // Add the mapped function to the list of new expressions
                         res.push(NessaExpr::NaryOperationDefinition(l.clone(), op_id, t.clone(), mapped_arg, mapped_args, mapped_return, mapped_body));
                         new_source.push(module.clone());
-                        
-                        // Add to current imports
-                        current_imports.entry(module.clone()).or_default().entry(ImportType::Nary).or_default().insert(rep.clone());
                     }
                 },
 
@@ -3018,21 +2978,15 @@ impl NessaContext{
         let mut res = vec!();
         let mut source = vec!();
         let mut imports = nessa_module_imports_parser(Span::new(&code)).unwrap().1; // TODO: should cache this
-        let mut current_imports = ImportMap::new();
 
         Self::cascade_imports(&mut imports, modules);
         Self::cascade_imports_inner(&mut imports, modules);
 
         // Import code from dependencies
-        for (m, mut i) in imports {
-            // Delete thing that are already imported
-            for (t, ii) in current_imports.entry(m.clone()).or_default() {
-                i.entry(t.clone()).or_default().retain(|v| !ii.contains(v));
-            }
-
+        for (m, i) in imports {
             let other = modules.get(&m).unwrap();
 
-            let (mut new_code, mut new_source) = self.import_code(&m, &other.code, &other.source, &other.ctx, &i, &mut current_imports)?;
+            let (mut new_code, mut new_source) = self.import_code(&other.code, &other.source, &other.ctx, &i)?;
             source.append(&mut new_source);
             res.append(&mut new_code);
         }

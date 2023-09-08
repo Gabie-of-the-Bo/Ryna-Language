@@ -1,7 +1,7 @@
 use std::{hash::Hash, cell::RefCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{types::Type, parser::NessaExpr};
+use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports};
 
 #[derive(Clone)]
 pub struct Cache<K: Hash + PartialEq + Eq + Clone, V: Clone> {
@@ -52,6 +52,7 @@ type IdCache = ResultCache<String, usize, String>;
 type TemplateCache = Cache<(usize, Vec<Type>, Vec<Type>), Vec<NessaExpr>>;
 type OverloadCache = Cache<(usize, Vec<Type>, Vec<Type>), usize>;
 type UsageCache = Cache<usize, FxHashSet<(Vec<Type>, Vec<Type>)>>;
+type ImportCache<T> = FxHashSet<(String, T)>;
 
 //  Concrete functionalities
 
@@ -62,6 +63,21 @@ impl UsageCache {
 }
 
 // Full Nessa cache
+
+#[derive(Default, Clone)]
+pub struct NessaImportCache {
+    pub functions: ImportCache<(usize, Vec<String>, Vec<(String, Type)>, Type)>,
+    pub unary: ImportCache<(usize, Vec<String>, Type, Type)>,
+    pub binary: ImportCache<(usize, Vec<String>, Type, Type, Type)>,
+    pub nary: ImportCache<(usize, Vec<String>, Type, Vec<(String, Type)>, Type)>,
+    
+    pub classes: ImportCache<(String, Vec<String>)>,
+
+    pub interface_def: ImportCache<(String, Vec<String>)>,
+    pub interface_impl: ImportCache<(Vec<String>, Type, String, Vec<Type>)>,
+
+    pub macros: ImportCache<(String, Pattern)>
+}
 
 #[derive(Default, Clone)]
 pub struct NessaDividedCache<T> {
@@ -79,5 +95,12 @@ pub struct NessaCache {
     pub templates: NessaDividedCache<TemplateCache>,
     pub usages: NessaDividedCache<UsageCache>,
     pub overloads: NessaDividedCache<OverloadCache>,
-    pub locations: NessaDividedCache<OverloadCache>
+    pub locations: NessaDividedCache<OverloadCache>,
+    pub imports: NessaImportCache
+}
+
+pub fn needs_import<T: Hash + PartialEq + Eq>(module: &String, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    
+    return imports.contains_key(&import_type) && 
+           imports[&import_type].contains(name) && 
+           cache.insert((module.clone(), obj));
 }

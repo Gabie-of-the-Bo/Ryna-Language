@@ -206,6 +206,39 @@ impl Type {
         };
     }
 
+    pub fn template_dependencies(&self, templates: &mut HashSet<usize>) {
+        return match self {
+            Type::Wildcard |
+            Type::Empty  |
+            Type::InferenceMarker  |
+            Type::SelfType  |
+            Type::Basic(..)  |
+            Type::TemplateParamStr(..) => {}
+
+            Type::Ref(t) |
+            Type::MutRef(t) => t.template_dependencies(templates),
+
+            Type::Template(_, ts) |
+            Type::Or(ts) |
+            Type::And(ts) => ts.iter().for_each(|i| i.template_dependencies(templates)),
+
+            Type::TemplateParam(id, cs) => {
+                templates.insert(*id);
+
+                for c in cs {
+                    for t in &c.args {
+                        t.template_dependencies(templates);
+                    }
+                }
+            },
+
+            Type::Function(a, b) => {
+                a.template_dependencies(templates);
+                b.template_dependencies(templates);
+            },
+        };
+    }
+
     pub fn type_dependencies(&self) -> Vec<usize> {
         return match self {
             Type::Wildcard |

@@ -1183,19 +1183,98 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, _, t, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, t, _, arg, r, b) |
+            NessaExpr::PostfixOperationDefinition(l, _, t, _, arg, r, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
+                    }
+                
+                } else {
+                    let mut templates = HashSet::new();
+                    arg.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (i, n) in t.iter().enumerate() {
+                        if !templates.contains(&i) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::BinaryOperationDefinition(l, _, t, (_, ta), (_, tb), r, b) => {
+                if t.is_empty() {
+                    for line in b {
+                        self.type_check(line)?;
+                    }
+                
+                } else {
+                    let mut templates = HashSet::new();
+                    ta.template_dependencies(&mut templates);
+                    tb.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (i, n) in t.iter().enumerate() {
+                        if !templates.contains(&i) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::NaryOperationDefinition(l, _, t, (_, ta), args, r, b) => {
+                if t.is_empty() {
+                    for line in b {
+                        self.type_check(line)?;
+                    }
+                
+                } else {
+                    let mut templates = HashSet::new();
+                    ta.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (_, i) in args {
+                        i.template_dependencies(&mut templates);
+                    }
+
+                    for (i, n) in t.iter().enumerate() {
+                        if !templates.contains(&i) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        }
                     }
                 }
 
                 Ok(())
             },
+
+            NessaExpr::FunctionDefinition(l, _, t, args, r, b) => {
+                if t.is_empty() {
+                    for line in b {
+                        self.type_check(line)?;
+                    }
+                
+                } else {
+                    let mut templates = HashSet::new();
+                    r.template_dependencies(&mut templates);
+
+                    for (_, i) in args {
+                        i.template_dependencies(&mut templates);
+                    }
+
+                    for (i, n) in t.iter().enumerate() {
+                        if !templates.contains(&i) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        }
+                    }
+                }
+
+                Ok(())
+            }
 
             NessaExpr::Macro(..) => { Ok(()) },
 

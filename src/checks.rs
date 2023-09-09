@@ -794,6 +794,53 @@ impl NessaContext {
         };
     }
 
+    pub fn check_type_well_formed(&self, t: &Type, l: &Location) -> Result<(), NessaError> {
+        return match t {
+            Type::Empty |
+            Type::SelfType |
+            Type::Basic(_) |
+            Type::Wildcard |
+            Type::InferenceMarker => Ok(()),
+
+            Type::Ref(i) |
+            Type::MutRef(i) => self.check_type_well_formed(i, l),
+
+            Type::Or(v) |
+            Type::And(v) => v.iter().map(|i| self.check_type_well_formed(i, l)).collect(),
+
+            Type::TemplateParam(_, c) |
+            Type::TemplateParamStr(_, c) => c.iter().flat_map(|i| &i.args).map(|i| self.check_type_well_formed(i, l)).collect(),
+
+            Type::Template(id, args) => {
+                let t = &self.type_templates[*id];
+                let num_params = t.params.len();
+
+                if num_params != args.len() {
+                    return Err(
+                        NessaError::compiler_error(
+                            format!(
+                                "Type {}{} expected {} arguments (got {})", 
+                                t.name.cyan(), 
+                                if num_params == 0 { "".into() } else { format!("<{}>", t.params.iter().map(|i| i.green().to_string()).collect::<Vec<_>>().join(", ")) },
+                                num_params, 
+                                args.len()
+                            ), 
+                            &l, 
+                            vec!()
+                        )
+                    );
+                }
+
+                args.iter().map(|i| self.check_type_well_formed(i, l)).collect()
+            },
+            
+            Type::Function(a, b) => {
+                self.check_type_well_formed(a, l)?;
+                self.check_type_well_formed(b, l)
+            },
+        }
+    }
+
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
             NessaExpr::Literal(..) |
@@ -813,6 +860,7 @@ impl NessaContext {
 
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
             NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
+                self.check_type_well_formed(t, l)?;
                 self.type_check(e)?;
 
                 let inferred_type = self.infer_type(e);
@@ -836,6 +884,10 @@ impl NessaContext {
             },
 
             NessaExpr::FunctionCall(l, id, templates, args) => {
+                for t in templates {
+                    self.check_type_well_formed(t, l)?;
+                }
+
                 let mut arg_types = Vec::with_capacity(args.len());
 
                 for (i, arg) in args.iter().enumerate() {
@@ -879,6 +931,10 @@ impl NessaContext {
             },
 
             NessaExpr::UnaryOperation(l, id, templates, arg) => {
+                for t in templates {
+                    self.check_type_well_formed(t, l)?;
+                }
+
                 self.type_check(arg)?;
 
                 let inferred_type = self.infer_type(arg);
@@ -949,6 +1005,10 @@ impl NessaContext {
             },
 
             NessaExpr::BinaryOperation(l, id, templates, arg1, arg2) => {
+                for t in templates {
+                    self.check_type_well_formed(t, l)?;
+                }
+                
                 self.type_check(arg1)?;
                 self.type_check(arg2)?;
 
@@ -1014,6 +1074,10 @@ impl NessaContext {
             },
 
             NessaExpr::NaryOperation(l, id, templates, first, args) => {
+                for t in templates {
+                    self.check_type_well_formed(t, l)?;
+                }
+                
                 self.type_check(first)?;
 
                 let first_type = self.infer_type(first);
@@ -1172,7 +1236,11 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::CompiledLambda(_, _, _, _, b) => {
+            NessaExpr::CompiledLambda(l, _, args, _, b) => {
+                for (_, t) in args {
+                    self.check_type_well_formed(t, l)?;
+                }
+                
                 for line in b {
                     self.type_check(line)?;
                 }                
@@ -1182,6 +1250,9 @@ impl NessaContext {
 
             NessaExpr::PrefixOperationDefinition(l, _, t, _, arg, r, b) |
             NessaExpr::PostfixOperationDefinition(l, _, t, _, arg, r, b) => {
+                self.check_type_well_formed(arg, l)?;
+                self.check_type_well_formed(r, l)?;
+
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
@@ -1203,6 +1274,10 @@ impl NessaContext {
             }
 
             NessaExpr::BinaryOperationDefinition(l, _, t, (_, ta), (_, tb), r, b) => {
+                self.check_type_well_formed(ta, l)?;
+                self.check_type_well_formed(tb, l)?;
+                self.check_type_well_formed(r, l)?;
+
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
@@ -1225,6 +1300,13 @@ impl NessaContext {
             }
 
             NessaExpr::NaryOperationDefinition(l, _, t, (_, ta), args, r, b) => {
+                self.check_type_well_formed(ta, l)?;
+                self.check_type_well_formed(r, l)?;
+
+                for (_, t) in args {
+                    self.check_type_well_formed(t, l)?;
+                }
+                
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
@@ -1250,6 +1332,12 @@ impl NessaContext {
             },
 
             NessaExpr::FunctionDefinition(l, _, t, args, r, b) => {
+                self.check_type_well_formed(r, l)?;
+
+                for (_, t) in args {
+                    self.check_type_well_formed(t, l)?;
+                }
+
                 if t.is_empty() {
                     for line in b {
                         self.type_check(line)?;
@@ -1277,9 +1365,11 @@ impl NessaContext {
                 let mut templates = HashSet::new();
 
                 for (_, _, args, r) in fns {
+                    self.check_type_well_formed(r, l)?;
                     r.template_dependencies(&mut templates);
 
                     for (_, i) in args {
+                        self.check_type_well_formed(i, l)?;
                         i.template_dependencies(&mut templates);
                     }
                 }
@@ -1295,9 +1385,11 @@ impl NessaContext {
 
             NessaExpr::InterfaceImplementation(l, t, tp, _, args) => {
                 let mut templates = HashSet::new();
+                self.check_type_well_formed(tp, l)?;
                 tp.template_dependencies(&mut templates);
 
                 for i in args {
+                    self.check_type_well_formed(i, l)?;
                     i.template_dependencies(&mut templates);
                 }
 
@@ -1314,10 +1406,12 @@ impl NessaContext {
                 let mut templates = HashSet::new();
 
                 if let Some(a) = alias {
+                    self.check_type_well_formed(a, l)?;
                     a.template_dependencies(&mut templates);    
                 
                 } else {
                     for (_, i) in attrs {
+                        self.check_type_well_formed(i, l)?;
                         i.template_dependencies(&mut templates);
                     }
                 }

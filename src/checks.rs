@@ -801,10 +801,7 @@ impl NessaContext {
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
             NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) |
-            NessaExpr::InterfaceDefinition(..) |
-            NessaExpr::InterfaceImplementation(..) |
-            NessaExpr::ClassDefinition(..) => Ok(()),
+            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
             NessaExpr::Tuple(_, args) => {
                 for arg in args {
@@ -1270,6 +1267,64 @@ impl NessaContext {
                         if !templates.contains(&i) {
                             return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
                         }
+                    }
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::InterfaceDefinition(l, _, t, fns) => {
+                let mut templates = HashSet::new();
+
+                for (_, _, args, r) in fns {
+                    r.template_dependencies(&mut templates);
+
+                    for (_, i) in args {
+                        i.template_dependencies(&mut templates);
+                    }
+                }
+
+                for (i, n) in t.iter().enumerate() {
+                    if !templates.contains(&i) {
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                    }
+                }
+                
+                Ok(())
+            }
+
+            NessaExpr::InterfaceImplementation(l, t, tp, _, args) => {
+                let mut templates = HashSet::new();
+                tp.template_dependencies(&mut templates);
+
+                for i in args {
+                    i.template_dependencies(&mut templates);
+                }
+
+                for (i, n) in t.iter().enumerate() {
+                    if !templates.contains(&i) {
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                    }
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::ClassDefinition(l, _, t, attrs, alias, _) => {
+                let mut templates = HashSet::new();
+
+                if let Some(a) = alias {
+                    a.template_dependencies(&mut templates);    
+                
+                } else {
+                    for (_, i) in attrs {
+                        i.template_dependencies(&mut templates);
+                    }
+                }
+
+                for (i, n) in t.iter().enumerate() {
+                    if !templates.contains(&i) {
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
                     }
                 }
 

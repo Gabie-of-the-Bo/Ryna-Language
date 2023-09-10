@@ -27,19 +27,11 @@ impl NessaContext {
         use CompiledNessaExpr::*;
 
         fn check_bool_obj(obj: Object) -> bool {
-            if obj.is_ref() {
-                let ref_obj = obj.deref_obj();
-
-                if let Type::Basic(BOOL_ID) = ref_obj.get_type() {
-                    return *ref_obj.get::<bool>();
-                }
-            }
-
             if let Type::Basic(BOOL_ID) = obj.get_type() {
                 return *obj.get::<bool>();
             }
 
-            return false;
+            unreachable!();
         }
 
         let mut ip: i32 = 0;

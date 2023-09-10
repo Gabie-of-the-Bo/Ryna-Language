@@ -866,7 +866,7 @@ impl NessaContext {
                                         loc.clone(), 
                                         CALL_OP, 
                                         vec!(), 
-                                        Box::new(NessaExpr::Lambda(loc, vec!(), Type::Wildcard, lines)),
+                                        Box::new(NessaExpr::Lambda(loc, vec!(), Type::InferenceMarker, lines)),
                                         vec!()
                                     )
                                 ));
@@ -2446,7 +2446,7 @@ impl NessaContext {
                     ))
                 ))   
             ),
-            |(l, (_, _, a, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::Wildcard), b)
+            |(l, (_, _, a, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
         )(input);
     }
 
@@ -2951,7 +2951,7 @@ mod tests {
                 vec!(
                     ("n".into(), INT)
                 ),
-                Type::Wildcard,
+                Type::InferenceMarker,
                 vec!(
                     NessaExpr::Return(Location::none(), Box::new(
                         NessaExpr::BinaryOperation(Location::none(), 

@@ -498,7 +498,7 @@ impl NessaContext {
                 self.compile(b, &a)?;
 
                 // Infer further
-                if *r == Type::Wildcard {
+                if *r == Type::InferenceMarker {
                     *r = self.infer_lambda_return_type(b).unwrap();
                 }
 

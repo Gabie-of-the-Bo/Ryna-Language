@@ -57,6 +57,11 @@ impl InterfaceConstraint {
 pub const ITERABLE_ID: usize = 0;
 pub const PRINTABLE_ID: usize = 1;
 
+pub const PRINTABLE: InterfaceConstraint = InterfaceConstraint { id: PRINTABLE_ID, args: vec!() };
+
+#[macro_export]
+macro_rules! ITERABLE_OF { ($t: expr) => { InterfaceConstraint::new($t) }; }
+
 // Standard context
 pub fn standard_interfaces(ctx: &mut NessaContext) {
     

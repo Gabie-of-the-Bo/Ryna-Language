@@ -2,6 +2,7 @@ use seq_macro::seq;
 
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
+use crate::interfaces::PRINTABLE;
 use crate::math::rand_f64;
 use crate::number::Integer;
 use crate::types::*;
@@ -392,7 +393,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         return Ok(Object::empty());
     }).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard], Type::Empty, |_, _, v, _| { 
+    ctx.define_native_function_overload(idx, 1, &[Type::TemplateParam(0, vec!(PRINTABLE))], Type::Empty, |_, _, v, _| { 
         println!("{}", v[0].to_string());
 
         return Ok(Object::empty());

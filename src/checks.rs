@@ -1364,13 +1364,28 @@ impl NessaContext {
             NessaExpr::InterfaceDefinition(l, _, t, fns) => {
                 let mut templates = HashSet::new();
 
-                for (_, _, args, r) in fns {
+                for (_, f_t, args, r) in fns {
+                    let mut templates_f = HashSet::new();
+
                     self.check_type_well_formed(r, l)?;
                     r.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates_f);
 
                     for (_, i) in args {
                         self.check_type_well_formed(i, l)?;
                         i.template_dependencies(&mut templates);
+                        i.template_dependencies(&mut templates_f);
+                    }
+
+                    // Function templates
+                    if let Some(inner) = f_t {
+                        for (i, n) in inner.iter().enumerate() {
+                            let offset_id = i + t.len();
+
+                            if !templates.contains(&offset_id) {
+                                return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                            }    
+                        }
                     }
                 }
 

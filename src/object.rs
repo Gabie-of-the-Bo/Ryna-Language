@@ -396,7 +396,7 @@ impl NessaObject for Tuple {
     }
 
     fn get_type(&self) -> Type {
-        return Type::And(self.types.clone());
+        return Type::And(self.exprs.iter().map(|i| i.get_type()).collect());
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -17,8 +17,13 @@ use crate::number::Integer;
 
 #[derive(Clone, PartialEq)]
 pub struct Tuple {
-    pub types: Vec<Type>,
     pub exprs: Vec<Object>
+}
+
+impl Tuple {
+    pub fn new(exprs: Vec<Object>) -> Tuple {
+        return Tuple { exprs };
+    }
 }
 
 pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;

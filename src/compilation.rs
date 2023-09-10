@@ -614,7 +614,7 @@ impl NessaContext {
 #[derive(Debug)]
 pub enum CompiledNessaExpr {
     Literal(Object),
-    Tuple(Vec<Type>),
+    Tuple(usize),
 
     StoreVariable(usize),
     GetVariable(usize),
@@ -1780,21 +1780,14 @@ impl NessaContext{
                 ))))))
             },
 
-            NessaExpr::Tuple(l, e) => {
-                let mut types = Vec::with_capacity(e.len());
+            NessaExpr::Tuple(_, e) => {
                 let mut res = vec!();
 
                 for i in e.iter().rev() {
-                    types.push(self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer tuple argument type".into(), l, vec!()
-                    ))?);
-
                     res.extend(self.compiled_form_expr(i, lambda_positions, false)?);
                 }
 
-                types.reverse();
-
-                res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(types)));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(e.len())));
 
                 Ok(res)
             }

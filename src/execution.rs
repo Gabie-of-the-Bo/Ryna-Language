@@ -57,14 +57,11 @@ impl NessaContext {
                     ip += 1;
                 },
 
-                Tuple(types) => {     
-                    let start_idx = stack.len() - types.len();
+                Tuple(length) => {     
+                    let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect();
                     
-                    stack.push(Object::new(crate::types::Tuple {
-                        types: types.clone(),
-                        exprs: args
-                    }));
+                    stack.push(Object::new(crate::types::Tuple::new(args)));
 
                     ip += 1;
                 },

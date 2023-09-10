@@ -84,4 +84,6 @@ pub fn standard_interfaces(ctx: &mut NessaContext) {
     ctx.define_interface_impl("Printable".into(), vec!(), INT, vec!()).unwrap();
     ctx.define_interface_impl("Printable".into(), vec!(), FLOAT, vec!()).unwrap();
     ctx.define_interface_impl("Printable".into(), vec!(), STR, vec!()).unwrap();
+    ctx.define_interface_impl("Printable".into(), vec!("T".into()), Type::TemplateParam(0, vec!(PRINTABLE)).to_ref(), vec!()).unwrap();
+    ctx.define_interface_impl("Printable".into(), vec!("T".into()), Type::TemplateParam(0, vec!(PRINTABLE)).to_mut(), vec!()).unwrap();
 } 

@@ -9,6 +9,7 @@ use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::InterfaceImpl;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
+use crate::translation::load_optimized_opcodes;
 use crate::types::*;
 use crate::operations::*;
 use crate::object::*;
@@ -214,11 +215,11 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<usize, String> {
         return self.define_unary_operation(id, templates, a, ret, Some(f));
     }
 
-    pub fn define_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<(), String> {
+    pub fn define_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<usize, String> {
         let op = &self.unary_ops[id];
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
@@ -237,9 +238,13 @@ impl NessaContext {
 
         if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
             o.push((templates, a, ret, f));
+
+            return Ok(o.len() - 1);
+        
+        } else {
+            unreachable!()
         }
 
-        return Ok(());
     }
 
     /*
@@ -285,11 +290,11 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<usize, String> {
         return self.define_binary_operation(id, templates, a, b, ret, Some(f));
     }
 
-    pub fn define_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<(), String> {
+    pub fn define_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<usize, String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
@@ -313,9 +318,12 @@ impl NessaContext {
 
         if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
             o.push((templates, and, ret, f));
-        }
 
-        return Ok(());
+            return Ok(o.len() - 1);
+
+        } else {
+            unreachable!();
+        }
     }
 
     /*
@@ -365,11 +373,11 @@ impl NessaContext {
         return vec!();
     }
 
-    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<(), String> {
+    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<usize, String> {
         return self.define_nary_operation(id, templates, from, args, ret, Some(f));
     }
 
-    pub fn define_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<(), String> {
+    pub fn define_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<usize, String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.into_iter().cloned());
 
@@ -396,9 +404,12 @@ impl NessaContext {
 
         if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
             o.push((templates, and, ret, f));
-        }
 
-        return Ok(());
+            return Ok(o.len() - 1);
+
+        } else {
+            unreachable!()
+        }
     }
 
     /*
@@ -583,6 +594,8 @@ pub fn standard_ctx() -> NessaContext {
     standard_nary_operations(&mut ctx);
 
     standard_functions(&mut ctx);
+
+    load_optimized_opcodes(&mut ctx);
 
     ctx.variables = vec!(None; 1000); // 1000 variables by default
 

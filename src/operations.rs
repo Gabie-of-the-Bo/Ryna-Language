@@ -115,17 +115,15 @@ macro_rules! define_unary_native_op_combinations {
     };
 }
 
+pub const NEG_UNOP_ID: usize = 0;
+pub const NOT_UNOP_ID: usize = 1;
+pub const DEREF_UNOP_ID: usize = 2;
+
 pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("-".into(), true, 300).unwrap();
 
-    ctx.define_native_unary_operation(0, 0, INT, INT, |_, _, a| {
-        let n_a = &*a.get::<Integer>();
-        let mut res = n_a.clone();
-
-        res.negative = !res.negative;
-
-        return Ok(Object::new(res));
-    }).unwrap();
+    define_unary_native_op_combinations!(ctx, 0, INT, INT, Integer, arg, Integer::new(!arg.negative, arg.limbs.clone()));
+    define_unary_native_op_combinations!(ctx, 0, FLOAT, FLOAT, f64, arg, -arg);
 
     ctx.define_unary_operator("!".into(), true, 250).unwrap();
 
@@ -212,8 +210,23 @@ macro_rules! define_binary_native_op_combinations {
 }
 
 // Constant identifiers
+pub const ADD_BINOP_ID: usize = 0;
+pub const SUB_BINOP_ID: usize = 1;
+pub const MUL_BINOP_ID: usize = 2;
+pub const DIV_BINOP_ID: usize = 3;
+pub const MOD_BINOP_ID: usize = 4;
+
 pub const DOT_BINOP_ID: usize = 5;
+
 pub const LT_BINOP_ID: usize = 6;
+pub const GT_BINOP_ID: usize = 7;
+pub const LTEQ_BINOP_ID: usize = 8;
+pub const GTEQ_BINOP_ID: usize = 9;
+pub const EQ_BINOP_ID: usize = 10;
+pub const NEQ_BINOP_ID: usize = 11;
+
+pub const OR_BINOP_ID: usize = 12;
+pub const AND_BINOP_ID: usize = 13;
 
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     

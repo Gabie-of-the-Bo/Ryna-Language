@@ -1,3 +1,4 @@
+use crate::number::Integer;
 use crate::types::{Type, BOOL_ID};
 use crate::object::Object;
 use crate::context::NessaContext;
@@ -15,7 +16,7 @@ impl NessaContext {
         let compiled_code = self.parse_and_compile(code)?;
 
         for (idx, i) in compiled_code.iter().enumerate() {
-            println!("{:<3} {}", idx, i.to_string());
+            println!("{:<3} {}", idx, i.to_string(self));
         }
         
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
@@ -39,6 +40,32 @@ impl NessaContext {
         
         let mut call_stack: Vec<(i32, usize, i32)> = Vec::with_capacity(1000);
         let mut stack: Vec<Object> = Vec::with_capacity(1000);
+
+        macro_rules! unary_op {
+            ($a: ident, $get_a: ident, $t: ty, $op: expr) => {
+                {
+                    let _a = stack.pop().unwrap();
+                    let $a = &*_a.$get_a::<$t>();
+    
+                    stack.push(Object::new($op));
+                    ip += 1;
+                }
+            };
+        }
+
+        macro_rules! bin_op {
+            ($a: ident, $b: ident, $get_a: ident, $get_b: ident, $t: ty, $op: expr) => {
+                {
+                    let _a = stack.pop().unwrap();
+                    let _b = stack.pop().unwrap();
+                    let $a = &*_a.$get_a::<$t>();
+                    let $b = &*_b.$get_b::<$t>();
+                        
+                    stack.push(Object::new($op));
+                    ip += 1;
+                }
+            };
+        }
 
         call_stack.push((0, 0, -1));
 
@@ -180,9 +207,55 @@ impl NessaContext {
                     } else {
                         unreachable!();
                     }
-                }
+                },
 
-                Halt => break
+                ToFloat => unary_op!(a, get, Integer, a.to_f64()),
+
+                Copy => {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.deref_obj().deep_clone());
+                    ip += 1;
+                },
+
+                Deref => {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.deref_obj());
+                    ip += 1;
+                },
+
+                Addi => bin_op!(a, b, get, get, Integer, a + b),
+                Subi => bin_op!(a, b, get, get, Integer, a - b),
+                Muli => bin_op!(a, b, get, get, Integer, a * b),
+                Divi => bin_op!(a, b, get, get, Integer, a / b),
+                Modi => bin_op!(a, b, get, get, Integer, a % b),
+                Negi => unary_op!(a, get, Integer, Integer::new(!a.negative, a.limbs.clone())),
+                Addf => bin_op!(a, b, get, get, f64, a + b),
+                Subf => bin_op!(a, b, get, get, f64, a - b),
+                Mulf => bin_op!(a, b, get, get, f64, a * b),
+                Divf => bin_op!(a, b, get, get, f64, a / b),
+                Modf => bin_op!(a, b, get, get, f64, a % b),
+                Negf => unary_op!(a, get, f64, -a),
+
+                Lti => bin_op!(a, b, get, get, Integer, a < b),
+                Gti => bin_op!(a, b, get, get, Integer, a > b),
+                Lteqi => bin_op!(a, b, get, get, Integer, a <= b),
+                Gteqi => bin_op!(a, b, get, get, Integer, a >= b),
+                Eqi => bin_op!(a, b, get, get, Integer, a == b),
+                Neqi => bin_op!(a, b, get, get, Integer, a != b),
+                Ltf => bin_op!(a, b, get, get, f64, a < b),
+                Gtf => bin_op!(a, b, get, get, f64, a > b),
+                Lteqf => bin_op!(a, b, get, get, f64, a <= b),
+                Gteqf => bin_op!(a, b, get, get, f64, a >= b),
+                Eqf => bin_op!(a, b, get, get, f64, a == b),
+                Neqf => bin_op!(a, b, get, get, f64, a != b),
+
+                Not => unary_op!(a, get, bool, !a),
+                Or => bin_op!(a, b, get, get, bool, *a || *b),
+                And => bin_op!(a, b, get, get, bool, *a && *b),
+
+                Halt => break,
+
+                // _ => todo!()
             }
         }
 

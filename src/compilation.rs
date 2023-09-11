@@ -611,7 +611,7 @@ impl NessaContext {
     ╘═══════════════════════╛
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CompiledNessaExpr {
     Literal(Object),
     Tuple(usize),
@@ -632,7 +632,104 @@ pub enum CompiledNessaExpr {
     BinaryOperatorCall(usize, usize, Vec<Type>),
     NaryOperatorCall(usize, usize, Vec<Type>),
 
+    // Conversions
+    Copy, Deref, ToFloat,
+
+    // Arithmetic opcodes
+    Addi, Addf,
+    Subi, Subf,
+    Muli, Mulf,
+    Divi, Divf,
+    Modi, Modf,
+    Negi, Negf,
+
+    // Comparison opcodes
+    Lti, Ltf,
+    Gti, Gtf,
+    Lteqi, Lteqf,
+    Gteqi, Gteqf,
+    Eqi, Eqf,
+    Neqi, Neqf,
+
+    // Logical opcodes
+    Not, Or, And,
+
     Halt
+}
+
+impl CompiledNessaExpr {
+    pub fn needs_float(&self) -> bool {
+        use CompiledNessaExpr::*;
+
+        return match self {
+            Addf | Subf | Mulf | Divf | Modf |
+            Ltf | Gtf | Lteqf | Gteqf | Eqf | Neqf |
+            Negf => true,
+            _ => false
+        };
+    }
+
+    pub fn needs_deref(&self) -> bool {
+        use CompiledNessaExpr::*;
+
+        return match self {
+            Addf | Subf | Mulf | Divf | Modf |
+            Ltf | Gtf | Lteqf | Gteqf | Eqf | Neqf | Negf |
+            Addi | Subi | Muli | Divi | Modi |
+            Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
+            Not | Or | And => true,
+            _ => false
+        };
+    }
+
+    pub fn to_string(&self, ctx: &NessaContext) -> String {
+        use CompiledNessaExpr::*;
+
+        return match self {
+            Literal(obj) => format!("{}({})", "Literal".green(), obj.to_string().blue()),
+            Tuple(to) => format!("{}({})", "Tuple".green(), to.to_string().blue()),
+
+            StoreVariable(to) => format!("{}({})", "StoreVariable".green(), to.to_string().blue()),
+            GetVariable(to) => format!("{}({})", "GetVariable".green(), to.to_string().blue()),
+
+            Call(to) => format!("{}({})", "Call".green(), to.to_string().blue()),
+
+            Jump(to) => format!("{}({})", "Jump".green(), to.to_string().blue()),
+            RelativeJump(to) => format!("{}({})", "RelativeJump".green(), to.to_string().blue()),
+            RelativeJumpIfTrue(to) => format!("{}({})", "RelativeJumpIfTrue".green(), to.to_string().blue()),
+            RelativeJumpIfFalse(to) => format!("{}({})", "RelativeJumpIfFalse".green(), to.to_string().blue()),
+
+            NativeFunctionCall(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "FunctionCall".green(), 
+                ctx.functions[*id].name.magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            UnaryOperatorCall(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "UnOpCall".green(), 
+                ctx.unary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            BinaryOperatorCall(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "BinOpCall".green(), 
+                ctx.binary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            NaryOperatorCall(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "NaryOpCall".green(), 
+                ctx.nary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            _ => format!("{:?}", self).green().to_string()
+        };
+    }
 }
 
 #[derive(Debug)]
@@ -642,8 +739,8 @@ pub struct NessaInstruction {
 }
 
 impl NessaInstruction {
-    pub fn to_string(&self) -> String {
-        return format!("{:<30}{}{}", format!("{:?}", self.instruction), if self.comment.is_empty() { "" } else { "# " }, format!("{}", self.comment));
+    pub fn to_string(&self, ctx: &NessaContext) -> String {
+        return format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { "# " }, format!("{}", self.comment));
     }
 }
 
@@ -1445,12 +1542,12 @@ impl NessaContext{
                                     self.cache.locations.functions.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
-                                        program_size += self.compiled_form_body_size(b, true) + a.len();
+                                        program_size += self.compiled_form_body_size(b, true)? + a.len();
         
                                     } else {                                
                                         let arg_types = a.iter().map(|(_, t)| t.clone()).collect();
                                         let sub_b = self.cache.templates.functions.get_checked(&(*id, ov.clone(), arg_types)).unwrap(); 
-                                        program_size += self.compiled_form_body_size(&sub_b, true) + a.len();
+                                        program_size += self.compiled_form_body_size(&sub_b, true)? + a.len();
                                     }    
                                 }
                             }
@@ -1468,11 +1565,11 @@ impl NessaContext{
                                     self.cache.locations.unary.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
-                                        program_size += self.compiled_form_body_size(b, true) + 1;
+                                        program_size += self.compiled_form_body_size(b, true)? + 1;
         
                                     } else {                                
                                         let sub_b = self.cache.templates.unary.get_checked(&(*id, ov.clone(), vec!(tp.clone()))).unwrap(); 
-                                        program_size += self.compiled_form_body_size(&sub_b, true) + 1;
+                                        program_size += self.compiled_form_body_size(&sub_b, true)? + 1;
                                     }    
                                 }
                             }
@@ -1491,11 +1588,11 @@ impl NessaContext{
                                     self.cache.locations.binary.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
-                                        program_size += self.compiled_form_body_size(b, true) + 2;
+                                        program_size += self.compiled_form_body_size(b, true)? + 2;
         
                                     } else {                                
                                         let sub_b = self.cache.templates.binary.get_checked(&(*id, ov.clone(), vec!(t1.clone(), t2.clone()))).unwrap(); 
-                                        program_size += self.compiled_form_body_size(&sub_b, true) + 2;
+                                        program_size += self.compiled_form_body_size(&sub_b, true)? + 2;
                                     }    
                                 }
                             }
@@ -1517,11 +1614,11 @@ impl NessaContext{
                                     self.cache.locations.nary.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
-                                        program_size += self.compiled_form_body_size(b, true) + a.len() + 1;
+                                        program_size += self.compiled_form_body_size(b, true)? + a.len() + 1;
         
                                     } else {                                
                                         let sub_b = self.cache.templates.nary.get_checked(&(*id, ov.clone(), arg_types.clone())).unwrap(); 
-                                        program_size += self.compiled_form_body_size(&sub_b, true) + a.len() + 1;
+                                        program_size += self.compiled_form_body_size(&sub_b, true)? + a.len() + 1;
                                     }    
                                 }
                             }
@@ -1725,43 +1822,88 @@ impl NessaContext{
         return Ok(res);
     }
 
-    pub fn compiled_form_size(&self, expr: &NessaExpr, root: bool, root_counter: &mut usize) -> usize {
+    pub fn compiled_form_size(&self, expr: &NessaExpr, root: bool, root_counter: &mut usize) -> Result<usize, NessaError> {
         use NessaExpr::*;
 
         return match expr {
-            Literal(..) | Variable(..) | CompiledLambda(..) => 1, 
-            BinaryOperation(_, _, _, a, b) => self.compiled_form_size(a, false, root_counter) + self.compiled_form_size(b, false, root_counter) + 1,
-            NaryOperation(_, _, _, a, b) => self.compiled_form_size(a, false, root_counter) + self.compiled_form_body_size(b, false) + 1,
-            Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) | UnaryOperation(_, _, _, e) => self.compiled_form_size(e, false, root_counter) + 1,
+            Literal(..) | Variable(..) | CompiledLambda(..) => Ok(1), 
+
+            UnaryOperation(l, id, t, arg) => {
+                let a_t = self.infer_type(arg).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of binary operation argument".into(), l, vec!()
+                ))?;
+
+                let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(a_t.clone()), t.clone())).unwrap();
+                let offset = self.cache.opcodes.unary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+
+                Ok(self.compiled_form_size(arg, false, root_counter)? + 1 + offset)
+            }
+
+            BinaryOperation(l, id, t, a, b) => {
+                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of binary operation argument".into(), l, vec!()
+                ))?;
+
+                let b_t = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of binary operation argument".into(), l, vec!()
+                ))?;
+
+                let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
+                let offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+
+                Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1 + offset)
+            },
+
+            NaryOperation(_, _, _, a, b) => Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_body_size(b, false)? + 1),
+
+            Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
+            
             If(_, ih, ib, ei, e) => {
-                let mut res = self.compiled_form_size(ih, false, root_counter) + self.compiled_form_body_size(ib, true) + 1;
+                let mut res = self.compiled_form_size(ih, false, root_counter)? + self.compiled_form_body_size(ib, true)? + 1;
 
                 for (h, b) in ei {
-                    res += self.compiled_form_size(h, false, root_counter) + self.compiled_form_body_size(b, true) + 1
+                    res += self.compiled_form_size(h, false, root_counter)? + self.compiled_form_body_size(b, true)? + 1
                 }
 
                 if let Some(b) = e {
-                    res += self.compiled_form_body_size(b, true);
+                    res += self.compiled_form_body_size(b, true)?;
                 }
                 
-                res
+                Ok(res)
             },
-            CompiledFor(_, _, _, _, c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 9,
-            While(_, c, b) => self.compiled_form_size(c, false, root_counter) + self.compiled_form_body_size(b, true) + 2,
-            Tuple(_, b) => 1 + self.compiled_form_body_size(b, false),
-            FunctionCall(_, _, _, a) => {
+
+            CompiledFor(_, _, _, _, c, b) => Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 9),
+
+            While(_, c, b) => Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2),
+
+            Tuple(_, b) => Ok(1 + self.compiled_form_body_size(b, false)?),
+
+            FunctionCall(l, id, t, a) => {
                 *root_counter += root as usize; // Add drop instruction
-                self.compiled_form_body_size(a, false) + 1
+
+                let args_types = a.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
+                    "Unable to infer type of function argument".into(), l, vec!()
+                ))).collect::<Result<Vec<_>, _>>()?;
+                
+                let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
+                let offset = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+
+                Ok(self.compiled_form_body_size(a, false)? + 1 + offset)
             }, 
+
             _ => unreachable!("{:?}", expr)
         }
     }
 
-    pub fn compiled_form_body_size(&self, lines: &Vec<NessaExpr>, root: bool) -> usize {
+    pub fn compiled_form_body_size(&self, lines: &Vec<NessaExpr>, root: bool) -> Result<usize, NessaError> {
         let mut counter = 0;
-        let res: usize = lines.iter().map(|i| self.compiled_form_size(i, root, &mut counter)).sum();
+        let mut res = 0;
 
-        return res + counter;
+        for i in lines {
+            res += self.compiled_form_size(i, root, &mut counter)?;
+        }
+
+        return Ok(res + counter);
     }
 
     pub fn compiled_form_expr(
@@ -1809,19 +1951,39 @@ impl NessaContext{
 
                 let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())).unwrap();
 
-                if let Some(pos) = self.cache.locations.unary.get_checked(&(*id, vec!(i_t), t.clone())) {
+                println!("Compiling {} {}", id, ov_id);
+
+                if let Some(pos) = self.cache.locations.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
-                } else {                    
-                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
+                } else {
+                    if let Some((opcode, _)) = self.cache.opcodes.unary.get_checked(&(*id, ov_id)) {                    
+                        println!("Olrait {} {}", id, ov_id);
+                        // Deref if necessary
+                        if opcode.needs_deref() && i_t.is_ref() {
+                            res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                        }
+    
+                        // Convert to float if necessary
+                        if opcode.needs_float() {
+                            if let Type::Basic(INT_ID) = i_t.deref_type() {
+                                res.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                            }
+                        }
+
+                        res.push(NessaInstruction::from(opcode));
+
+                    } else {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
+                    }
                 }
 
                 Ok(res)
             },
 
             NessaExpr::BinaryOperation(l, id, t, a, b) => {
-                let mut res = self.compiled_form_expr(b, lambda_positions, false)?;
-                res.extend(self.compiled_form_expr(a, lambda_positions, false)?);
+                let mut res_a = self.compiled_form_expr(b, lambda_positions, false)?;
+                let mut res_b = self.compiled_form_expr(a, lambda_positions, false)?;
                 
                 let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
                     "Unable to infer type of binary operation argument".into(), l, vec!()
@@ -1833,12 +1995,45 @@ impl NessaContext{
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
 
-                if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t, b_t), t.clone())) {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                let res_op;
+
+                if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())) {
+                    res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos));
 
                 } else {                    
-                    res.push(NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id, t.clone())));
+                    if let Some((opcode, _)) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)) {                    
+                        // Deref if necessary
+                        if opcode.needs_deref() {
+                            if a_t.is_ref() {
+                                res_b.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                            }
+        
+                            if b_t.is_ref() {
+                                res_a.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                            }
+                        }
+    
+                        // Convert to float if necessary
+                        if opcode.needs_float() {
+                            if let Type::Basic(INT_ID) = a_t.deref_type() {
+                                res_b.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                            }
+    
+                            if let Type::Basic(INT_ID) = b_t.deref_type() {
+                                res_a.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                            }
+                        }
+
+                        res_op = NessaInstruction::from(opcode);
+
+                    } else {
+                        res_op = NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id, t.clone()));
+                    }
                 }
+                
+                let mut res = res_a;
+                res.append(&mut res_b);
+                res.push(res_op);
 
                 Ok(res)
             },
@@ -2018,8 +2213,14 @@ impl NessaContext{
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
-                } else {                    
-                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
+                } else {
+                    if let Some((opcode, _)) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)) {
+                        // TODO: add conversions and derefs if necessary 
+                        res.push(NessaInstruction::from(opcode));
+
+                    } else {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
+                    }            
                 }
 
                 if root { // Drop if the return value is unused

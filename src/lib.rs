@@ -18,6 +18,7 @@ pub mod inference;
 pub mod checks;
 pub mod compilation;
 pub mod execution;
+pub mod translation;
 
 pub mod config;
 

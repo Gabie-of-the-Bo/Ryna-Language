@@ -1,7 +1,7 @@
 use std::{hash::Hash, cell::RefCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports};
+use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports, compilation::CompiledNessaExpr};
 
 #[derive(Clone)]
 pub struct Cache<K: Hash + PartialEq + Eq + Clone, V: Clone> {
@@ -53,6 +53,7 @@ type TemplateCache = Cache<(usize, Vec<Type>, Vec<Type>), Vec<NessaExpr>>;
 type OverloadCache = Cache<(usize, Vec<Type>, Vec<Type>), usize>;
 type UsageCache = Cache<usize, FxHashSet<(Vec<Type>, Vec<Type>)>>;
 type ImportCache<T> = FxHashSet<(String, T)>;
+type OpcodeCache = Cache<(usize, usize), (CompiledNessaExpr, usize)>;
 
 //  Concrete functionalities
 
@@ -96,6 +97,7 @@ pub struct NessaCache {
     pub usages: NessaDividedCache<UsageCache>,
     pub overloads: NessaDividedCache<OverloadCache>,
     pub locations: NessaDividedCache<OverloadCache>,
+    pub opcodes: NessaDividedCache<OpcodeCache>,
     pub imports: NessaImportCache
 }
 

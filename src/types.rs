@@ -115,12 +115,26 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
+    pub fn is_ref(&self) -> bool {
+        return match self {
+            Type::Ref(_) | Type::MutRef(_) => true,
+            _ => false
+        };
+    }
+
     pub fn to_ref(self) -> Type {
         return Type::Ref(Box::new(self));
     }
 
     pub fn to_mut(self) -> Type {
         return Type::MutRef(Box::new(self));
+    }
+
+    pub fn deref_type(&self) -> &Type {
+        return match self {
+            Type::Ref(t) | Type::MutRef(t) => t,
+            _ => self
+        };
     }
 
     pub fn get_name(&self, ctx: &NessaContext) -> String {

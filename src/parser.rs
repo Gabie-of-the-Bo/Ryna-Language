@@ -2968,7 +2968,9 @@ mod tests {
 
     #[test]
     fn operation_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
+
+        ctx.define_unary_operator("?".into(), false, 150).unwrap();
 
         let number_str = "-10";
         let var_str = "-!a";
@@ -3282,7 +3284,9 @@ mod tests {
 
     #[test]
     fn operation_definition_and_flow_control_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
+
+        ctx.define_unary_operator("?".into(), false, 150).unwrap();
 
         let test_1_str = "op !(arg: Bool) -> Bool {
             if arg {

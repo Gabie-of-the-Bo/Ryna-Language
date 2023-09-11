@@ -136,8 +136,6 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
             inner: a.get::<Reference>().inner.clone()
         });
     }).unwrap();
-
-    ctx.define_unary_operator("?".into(), false, 150).unwrap();
 }
 
 macro_rules! define_binary_native_op {

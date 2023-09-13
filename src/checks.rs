@@ -666,68 +666,76 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, a, ret, b) => {
-                for i in b {
-                    self.invalid_type_check(i)?;
-                }
-
-                for t in [a, ret] {
-                    if t.has_self() {
-                        return Err(NessaError::compiler_error(
-                            format!("{} type found outside an interface", Type::SelfType.get_name(self)),
-                            l, vec!()
-                        ));    
+            NessaExpr::PrefixOperationDefinition(l, _, tm, _, a, ret, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.invalid_type_check(i)?;
+                    }
+    
+                    for t in [a, ret] {
+                        if t.has_self() {
+                            return Err(NessaError::compiler_error(
+                                format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                                l, vec!()
+                            ));    
+                        }
                     }
                 }
 
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, a, ret, b) => {
-                for i in b {
-                    self.invalid_type_check(i)?;    
-                }
-
-                for t in [a, ret] {
-                    if t.has_self() {
-                        return Err(NessaError::compiler_error(
-                            format!("{} type found outside an interface", Type::SelfType.get_name(self)),
-                            l, vec!()
-                        ));    
+            NessaExpr::PostfixOperationDefinition(l, _, tm, _, a, ret, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.invalid_type_check(i)?;    
                     }
-                }
-                
-                Ok(())
-            },
-
-            NessaExpr::BinaryOperationDefinition(l, _, _, (_, a_1), (_, a_2), ret, b) => {
-                for i in b {
-                    self.invalid_type_check(i)?;    
-                }
-
-                for t in [a_1, a_2, ret] {
-                    if t.has_self() {
-                        return Err(NessaError::compiler_error(
-                            format!("{} type found outside an interface", Type::SelfType.get_name(self)),
-                            l, vec!()
-                        ));    
+    
+                    for t in [a, ret] {
+                        if t.has_self() {
+                            return Err(NessaError::compiler_error(
+                                format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                                l, vec!()
+                            ));    
+                        }
                     }
                 }
                 
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(l, _, _, (_, a), args, ret, b) => {
-                for i in b {
-                    self.invalid_type_check(i)?;    
+            NessaExpr::BinaryOperationDefinition(l, _, tm, (_, a_1), (_, a_2), ret, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.invalid_type_check(i)?;    
+                    }
+    
+                    for t in [a_1, a_2, ret] {
+                        if t.has_self() {
+                            return Err(NessaError::compiler_error(
+                                format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                                l, vec!()
+                            ));    
+                        }
+                    }                
                 }
+                
+                Ok(())
+            },
 
-                for t in args.iter().map(|(_, t)| t).chain([a, ret]) {
-                    if t.has_self() {
-                        return Err(NessaError::compiler_error(
-                            format!("{} type found outside an interface", Type::SelfType.get_name(self)),
-                            l, vec!()
-                        ));    
+            NessaExpr::NaryOperationDefinition(l, _, tm, (_, a), args, ret, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.invalid_type_check(i)?;    
+                    }
+    
+                    for t in args.iter().map(|(_, t)| t).chain([a, ret]) {
+                        if t.has_self() {
+                            return Err(NessaError::compiler_error(
+                                format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                                l, vec!()
+                            ));    
+                        }
                     }
                 }
                 

@@ -518,8 +518,22 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, _, n, t, r, b) => {
-                self.compile(b, &vec!((n.clone(), t.clone())))?;
+            NessaExpr::PrefixOperationDefinition(l, _, tm, n, t, r, b) => {
+                if tm.is_empty() {
+                    self.compile(b, &vec!((n.clone(), t.clone())))?;
+                }
+                
+                if let Type::Empty = r {
+                    if self.ensured_return_check_body(b, l).is_err() {
+                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
+                    }
+                }
+            },
+
+            NessaExpr::PostfixOperationDefinition(l, _, tm, n, t, r, b) => {
+                if tm.is_empty() {
+                    self.compile(b, &vec!((n.clone(), t.clone())))?;
+                }
 
                 if let Type::Empty = r {
                     if self.ensured_return_check_body(b, l).is_err() {
@@ -528,8 +542,10 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, _, n, t, r, b) => {
-                self.compile(b, &vec!((n.clone(), t.clone())))?;
+            NessaExpr::BinaryOperationDefinition(l, _, tm, a1, a2, r, b) => {
+                if tm.is_empty() {
+                    self.compile(b, &vec!(a1.clone(), a2.clone()))?;
+                }
 
                 if let Type::Empty = r {
                     if self.ensured_return_check_body(b, l).is_err() {
@@ -538,21 +554,13 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperationDefinition(l, _, _, a1, a2, r, b) => {
-                self.compile(b, &vec!(a1.clone(), a2.clone()))?;
-
-                if let Type::Empty = r {
-                    if self.ensured_return_check_body(b, l).is_err() {
-                        b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
-                    }
-                }
-            },
-
-            NessaExpr::NaryOperationDefinition(l, _, _, a, args, r, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, tm, a, args, r, b) => {
                 let mut all_args = vec!(a.clone());
                 all_args.extend(args.iter().cloned());
 
-                self.compile(b, &all_args)?;
+                if tm.is_empty() {
+                    self.compile(b, &all_args)?;
+                }
 
                 if let Type::Empty = r {
                     if self.ensured_return_check_body(b, l).is_err() {
@@ -1292,9 +1300,9 @@ impl NessaContext{
                                     // Create new instance
                                     body.iter_mut().for_each(|i| self.subtitute_type_params_expr(i, &templates));
 
-                                    let named_args = [(n.clone(), t.clone())].iter().chain(a).cloned().collect();
+                                    let named_args = [(n.clone(), t.clone())].iter().chain(a).map(|(n, t)| (n.clone(), t.sub_templates(&templates))).collect();
                                     self.compile(&mut body, &named_args)?;    
-    
+
                                     // Statically check the newly instantiated functions
                                     for line in &body {
                                         self.static_check_expected(line, &Some(r.sub_templates(&templates)))?;
@@ -1411,11 +1419,7 @@ impl NessaContext{
         line: &NessaExpr, 
         current_size: usize,
         lambdas: &mut Vec<NessaInstruction>,
-        lambda_positions: &mut HashMap<usize, usize>,
-        functions: &mut HashMap<(usize, usize, Vec<Type>), usize>, 
-        unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
-        binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
-        nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
+        lambda_positions: &mut HashMap<usize, usize>
     ) -> Result<(), NessaError> {
         return match line {
             NessaExpr::Literal(..) |
@@ -1429,7 +1433,7 @@ impl NessaContext{
             NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
             NessaExpr::CompiledLambda(_, i, a, _, b) => {
-                self.compile_lambda(b, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda(b, current_size, lambdas, lambda_positions)?;
 
                 lambda_positions.entry(*i).or_insert(lambdas.len() + current_size);
 
@@ -1450,11 +1454,11 @@ impl NessaContext{
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
             NessaExpr::Return(_, e) |
-            NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, current_size, lambdas, lambda_positions, functions, unary, binary, nary),
+            NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, current_size, lambdas, lambda_positions),
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.compile_lambda_expr(a, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
-                self.compile_lambda_expr(b, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda_expr(a, current_size, lambdas, lambda_positions)?;
+                self.compile_lambda_expr(b, current_size, lambdas, lambda_positions)?;
 
                 Ok(())
             }
@@ -1462,37 +1466,36 @@ impl NessaContext{
             NessaExpr::CompiledFor(_, _, _, _, a, b) |
             NessaExpr::While(_, a, b) |
             NessaExpr::NaryOperation(_, _, _, a, b) => {
-                self.compile_lambda_expr(a, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
-                self.compile_lambda(b, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda_expr(a, current_size, lambdas, lambda_positions)?;
+                self.compile_lambda(b, current_size, lambdas, lambda_positions)?;
 
                 Ok(())
             }
 
             NessaExpr::If(_, ih, ib, ei, eb) => {
-                self.compile_lambda_expr(ih, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
-                self.compile_lambda(ib, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                self.compile_lambda_expr(ih, current_size, lambdas, lambda_positions)?;
+                self.compile_lambda(ib, current_size, lambdas, lambda_positions)?;
 
                 for (ei_h, ei_b) in ei {
-                    self.compile_lambda_expr(ei_h, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
-                    self.compile_lambda(ei_b, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+                    self.compile_lambda_expr(ei_h, current_size, lambdas, lambda_positions)?;
+                    self.compile_lambda(ei_b, current_size, lambdas, lambda_positions)?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    self.compile_lambda(eb_inner, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;                    
+                    self.compile_lambda(eb_inner, current_size, lambdas, lambda_positions)?;                    
                 }
 
                 Ok(())
             }
 
             NessaExpr::Tuple(_, args) |
-            NessaExpr::FunctionCall(_, _, _, args) => self.compile_lambda(args, current_size, lambdas, lambda_positions, functions, unary, binary, nary),
+            NessaExpr::FunctionCall(_, _, _, args) => self.compile_lambda(args, current_size, lambdas, lambda_positions),
 
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) => { Ok(()) }
-
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, b) => self.compile_lambda(b, current_size, lambdas, lambda_positions, functions, unary, binary, nary),
+            NessaExpr::PrefixOperationDefinition(..) |
+            NessaExpr::PostfixOperationDefinition(..) |
+            NessaExpr::BinaryOperationDefinition(..) |
+            NessaExpr::NaryOperationDefinition(..) |
+            NessaExpr::FunctionDefinition(..) => Ok(()),
 
             NessaExpr::Macro(..) => { Ok(()) },
 
@@ -1505,14 +1508,10 @@ impl NessaContext{
         lines: &Vec<NessaExpr>, 
         current_size: usize,
         lambdas: &mut Vec<NessaInstruction>,
-        lambda_positions: &mut HashMap<usize, usize>,
-        functions: &mut HashMap<(usize, usize, Vec<Type>), usize>, 
-        unary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
-        binary: &mut HashMap<(usize, usize, Vec<Type>), usize>,
-        nary: &mut HashMap<(usize, usize, Vec<Type>), usize>
+        lambda_positions: &mut HashMap<usize, usize>
     ) -> Result<(), NessaError> {
         for line in lines {
-            self.compile_lambda_expr(line, current_size, lambdas, lambda_positions, functions, unary, binary, nary)?;
+            self.compile_lambda_expr(line, current_size, lambdas, lambda_positions)?;
         }
 
         return Ok(());
@@ -1520,10 +1519,6 @@ impl NessaContext{
 
     pub fn compiled_form(&mut self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, NessaError> {
         let mut program_size = 1;
-        let mut functions: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
-        let mut unary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
-        let mut binary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
-        let mut nary: HashMap<(usize, usize, Vec<Type>), usize> = HashMap::new();
 
         self.get_template_calls_body(lines)?;
 
@@ -1633,7 +1628,7 @@ impl NessaContext{
 
         let mut lambda_positions: HashMap<usize, usize> = HashMap::new();
         let mut lambdas = vec!();
-        self.compile_lambda(lines, program_size, &mut lambdas, &mut lambda_positions, &mut functions, &mut unary, &mut binary, &mut nary)?;
+        self.compile_lambda(lines, program_size, &mut lambdas, &mut lambda_positions)?;
 
         let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Jump(program_size + lambdas.len())));
 
@@ -1951,14 +1946,11 @@ impl NessaContext{
 
                 let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())).unwrap();
 
-                println!("Compiling {} {}", id, ov_id);
-
                 if let Some(pos) = self.cache.locations.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
                 } else {
                     if let Some((opcode, _)) = self.cache.opcodes.unary.get_checked(&(*id, ov_id)) {                    
-                        println!("Olrait {} {}", id, ov_id);
                         // Deref if necessary
                         if opcode.needs_deref() && i_t.is_ref() {
                             res.push(NessaInstruction::from(CompiledNessaExpr::Deref));

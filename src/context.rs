@@ -442,11 +442,11 @@ impl NessaContext {
         return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates, self)).collect::<Vec<_>>();
     }
 
-    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>) -> Result<(), String> {
+    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>) -> Result<usize, String> {
         return self.define_function_overload(id, templates, args, ret, Some(f));
     }
 
-    pub fn define_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<(), String> {
+    pub fn define_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<usize, String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
 
@@ -468,7 +468,7 @@ impl NessaContext {
 
         self.functions[id].overloads.push((templates, and, ret, f));
 
-        return Ok(());
+        return Ok(self.functions[id].overloads.len() - 1);
     }
 }
 

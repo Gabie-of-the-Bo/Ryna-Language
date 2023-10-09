@@ -1,5 +1,5 @@
 use crate::number::Integer;
-use crate::types::{Type, BOOL_ID};
+use crate::types::{Type, BOOL_ID, TypeInstance};
 use crate::object::Object;
 use crate::context::NessaContext;
 use crate::operations::Operator;
@@ -73,6 +73,58 @@ impl NessaContext {
             match &program[ip as usize] {
                 Literal(obj) => {
                     stack.push(obj.deep_clone());
+                    ip += 1;
+                },
+
+                Bool(obj) => {
+                    stack.push(Object::new(*obj));
+                    ip += 1;
+                },
+
+                Float(obj) => {
+                    stack.push(Object::new(*obj));
+                    ip += 1;
+                },
+
+                Int(obj) => {
+                    stack.push(Object::new(obj.clone()));
+                    ip += 1;
+                },
+
+                Str(obj) => {
+                    stack.push(Object::new(obj.clone()));
+                    ip += 1;
+                },
+
+                Construct(id, ts) => {
+                    let length = self.type_templates[*id].attributes.len();
+                    let start_idx = stack.len() - length;
+                    let args = stack.drain(start_idx..).rev().collect();
+
+                    stack.push(Object::new(TypeInstance {
+                        id: *id,
+                        params: ts.clone(),
+                        attributes: args,
+                    }));
+
+                    ip += 1;
+                }
+
+                Attribute(idx) => {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.get::<TypeInstance>().attributes[*idx].clone());
+                    ip += 1;
+                },
+
+                AttributeRef(idx) => {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref_obj());
+                    ip += 1;
+                },
+
+                AttributeMut(idx) => {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref_mut_obj());
                     ip += 1;
                 },
 

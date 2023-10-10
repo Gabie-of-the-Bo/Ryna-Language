@@ -4,6 +4,7 @@ use colored::Colorize;
 use levenshtein::levenshtein;
 use nom::error::{VerboseErrorKind, VerboseError};
 use seq_macro::seq;
+use serde::{Serialize, Deserialize};
 
 use crate::cache::needs_import;
 use crate::config::ImportMap;
@@ -620,16 +621,17 @@ impl NessaContext {
     ╘═══════════════════════╛
 */
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CompiledNessaExpr {
-    Literal(Object),
-
+    Empty,
     Bool(bool),
     Int(Integer),
     Float(f64),
     Str(String),
+    Array(usize, Type),
+    Lambda(usize, Type, Type),
 
-    Construct(usize, Vec<Type>),
+    Construct(usize, usize, Vec<Type>),
     Attribute(usize),
     AttributeRef(usize),
     AttributeMut(usize),
@@ -706,12 +708,23 @@ impl CompiledNessaExpr {
         use CompiledNessaExpr::*;
 
         return match self {
-            Literal(obj) => format!("{}({})", "Literal".green(), obj.to_string().blue()),
-
             Bool(obj) => format!("{}({})", "Bool".green(), obj.to_string().blue()),
             Int(obj) => format!("{}({})", "Int".green(), obj.to_string().blue()),
             Float(obj) => format!("{}({})", "Float".green(), obj.to_string().blue()),
-            Str(obj) => format!("{}({:?})", "Str".green(), format!("{obj:?}").blue()),
+            Str(obj) => format!("{}(\"{}\")", "Str".green(), format!("{obj}").blue()),
+
+            Array(length, t) => format!(
+                "{}({}, {})", "Array".green(), 
+                length.to_string().magenta(), 
+                t.get_name(ctx)
+            ),
+
+            Lambda(pos, args, ret) => format!(
+                "{}({}, {}, {})", "Lambda".green(), 
+                pos.to_string().magenta(), 
+                args.get_name(ctx),
+                ret.get_name(ctx)
+            ),
             
             Tuple(to) => format!("{}({})", "Tuple".green(), to.to_string().blue()),
 
@@ -724,6 +737,17 @@ impl CompiledNessaExpr {
             RelativeJump(to) => format!("{}({})", "RelativeJump".green(), to.to_string().blue()),
             RelativeJumpIfTrue(to) => format!("{}({})", "RelativeJumpIfTrue".green(), to.to_string().blue()),
             RelativeJumpIfFalse(to) => format!("{}({})", "RelativeJumpIfFalse".green(), to.to_string().blue()),
+
+            Construct(id, length, args) => format!(
+                "{}({}, {}, {{{}}})", "Construct".green(), 
+                ctx.type_templates[*id].name.magenta(), 
+                length.to_string().magenta(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            Attribute(to) => format!("{}({})", "Attribute".green(), to.to_string().blue()),
+            AttributeRef(to) => format!("{}({})", "AttributeRef".green(), to.to_string().blue()),
+            AttributeMut(to) => format!("{}({})", "AttributeMut".green(), to.to_string().blue()),
 
             NativeFunctionCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "FunctionCall".green(), 
@@ -1923,6 +1947,7 @@ impl NessaContext{
 
     pub fn compiled_literal_size(&self, obj: &Object) -> usize {
         match obj.get_type() {
+            Type::Empty |
             Type::Basic(INT_ID) |
             Type::Basic(FLOAT_ID) |
             Type::Basic(BOOL_ID) |
@@ -1939,12 +1964,25 @@ impl NessaContext{
                 res
             },
 
+            Type::Template(ARR_ID, _) => {
+                let obj_t = obj.get::<(Type, Vec<Object>)>();
+                let mut res = 1;
+
+                for i in obj_t.1.iter().rev() {
+                    res += self.compiled_literal_size(i);
+                }
+
+                res
+            },
+
             _ => 1
         }
     }
 
     pub fn compile_literal(&self, obj: &Object) -> Vec<NessaInstruction> {
         match obj.get_type() {
+            Type::Empty => vec!(NessaInstruction::from(CompiledNessaExpr::Empty)),
+            
             Type::Basic(INT_ID) => vec!(NessaInstruction::from(CompiledNessaExpr::Int(obj.get::<Integer>().clone()))),
             Type::Basic(FLOAT_ID) => vec!(NessaInstruction::from(CompiledNessaExpr::Float(obj.get::<f64>().clone()))),
             Type::Basic(BOOL_ID) => vec!(NessaInstruction::from(CompiledNessaExpr::Bool(obj.get::<bool>().clone()))),
@@ -1958,12 +1996,23 @@ impl NessaContext{
                     res.extend(self.compile_literal(i));
                 }
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::Construct(id, obj_t.params.clone())));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Construct(id, obj_t.attributes.len(), obj_t.params.clone())));
 
                 res
             },
 
-            _ => vec!(NessaInstruction::from(CompiledNessaExpr::Literal(obj.clone())))
+            Type::Template(ARR_ID, _) => {
+                let obj_t = obj.get::<(Type, Vec<Object>)>();
+                let mut res = vec!();
+
+                for i in obj_t.1.iter().rev() {
+                    res.extend(self.compile_literal(i));
+                }
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::Array(obj_t.1.len(), obj_t.0.clone())));
+
+                res
+            },
         }
     }
 
@@ -1976,11 +2025,11 @@ impl NessaContext{
             NessaExpr::Literal(_, obj) => Ok(self.compile_literal(obj)),
 
             NessaExpr::CompiledLambda(_, i, a, r, _) => {
-                Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Literal(Object::new((
+                Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
                     *lambda_positions.get(i).unwrap(),
                     Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
                     r.clone()
-                ))))))
+                ))))
             },
 
             NessaExpr::Tuple(_, e) => {
@@ -2276,7 +2325,7 @@ impl NessaContext{
                         // TODO: add conversions and derefs if necessary 
                         opcode = match opcode {
                             // Add type parameters to Construct opcodes
-                            CompiledNessaExpr::Construct(id, _) => CompiledNessaExpr::Construct(id, t.clone()),
+                            CompiledNessaExpr::Construct(id, length, _) => CompiledNessaExpr::Construct(id, length, t.clone()),
                             _ => opcode
                         };
 
@@ -2382,7 +2431,7 @@ impl NessaContext{
                         return Err(NessaError::compiler_error(msg, &l, vec!()));
                     
                     } else {
-                        self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, vec!()), 0));
+                        self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, a.len(), vec!()), 0));
                     }
                     
                     // Define meber access
@@ -2465,7 +2514,7 @@ impl NessaContext{
                         return Err(NessaError::compiler_error(msg, &l, vec!()));
 
                     } else {
-                        self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, vec!()), 0));
+                        self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, a.len(), vec!()), 0));
                     }
 
                     for (i, (att_name, att_type)) in a.into_iter().enumerate() {

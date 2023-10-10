@@ -107,11 +107,11 @@ impl Object {
         }    
     }
 
-    pub fn get<T>(&self) -> Ref<T> where T: 'static {
+    pub fn get<T: NessaObject>(&self) -> Ref<T> where T: 'static {
         return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
     }
 
-    pub fn get_mut<T>(&mut self) -> RefMut<T> where T: 'static {
+    pub fn get_mut<T: NessaObject>(&mut self) -> RefMut<T> where T: 'static {
         return RefMut::map(self.inner.borrow_mut(), |i| i.as_any_mut().downcast_mut::<T>().unwrap());
     }
 

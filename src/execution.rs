@@ -71,8 +71,8 @@ impl NessaContext {
 
         loop {
             match &program[ip as usize] {
-                Literal(obj) => {
-                    stack.push(obj.deep_clone());
+                Empty => {
+                    stack.push(Object::empty());
                     ip += 1;
                 },
 
@@ -96,8 +96,21 @@ impl NessaContext {
                     ip += 1;
                 },
 
-                Construct(id, ts) => {
-                    let length = self.type_templates[*id].attributes.len();
+                Array(length, t) => {
+                    let start_idx = stack.len() - length;
+                    let args = stack.drain(start_idx..).rev().collect();
+
+                    stack.push(Object::new((t.clone(), args)));
+
+                    ip += 1;
+                },
+
+                Lambda(pos, args, ret) => {
+                    stack.push(Object::new((*pos, args.clone(), ret.clone())));
+                    ip += 1;
+                },
+
+                Construct(id, length, ts) => {
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect();
 

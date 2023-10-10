@@ -583,6 +583,9 @@ mod tests {
                                                   ╘════════════════╛
 */
 
+pub const NUM_STD_TYPES: usize = 6;
+pub const NUM_STD_INT_IMPL: usize = 8;
+
 pub fn standard_ctx() -> NessaContext {
     let mut ctx = NessaContext::default();
 

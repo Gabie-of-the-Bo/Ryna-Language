@@ -8,6 +8,7 @@ use nom::{
     branch::alt,
     multi::separated_list1
 };
+use serde::{Serialize, Deserialize};
 
 use crate::{parser::{Span, verbose_error, PResult, identifier_parser, empty1, empty0}, context::NessaContext};
 
@@ -17,7 +18,7 @@ use crate::{parser::{Span, verbose_error, PResult, identifier_parser, empty1, em
                                                   ╘══════════════════╛
 */
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Pattern{
     // Markers
     Arg(Box<Pattern>, String),

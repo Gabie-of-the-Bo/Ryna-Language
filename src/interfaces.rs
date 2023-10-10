@@ -1,4 +1,5 @@
 use colored::Colorize;
+use serde::{Serialize, Deserialize};
 
 use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaContext, ARR_OF, ARR_IT_OF};
 
@@ -10,14 +11,14 @@ pub struct Interface {
     pub fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InterfaceImpl {
     pub interface_id: usize,
     pub args: Vec<Type>,
     pub interface_type: Type
 }
 
-#[derive(Clone, Hash, Debug, PartialEq)]
+#[derive(Clone, Hash, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InterfaceConstraint {
     pub id: usize,
     pub args: Vec<Type>

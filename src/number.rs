@@ -3,6 +3,7 @@ use std::arch::x86_64::*;
 use std::ops;
 use rayon::prelude::*;
 use std::str::FromStr;
+use serde::{Serialize, Deserialize};
 use rand::{
     RngCore,
     distributions::{
@@ -38,7 +39,7 @@ static BITS_PER_LIMB: u64 = 64;
     ╚════════════════════════════╝
 */
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Integer{
     pub negative: bool,
     pub limbs: Vec<u64>

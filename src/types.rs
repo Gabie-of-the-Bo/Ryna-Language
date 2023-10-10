@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use colored::Colorize;
+use serde::{Serialize, Deserialize};
 
 use crate::context::NessaContext;
 use crate::interfaces::InterfaceConstraint;
@@ -28,14 +29,21 @@ impl Tuple {
 
 pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TypeTemplate {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
+
+    #[serde(skip)]
     pub attributes: Vec<(String, Type)>,
+
     pub alias: Option<Type>,
+    
+    #[serde(skip)]
     pub patterns: Vec<Pattern>,
+
+    #[serde(skip)]
     pub parser: Option<ParsingFunction>
 }
 
@@ -56,7 +64,7 @@ pub struct TypeInstance {
     pub attributes: Vec<Object>
 }
 
-#[derive(Clone, Hash, Debug)]
+#[derive(Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum Type {
     // Empty type (also called void)
     Empty,
@@ -942,8 +950,7 @@ pub const FLOAT_ID: usize = 1;
 pub const STR_ID: usize = 2;
 pub const BOOL_ID: usize = 3;
 pub const ARR_ID: usize = 4;
-pub const MAP_ID: usize = 5;
-pub const ARR_IT_ID: usize = 6;
+pub const ARR_IT_ID: usize = 5;
 
 pub const INT: Type = Type::Basic(INT_ID);
 pub const FLOAT: Type = Type::Basic(FLOAT_ID);
@@ -976,6 +983,5 @@ pub fn standard_types(ctx: &mut NessaContext) {
     )).unwrap();
 
     ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-    ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
     ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
 } 

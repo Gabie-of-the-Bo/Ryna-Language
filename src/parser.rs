@@ -2686,7 +2686,10 @@ mod tests {
 
     #[test]
     fn type_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
+
+        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let wildcard_str = "*";
         let empty_str = "()";
@@ -2739,8 +2742,8 @@ mod tests {
         let (_, map_refs) = ctx.type_parser(Span::new(map_refs_str)).unwrap();
 
         assert_eq!(array, ARR_OF!(INT));
-        assert_eq!(map, Type::Template(MAP_ID, vec!(INT, STR)));
-        assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(MAP_ID, vec!(Type::Ref(Box::new(INT)), Type::MutRef(Box::new(STR)))))));
+        assert_eq!(map, Type::Template(map_id, vec!(INT, STR)));
+        assert_eq!(map_refs, Type::Ref(Box::new(Type::Template(map_id, vec!(Type::Ref(Box::new(INT)), Type::MutRef(Box::new(STR)))))));
         
         let (_, basic_func) = ctx.type_parser(Span::new(basic_func_str)).unwrap();
         let (_, complex_func) = ctx.type_parser(Span::new(complex_func_str)).unwrap();
@@ -2751,7 +2754,7 @@ mod tests {
                 INT,
                 ARR_OF!(BOOL)
             ))), 
-            Box::new(Type::Template(MAP_ID, vec!(
+            Box::new(Type::Template(map_id, vec!(
                 INT,
                 Type::Wildcard
             )))
@@ -2823,7 +2826,7 @@ mod tests {
             )
         })));
 
-        assert_eq!(ctx.type_templates[7].parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
+        assert_eq!(ctx.type_templates.last().unwrap().parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
             id: id,
             params: vec!(),
             attributes: vec!(
@@ -3052,7 +3055,10 @@ mod tests {
 
     #[test]
     fn function_header_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
+
+        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let number_header_str = "fn test(a: Int) -> Int";
         let ref_header_str = "fn test(arg: &Int) -> &&Int";
@@ -3101,7 +3107,7 @@ mod tests {
                 ("c".into(), Type::MutRef(Box::new(Type::Wildcard)))
             ),
             Type::Template(
-                MAP_ID,
+                map_id,
                 vec!(
                     INT,
                     STR
@@ -3112,7 +3118,10 @@ mod tests {
 
     #[test]
     fn function_definition_and_flow_control_parsing() {
-        let ctx = standard_ctx();
+        let mut ctx = standard_ctx();
+
+        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let test_1_str = "fn inc() -> Int {
             let res = 5;
@@ -3244,7 +3253,7 @@ mod tests {
                     ("key".into(), T_0),
                     ("value".into(), T_1)
                 ),
-                Type::Template(MAP_ID, vec!(T_0, T_1)),
+                Type::Template(map_id, vec!(T_0, T_1)),
                 vec!(
                     NessaExpr::VariableDefinition(Location::none(), 
                         "a".into(), 

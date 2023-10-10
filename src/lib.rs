@@ -19,6 +19,7 @@ pub mod checks;
 pub mod compilation;
 pub mod execution;
 pub mod translation;
+pub mod serialization;
 
 pub mod config;
 
@@ -53,15 +54,15 @@ mod integration {
 
         let (mut ctx, lines) = err.unwrap();
 
-        let program = ctx.compiled_form(&lines);
+        match ctx.compiled_form(&lines) {
+            Ok(code) => {
+                if let Err(err) = ctx.execute_compiled_code(&code.into_iter().map(|i| i.instruction).collect()) {
+                    err.emit();
+                }
+            },
 
-        if let Err(err) = &program {
-            err.emit();
-        }
-
-        if let Err(err) = ctx.execute_compiled_code(&program.unwrap().into_iter().map(|i| i.instruction).collect()) {
-            err.emit();
-        }
+            Err(err) => err.emit()
+        };
     }
 
     #[test]

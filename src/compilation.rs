@@ -3218,7 +3218,7 @@ impl NessaContext{
     // BFS on imports
     fn cascade_imports(
         imports: &mut ImportMap,
-        modules: &HashMap<String, NessaModule>
+        modules: &HashMap<String, &NessaModule>
     )
     {
         let mut res = HashMap::new();
@@ -3273,7 +3273,7 @@ impl NessaContext{
     // BFS on imports (inner dependencies)
     fn cascade_imports_inner(
         imports: &mut ImportMap,
-        modules: &HashMap<String, NessaModule>
+        modules: &HashMap<String, &NessaModule>
     )
     {
         for (m, imps) in imports {
@@ -3306,7 +3306,7 @@ impl NessaContext{
         &mut self, 
         name: &String,
         code: &String, 
-        modules: &HashMap<String, NessaModule>
+        modules: &HashMap<String, &NessaModule>
     ) -> Result<(Vec<NessaExpr>, Vec<String>), NessaError> {
         let mut res = vec!();
         let mut source = vec!();

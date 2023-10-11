@@ -1,4 +1,10 @@
+---
 module_name: sum
+version: "1.0"
+hash: 4e2c00088d1a325562185779f7541218
 module_paths:
   - test/lib
-modules: {}
+modules:
+  range:
+    path: "test\\lib\\range"
+    version: "1.0"

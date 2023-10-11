@@ -1,4 +1,13 @@
+---
 module_name: hash_extensions
+version: "1.0"
+hash: 2a8062db6fba953781069141d51daf87
 module_paths:
   - test/lib
-modules: {}
+modules:
+  cast:
+    path: "test\\lib\\cast"
+    version: "1.0"
+  hash:
+    path: "test\\lib\\hash"
+    version: "1.0"

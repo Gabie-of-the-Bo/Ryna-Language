@@ -1,4 +1,10 @@
+---
 module_name: props_test
+version: "1.0"
+hash: 0b2bac8d8b5cfdc11cd1a76a5ccd588e
 module_paths:
   - test/lib
-modules: {}
+modules:
+  num_props:
+    path: "test\\lib\\num_props"
+    version: "1.0"

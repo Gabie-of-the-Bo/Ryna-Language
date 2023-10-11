@@ -1,4 +1,7 @@
-module_name: array_extensions
+---
+module_name: math
+version: "1.0"
+hash: 0b8fd867c48049e2817e487286a446a7
 module_paths:
   - test/lib
 modules: {}

@@ -1,4 +1,10 @@
+---
 module_name: math_ops
+version: "1.0"
+hash: 335edad29022b313a125871af53ee06d
 module_paths:
   - test/lib
-modules: {}
+modules:
+  math:
+    path: "test\\lib\\math"
+    version: "1.0"

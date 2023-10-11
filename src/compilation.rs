@@ -3302,7 +3302,7 @@ impl NessaContext{
         }
     }
 
-    pub fn parse_and_precompile_with_dependencies(
+    pub fn parse_with_dependencies(
         &mut self, 
         name: &String,
         code: &String, 

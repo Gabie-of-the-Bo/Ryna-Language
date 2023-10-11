@@ -1,9 +1,7 @@
+---
 module_name: range
+version: "1.0"
+hash: 994e15db1ac15435732c578748a3a3cd
 module_paths:
   - test/lib
-modules: 
-  range:
-    path: test/lib/range
-    version: 1.0
-    hash: ""
-    dependencies: []
+modules: {}

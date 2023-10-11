@@ -24,16 +24,17 @@ pub struct ModuleInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NessaConfig {
-    module_name: String,
+    pub module_name: String,
 
     #[serde(default = "default_version")]
-    version: String,
+    pub version: String,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(default)]
-    hash: String,
+    pub hash: String,
 
-    module_paths: Vec<String>,
-    modules: HashMap<String, ModuleInfo>
+    pub module_paths: Vec<String>,
+    pub modules: HashMap<String, ModuleInfo>
 }
 
 fn default_version() -> String {

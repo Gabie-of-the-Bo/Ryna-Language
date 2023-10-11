@@ -1,7 +1,7 @@
 ---
 module_name: hash
 version: "1.0"
-hash: 64b06075f6561445849a8cd9345817ac
+hash: 76d4a5ebbab49494702ed5841bab07f8
 module_paths:
   - test/lib
 modules: {}

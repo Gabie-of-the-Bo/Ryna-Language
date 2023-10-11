@@ -1,5 +1,3 @@
-module primes [1.0]
-
 import fn { range, iterator, next, is_consumed } from range;
 
 fn is_prime(n: Int) -> Bool {

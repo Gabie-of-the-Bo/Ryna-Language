@@ -1,5 +1,3 @@
-module sum [1.0]
-
 import class Range from range;
 import fn { iterator, next, is_consumed } from range;
 

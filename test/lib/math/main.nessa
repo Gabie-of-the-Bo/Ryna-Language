@@ -1,5 +1,3 @@
-module math [1.0]
-
 unary postfix op "++" (5000);
 
 op (n: &&Int) ++ -> &&Int {

@@ -1,7 +1,7 @@
 ---
 module_name: sum
 version: "1.0"
-hash: 4e2c00088d1a325562185779f7541218
+hash: c3932d6e0d2162e9bd81c82f8d5cc67c
 module_paths:
   - test/lib
 modules:

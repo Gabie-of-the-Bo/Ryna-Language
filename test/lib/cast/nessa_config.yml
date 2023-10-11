@@ -1,7 +1,7 @@
 ---
 module_name: cast
 version: "1.0"
-hash: 5b95d258219c26091f4f6a350fa37ac4
+hash: f773ca1ef351a9dde3ea4168f86b65e5
 module_paths:
   - test/lib
 modules: {}

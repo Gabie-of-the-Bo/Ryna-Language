@@ -1,7 +1,7 @@
 ---
 module_name: prime_check
 version: "1.0"
-hash: c0d4f2d2ec9c31eba30d12c79d687413
+hash: a5386dc7be87e672e66bab620bd42d75
 module_paths:
   - test/lib
 modules:

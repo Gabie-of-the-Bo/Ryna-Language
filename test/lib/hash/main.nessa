@@ -1,5 +1,3 @@
-module hash [1.0]
-
 interface Hashable {
     fn hash(obj: Self) -> Int;
 }

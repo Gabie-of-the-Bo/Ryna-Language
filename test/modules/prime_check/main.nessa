@@ -1,5 +1,3 @@
-module prime_check [1.0]
-
 import fn is_prime from primes;
 
 if !is_prime(7919) {

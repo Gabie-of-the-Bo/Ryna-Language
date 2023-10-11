@@ -1,7 +1,7 @@
 ---
 module_name: props_test
 version: "1.0"
-hash: 0b2bac8d8b5cfdc11cd1a76a5ccd588e
+hash: 3cc98be0790fd4f5e93762df098bf0de
 module_paths:
   - test/lib
 modules:

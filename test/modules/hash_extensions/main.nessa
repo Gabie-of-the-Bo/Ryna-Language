@@ -1,5 +1,3 @@
-module hash_extensions [1.0]
-
 import interface Hashable from hash;
 import interface Castable from cast;
 

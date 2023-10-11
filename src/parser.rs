@@ -294,29 +294,6 @@ fn string_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
     )(input);
 }
 
-fn module_header_parser<'a>(input: Span<'a>) -> PResult<'a, (String, String)> {
-    return map(
-        tuple((
-            tag("module"),
-            empty1,
-            context("Expected module name after 'module'", cut(identifier_parser)),
-            empty0,
-            context("Expected '[' after module name", cut(tag("["))),
-            empty0,
-            context(
-                "Expected version number after module name",
-                cut(separated_list1(
-                    tag("."), 
-                    take_while1(|c: char| c.is_digit(10))
-                ))
-            ),
-            empty0,
-            context("Expected ']' after version number", cut(tag("]")))
-        )),
-        |(_, _, n, _, _, _, v, _, _)| (n, v.into_iter().map(|i| i.to_string()).collect::<Vec<_>>().join("."))
-    )(input)
-}
-
 fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType, HashSet<String>)> {
     return map(
         tuple((
@@ -381,28 +358,9 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
 pub fn nessa_info_parser<'a>(input: Span<'a>) -> PResult<'a, ()> {
     return delimited(
         empty0,
-        alt((
-            value((), module_import_parser),
-            value((), module_header_parser)
-        )),
+        value((), module_import_parser),
         empty0
     )(input);
-}
-
-pub fn nessa_module_header_parser<'a>(mut input: Span<'a>) -> PResult<'a, Vec<(String, String)>> {
-    let mut ops = vec!();
-
-    while input.len() > 0 {
-        if let Ok((i, o)) = module_header_parser(input) {
-            input = i;
-            ops.push(o);
-        
-        } else {
-            input = skip_token(input)?.0;
-        }
-    }
-
-    return Ok(("".into(), ops));
 }
 
 pub fn nessa_module_imports_parser<'a>(mut input: Span<'a>) -> PResult<'a, ImportMap> {

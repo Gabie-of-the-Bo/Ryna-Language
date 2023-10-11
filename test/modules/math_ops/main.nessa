@@ -1,5 +1,3 @@
-module math_ops [1.0]
-
 import postfix op "++" from math;
 
 let n: Int = 10;

@@ -1,7 +1,7 @@
 ---
 module_name: syntax_test
 version: "1.0"
-hash: bf788be9ba862c9e5f09d11fd4628b07
+hash: 099ebaa63ec7714532d98b158eaaead3
 module_paths:
   - test/lib
 modules:

@@ -1,7 +1,7 @@
 ---
 module_name: hash_extensions
 version: "1.0"
-hash: 2a8062db6fba953781069141d51daf87
+hash: c4ca089d0a4006b8a91dfa8a399d357d
 module_paths:
   - test/lib
 modules:

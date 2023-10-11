@@ -1,5 +1,3 @@
-module array_extensions [1.0]
-
 syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
     {#let res = arr<} {$type} {#>(} {#);\n}
     {@i in $elems} {

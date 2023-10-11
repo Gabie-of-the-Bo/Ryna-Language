@@ -1,5 +1,3 @@
-module range [1.0]
-
 class Range {
     start: Int;
     current: Int;

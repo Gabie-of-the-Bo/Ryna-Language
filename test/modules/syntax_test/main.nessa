@@ -1,5 +1,3 @@
-module syntax_test [1.0]
-
 import syntax { array_initialization, list_comprehension } from array_extensions;
 
 let array = [i * i for i: Int in <Int>[1, 2, 3, 4, 5]];

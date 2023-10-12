@@ -1,6 +1,6 @@
 ---
 module_name: array_extensions
-version: "1.0"
+version: "0.1.0"
 hash: b6f3439afd6dcb443c8ae15124795889
 module_paths:
   - test/lib

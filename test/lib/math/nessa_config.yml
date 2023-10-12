@@ -1,6 +1,6 @@
 ---
 module_name: math
-version: "1.0"
+version: "0.1.0"
 hash: e300b5d96bd9494071daae351425bec8
 module_paths:
   - test/lib

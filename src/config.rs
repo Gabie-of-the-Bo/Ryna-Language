@@ -15,11 +15,11 @@ use crate::parser::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
-    path: String,
-    version: String,
+    pub path: String,
+    pub version: String,
 
     #[serde(skip)]
-    dependencies: HashSet<(String, String)>
+    pub dependencies: HashSet<(String, String)>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ pub struct NessaConfig {
 }
 
 fn default_version() -> String {
-    return "1.0".into();
+    return "0.1.0".into();
 }
 
 pub type Imports = HashMap<ImportType, HashSet<String>>;

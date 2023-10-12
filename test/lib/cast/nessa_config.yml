@@ -1,6 +1,6 @@
 ---
 module_name: cast
-version: "1.0"
+version: "0.1.0"
 hash: f773ca1ef351a9dde3ea4168f86b65e5
 module_paths:
   - test/lib

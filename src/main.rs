@@ -90,7 +90,8 @@ fn main() {
             Command::new("run")        
                 .arg(Arg::new("INPUT")
                 .help("Specifies the file you want to execute")
-                .required(true)
+                .required(false)
+                .default_value(".")
                 .index(1))
         )
         .subcommand(Command::new("new"))
@@ -105,11 +106,10 @@ fn main() {
 
     match args.subcommand() {
         Some(("run", run_args)) => {
-            let path = run_args.get_one::<String>("INPUT").expect("No input file was provided");
-            let file = fs::read_to_string(path).expect("Unable to locate file");
+            let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
 
             let mut ctx = standard_ctx();
-            let res = ctx.parse_and_execute_nessa_module(&file);
+            let res = ctx.parse_and_execute_nessa_project(path.into());
             
             if let Err(err) = res {
                 err.emit();
@@ -133,7 +133,7 @@ fn main() {
 
             let modules = Text::new("Modules path:")
                 .with_default("libs")
-                .with_validator(RegexValidator::new("^([a-zA-Z0-9_ ]+/?)+$", "Modules path contains invalid characters"))
+                .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
                 .with_placeholder("path/to/modules")
                 .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
                 .prompt().unwrap().trim().to_string();

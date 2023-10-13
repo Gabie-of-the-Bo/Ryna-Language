@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, path::Path};
 
 use crate::{types::TypeTemplate, interfaces::InterfaceImpl, compilation::{CompiledNessaExpr, NessaInstruction}, context::{NessaContext, standard_ctx, NUM_STD_TYPES, NUM_STD_INT_IMPL}};
 
@@ -31,12 +31,12 @@ impl CompiledNessaModule {
         return bitcode::serialize(self).expect("Unable to serialize code");
     }
 
-    pub fn from_file(&self, path: &str) -> Self {
+    pub fn from_file(path: &Path) -> Self {
         let data = fs::read(path).expect("Unable to read serialized code from file");
         return CompiledNessaModule::deserialize(&data);
     }
 
-    pub fn write_to_file(&self, path: &str) {
+    pub fn write_to_file(&self, path: &Path) {
         fs::write(path, self.serialize()).expect("Unable to write serialized code to file");
     }
 

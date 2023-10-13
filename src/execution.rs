@@ -1,3 +1,4 @@
+use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache};
 use crate::number::Integer;
 use crate::types::{Type, BOOL_ID, TypeInstance};
 use crate::object::Object;
@@ -20,6 +21,37 @@ impl NessaContext {
         }
         
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
+    }
+
+    pub fn parse_and_execute_nessa_project(&mut self, path: String) -> Result<(), NessaError> {
+        if let Some(mut code) = read_compiled_cache(&path) {
+            code.execute();
+
+            return Ok(());
+        }
+
+        match precompile_nessa_module_with_config(&path) {
+            Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
+                Ok(instr) => {
+                    let ser_module = ctx.get_serializable_module(&instr);
+                    
+                    if let Err(err) = save_compiled_cache(&path, &ser_module) {
+                        err.emit();
+                    }
+
+                    match self.execute_compiled_code(&instr.into_iter().map(|i| i.instruction).collect()) {
+                        Ok(_) => {},
+                        Err(err) => err.emit(),
+                    }
+                },
+
+                Err(err) => err.emit(),
+            },
+
+            Err(err) => err.emit(),
+        }
+        
+        return Ok(());
     }
 }
 

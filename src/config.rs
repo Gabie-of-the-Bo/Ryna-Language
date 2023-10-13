@@ -12,6 +12,7 @@ use crate::compilation::NessaError;
 use crate::context::*;
 use crate::graph::DirectedGraph;
 use crate::parser::*;
+use crate::serialization::CompiledNessaModule;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
@@ -178,13 +179,13 @@ fn parse_nessa_module_with_config<'a>(path: &String, already_compiled: &mut Hash
 pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<String>, modules: &mut HashMap<(String, String), ModuleInfo>, file_cache: &mut FileCache) -> Result<(), NessaError> {
     let main_path = module_path.join(Path::new("main.nessa"));
 
-    if !main_path.is_file() {
+    if !main_path.exists() {
         return Err(NessaError::module_error(format!("Main file ({}) does not exist", main_path.to_str().unwrap())));
     }
 
     let config_path = module_path.join(Path::new("nessa_config.yml"));
 
-    if !config_path.is_file() {
+    if !config_path.exists() {
         return Err(NessaError::module_error(format!("Config file ({}) does not exist", config_path.to_str().unwrap())));
     }
 
@@ -245,10 +246,43 @@ pub fn get_all_modules_cascade(module_path: &Path) -> Result<(HashMap<(String, S
 }
 
 pub fn precompile_nessa_module_with_config(path: &String) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
-    let (all_modules, file_cache) = get_all_modules_cascade(Path::new(&path)).unwrap();
+    let (all_modules, file_cache) = get_all_modules_cascade(Path::new(&path))?;
     let mut module = parse_nessa_module_with_config(path, &mut HashMap::new(), &all_modules, &file_cache)?;
 
     module.ctx.precompile_module(&mut module.code)?;
 
     return Ok((module.ctx, module.code));
+}
+
+pub fn read_compiled_cache(path: &String) -> Option<CompiledNessaModule> {
+    let module_path = Path::new(path);
+    let cache_path = module_path.join(Path::new("nessa_cache"));
+
+    if !cache_path.exists() {
+        return None;
+    }
+
+    let code_path = cache_path.join(Path::new("main.nessac"));
+
+    if !code_path.exists() {
+        return None;
+    }
+
+    let code = CompiledNessaModule::from_file(&code_path);
+
+    return Some(code);
+}
+
+pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Result<(), NessaError> {
+    let module_path = Path::new(path);
+    let cache_path = module_path.join(Path::new("nessa_cache"));
+
+    if !cache_path.exists() {
+        fs::create_dir(&cache_path).expect("Unable to create cache directory");
+    }
+
+    let code_path = cache_path.join(Path::new("main.nessac"));
+    module.write_to_file(&code_path);
+
+    return Ok(());
 }

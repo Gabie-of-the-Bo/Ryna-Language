@@ -25,7 +25,7 @@ impl NessaContext {
         return self.execute_compiled_code(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
 
-    pub fn parse_and_execute_nessa_project(&mut self, path: String) -> Result<(), NessaError> {
+    pub fn parse_and_execute_nessa_project(&mut self, path: String, force_recompile: bool) -> Result<(), NessaError> {
         let mut combined_hash = "".into();
         let mut all_modules = HashMap::new();
         let mut file_cache = HashMap::new();
@@ -36,12 +36,14 @@ impl NessaContext {
                 all_modules = all_mods;
                 file_cache = files;
 
-                if let Some(mut code) = read_compiled_cache(&path) {
-                    if hash == code.hash {
-                        code.execute();
-    
-                        return Ok(());    
-                    }    
+                if !force_recompile {
+                    if let Some(mut code) = read_compiled_cache(&path) {
+                        if hash == code.hash {
+                            code.execute();
+        
+                            return Ok(());    
+                        }    
+                    }
                 }
             }
 

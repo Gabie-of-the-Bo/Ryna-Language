@@ -1,6 +1,6 @@
 use std::{fs, collections::{HashMap, HashSet}, path::Path};
 
-use clap::{Arg, Command};
+use clap::{Arg, Command, ArgAction};
 use inquire::{Text, required, validator::StringValidator, Autocomplete};
 use regex::Regex;
 use glob::glob;
@@ -88,11 +88,21 @@ fn main() {
         .about("Executes Nessa code")
         .subcommand(
             Command::new("run")        
-                .arg(Arg::new("INPUT")
-                .help("Specifies the file you want to execute")
-                .required(false)
-                .default_value(".")
-                .index(1))
+                .arg(
+                    Arg::new("INPUT")
+                    .help("Specifies the file you want to execute")
+                    .required(false)
+                    .default_value(".")
+                    .index(1)
+                )
+                .arg(
+                    Arg::new("recompile")
+                    .help("Force recompilation")
+                    .long("recompile")
+                    .short('r')
+                    .action(ArgAction::SetTrue)
+                    .default_value("false")
+                )
         )
         .subcommand(Command::new("new"))
         .subcommand(Command::new("add"))
@@ -107,9 +117,10 @@ fn main() {
     match args.subcommand() {
         Some(("run", run_args)) => {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
+            let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
 
             let mut ctx = standard_ctx();
-            let res = ctx.parse_and_execute_nessa_project(path.into());
+            let res = ctx.parse_and_execute_nessa_project(path.into(), force_recompile);
             
             if let Err(err) = res {
                 err.emit();

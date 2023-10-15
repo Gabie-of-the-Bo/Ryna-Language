@@ -1,4 +1,6 @@
-use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache};
+use std::collections::HashMap;
+
+use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::number::Integer;
 use crate::types::{Type, BOOL_ID, TypeInstance};
 use crate::object::Object;
@@ -24,16 +26,32 @@ impl NessaContext {
     }
 
     pub fn parse_and_execute_nessa_project(&mut self, path: String) -> Result<(), NessaError> {
-        if let Some(mut code) = read_compiled_cache(&path) {
-            code.execute();
+        let mut combined_hash = "".into();
+        let mut all_modules = HashMap::new();
+        let mut file_cache = HashMap::new();
 
-            return Ok(());
+        match compute_project_hash(&path) {
+            Ok((hash, all_mods, files)) => {
+                combined_hash = hash.clone();
+                all_modules = all_mods;
+                file_cache = files;
+
+                if let Some(mut code) = read_compiled_cache(&path) {
+                    if hash == code.hash {
+                        code.execute();
+    
+                        return Ok(());    
+                    }    
+                }
+            }
+
+            Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path) {
+        match precompile_nessa_module_with_config(&path, all_modules, file_cache) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
                 Ok(instr) => {
-                    let ser_module = ctx.get_serializable_module(&instr);
+                    let ser_module = ctx.get_serializable_module(combined_hash, &instr);
                     
                     if let Err(err) = save_compiled_cache(&path, &ser_module) {
                         err.emit();

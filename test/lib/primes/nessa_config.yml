@@ -1,10 +1,10 @@
 ---
 module_name: primes
-version: "0.1.0"
+version: 0.1.0
 hash: cb99433e5e507a56e2549bae29f7b181
 module_paths:
   - test/lib
 modules:
   range:
     path: test/lib/range
-    version: "0.1.0"
+    version: 0.1.0

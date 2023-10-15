@@ -33,7 +33,7 @@ pub mod graph;
 mod integration {
     use std::fs::read_to_string;
     use crate::context::standard_ctx;
-    use crate::config::precompile_nessa_module_with_config;
+    use crate::config::{precompile_nessa_module_with_config, compute_project_hash};
 
     fn integration_test(file_path: &str) {
         let file = read_to_string(file_path).expect("Unable to locate file");
@@ -46,7 +46,8 @@ mod integration {
 
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
-        let err = precompile_nessa_module_with_config(path_str);
+        let (_, all_mods, files) = compute_project_hash(&path_str).unwrap();
+        let err = precompile_nessa_module_with_config(path_str, all_mods, files);
 
         if let Err(err) = &err {
             err.emit();

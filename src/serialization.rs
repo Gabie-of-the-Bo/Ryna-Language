@@ -7,14 +7,16 @@ use bitcode;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledNessaModule {
+    pub hash: String,
     type_templates: Vec<TypeTemplate>,
     interface_impls: Vec<InterfaceImpl>,
     instructions: Vec<CompiledNessaExpr>
 }
 
 impl NessaContext {
-    pub fn get_serializable_module(&self, instructions: &Vec<NessaInstruction>) -> CompiledNessaModule {
-        return CompiledNessaModule { 
+    pub fn get_serializable_module(&self, hash: String, instructions: &Vec<NessaInstruction>) -> CompiledNessaModule {
+        return CompiledNessaModule {
+            hash, 
             type_templates: self.type_templates[NUM_STD_TYPES..].iter().cloned().collect(), 
             interface_impls: self.interface_impls[NUM_STD_INT_IMPL..].iter().cloned().collect(), 
             instructions: instructions.iter().map(|i| i.instruction.clone()).collect()

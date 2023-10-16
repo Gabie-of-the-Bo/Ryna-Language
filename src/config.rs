@@ -203,7 +203,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
         fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
     }
 
-    file_cache.insert(normalize_path(module_path), (config_yml.clone(), imports.clone(), main.clone()));
+    file_cache.insert(normalize_path(module_path)?, (config_yml.clone(), imports.clone(), main.clone()));
 
     for module in imports.keys() {
         if !config_yml.modules.contains_key(module) {
@@ -212,7 +212,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
     }
 
     modules.entry((config_yml.module_name, config_yml.version.clone())).or_insert(ModuleInfo { 
-        path: normalize_path(module_path), 
+        path: normalize_path(module_path)?, 
         version: config_yml.version, 
         dependencies: config_yml.modules.into_iter().map(|i| (i.0, i.1.version)).filter(|(i, _)| imports.contains_key(i)).collect()
     });
@@ -248,7 +248,7 @@ pub fn get_all_modules_cascade(module_path: &Path) -> Result<(HashMap<(String, S
 }
 
 pub fn precompile_nessa_module_with_config(path: &String, all_modules: HashMap<(String, String), ModuleInfo>, file_cache: FileCache) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
-    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path)), &mut HashMap::new(), &all_modules, &file_cache)?;
+    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache)?;
 
     module.ctx.precompile_module(&mut module.code)?;
 
@@ -259,20 +259,13 @@ pub fn compute_project_hash(path: &String) -> Result<(String, HashMap<(String, S
     let module_path = Path::new(path);
     let (all_modules, file_cache) = get_all_modules_cascade(module_path)?;
 
-    for (path, _) in &file_cache {
-        println!("Info: {}", path);
-    }
-
-    println!();
-
-    let config_yml = &file_cache.get(&normalize_path(module_path)).unwrap().0;
+    let config_yml = &file_cache.get(&normalize_path(module_path)?).unwrap().0;
 
     let mut final_hash = config_yml.hash.clone();
 
     // Add the hashes of all submodules
     for (_, info) in &config_yml.modules {
-        println!("Dep:  {}", normalize_path(Path::new(&info.path)));
-        final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))).unwrap().0.hash);
+        final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 
     return Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache));
@@ -311,8 +304,14 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
     return Ok(());
 }
 
-pub fn normalize_path(path: &Path) -> String {
+pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     let path_slashes = path.to_str().unwrap().replace("\\", "/");
-    println!("Conv: {path_slashes}");
-    return Path::new(&path_slashes).canonicalize().unwrap().to_str().unwrap().into();
+    
+    return match Path::new(&path_slashes).canonicalize() {
+        Ok(p) => Ok(p.to_str().unwrap().into()),
+        Err(_) => Err(NessaError::module_error(format!(
+            "Unable to normalize path: {} (does it exist?)",
+            path_slashes.green()
+        ))),
+    };
 }

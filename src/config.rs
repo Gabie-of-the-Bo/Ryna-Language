@@ -93,7 +93,7 @@ impl NessaConfig {
                 },
 
                 None => {
-                    return Err(NessaError::module_error(format!("Module {} [{}] was not found", node.0.green(), node.1.cyan())));
+                    return Err(NessaError::module_error(format!("Module {} {} was not found", node.0.green(), format!("v{}", node.1).cyan())));
                 },
             }
 

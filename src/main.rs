@@ -1,6 +1,7 @@
 use std::{fs, collections::{HashMap, HashSet}, path::Path};
 
 use clap::{Arg, Command, ArgAction};
+use colored::Colorize;
 use inquire::{Text, required, validator::StringValidator, Autocomplete};
 use regex::Regex;
 use glob::glob;
@@ -83,11 +84,12 @@ fn main() {
     */
 
     let args = Command::new("Nessa Interpreter")
-        .version("0.1 alpha")
+        .version("0.1.0")
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
         .subcommand(
-            Command::new("run")        
+            Command::new("run")      
+                .about("Run Nessa project")
                 .arg(
                     Arg::new("INPUT")
                     .help("Specifies the file you want to execute")
@@ -104,8 +106,49 @@ fn main() {
                     .default_value("false")
                 )
         )
-        .subcommand(Command::new("new"))
-        .subcommand(Command::new("add"))
+        .subcommand(
+            Command::new("new")
+            .about("Create Nessa project with config files")
+            .arg(
+                Arg::new("name")
+                .help("Project name")
+                .required(false)
+                .long("name")
+                .short('n')
+            )
+            .arg(
+                Arg::new("version")
+                .help("Project version")
+                .required(false)
+                .long("version")
+                .short('v')
+            )
+            .arg(
+                Arg::new("modules")
+                .help("Modules path")
+                .required(false)
+                .long("modules")
+                .short('m')
+            )
+        )
+        .subcommand(
+            Command::new("add")
+            .about("Add dependency to a Nessa project")
+            .arg(
+                Arg::new("name")
+                .help("Module name")
+                .required(false)
+                .long("name")
+                .short('n')
+            )
+            .arg(
+                Arg::new("version")
+                .help("Project version")
+                .required(false)
+                .long("version")
+                .short('v')
+            )
+        )
         .get_matches();
 
     /*
@@ -127,27 +170,46 @@ fn main() {
             }
         }
 
-        Some(("new", _)) => {
-            let name = Text::new("Project name:")
-                .with_validator(required!("Project name must not be empty"))
-                .with_validator(RegexValidator::new("^[a-zA-Z0-9_]+$", "Project name contains invalid characters"))
-                .with_placeholder("my_new_project")
-                .with_help_message("This is the name that you will use to import your module")
-                .prompt().unwrap();
+        Some(("new", run_args)) => {
+            let name;
+            let version;
+            let modules;
 
-            let version = Text::new("Initial version:")
-                .with_default("0.1.0")
-                .with_validator(required!("Initial version must not be empty"))
-                .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
-                .with_help_message("Versions can be changed later and must follow SemVer")
-                .prompt().unwrap();
+            if let Some(n) = run_args.get_one::<String>("name") {
+                name = n.clone();
 
-            let modules = Text::new("Modules path:")
-                .with_default("libs")
-                .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
-                .with_placeholder("path/to/modules")
-                .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
-                .prompt().unwrap().trim().to_string();
+            } else {
+                name = Text::new("Project name:")
+                    .with_validator(required!("Project name must not be empty"))
+                    .with_validator(RegexValidator::new("^[a-zA-Z0-9_]+$", "Project name contains invalid characters"))
+                    .with_placeholder("my_new_project")
+                    .with_help_message("This is the name that you will use to import your module")
+                    .prompt().unwrap();
+            }
+
+            if let Some(v) = run_args.get_one::<String>("version") {
+                version = v.clone();
+
+            } else {
+                version = Text::new("Initial version:")
+                    .with_default("0.1.0")
+                    .with_validator(required!("Initial version must not be empty"))
+                    .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
+                    .with_help_message("Versions can be changed later and must follow SemVer")
+                    .prompt().unwrap();
+            }
+
+            if let Some(m) = run_args.get_one::<String>("modules") {
+                modules = m.clone();
+
+            } else {
+                modules = Text::new("Modules path:")
+                    .with_default("libs")
+                    .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
+                    .with_placeholder("path/to/modules")
+                    .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
+                    .prompt().unwrap().trim().to_string();
+            }
 
             let module_path = Path::new(&name);
 
@@ -169,7 +231,7 @@ fn main() {
             fs::write(module_path.join(Path::new("main.nessa")), DEFAULT_CODE).expect("Unable to write main file");
         }
 
-        Some(("add", _)) => {
+        Some(("add", run_args)) => {
             let module_path = Path::new(".");
 
             let config_path = module_path.join(Path::new("nessa_config.yml"));
@@ -204,26 +266,48 @@ fn main() {
                     }
                 }    
             }
-            
-            let name = Text::new("Module name:")
-                .with_validator(required!("Module name must not be empty"))
-                .with_validator(RegexValidator::new("^[a-zA-Z0-9_]+$", "Module name contains invalid characters"))
-                .with_placeholder("my_module")
-                .with_help_message("This is the name of the module you are importing")
-                .with_autocomplete(OptionsAutocompleter {
-                    options: module_versions.keys().cloned().collect()
-                })
-                .prompt().unwrap();
 
-            let version = Text::new("Version:")
-                .with_validator(required!("Module version must not be empty"))
-                .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
-                .with_help_message("Versions can be changed later and must follow SemVer")
-                .with_autocomplete(OptionsAutocompleter {
-                    options: module_versions.get(&name).cloned().unwrap_or(HashSet::new()).into_iter().collect()
-                })
-                .prompt().unwrap();
-            
+            let name;
+            let version;
+
+            if let Some(n) = run_args.get_one::<String>("name") {
+                name = n.clone();
+
+            } else {
+                name = Text::new("Module name:")
+                    .with_validator(required!("Module name must not be empty"))
+                    .with_validator(RegexValidator::new("^[a-zA-Z0-9_]+$", "Module name contains invalid characters"))
+                    .with_placeholder("my_module")
+                    .with_help_message("This is the name of the module you are importing")
+                    .with_autocomplete(OptionsAutocompleter {
+                        options: module_versions.keys().cloned().collect()
+                    })
+                    .prompt().unwrap();
+            }
+
+            if let Some(v) = run_args.get_one::<String>("version") {
+                version = v.clone();
+
+            } else {
+                version = Text::new("Version:")
+                    .with_validator(required!("Module version must not be empty"))
+                    .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
+                    .with_help_message("Versions can be changed later and must follow SemVer")
+                    .with_autocomplete(OptionsAutocompleter {
+                        options: module_versions.get(&name).cloned().unwrap_or(HashSet::new()).into_iter().collect()
+                    })
+                    .prompt().unwrap();
+            }
+
+            if paths.get(&(name.clone(), version.clone())).is_none() {
+                println!(
+                    "{} module {} {} was not found. Setting empty module path...",
+                    "Warning:".yellow(),
+                    name.green(),
+                    format!("v{version}").cyan()
+                )
+            }
+
             config_yml.modules.insert(name.clone(), ModuleInfo {
                 path: paths.get(&(name, version.clone())).cloned().unwrap_or("".into()),
                 version: version,
@@ -233,6 +317,6 @@ fn main() {
             fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
         }
 
-        _ => panic!("Invalid subcommand")
+        _ => unreachable!()
     };
 }

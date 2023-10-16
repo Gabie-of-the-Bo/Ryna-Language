@@ -312,6 +312,7 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
 }
 
 pub fn normalize_path(path: &Path) -> String {
-    println!("Conv: {:?}", path);
-    return path.canonicalize().unwrap().to_str().unwrap().replace("\\", "/");
+    let path_slashes = path.to_str().unwrap().replace("\\", "/");
+    println!("Conv: {path_slashes}");
+    return Path::new(&path_slashes).canonicalize().unwrap().to_str().unwrap().into();
 }

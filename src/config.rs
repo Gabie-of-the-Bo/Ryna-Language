@@ -312,5 +312,6 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
 }
 
 pub fn normalize_path(path: &Path) -> String {
+    println!("Conv: {:?}", path);
     return path.canonicalize().unwrap().to_str().unwrap().replace("\\", "/");
 }

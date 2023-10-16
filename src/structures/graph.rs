@@ -45,7 +45,10 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
     pub fn connections(&self, v: &Vertex) -> Result<HashSet<(&Vertex, &Edge)>, String> {
         if self.contains(v) {
             let idx = self.vertex_idx_unchecked(v);
-            return Ok(self.connections.get(&idx).unwrap().iter().map(|(k, v)| (self.vertex_by_idx(*k), v)).collect());
+
+            if let Some(conn) = self.connections.get(&idx) {
+                return Ok(conn.iter().map(|(k, v)| (self.vertex_by_idx(*k), v)).collect());
+            }
         }
         
         return Err("Vertex is not in the graph".into());
@@ -118,5 +121,62 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
         }
 
         return format!("digraph G {{\n{}\n}}", lines.join("\n"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::DirectedGraph;
+
+    #[test]
+    fn graph_construction() {
+        let mut g = DirectedGraph::new();
+
+        g.connect("A", "B", 1);
+        g.connect("A", "C", 2);
+        g.connect("A", "D", 3);
+
+        g.connect("B", "C", 2);
+        g.connect("B", "D", 2);
+        g.connect("B", "C", 3);
+
+        g.connect("D", "D", 4);
+
+        assert!(g.contains(&"A"));
+        assert!(g.contains(&"B"));
+        assert!(g.contains(&"C"));
+        assert!(g.contains(&"D"));
+        assert!(!g.contains(&"E"));
+
+        assert_eq!(
+            g.connections(&"A"),
+            Ok([(&"B", &1), (&"C", &2), (&"D", &3)].iter().cloned().collect())
+        );
+
+        assert_eq!(
+            g.connections(&"B"),
+            Ok([(&"C", &2), (&"D", &2), (&"C", &3)].iter().cloned().collect())
+        );
+
+        assert!(g.connections(&"C").is_err());
+
+        assert_eq!(
+            g.connections(&"D"),
+            Ok([(&"D", &4)].iter().cloned().collect())
+        );
+
+        let mut dfs_nodes = HashSet::new();
+        g.dfs(&"A", |i| { dfs_nodes.insert(*i); });
+
+        assert_eq!(dfs_nodes.len(), 4);
+
+        let mut bfs_nodes = HashSet::new();
+        g.bfs(&"A", |i| { bfs_nodes.insert(*i); });
+
+        assert_eq!(bfs_nodes.len(), 4);
+
+        assert_eq!(g.to_dot(|i| i.to_string()).len(), 90);
     }
 }

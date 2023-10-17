@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use crate::{types::TypeTemplate, interfaces::InterfaceImpl, compilation::{CompiledNessaExpr, NessaInstruction}, context::{NessaContext, standard_ctx, NUM_STD_TYPES, NUM_STD_INT_IMPL}};
+use crate::{types::TypeTemplate, interfaces::InterfaceImpl, compilation::{CompiledNessaExpr, NessaInstruction, NessaError}, context::{NessaContext, standard_ctx, NUM_STD_TYPES, NUM_STD_INT_IMPL}, execution::ExecutionInfo};
 
 use serde::{Serialize, Deserialize};
 use bitcode;
@@ -42,14 +42,12 @@ impl CompiledNessaModule {
         fs::write(path, self.serialize()).expect("Unable to write serialized code to file");
     }
 
-    pub fn execute(&mut self) {
+    pub fn execute<const DEBUG: bool>(&mut self) -> Result<Option<ExecutionInfo>, NessaError> {
         let mut ctx = standard_ctx();
 
         ctx.type_templates.append(&mut self.type_templates);
         ctx.interface_impls.append(&mut self.interface_impls);
 
-        if let Err(err) = ctx.execute_compiled_code(&self.instructions) {
-            err.emit();
-        }
+        return ctx.execute_compiled_code::<DEBUG>(&self.instructions);
     }
 }

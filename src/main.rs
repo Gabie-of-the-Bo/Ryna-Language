@@ -88,8 +88,27 @@ fn main() {
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
         .subcommand(
-            Command::new("run")      
+            Command::new("run")
                 .about("Run Nessa project")
+                .arg(
+                    Arg::new("INPUT")
+                    .help("Specifies the file you want to execute")
+                    .required(false)
+                    .default_value(".")
+                    .index(1)
+                )
+                .arg(
+                    Arg::new("recompile")
+                    .help("Force recompilation")
+                    .long("recompile")
+                    .short('r')
+                    .action(ArgAction::SetTrue)
+                    .default_value("false")
+                )
+        )
+        .subcommand(
+            Command::new("profile")
+                .about("Profile Nessa project")
                 .arg(
                     Arg::new("INPUT")
                     .help("Specifies the file you want to execute")
@@ -158,15 +177,34 @@ fn main() {
     */
 
     match args.subcommand() {
+        Some(("profile", run_args)) |
         Some(("run", run_args)) => {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
 
             let mut ctx = standard_ctx();
-            let res = ctx.parse_and_execute_nessa_project(path.into(), force_recompile);
+
+            let res;
+
+            if let Some(("profile", _)) = args.subcommand() {
+                res = ctx.parse_and_execute_nessa_project::<true>(path.into(), force_recompile);
+
+            } else {
+                res = ctx.parse_and_execute_nessa_project::<false>(path.into(), force_recompile);
+            }
             
-            if let Err(err) = res {
-                err.emit();
+            match res {
+                Ok(Some(ex)) => {
+                    let proj_path = Path::new(path);
+                    let prof_path = proj_path.join("nessa_cache/prof.json");
+
+                    let prof_file = serde_json::to_string(&ex).expect("Unable to serialize profiling information");
+
+                    fs::write(prof_path, prof_file).expect("Unable to write profiling information file");
+                },
+
+                Ok(None) => {}
+                Err(err) => err.emit(),
             }
         }
 

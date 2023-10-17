@@ -23,6 +23,7 @@ nom_locate = "4.1.0"
 clap = "4.4.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
+serde_json = "1.0"
 glob = "0.2.8"
 md5 = "*"
 colored = "2"

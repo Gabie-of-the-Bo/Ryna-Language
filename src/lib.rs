@@ -57,7 +57,7 @@ mod integration {
 
         match ctx.compiled_form(&lines) {
             Ok(code) => {
-                if let Err(err) = ctx.execute_compiled_code(&code.into_iter().map(|i| i.instruction).collect()) {
+                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect()) {
                     err.emit();
                 }
             },

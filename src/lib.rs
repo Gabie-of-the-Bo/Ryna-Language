@@ -162,6 +162,11 @@ mod integration {
     }
 
     #[test]
+    fn short_circuit() {
+        integration_test("test/short_circuit.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

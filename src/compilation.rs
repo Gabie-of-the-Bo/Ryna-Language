@@ -644,8 +644,8 @@ pub enum CompiledNessaExpr {
 
     Jump(usize),
     RelativeJump(i32),
-    RelativeJumpIfFalse(usize),
-    RelativeJumpIfTrue(usize),
+    RelativeJumpIfFalse(usize, bool),
+    RelativeJumpIfTrue(usize, bool),
     Call(usize),
     Return,
 
@@ -735,8 +735,8 @@ impl CompiledNessaExpr {
 
             Jump(to) => format!("{}({})", "Jump".green(), to.to_string().blue()),
             RelativeJump(to) => format!("{}({})", "RelativeJump".green(), to.to_string().blue()),
-            RelativeJumpIfTrue(to) => format!("{}({})", "RelativeJumpIfTrue".green(), to.to_string().blue()),
-            RelativeJumpIfFalse(to) => format!("{}({})", "RelativeJumpIfFalse".green(), to.to_string().blue()),
+            RelativeJumpIfTrue(to, p) => format!("{}({}, {})", "RelativeJumpIfTrue".green(), to.to_string().blue(), p.to_string().blue()),
+            RelativeJumpIfFalse(to, p) => format!("{}({}, {})", "RelativeJumpIfFalse".green(), to.to_string().blue(), p.to_string().blue()),
 
             Construct(id, length, args) => format!(
                 "{}({}, {}, {{{}}})", "Construct".green(), 
@@ -1888,7 +1888,11 @@ impl NessaContext{
                 ))?;
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
-                let offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+                let mut offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+
+                if (*id == AND_BINOP_ID || *id == OR_BINOP_ID) && *a_t.deref_type() == BOOL && *b_t.deref_type() == BOOL {
+                    offset += 1;
+                }
 
                 Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1 + offset)
             },
@@ -1898,10 +1902,10 @@ impl NessaContext{
             Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
             
             If(_, ih, ib, ei, e) => {
-                let mut res = self.compiled_form_size(ih, false, root_counter)? + self.compiled_form_body_size(ib, true)? + 1;
+                let mut res = self.compiled_form_size(ih, false, root_counter)? + self.compiled_form_body_size(ib, true)? + 2;
 
                 for (h, b) in ei {
-                    res += self.compiled_form_size(h, false, root_counter)? + self.compiled_form_body_size(b, true)? + 1
+                    res += self.compiled_form_size(h, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2;
                 }
 
                 if let Some(b) = e {
@@ -2106,11 +2110,20 @@ impl NessaContext{
 
                 let res_op;
 
+                // Short circuit
+                let mut short_circuit = false;
+                let mut short_circuit_on = true;
+
                 if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())) {
                     res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos));
 
-                } else {                    
-                    if let Some((opcode, _)) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)) {                    
+                } else {
+                    if (*id == AND_BINOP_ID || *id == OR_BINOP_ID) && *a_t.deref_type() == BOOL && *b_t.deref_type() == BOOL {
+                        short_circuit = true;
+                        short_circuit_on = *id == OR_BINOP_ID; // True on OR and false on AND
+                    }
+
+                    if let Some((opcode, _)) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)) {
                         // Deref if necessary
                         if opcode.needs_deref() {
                             if a_t.is_ref() {
@@ -2140,9 +2153,26 @@ impl NessaContext{
                     }
                 }
                 
-                let mut res = res_a;
-                res.append(&mut res_b);
-                res.push(res_op);
+                let mut res;
+
+                if short_circuit {
+                    res = res_b;
+
+                    if short_circuit_on {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(res_a.len() + 2, true)));
+
+                    } else {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(res_a.len() + 2, true)));
+                    }
+
+                    res.append(&mut res_a);
+    
+                } else {
+                    res = res_a;
+                    res.append(&mut res_b);
+                }
+
+                res.push(res_op);    
 
                 Ok(res)
             },
@@ -2183,21 +2213,39 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(ih, lambda_positions, false)?;
                 let if_body = self.compiled_form_body(ib, lambda_positions)?;
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 1)));
+                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 2, false)));
                 res.extend(if_body);
 
+                let mut elif = vec!();
+                let mut else_body = vec!();
+                let mut complete_size = 1;
+
                 for (h, b) in ei {
-                    res.extend(self.compiled_form_expr(h, lambda_positions, false)?);
+                    let cond = self.compiled_form_expr(h, lambda_positions, false)?;
+                    let body = self.compiled_form_body(b, lambda_positions)?;
+                    
+                    complete_size += cond.len() + body.len() + 2;
 
-                    let elif_body = self.compiled_form_body(b, lambda_positions)?;
-
-                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(elif_body.len() + 1)));
-                    res.extend(elif_body);
+                    elif.push((cond, body));
                 }
 
                 if let Some(b) = e {
-                    res.extend(self.compiled_form_body(b, lambda_positions)?);
+                    else_body = self.compiled_form_body(b, lambda_positions)?;
+                    complete_size += else_body.len();
                 }
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJump(complete_size as i32)));
+
+                for (cond, body) in elif {
+                    complete_size -= cond.len() + body.len() + 2;
+
+                    res.extend(cond);
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(body.len() + 2, false)));
+                    res.extend(body);
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJump(complete_size as i32)));
+                }
+
+                res.extend(else_body);
 
                 Ok(res)
             },
@@ -2209,7 +2257,7 @@ impl NessaContext{
                 // Add while body
                 let beginning_jmp = CompiledNessaExpr::RelativeJump(-(while_body.len() as i32 + res.len() as i32 + 1));
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(while_body.len() + 2)));
+                res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(while_body.len() + 2, false)));
                 res.extend(while_body);
 
                 // Jump to the beginning of the loop
@@ -2254,7 +2302,7 @@ impl NessaContext{
                                     }                                    
 
                                     // Jump to end of loop
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5)));
+                                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5, false)));
 
                                     // Get next value
                                     res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::number::Integer;
-use crate::types::{Type, BOOL_ID, TypeInstance};
+use crate::types::{Type, TypeInstance};
 use crate::object::Object;
 use crate::context::NessaContext;
 use crate::operations::Operator;
@@ -78,14 +78,6 @@ impl NessaContext {
 impl NessaContext {
     pub fn execute_compiled_code(&mut self, program: &Vec<CompiledNessaExpr>) -> Result<(), NessaError> {
         use CompiledNessaExpr::*;
-
-        fn check_bool_obj(obj: Object) -> bool {
-            if let Type::Basic(BOOL_ID) = obj.get_type() {
-                return *obj.get::<bool>();
-            }
-
-            unreachable!();
-        }
 
         let mut ip: i32 = 0;
         let mut offset: usize = 0;
@@ -223,16 +215,32 @@ impl NessaContext {
 
                 Jump(to) => ip = *to as i32,
                 RelativeJump(to) => ip += *to,
-                RelativeJumpIfFalse(to) => {
-                    if !check_bool_obj(stack.pop().unwrap()) {
+                RelativeJumpIfFalse(to, false) => {
+                    if !*stack.pop().unwrap().get::<bool>() {
                         ip += *to as i32;
 
                     } else {
                         ip += 1;
                     }
                 },
-                RelativeJumpIfTrue(to) => {
-                    if check_bool_obj(stack.pop().unwrap()) {
+                RelativeJumpIfTrue(to, false) => {
+                    if *stack.pop().unwrap().get::<bool>() {
+                        ip += *to as i32;
+
+                    } else {
+                        ip += 1;
+                    }
+                },
+                RelativeJumpIfFalse(to, true) => {
+                    if !*stack.last().unwrap().get::<bool>() {
+                        ip += *to as i32;
+
+                    } else {
+                        ip += 1;
+                    }
+                },
+                RelativeJumpIfTrue(to, true) => {
+                    if *stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
 
                     } else {

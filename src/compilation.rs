@@ -166,8 +166,18 @@ impl<'a> From<nom::Err<VerboseError<Span<'a>>>> for NessaError {
     ╘═════════════════════════════════╛
 */
 
-impl NessaContext {
+#[macro_export]
+macro_rules! nessa_warning {
+    ($pat: expr, $first: expr $( , $more: expr)*) => {
+        println!(
+            "{} {}",
+            "[Warning]".yellow(),
+            format!($pat, $first, $($more,)*)
+        );
+    };
+}
 
+impl NessaContext {
     /*
         ╒══════════════════════╕
         │ Function compilation │

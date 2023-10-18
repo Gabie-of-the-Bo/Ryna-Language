@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete};
 use regex::Regex;
 use glob::glob;
 
-use nessa::{context::*, config::{NessaConfig, ModuleInfo}};
+use nessa::{context::*, config::{NessaConfig, ModuleInfo}, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -336,12 +336,11 @@ fn main() {
             }
 
             if paths.get(&(name.clone(), version.clone())).is_none() {
-                println!(
-                    "{} module {} {} was not found. Setting empty module path...",
-                    "Warning:".yellow(),
+                nessa_warning!(
+                    "module {} {} was not found. Setting empty module path...",
                     name.green(),
                     format!("v{version}").cyan()
-                )
+                );
             }
 
             config_yml.modules.insert(name.clone(), ModuleInfo {

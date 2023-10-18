@@ -101,8 +101,26 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("print".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[Type::TemplateParam(0, vec!(PRINTABLE))], Type::Empty, |_, _, v, _| { 
-        print!("{}", v[0].to_string());
+    ctx.define_native_function_overload(idx, 0, &[INT], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].get::<Integer>().to_string());
+
+        return Ok(Object::empty());
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FLOAT], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].get::<f64>().to_string());
+
+        return Ok(Object::empty());
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[BOOL], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].get::<bool>().to_string());
+
+        return Ok(Object::empty());
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].get::<String>());
 
         return Ok(Object::empty());
     }).unwrap();

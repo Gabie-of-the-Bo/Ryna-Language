@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use colored::Colorize;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
+use crate::nessa_warning;
 use crate::number::Integer;
 use crate::types::{Type, TypeInstance};
 use crate::object::Object;
@@ -43,6 +45,13 @@ impl NessaContext {
                 if !force_recompile {
                     if let Some(mut code) = read_compiled_cache(&path) {
                         if hash == code.hash {
+                            if DEBUG {
+                                nessa_warning!(
+                                    "Function timings will not be dumped when executing cached code (use {} to force recompilation)",
+                                    "--recompile".green()
+                                );
+                            }
+
                             return code.execute::<DEBUG>(); 
                         }    
                     }

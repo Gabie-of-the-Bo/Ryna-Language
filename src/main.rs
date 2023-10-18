@@ -337,7 +337,7 @@ fn main() {
 
             if paths.get(&(name.clone(), version.clone())).is_none() {
                 nessa_warning!(
-                    "module {} {} was not found. Setting empty module path...",
+                    "Module {} {} was not found. Setting empty module path...",
                     name.green(),
                     format!("v{version}").cyan()
                 );

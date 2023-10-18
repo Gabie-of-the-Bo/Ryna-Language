@@ -86,9 +86,9 @@ macro_rules! define_binary_function_overloads {
 }
 
 // Constant identifiers
-pub const ITERATOR_FUNC_ID: usize = 5;
-pub const NEXT_FUNC_ID: usize = 6;
-pub const IS_CONSUMED_FUNC_ID: usize = 7;
+pub const ITERATOR_FUNC_ID: usize = 7;
+pub const NEXT_FUNC_ID: usize = 8;
+pub const IS_CONSUMED_FUNC_ID: usize = 9;
 
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
@@ -129,6 +129,18 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v, _| {
         return Ok(v[0].deref_obj());
+    }).unwrap();
+
+    let idx = ctx.define_function("ref".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), |_, _, v, _| {
+        return Ok(v[0].get_ref_obj());
+    }).unwrap();
+
+    let idx = ctx.define_function("mut".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
+        return Ok(v[0].get_ref_mut_obj());
     }).unwrap();
 
     let idx = ctx.define_function("arr".into()).unwrap();

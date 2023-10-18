@@ -1567,24 +1567,50 @@ impl NessaContext{
         // Define function indexes
         for expr in lines {
             match expr {
-                NessaExpr::FunctionDefinition(_, id, t, a, _, b) => {
+                NessaExpr::FunctionDefinition(_, id, t, a, ret, b) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                     let and = Type::And(arg_types.clone());
 
                     if let Some(usages) = self.cache.usages.functions.get_checked(id) {
                         for (args, ov) in usages {
-                            if Type::And(args.clone()).bindable_to(&and, self) {                                
+                            if Type::And(args.clone()).bindable_to(&and, self) {
                                 // Find function overload id    
                                 if let Some(_) = self.cache.overloads.functions.get_checked(&(*id, args.clone(), ov.clone())) {
+                                    let init_loc = program_size;
                                     self.cache.locations.functions.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
                                         program_size += self.compiled_form_body_size(b, true)? + a.len();
+                                        
+                                        let signature = format!(
+                                            "fn {}({}) -> {}",
+                                            self.functions[*id].name,
+                                            a.iter().map(|(_, at)| {
+                                                at.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
         
                                     } else {                                
                                         let arg_types = a.iter().map(|(_, t)| t.clone()).collect();
                                         let sub_b = self.cache.templates.functions.get_checked(&(*id, ov.clone(), arg_types)).unwrap(); 
                                         program_size += self.compiled_form_body_size(&sub_b, true)? + a.len();
+
+                                        let signature = format!(
+                                            "fn<{}> {}({}) -> {}",
+                                            ov.iter().map(|i| {
+                                                i.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            self.functions[*id].name,
+                                            a.iter().map(|(_, at)| {
+                                                at.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
                                     }    
                                 }
                             }
@@ -1592,21 +1618,51 @@ impl NessaContext{
                     }
                 },
                 
-                NessaExpr::PrefixOperationDefinition(_, id, t, _, tp, _, b) |
-                NessaExpr::PostfixOperationDefinition(_, id, t, _, tp, _, b) => {
+                NessaExpr::PrefixOperationDefinition(_, id, t, _, tp, ret, b) |
+                NessaExpr::PostfixOperationDefinition(_, id, t, _, tp, ret, b) => {
                     if let Some(usages) = self.cache.usages.unary.get_checked(id) {
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&tp, self) {                                
                                 // Find overload id    
                                 if let Some(_) = self.cache.overloads.unary.get_checked(&(*id, args.clone(), ov.clone())) {
+                                    let init_loc = program_size;
                                     self.cache.locations.unary.insert((*id, args.clone(), ov.clone()), program_size);
+
+                                    let prefix = if let Operator::Unary { prefix, .. } = self.unary_ops[*id] {
+                                        prefix   
+                                    } else {
+                                        false
+                                    };
                                     
                                     if t.is_empty() {
                                         program_size += self.compiled_form_body_size(b, true)? + 1;
         
+                                        let signature = format!(
+                                            "op {}({}){} -> {}",
+                                            if prefix { self.unary_ops[*id].get_repr() } else { "".into() },
+                                            tp.get_name_plain(self),
+                                            if prefix { "".into() } else { self.unary_ops[*id].get_repr() },
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
+
                                     } else {                                
                                         let sub_b = self.cache.templates.unary.get_checked(&(*id, ov.clone(), vec!(tp.clone()))).unwrap(); 
                                         program_size += self.compiled_form_body_size(&sub_b, true)? + 1;
+
+                                        let signature = format!(
+                                            "op<{}> {}({}){} -> {}",
+                                            ov.iter().map(|i| {
+                                                i.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            if prefix { self.unary_ops[*id].get_repr() } else { "".into() },
+                                            tp.get_name_plain(self),
+                                            if prefix { "".into() } else { self.unary_ops[*id].get_repr() },
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
                                     }    
                                 }
                             }
@@ -1614,7 +1670,7 @@ impl NessaContext{
                     }
                 }
                 
-                NessaExpr::BinaryOperationDefinition(_, id, t, (_, t1), (_, t2), _, b) => {
+                NessaExpr::BinaryOperationDefinition(_, id, t, (_, t1), (_, t2), ret, b) => {
                     let and = Type::And(vec!(t1.clone(), t2.clone()));
 
                     if let Some(usages) = self.cache.usages.binary.get_checked(id) {
@@ -1622,14 +1678,38 @@ impl NessaContext{
                             if Type::And(args.clone()).bindable_to(&and, self) {                                
                                 // Find overload id    
                                 if let Some(_) = self.cache.overloads.binary.get_checked(&(*id, args.clone(), ov.clone())) {
+                                    let init_loc = program_size;
                                     self.cache.locations.binary.insert((*id, args.clone(), ov.clone()), program_size);
                                     
                                     if t.is_empty() {
                                         program_size += self.compiled_form_body_size(b, true)? + 2;
-        
+
+                                        let signature = format!(
+                                            "op ({}){}({}) -> {}",
+                                            t1.get_name_plain(self),
+                                            self.binary_ops[*id].get_repr(),
+                                            t2.get_name_plain(self),
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
+
                                     } else {                                
                                         let sub_b = self.cache.templates.binary.get_checked(&(*id, ov.clone(), vec!(t1.clone(), t2.clone()))).unwrap(); 
                                         program_size += self.compiled_form_body_size(&sub_b, true)? + 2;
+
+                                        let signature = format!(
+                                            "op<{}> ({}){}({}) -> {}",
+                                            ov.iter().map(|i| {
+                                                i.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            t1.get_name_plain(self),
+                                            self.binary_ops[*id].get_repr(),
+                                            t2.get_name_plain(self),
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
                                     }    
                                 }
                             }
@@ -1637,7 +1717,7 @@ impl NessaContext{
                     }
                 }
                 
-                NessaExpr::NaryOperationDefinition(_, id, t, (_, a_t), a, _, b) => {
+                NessaExpr::NaryOperationDefinition(_, id, t, (_, a_t), a, ret, b) => {
                     let mut arg_types = vec!(a_t.clone());
                     arg_types.extend(a.iter().map(|(_, t)| t).cloned());
 
@@ -1648,14 +1728,52 @@ impl NessaContext{
                             if Type::And(args.clone()).bindable_to(&and, self) {
                                 // Find overload id    
                                 if let Some(_) = self.cache.overloads.nary.get_checked(&(*id, args.clone(), ov.clone())) {
+                                    let init_loc = program_size;
                                     self.cache.locations.nary.insert((*id, args.clone(), ov.clone()), program_size);
+
+                                    let mut o_rep = "".to_string();
+                                    let mut c_rep = "".to_string();
+
+                                    if let Operator::Nary { open_rep, close_rep, .. } = &self.nary_ops[*id] {
+                                        o_rep = open_rep.clone();
+                                        c_rep = close_rep.clone();
+                                    }
                                     
                                     if t.is_empty() {
                                         program_size += self.compiled_form_body_size(b, true)? + a.len() + 1;
+                                            
+                                        let signature = format!(
+                                            "op ({}){}({}){} -> {}",
+                                            a_t.get_name_plain(self),
+                                            o_rep,
+                                            a.iter().map(|(_, at)| {
+                                                at.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            c_rep,
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
         
                                     } else {                                
                                         let sub_b = self.cache.templates.nary.get_checked(&(*id, ov.clone(), arg_types.clone())).unwrap(); 
                                         program_size += self.compiled_form_body_size(&sub_b, true)? + a.len() + 1;
+
+                                        let signature = format!(
+                                            "op<{}> ({}){}({}){} -> {}",
+                                            ov.iter().map(|i| {
+                                                i.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            a_t.get_name_plain(self),
+                                            o_rep,
+                                            a.iter().map(|(_, at)| {
+                                                at.get_name_plain(self)
+                                            }).collect::<Vec<_>>().join(", "),
+                                            c_rep,
+                                            ret.get_name_plain(self)
+                                        );
+
+                                        self.cache.ranges.insert(signature, (init_loc, program_size));
                                     }    
                                 }
                             }

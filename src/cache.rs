@@ -15,6 +15,10 @@ impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Default for Cache<K, V> {
 }
 
 impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Cache<K, V> {
+    pub fn inner_clone(&self) -> FxHashMap<K, V> {
+        return self.inner.borrow().clone();
+    }
+
     pub fn get<F: FnMut(K) -> V>(&self, key: K, mut f: F) -> V {
         let contents = self.inner.borrow_mut().get(&key).cloned();
 
@@ -48,6 +52,7 @@ impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Cache<K, V> {
 // Concrete types
 
 type ResultCache<K, O, E> = Cache<K, Result<O, E>>;
+type StringCache<V> = Cache<String, V>;
 type IdCache = ResultCache<String, usize, String>;
 type TemplateCache = Cache<(usize, Vec<Type>, Vec<Type>), Vec<NessaExpr>>;
 type OverloadCache = Cache<(usize, Vec<Type>, Vec<Type>), usize>;
@@ -98,7 +103,8 @@ pub struct NessaCache {
     pub overloads: NessaDividedCache<OverloadCache>,
     pub locations: NessaDividedCache<OverloadCache>,
     pub opcodes: NessaDividedCache<OpcodeCache>,
-    pub imports: NessaImportCache
+    pub imports: NessaImportCache,
+    pub ranges: StringCache<(usize, usize)>
 }
 
 pub fn needs_import<T: Hash + PartialEq + Eq>(module: &String, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    

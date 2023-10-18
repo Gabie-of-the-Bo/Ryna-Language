@@ -182,15 +182,13 @@ fn main() {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
 
-            let mut ctx = standard_ctx();
-
             let res;
 
             if let Some(("profile", _)) = args.subcommand() {
-                res = ctx.parse_and_execute_nessa_project::<true>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile);
 
             } else {
-                res = ctx.parse_and_execute_nessa_project::<false>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile);
             }
             
             match res {

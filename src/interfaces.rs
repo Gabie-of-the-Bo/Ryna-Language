@@ -46,6 +46,19 @@ impl InterfaceConstraint {
             return format!("{}", ctx.interfaces[self.id].name.green());
         }
     }
+
+    pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
+        if self.args.len() > 0 {
+            return format!(
+                "{}<{}>", 
+                ctx.interfaces[self.id].name,
+                self.args.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
+            );
+
+        } else {
+            return format!("{}", ctx.interfaces[self.id].name);
+        }
+    }
 }
 
 /*

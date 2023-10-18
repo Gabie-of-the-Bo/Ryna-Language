@@ -189,6 +189,50 @@ impl Type {
         }
     }
 
+    pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
+        return match self {
+            Type::Empty => "()".into(),
+            Type::SelfType => format!("{}", "Self"),
+            Type::InferenceMarker => "[Inferred]".into(),
+
+            Type::Basic(id) => ctx.type_templates[*id].name.clone().to_string(),
+            Type::Ref(t) => format!("{}{}", "&", t.get_name_plain(ctx)),
+            Type::MutRef(t) => format!("{}{}", "&&", t.get_name_plain(ctx)),
+            Type::Or(v) => v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(" | "),
+            Type::And(v) => format!("({})", v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")),
+
+            Type::Wildcard => "*".to_string(),
+
+            Type::TemplateParam(id, v) => {
+                if v.len() > 0 {
+                    format!(
+                        "{} [{}]", 
+                        format!("'T_{}", id), 
+                        v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
+                    )
+
+                } else {
+                    format!("'T_{}", id).to_string()
+                }
+            },
+            Type::TemplateParamStr(name, v) => {
+                if v.len() > 0 {
+                    format!(
+                        "{} [{}]", 
+                        format!("'{}", name), 
+                        v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
+                    )
+                    
+                } else {
+                    format!("'{}", name).to_string()
+                }   
+            },
+            Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.to_string().clone(), 
+                                                       v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")),
+            Type::Function(from, to) => format!("{} => {}", from.get_name_plain(ctx), to.get_name_plain(ctx))
+        }
+    }
+
     pub fn has_templates(&self) -> bool {
         return match self {
             Type::Wildcard |

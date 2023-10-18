@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use rustc_hash::FxHashMap;
 use serde::Serialize;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
@@ -28,7 +29,7 @@ impl NessaContext {
         return self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect());
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(&mut self, path: String, force_recompile: bool) -> Result<Option<ExecutionInfo>, NessaError> {
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<Option<ExecutionInfo>, NessaError> {
         let mut combined_hash = "".into();
         let mut all_modules = HashMap::new();
         let mut file_cache = HashMap::new();
@@ -60,7 +61,7 @@ impl NessaContext {
                         err.emit();
                     }
 
-                    return self.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect());
+                    return ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect());
                 },
 
                 Err(err) => err.emit(),
@@ -78,7 +79,24 @@ pub struct ExecutionInfo {
     pub instr_count: HashMap<&'static str, usize>,
     pub instr_time: HashMap<&'static str, u128>,
     pub loc_count: HashMap<i32, usize>,
-    pub loc_time: HashMap<i32, u128>
+    pub loc_time: HashMap<i32, u128>,
+    pub ranges: FxHashMap<String, (usize, usize)>,
+    pub fn_count: HashMap<usize, usize>,
+    pub fn_time: HashMap<String, (u128, u128, f64)>,
+    pub total_time: u128
+}
+
+
+impl ExecutionInfo {
+    pub fn process(&mut self) {
+        self.total_time = self.loc_time.iter().map(|(_, i)| *i).sum();
+
+        self.fn_time = self.ranges.iter().map(|(n, (f, t))| {
+            let time = (*f..*t).map(|j| *self.loc_time.get(&(j as i32)).unwrap_or(&0)).sum();
+            let count = *self.fn_count.get(f).unwrap_or(&1);
+            (n.clone(), (time, (time as f64 / count as f64) as u128, time as f64 / self.total_time as f64))
+        }).collect();
+    }
 }
 
 impl NessaContext {
@@ -95,6 +113,7 @@ impl NessaContext {
         let mut instr_time = HashMap::<&str, u128>::new();
         let mut loc_count = HashMap::<i32, usize>::new();
         let mut loc_time = HashMap::<i32, u128>::new();
+        let mut fn_count = HashMap::new();
 
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
@@ -283,6 +302,10 @@ impl NessaContext {
                     call_stack.push((ip + 1, offset, -1));
                     ip = *to as i32;
                     offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+
+                    if DEBUG {
+                        *fn_count.entry(*to).or_default() += 1;
+                    }
                 }),
                 Return => nessa_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
@@ -414,8 +437,17 @@ impl NessaContext {
             }
         }
 
-        if DEBUG {
-            return Ok(Some(ExecutionInfo { instr_count, instr_time, loc_count, loc_time }));
+        if DEBUG {            
+            let mut ex = ExecutionInfo { 
+                instr_count, instr_time, loc_count, loc_time, fn_count,
+                ranges: self.cache.ranges.inner_clone(),
+                fn_time: HashMap::new(),
+                total_time: 0
+            };
+
+            ex.process();
+
+            return Ok(Some(ex));
 
         } else {
             return Ok(None);

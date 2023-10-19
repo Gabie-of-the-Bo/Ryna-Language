@@ -24,7 +24,7 @@ use crate::functions::Function;
 use crate::interfaces::{InterfaceConstraint, Interface};
 use crate::macros::{NessaMacro, parse_nessa_macro};
 use crate::operations::Operator;
-use crate::object::Object;
+use crate::object::{Object, TypeInstance};
 use crate::number::Integer;
 use crate::types::*;
 use crate::operations::*;
@@ -172,7 +172,7 @@ pub fn many_separated0<
                                                   ╘══════════════════╛
 */
 
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub enum NessaExpr {
     // Compiled
     FunctionName(Location, usize),
@@ -753,7 +753,7 @@ impl NessaContext {
                                 return args[n].iter().cloned()
                                     .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg.into()))
                                     .collect::<Result<Vec<_>, _>>()
-                                    .map(|r| Object::new((Type::Basic(t_id), r)));
+                                    .map(|r| Object::arr(r, Type::Basic(t_id)));
                             }
 
                             unimplemented!();

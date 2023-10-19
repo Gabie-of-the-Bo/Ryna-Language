@@ -8,8 +8,8 @@ use serde::Serialize;
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::nessa_warning;
 use crate::number::Integer;
-use crate::types::{Type, TypeInstance};
-use crate::object::Object;
+use crate::types::Type;
+use crate::object::{Object, TypeInstance};
 use crate::context::NessaContext;
 use crate::operations::Operator;
 use crate::compilation::{CompiledNessaExpr, NessaError};
@@ -204,13 +204,13 @@ impl NessaContext {
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect();
 
-                    stack.push(Object::new((t.clone(), args)));
+                    stack.push(Object::arr(args, t.clone()));
 
                     ip += 1;
                 }),
 
                 Lambda(pos, args, ret) => nessa_instruction!("Lambda", {
-                    stack.push(Object::new((*pos, args.clone(), ret.clone())));
+                    stack.push(Object::lambda(*pos, args.clone(), ret.clone()));
                     ip += 1;
                 }),
 
@@ -235,21 +235,22 @@ impl NessaContext {
 
                 AttributeRef(idx) => nessa_instruction!("AttributeRef", {
                     let elem = stack.pop().unwrap();
-                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref_obj());
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref());
                     ip += 1;
                 }),
 
                 AttributeMut(idx) => nessa_instruction!("AttributeMut", {
                     let elem = stack.pop().unwrap();
-                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref_mut_obj());
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_mut());
                     ip += 1;
                 }),
 
                 Tuple(length) => nessa_instruction!("Tuple", {     
                     let start_idx = stack.len() - length;
-                    let args = stack.drain(start_idx..).rev().collect();
-                    
-                    stack.push(Object::new(crate::types::Tuple::new(args)));
+                    let args = stack.drain(start_idx..).rev().collect::<Vec<_>>();
+                    let types = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
+
+                    stack.push(Object::tuple(args, types));
 
                     ip += 1;
                 }),
@@ -264,7 +265,7 @@ impl NessaContext {
                 }),
 
                 GetVariable(id) => nessa_instruction!("GetVariable", {
-                    stack.push(self.variables[*id + offset].as_ref().unwrap().get_ref_mut_obj());
+                    stack.push(self.variables[*id + offset].as_ref().unwrap().get_mut());
                     ip += 1;
                 }),
 
@@ -487,7 +488,7 @@ mod tests {
                     return test(a - 1) + a;
                 }
 
-                println(a);
+                println(*a);
                 println(0 < a);
 
                 return 0;
@@ -587,22 +588,22 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!(Object::new(Integer::from(5)))))));
-        assert_eq!(ctx.variables[1], Some(Object::new((Type::MutRef(Box::new(INT)), ctx.variables[0].as_ref().unwrap().get_ref_mut(), 1))));
+        assert_eq!(ctx.variables[0], Some(Object::arr(vec!(Object::new(Integer::from(5))), INT)));
+        assert_eq!(ctx.variables[1], Some(Object::arr_it(Type::MutRef(Box::new(INT)), ctx.variables[0].as_ref().unwrap().inner.clone(), 1)));
         assert_eq!(ctx.variables[2], Some(Object::new(false)));
         assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(5))));
         assert_eq!(ctx.variables[4], Some(Object::new(true)));
-        assert_eq!(ctx.variables[5], Some(Object::new((INT, vec!(
+        assert_eq!(ctx.variables[5], Some(Object::arr(vec!(
             Object::new(Integer::from(0)),
             Object::new(Integer::from(2)),
             Object::new(Integer::from(4)),
             Object::new(Integer::from(6)),
             Object::new(Integer::from(8)),
-        )))));
+        ), INT)));
         assert_eq!(ctx.variables[6], Some(Object::new(Integer::from(20))));
 
         if let Type::Template(..) = ctx.variables[7].as_ref().unwrap().get_type() {
-            assert_eq!(ctx.variables[7], Some(Object::new((INT, vec!(
+            assert_eq!(ctx.variables[7], Some(Object::arr(vec!(
                 Object::new(Integer::from(0)),
                 Object::new(Integer::from(1)),
                 Object::new(Integer::from(2)),
@@ -612,11 +613,11 @@ mod tests {
                 Object::new(Integer::from(6)),
                 Object::new(Integer::from(7)),
                 Object::new(Integer::from(8)),
-            )))));
+            ), INT)));
             assert_eq!(ctx.variables[8], Some(Object::new(Integer::from(16))));
 
         } else {
-            assert_eq!(ctx.variables[8], Some(Object::new((INT, vec!(
+            assert_eq!(ctx.variables[8], Some(Object::arr(vec!(
                 Object::new(Integer::from(0)),
                 Object::new(Integer::from(1)),
                 Object::new(Integer::from(2)),
@@ -626,7 +627,7 @@ mod tests {
                 Object::new(Integer::from(6)),
                 Object::new(Integer::from(7)),
                 Object::new(Integer::from(8)),
-            )))));
+            ), INT)));
             assert_eq!(ctx.variables[7], Some(Object::new(Integer::from(16))));
         }
 
@@ -665,7 +666,7 @@ mod tests {
         
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!(
+        assert_eq!(ctx.variables[0], Some(Object::arr(vec!(
             Object::new(Integer::from(2)),
             Object::new(Integer::from(3)),
             Object::new(Integer::from(5)),
@@ -681,7 +682,7 @@ mod tests {
             Object::new(Integer::from(41)),
             Object::new(Integer::from(43)),
             Object::new(Integer::from(47)),
-        )))));
+        ), INT)));
     }
 
     #[test]
@@ -803,11 +804,11 @@ mod tests {
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(Integer::from(5))));
-        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[2], Some(Object::new("Hello".to_string()).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[4], Some(Object::new(Integer::from(6)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[5], Some(Object::new(Integer::from(9)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_mut()));
+        assert_eq!(ctx.variables[2], Some(Object::new("Hello".to_string()).get_mut()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_mut()));
+        assert_eq!(ctx.variables[4], Some(Object::new(Integer::from(6)).get_mut()));
+        assert_eq!(ctx.variables[5], Some(Object::new(Integer::from(9)).get_mut()));
         assert_eq!(ctx.variables[6], Some(Object::new(Integer::from(55))));
         assert_eq!(ctx.variables[7], Some(Object::new(Integer::from(26))));
     }
@@ -827,8 +828,8 @@ mod tests {
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
 
-        assert_eq!(ctx.variables[0], Some(Object::new((INT, vec!()))));
-        assert_eq!(ctx.variables[1], Some(Object::new((STR, vec!()))));
+        assert_eq!(ctx.variables[0], Some(Object::arr(vec!(), INT)));
+        assert_eq!(ctx.variables[1], Some(Object::arr(vec!(), STR)));
 
         let mut ctx = standard_ctx();
         
@@ -1023,9 +1024,9 @@ mod tests {
             )
         })));
 
-        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(2)).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[1], Some(Object::new(Integer::from(0)).get_mut()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(2)).get_mut()));
+        assert_eq!(ctx.variables[3], Some(Object::new(Integer::from(10)).get_mut()));
 
         let mut ctx = standard_ctx();
         
@@ -1054,8 +1055,8 @@ mod tests {
             )
         })));
 
-        assert_eq!(ctx.variables[1], Some(Object::new(true).get_ref_mut_obj()));
-        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(5)).get_ref_mut_obj()));
+        assert_eq!(ctx.variables[1], Some(Object::new(true).get_mut()));
+        assert_eq!(ctx.variables[2], Some(Object::new(Integer::from(5)).get_mut()));
     }
 
     #[test]

@@ -1,10 +1,8 @@
-use std::any::*;
-use std::hash::Hash;
-use std::rc::Rc;
-use std::cell::*;
+use std::{cell::{RefCell, Ref, RefMut}, rc::Rc};
 
-use crate::number::Integer;
-use crate::{types::*, ARR_OF, ARR_IT_OF};
+use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID}, ARR_OF, ARR_IT_OF};
+
+type DataBlock = Rc<RefCell<ObjectBlock>>;
 
 /*
                                                   ╒══════════════════╕
@@ -12,70 +10,262 @@ use crate::{types::*, ARR_OF, ARR_IT_OF};
                                                   ╘══════════════════╛
 */
 
-/*
-    ╔═════════════════════════════╗
-    ║     OBJECT TYPE ERASURE     ║
-    ╠═════════════════════════════╣
-    ║ Nessa's type system allows  ║
-    ║ the use of "gradual typing" ║
-    ║ so a type erasure object    ║
-    ║ struct and trait are needed ║
-    ╚═════════════════════════════╝
-*/
-
-pub trait NessaObject {
-    fn get_type_id(&self) -> usize;
-    fn get_type(&self) -> Type {
-        return Type::Basic(self.get_type_id());
-    }
-
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>>;
-    fn to_string(&self) -> String;
-    fn equal_to(&self, b: &dyn NessaObject) -> bool;
-
-    fn assign(&mut self, other: Object);
+#[derive(Clone, PartialEq, Debug)]
+pub struct NessaArray {
+    pub elements: Vec<Object>,
+    pub elem_type: Type
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
+pub struct NessaTuple {
+    pub elements: Vec<Object>,
+    pub elem_types: Vec<Type>
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct NessaArrayIt {
+    pub pos: usize,
+    pub block: DataBlock,
+    pub it_type: Type
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct NessaLambda {
+    pub loc: usize,
+    pub args_type: Type,
+    pub ret_type: Type
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct TypeInstance {
+    pub id: usize,
+    pub params: Vec<Type>,
+    pub attributes: Vec<Object>
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum ObjectBlock {
+    Empty,
+    Int(Integer),
+    Float(f64),
+    Str(String),
+    Bool(bool),
+
+    Tuple(NessaTuple),
+    Array(NessaArray),
+    ArrayIter(NessaArrayIt),
+
+    Lambda(NessaLambda),
+
+    Instance(TypeInstance),
+
+    Ref(DataBlock),
+    Mut(DataBlock),
+}
+
+impl Default for ObjectBlock {
+    fn default() -> Self {
+        return ObjectBlock::Empty;
+    }
+}
+
+impl Eq for ObjectBlock {}
+
+impl ObjectBlock {
+    pub fn to_obj(self) -> Object {
+        return Object { inner: Rc::new(RefCell::new(self)) }
+    } 
+
+    pub fn get_type_id(&self) -> usize {
+        return match self {
+            ObjectBlock::Empty => 0,
+            ObjectBlock::Int(_) => INT_ID,
+            ObjectBlock::Float(_) => FLOAT_ID,
+            ObjectBlock::Str(_) => STR_ID,
+            ObjectBlock::Bool(_) => BOOL_ID,
+            ObjectBlock::Tuple(_) => 0,
+            ObjectBlock::Array(_) => ARR_ID,
+            ObjectBlock::ArrayIter(_) => ARR_IT_ID,
+            ObjectBlock::Lambda(_) => 0,
+            ObjectBlock::Instance(i) => i.id,
+            ObjectBlock::Ref(_) => 0,
+            ObjectBlock::Mut(_) => 0,
+        };
+    }
+
+    pub fn get_type(&self) -> Type {
+        return match self {
+            ObjectBlock::Empty => Type::Empty,
+            ObjectBlock::Int(_) => INT,
+            ObjectBlock::Float(_) => FLOAT,
+            ObjectBlock::Str(_) => STR,
+            ObjectBlock::Bool(_) => BOOL,
+            ObjectBlock::Tuple(t) => Type::And(t.elem_types.clone()),
+            ObjectBlock::Array(a) => ARR_OF!(a.elem_type.clone()),
+            ObjectBlock::ArrayIter(i) => ARR_IT_OF!(i.it_type.clone()),
+            ObjectBlock::Lambda(l) => Type::Function(Box::new(l.args_type.clone()), Box::new(l.ret_type.clone())),
+            ObjectBlock::Instance(i) => if i.params.is_empty() { Type::Basic(i.id) } else { Type::Template(i.id, i.params.clone()) },
+            ObjectBlock::Ref(r) => Type::Ref(Box::new(r.borrow().get_type())),
+            ObjectBlock::Mut(r) => Type::MutRef(Box::new(r.borrow().get_type())),
+        };
+    }
+
+    pub fn get_inner<T>(&self) -> &T where ObjectBlock: Get<T> {
+        return Get::<T>::get(self);
+    }
+
+    pub fn mut_inner<T>(&mut self) -> &mut T where ObjectBlock: GetMut<T> {
+        return GetMut::<T>::get(self);
+    }
+
+    pub fn deref(&self) -> &DataBlock {
+        if let ObjectBlock::Ref(n) | ObjectBlock::Mut(n) = self {
+            return n;
+        }
+
+        unreachable!();
+    }
+
+    pub fn assign(&mut self, other: ObjectBlock) {
+        use ObjectBlock::*;
+
+        match (&mut *self.deref().borrow_mut(), other) {
+            (Int(a), Int(b)) => *a = b,
+            (Float(a), Float(b)) => *a = b,
+            (Str(a), Str(b)) => *a = b,
+            (Bool(a), Bool(b)) => *a = b,
+            (Array(a), Array(b)) => *a = b,
+            (ArrayIter(a), ArrayIter(b)) => *a = b,
+            (Lambda(a), Lambda(b)) => *a = b,
+            (Instance(a), Instance(b)) => *a = b,
+            (Tuple(a), Tuple(b)) => *a = b,
+
+            (a, b) => unreachable!("{:?}, {:?}", a, b)
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Object {
-    pub inner: Rc<RefCell<dyn NessaObject>>
+    pub inner: DataBlock
 }
-
-impl Hash for Object {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.to_string().hash(state);
-    }
-}
-
-impl std::fmt::Debug for dyn NessaObject {
-    fn fmt(&self, out: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        out.write_str(self.to_string().as_str()).unwrap();
-
-        return Ok(());
-    }
-}
-
-impl PartialEq for Object {
-    fn eq(&self, b: &Object) -> bool {
-        return self.inner.borrow().equal_to(&*b.inner.borrow());
-    }
-}
-
-impl Eq for Object {}
 
 impl Object {
-    pub fn new<T>(inner: T) -> Object where T: NessaObject + 'static {
-        return Object {
-            inner: Rc::new(RefCell::new(inner))
+    pub fn new<T: NessaData>(data: T) -> Self {
+        return data.data().to_obj();
+    }
+
+    pub fn get_ptr(&self) -> *mut ObjectBlock {
+        return self.inner.as_ptr();
+    }
+
+    pub fn arr(elements: Vec<Object>, elem_type: Type) -> Self {
+        return ObjectBlock::Array(NessaArray { elements, elem_type }).to_obj()
+    }
+
+    pub fn arr_it(it_type: Type, block: DataBlock, pos: usize) -> Self {
+        return ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type }).to_obj()
+    }
+
+    pub fn lambda(loc: usize, args_type: Type, ret_type: Type) -> Self {
+        return ObjectBlock::Lambda(NessaLambda { loc, args_type, ret_type }).to_obj()
+    }
+
+    pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {
+        return ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
+    }
+
+    pub fn instance(attributes: Vec<Object>, params: Vec<Type>, id: usize) -> Self {
+        return ObjectBlock::Instance(TypeInstance { params, attributes, id }).to_obj()
+    }
+
+    pub fn get<T>(&self) -> Ref<T> where ObjectBlock: Get<T> {
+        return Ref::map(self.inner.borrow(), |i| Get::<T>::get(i));
+    }
+
+    pub fn deref<T>(&self) -> RefMut<T> where ObjectBlock: Deref<T> + GetMut<T> {
+        return RefMut::map(self.inner.borrow_mut(), |i| {
+            let ptr = match i {
+                ObjectBlock::Ref(i) |
+                ObjectBlock::Mut(i) => i.as_ptr(),
+    
+                _ => unreachable!()
+            };
+
+            GetMut::<T>::get(unsafe { &mut *ptr })
+        });
+    }
+    
+    pub fn assign(&self, other_obj: Object) {
+        match Rc::try_unwrap(other_obj.inner) {
+            Ok(inner) => self.inner.borrow_mut().assign(RefCell::take(&inner)),
+            Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone())
+        };
+    }
+
+    pub fn from_inner(inner: DataBlock) -> Self {
+        return Object { inner };
+    }
+
+    pub fn empty() -> Object {
+        return ObjectBlock::Empty.to_obj();
+    }
+
+    pub fn get_ref(&self) -> Object {
+        return match &*self.inner.borrow() {
+            ObjectBlock::Ref(i) |
+            ObjectBlock::Mut(i) => ObjectBlock::Ref(i.clone()).to_obj(),
+
+            _ => ObjectBlock::Ref(self.inner.clone()).to_obj()
         }
     }
 
+    pub fn get_mut(&self) -> Object {
+        return match &*self.inner.borrow() {
+            ObjectBlock::Ref(i) |
+            ObjectBlock::Mut(i) => ObjectBlock::Mut(i.clone()).to_obj(),
+
+            _ => ObjectBlock::Mut(self.inner.clone()).to_obj()
+        }
+    }
+
+    pub fn to_debug_string(&self) -> String {
+        return format!("{:?}", self.inner.borrow());
+    }
+
     pub fn deep_clone(&self) -> Object {
-        return Object {
-            inner: self.inner.borrow().deep_clone()
-        };
+        return match &*self.inner.borrow() {
+            ObjectBlock::Empty => ObjectBlock::Empty.to_obj(),
+            ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()).to_obj(),
+            ObjectBlock::Float(n) => ObjectBlock::Float(*n).to_obj(),
+            ObjectBlock::Str(s) => ObjectBlock::Str(s.clone()).to_obj(),
+            ObjectBlock::Bool(b) => ObjectBlock::Bool(b.clone()).to_obj(),
+            ObjectBlock::Tuple(t) => ObjectBlock::Tuple(NessaTuple { 
+                elements: t.elements.iter().map(Object::deep_clone).collect(), 
+                elem_types: t.elem_types.clone()
+            }).to_obj(),
+            ObjectBlock::Array(a) => ObjectBlock::Array(NessaArray { 
+                elements: a.elements.iter().map(Object::deep_clone).collect(), 
+                elem_type: a.elem_type.clone()
+            }).to_obj(),
+            ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(NessaArrayIt { 
+                pos: i.pos, 
+                block: i.block.clone(), 
+                it_type: i.it_type.clone() 
+            }).to_obj(),
+            ObjectBlock::Lambda(l) => ObjectBlock::Lambda(NessaLambda { 
+                loc: l.loc, 
+                args_type: l.args_type.clone(), 
+                ret_type: l.ret_type.clone() 
+            }).to_obj(),
+            ObjectBlock::Instance(i) => ObjectBlock::Instance(TypeInstance {
+                id: i.id, 
+                params: i.params.clone(), 
+                attributes: i.attributes.iter().map(Object::deep_clone).collect()
+            }).to_obj(),
+            ObjectBlock::Ref(r) => ObjectBlock::Ref(r.clone()).to_obj(),
+            ObjectBlock::Mut(r) => ObjectBlock::Mut(r.clone()).to_obj(),
+        }
     }
 
     pub fn get_type_id(&self) -> usize {
@@ -86,542 +276,75 @@ impl Object {
         return self.inner.borrow().get_type();
     }
 
-    pub fn get_ptr(&self) -> *const dyn NessaObject{
-        return self.inner.as_ptr();
-    }
-
-    pub fn deref<T>(&self) -> Ref<T> where T: 'static {
-        return Ref::map(self.inner.borrow(), |i| {
-            let ptr = i.as_any().downcast_ref::<Reference>().unwrap().get_ptr();
-
-            // SAFETY: The value will not be dropped because self contains the Reference
-            // and this object contains the inner object that we are returning. All these
-            // are reference counted, so there is no problem.
-            unsafe { (*ptr).as_any().downcast_ref::<T>().unwrap() }
-        })
-    }
-
     pub fn deref_obj(&self) -> Object {
-        return Object {
-            inner: self.get::<Reference>().inner.clone()
-        }    
-    }
-
-    pub fn get<T: NessaObject>(&self) -> Ref<T> where T: 'static {
-        return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
-    }
-
-    pub fn get_mut<T: NessaObject>(&mut self) -> RefMut<T> where T: 'static {
-        return RefMut::map(self.inner.borrow_mut(), |i| i.as_any_mut().downcast_mut::<T>().unwrap());
-    }
-
-    pub fn get_ref(&self) -> Reference {
-        return Reference {
-            inner: if self.is_ref() { self.get::<Reference>().inner.clone() } else { self.inner.clone() },
-            mutable: false
-        }
-    }
-
-    pub fn get_ref_mut(&self) -> Reference {
-        return Reference {
-            inner: if self.is_ref() { 
-                let reference = self.get::<Reference>();
-
-                assert!(reference.mutable, "Cannot take mutable reference from constant reference");
-
-                reference.inner.clone() 
-
-            } else { 
-                self.inner.clone() 
-            },
-
-            mutable: true
-        }
-    }
-
-    pub fn get_ref_obj(&self) -> Object {
-        return Object::new(self.get_ref());
-    }
-
-    pub fn get_ref_mut_obj(&self) -> Object {
-        return Object::new(self.get_ref_mut());
-    }
-
-    pub fn is_ref(&self) -> bool {
-        return self.inner.borrow().as_any().type_id() == TypeId::of::<Reference>();
-    }
-
-    pub fn to_string(&self) -> String {
-        return self.inner.borrow().to_string();
-    }
-
-    pub fn empty() -> Object {
-        return Object::new(());
+        return match &*self.inner.borrow() {
+            ObjectBlock::Ref(r) | ObjectBlock::Mut(r) => Object::from_inner(r.clone()),
+            _ => unreachable!()
+        };
     }
 }
 
-/*
-    ╒═════════════════════════════════════════════╕
-    │ Reference struct for high level indirection │
-    ╘═════════════════════════════════════════════╛
-*/
-
-#[derive(Clone)]
-pub struct Reference {
-    pub inner: Rc<RefCell<dyn NessaObject>>,
-    pub mutable: bool
+pub trait NessaData {
+    fn data(self) -> ObjectBlock;
 }
 
-impl PartialEq for Reference {
-    fn eq(&self, b: &Reference) -> bool {
-        return self.get_ptr() == b.get_ptr();
-    }
+pub trait Get<T> {
+    fn get<'a>(&self) -> &T;
 }
 
-
-impl Reference {
-    pub fn get<T>(&self) -> Ref<T> where T: 'static {
-        return Ref::map(self.inner.borrow(), |i| i.as_any().downcast_ref::<T>().unwrap());
-    }
-
-    pub fn get_mut<T>(&self) -> RefMut<T> where T: 'static {
-        assert!(self.mutable, "Cannot take mutable data from constant reference");
-
-        return RefMut::map(self.inner.borrow_mut(), |i| i.as_any_mut().downcast_mut::<T>().unwrap());
-    }
-
-    pub fn get_ptr(&self) -> *const dyn NessaObject{
-        return self.inner.as_ptr();
-    }
-
-    pub fn assign(&mut self, other: Object) {
-        assert!(self.mutable, "Cannot take mutate data from constant reference");
-
-        self.inner.borrow_mut().assign(other);
-    }
+pub trait GetMut<T> {
+    fn get<'a>(&mut self) -> &mut T;
 }
 
-/*
-    ╒════════════════════════════════════════════════╕
-    │ Basic implementations of the NessaObject trait │
-    ╘════════════════════════════════════════════════╛
-*/
+pub trait Deref<T> {
+    fn deref<'a>(&self) -> Ref<T>;
+}
 
-impl NessaObject for Reference {
-    fn get_type_id(&self) -> usize {
-        return self.inner.borrow().get_type_id();
-    }
-
-    fn get_type(&self) -> Type {
-        if self.mutable {
-            return Type::MutRef(Box::new(self.inner.borrow().get_type()));
-
-        } else{
-            return Type::Ref(Box::new(self.inner.borrow().get_type()));
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return self.inner.borrow().to_string();
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<Reference>();
-        let tb = b.as_any().downcast_ref::<Reference>();
-
-        if ta.is_some() && tb.is_some() {
-            return ta.unwrap().inner.borrow().equal_to(&*tb.unwrap().inner.borrow());
+macro_rules! impl_nessa_data {
+    ($t: ty, $v: tt) => {
+        impl NessaData for $t {
+            fn data(self) -> ObjectBlock {
+                return ObjectBlock::$v(self)
+            }
         }
 
-        return false;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for Integer {
-    fn get_type_id(&self) -> usize {
-        return INT_ID;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return String::from(self);
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<Integer>();
-        let tb = b.as_any().downcast_ref::<Integer>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for f64 {
-    fn get_type_id(&self) -> usize {
-        return FLOAT_ID;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("{}", self);
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<f64>();
-        let tb = b.as_any().downcast_ref::<f64>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for String {
-    fn get_type_id(&self) -> usize {
-        return STR_ID;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return self.clone();
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<String>();
-        let tb = b.as_any().downcast_ref::<String>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for bool {
-    fn get_type_id(&self) -> usize {
-        return BOOL_ID;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return if *self { "true".into() } else { "false".into() };
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<bool>();
-        let tb = b.as_any().downcast_ref::<bool>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for Tuple {
-    fn get_type_id(&self) -> usize {
-        return 0;
-    }
-
-    fn get_type(&self) -> Type {
-        return Type::And(self.exprs.iter().map(|i| i.get_type()).collect());
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("({})", self.exprs.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<Tuple>();
-        let tb = b.as_any().downcast_ref::<Tuple>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for (usize, Type, Type) {
-    fn get_type_id(&self) -> usize {
-        return 0;
-    }
-
-    fn get_type(&self) -> Type {
-        return Type::Function(Box::new(self.1.clone()), Box::new(self.2.clone()));
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("[Line {}] Lambda {:?} => {:?}", self.0, self.1, self.2);
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<(usize, usize, Type, Type)>();
-        let tb = b.as_any().downcast_ref::<(usize, usize, Type, Type)>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for (Type, Vec<Object>) {
-    fn get_type_id(&self) -> usize {
-        return ARR_ID;
-    }
-
-    fn get_type(&self) -> Type {
-        return ARR_OF!(self.0.clone());
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("[{}]", self.1.iter().map(|i| i.inner.borrow().to_string()).collect::<Vec<_>>().join(", "));
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<(Type, Vec<Object>)>();
-        let tb = b.as_any().downcast_ref::<(Type, Vec<Object>)>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for (Type, Reference, usize) {
-    fn get_type_id(&self) -> usize {
-        return ARR_IT_ID;
-    }
-
-    fn get_type(&self) -> Type {
-        return ARR_IT_OF!(self.0.clone());
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("ArrayIterator(index = {})", self.2);
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<(Type, Reference, usize)>();
-        let tb = b.as_any().downcast_ref::<(Type, Reference, usize)>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
-
-impl NessaObject for TypeInstance {
-    fn get_type_id(&self) -> usize {
-        return self.id;
-    }
-
-    fn get_type(&self) -> Type {
-        if self.params.is_empty() {
-            return Type::Basic(self.id);
-
-        } else {
-            return Type::Template(self.id, self.params.clone());
+        impl Get<$t> for ObjectBlock {
+            fn get<'a>(&self) -> &$t {
+                if let ObjectBlock::$v(n) = self {
+                    return n;
+                }
+        
+                unreachable!("Unable to get {:?}", self);    
+            }
         }
-    }
 
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
+        impl GetMut<$t> for ObjectBlock {
+            fn get<'a>(&mut self) -> &mut $t {
+                if let ObjectBlock::$v(n) = self {
+                    return n;
+                }
+        
+                unreachable!("Unable to get mut {:?}", self);    
+            }
+        }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return format!("Class [{}]", self.attributes.iter().map(Object::to_string).collect::<Vec<_>>().join(", "));
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<TypeInstance>();
-        let tb = b.as_any().downcast_ref::<TypeInstance>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
+        impl Deref<$t> for ObjectBlock {
+            fn deref<'a>(&self) -> Ref<$t> {
+                return Ref::map(self.deref().borrow(), |i| Get::<$t>::get(i));
+            }
+        }
+    };
 }
 
-impl NessaObject for () {
-    fn get_type_id(&self) -> usize {
-        return 0;
-    }
-
-    fn get_type(&self) -> Type {
-        return Type::Empty;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        return self;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        return self;
-    }
-
-    fn deep_clone(&self) -> Rc<RefCell<dyn NessaObject>> {
-        return Rc::new(RefCell::new(self.clone()));
-    }
-
-    fn to_string(&self) -> String {
-        return "()".into();
-    }
-
-    fn equal_to(&self, b: &dyn NessaObject) -> bool {
-        let ta = self.as_any().downcast_ref::<()>();
-        let tb = b.as_any().downcast_ref::<()>();
-
-        return ta == tb;
-    }
-
-    fn assign(&mut self, mut other: Object) {
-        // Swapping should be ok, since other will be destroyed after this function
-        std::mem::swap(self, &mut other.get_mut::<Self>());
-    }
-}
+impl_nessa_data!(Integer, Int);
+impl_nessa_data!(f64, Float);
+impl_nessa_data!(String, Str);
+impl_nessa_data!(bool, Bool);
+impl_nessa_data!(TypeInstance, Instance);
+impl_nessa_data!(NessaArray, Array);
+impl_nessa_data!(NessaTuple, Tuple);
+impl_nessa_data!(NessaLambda, Lambda);
+impl_nessa_data!(NessaArrayIt, ArrayIter);
 
 /*
                                                   ╒═════════╕
@@ -653,24 +376,31 @@ mod tests {
         
         assert_eq!(*number.get::<Integer>(), Integer::from(10));
 
-        let reference = number.get_ref_mut_obj();
-        let ref_of_ref = reference.get_ref_obj();
+        let reference = number.get_mut();
+        let ref_of_ref = reference.get_ref();
 
-        assert_eq!(*reference.get::<Reference>().get::<Integer>(), Integer::from(10));
-        assert_eq!(*ref_of_ref.get::<Reference>().get::<Integer>(), Integer::from(10));
+        assert_eq!(*reference.deref::<Integer>(), Integer::from(10));
+        assert_eq!(*ref_of_ref.deref::<Integer>(), Integer::from(10));
 
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
         assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
-        assert_ne!(reference.get::<Reference>().mutable, ref_of_ref.get::<Reference>().mutable);
-        assert_eq!(number.get_ptr(), reference.get::<Reference>().get_ptr());
-        assert_eq!(number.get_ptr(), ref_of_ref.get::<Reference>().get_ptr());
+        assert_eq!(number.get_ptr(), reference.inner.borrow().deref().as_ptr());
+        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().deref().as_ptr());
 
-        let struct_ref = reference.get::<Reference>();
-        *struct_ref.get_mut::<Integer>() += Integer::from(5);
+        {
+            let mut struct_ref = reference.deref::<Integer>();
+            *struct_ref += Integer::from(5);    
+        }
 
         assert_eq!(*number.get::<Integer>(), Integer::from(15));
-        assert_eq!(*reference.get::<Reference>().get::<Integer>(), Integer::from(15));
-        assert_eq!(*ref_of_ref.get::<Reference>().get::<Integer>(), Integer::from(15));
+        assert_eq!(*reference.deref::<Integer>(), Integer::from(15));
+        assert_eq!(*ref_of_ref.deref::<Integer>(), Integer::from(15));
+
+        reference.assign(ObjectBlock::Int(Integer::from(20)).to_obj());
+
+        assert_eq!(*number.get::<Integer>(), Integer::from(20));
+        assert_eq!(*reference.deref::<Integer>(), Integer::from(20));
+        assert_eq!(*ref_of_ref.deref::<Integer>(), Integer::from(20));
     }
 }

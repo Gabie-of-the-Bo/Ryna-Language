@@ -16,17 +16,6 @@ use crate::number::Integer;
                                                   ╘══════════════════╛
 */
 
-#[derive(Clone, PartialEq)]
-pub struct Tuple {
-    pub exprs: Vec<Object>
-}
-
-impl Tuple {
-    pub fn new(exprs: Vec<Object>) -> Tuple {
-        return Tuple { exprs };
-    }
-}
-
 pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -55,13 +44,6 @@ impl TypeTemplate {
     pub fn is_structural(&self) -> bool {
         return self.alias.is_some();
     }
-}
-
-#[derive(Clone, PartialEq)]
-pub struct TypeInstance {
-    pub id: usize,
-    pub params: Vec<Type>,
-    pub attributes: Vec<Object>
 }
 
 #[derive(Clone, Hash, Debug, Serialize, Deserialize)]

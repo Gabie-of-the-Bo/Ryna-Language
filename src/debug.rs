@@ -10,7 +10,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, n, t, e) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
             NessaExpr::CompiledVariableAssignment(_, _, n, _, e) => format!("{} = {}", n.cyan(), self.to_string(e)),
 
-            NessaExpr::Literal(_, obj) => obj.to_string().magenta().to_string(),
+            NessaExpr::Literal(_, obj) => obj.to_debug_string().magenta().to_string(),
             NessaExpr::Tuple(_, args) => format!("({})", args.iter().map(|i| self.to_string(i)).collect::<Vec<_>>().join(", ")),
 
             NessaExpr::FunctionCall(_, id, t, args) => {

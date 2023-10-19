@@ -14,7 +14,9 @@ use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
 use crate::interfaces::ITERABLE_ID;
 use crate::number::Integer;
+use crate::object::TypeInstance;
 use crate::parser::*;
+use crate::object::NessaArray;
 use crate::types::*;
 use crate::object::Object;
 use crate::functions::*;
@@ -2097,10 +2099,10 @@ impl NessaContext{
             },
 
             Type::Template(ARR_ID, _) => {
-                let obj_t = obj.get::<(Type, Vec<Object>)>();
+                let obj_t = obj.get::<NessaArray>();
                 let mut res = 1;
 
-                for i in obj_t.1.iter().rev() {
+                for i in obj_t.elements.iter().rev() {
                     res += self.compiled_literal_size(i);
                 }
 
@@ -2134,14 +2136,14 @@ impl NessaContext{
             },
 
             Type::Template(ARR_ID, _) => {
-                let obj_t = obj.get::<(Type, Vec<Object>)>();
+                let obj_t = obj.get::<NessaArray>();
                 let mut res = vec!();
 
-                for i in obj_t.1.iter().rev() {
+                for i in obj_t.elements.iter().rev() {
                     res.extend(self.compile_literal(i));
                 }
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::Array(obj_t.1.len(), obj_t.0.clone())));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Array(obj_t.elements.len(), obj_t.elem_type.clone())));
 
                 res
             },
@@ -2645,7 +2647,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let res = self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
 
@@ -2659,7 +2661,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let res = self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_mut()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2727,7 +2729,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let res = self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             
@@ -2741,7 +2743,7 @@ impl NessaContext{
 
                         seq!(N in 0..100 {
                             let res = self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref_mut_obj()), )*
+                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_mut()), )*
                                 _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
                             });
                             

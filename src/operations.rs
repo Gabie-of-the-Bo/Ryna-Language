@@ -132,9 +132,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 
     ctx.define_native_unary_operation(2, 1, T_0.to_mut(), T_0, |_, _, a| {
-        return Ok(Object {
-            inner: a.get::<Reference>().inner.clone()
-        });
+        return Ok(a.deref_obj());
     }).unwrap();
 }
 
@@ -346,9 +344,8 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operation(
         14, 1, 
         T_0.to_mut(), T_0, Type::Empty, 
-        Some(|_, _, mut a, b| {
-            a.get_mut::<Reference>().assign(b);
-
+        Some(|_, _, a, b| {
+            a.assign(b);
             return Ok(Object::empty());
         }
     )).unwrap();
@@ -362,12 +359,12 @@ macro_rules! idx_op_definition {
                 let arr = s.pop().unwrap();
                 let first = s.pop().unwrap();
 
-                let arr = &arr.$deref_arr::<(Type, Vec<Object>)>().1;
+                let arr = &*arr.$deref_arr::<NessaArray>();
                 let idx = &*first.$deref_idx::<Integer>();
 
                 *ip += 1;
     
-                s.push(arr[idx.limbs[0] as usize].$ref_method());
+                s.push(arr.elements[idx.limbs[0] as usize].$ref_method());
                 return Ok(());
             }
         ).unwrap();
@@ -394,10 +391,10 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
-                let f = &a.deref::<(usize, Type, Type)>();
+                let f = &a.deref::<NessaLambda>();
                 
                 call_stack.push((*ip + 1, *off, -1));
-                *ip = f.0 as i32;
+                *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
                 return Ok(());
@@ -411,10 +408,10 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
-                let f = &a.deref::<(usize, Type, Type)>();
+                let f = &a.deref::<NessaLambda>();
                 
                 call_stack.push((*ip + 1, *off, -1));
-                *ip = f.0 as i32;
+                *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
                 return Ok(());
@@ -428,10 +425,10 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             Type::TemplateParam(n, vec!()), 
             |(s, off, call_stack, ip), _, _| {
                 let a = s.pop().unwrap();
-                let f = &a.get::<(usize, Type, Type)>();
+                let f = &a.get::<NessaLambda>();
                 
                 call_stack.push((*ip + 1, *off, -1));
-                *ip = f.0 as i32;
+                *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
                 return Ok(());
@@ -453,14 +450,14 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
         ARR_OF!(T_0).to_mut(),
         INT,
         T_0.to_mut(),
-        ctx, deref, get, get_ref_mut_obj
+        ctx, deref, get, get_mut
     );
 
     idx_op_definition!(
         ARR_OF!(T_0).to_ref(),
         INT,
         T_0.to_ref(),
-        ctx, deref, get, get_ref_obj
+        ctx, deref, get, get_ref
     );
 
     idx_op_definition!(
@@ -474,14 +471,14 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
         ARR_OF!(T_0).to_mut(),
         INT.to_mut(),
         T_0.to_mut(),
-        ctx, deref, deref, get_ref_mut_obj
+        ctx, deref, deref, get_mut
     );
 
     idx_op_definition!(
         ARR_OF!(T_0).to_ref(),
         INT.to_mut(),
         T_0.to_ref(),
-        ctx, deref, deref, get_ref_obj
+        ctx, deref, deref, get_ref
     );
 
     idx_op_definition!(
@@ -495,13 +492,13 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
         ARR_OF!(T_0).to_mut(),
         Type::Ref(Box::new(INT)),
         T_0.to_mut(),
-        ctx, deref, deref, get_ref_mut_obj
+        ctx, deref, deref, get_mut
     );
 
     idx_op_definition!(
         ARR_OF!(T_0).to_ref(),
         Type::Ref(Box::new(INT)),
         T_0.to_ref(),
-        ctx, deref, deref, get_ref_obj
+        ctx, deref, deref, get_ref
     );
 }

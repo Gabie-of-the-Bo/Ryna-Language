@@ -639,52 +639,52 @@ impl NessaContext {
         return match (func, or) {
             (true, true) => alt((
                 |input| self.function_type_parser(input, or),
+                |input| self.and_type_parser(input),
+                |input| self.or_type_parser(input, func),
                 |input| self.empty_type_parser(input),
                 |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
                 |input| self.parametric_type_parser(input),
-                |input| self.and_type_parser(input),
-                |input| self.or_type_parser(input, func),
                 |input| self.template_type_parser(input),
                 |input| self.basic_type_parser(input)
             ))(input),
 
             (false, true) => alt((
+                |input| self.and_type_parser(input),
+                |input| self.or_type_parser(input, func),
                 |input| self.empty_type_parser(input),
                 |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
                 |input| self.parametric_type_parser(input),
-                |input| self.and_type_parser(input),
-                |input| self.or_type_parser(input, func),
                 |input| self.template_type_parser(input),
                 |input| self.basic_type_parser(input)
             ))(input),
 
             (true, false) => alt((
                 |input| self.function_type_parser(input, or),
+                |input| self.and_type_parser(input),
                 |input| self.empty_type_parser(input),
                 |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
                 |input| self.parametric_type_parser(input),
-                |input| self.and_type_parser(input),
                 |input| self.template_type_parser(input),
                 |input| self.basic_type_parser(input)
             ))(input),
             
             (false, false) => alt((
+                |input| self.and_type_parser(input),
                 |input| self.empty_type_parser(input),
                 |input| self.self_type_parser(input),
                 |input| self.wildcard_type_parser(input),
                 |input| self.mutable_reference_type_parser(input),
                 |input| self.constant_reference_type_parser(input),
                 |input| self.parametric_type_parser(input),
-                |input| self.and_type_parser(input),
                 |input| self.template_type_parser(input),
                 |input| self.basic_type_parser(input)
             ))(input),
@@ -2344,7 +2344,10 @@ impl NessaContext {
                 ))
             ),
             |(l, (_, _, mut e, _, _))| {
-                if e.len() == 1 {
+                if e.len() == 0 {
+                    return NessaExpr::Literal(l, Object::empty());
+
+                } if e.len() == 1 {
                     return e.pop().unwrap();
 
                 } else {

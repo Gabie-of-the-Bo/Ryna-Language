@@ -263,8 +263,11 @@ pub fn compute_project_hash(path: &String) -> Result<(String, HashMap<(String, S
 
     let mut final_hash = config_yml.hash.clone();
 
+    let mut sorted_modules = config_yml.modules.values().collect::<Vec<_>>();
+    sorted_modules.sort_by_key(|i| &i.path); // This should be unique and allow the same order every time
+
     // Add the hashes of all submodules
-    for (_, info) in &config_yml.modules {
+    for info in sorted_modules {
         final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 

@@ -45,6 +45,8 @@ pub struct TypeInstance {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ObjectBlock {
+    NoValue, //  Empty is a type, this represents no value at all
+
     Empty,
     Int(Integer),
     Float(f64),
@@ -65,7 +67,7 @@ pub enum ObjectBlock {
 
 impl Default for ObjectBlock {
     fn default() -> Self {
-        return ObjectBlock::Empty;
+        return ObjectBlock::NoValue;
     }
 }
 
@@ -78,6 +80,7 @@ impl ObjectBlock {
 
     pub fn get_type_id(&self) -> usize {
         return match self {
+            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
             ObjectBlock::Empty => 0,
             ObjectBlock::Int(_) => INT_ID,
             ObjectBlock::Float(_) => FLOAT_ID,
@@ -95,6 +98,7 @@ impl ObjectBlock {
 
     pub fn get_type(&self) -> Type {
         return match self {
+            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
             ObjectBlock::Empty => Type::Empty,
             ObjectBlock::Int(_) => INT,
             ObjectBlock::Float(_) => FLOAT,
@@ -107,6 +111,13 @@ impl ObjectBlock {
             ObjectBlock::Instance(i) => if i.params.is_empty() { Type::Basic(i.id) } else { Type::Template(i.id, i.params.clone()) },
             ObjectBlock::Ref(r) => Type::Ref(Box::new(r.borrow().get_type())),
             ObjectBlock::Mut(r) => Type::MutRef(Box::new(r.borrow().get_type())),
+        };
+    }
+
+    pub fn is_moved(&self) -> bool {
+        return match self {
+            ObjectBlock::NoValue => true,
+            _ => false
         };
     }
 
@@ -195,6 +206,28 @@ impl Object {
             GetMut::<T>::get(unsafe { &mut *ptr })
         });
     }
+
+    pub fn ref_count(&self) -> usize {
+        return Rc::strong_count(&self.inner);
+    }
+
+    pub fn is_moved(&self) -> bool {
+        return self.inner.borrow().is_moved();
+    }
+
+    /*
+        Moves self contents to the returned value and leaves Moved
+    */
+    pub fn move_contents(&self) -> Object {
+        let res = ObjectBlock::default().to_obj();
+
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) => std::mem::swap(&mut *i.borrow_mut(), &mut *res.inner.borrow_mut()),
+            _ => unreachable!()
+        };
+
+        return res;
+    }
     
     pub fn assign(&self, other_obj: Object) {
         match Rc::try_unwrap(other_obj.inner) {
@@ -235,6 +268,8 @@ impl Object {
 
     pub fn deep_clone(&self) -> Object {
         return match &*self.inner.borrow() {
+            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
+
             ObjectBlock::Empty => ObjectBlock::Empty.to_obj(),
             ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()).to_obj(),
             ObjectBlock::Float(n) => ObjectBlock::Float(*n).to_obj(),
@@ -402,5 +437,34 @@ mod tests {
         assert_eq!(*number.get::<Integer>(), Integer::from(20));
         assert_eq!(*reference.deref::<Integer>(), Integer::from(20));
         assert_eq!(*ref_of_ref.deref::<Integer>(), Integer::from(20));
+    }
+
+    #[test]
+    fn value_moving() {
+        let number = Object::new(Integer::from(10));
+        
+        assert_eq!(*number.get::<Integer>(), Integer::from(10));
+
+        let reference = number.get_mut();
+        let ref_of_ref = reference.get_mut();
+
+        assert_ne!(number.get_ptr(), reference.get_ptr());
+        assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
+        assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
+        assert_eq!(number.get_ptr(), reference.inner.borrow().deref().as_ptr());
+        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().deref().as_ptr());
+
+        assert_eq!(number.ref_count(), 3);
+
+        let number_2 = reference.move_contents();
+
+        assert!(number.is_moved());
+        assert!(reference.deref_obj().is_moved());
+        assert!(ref_of_ref.deref_obj().is_moved());
+        assert_eq!(number.ref_count(), 3);
+
+        assert!(!number_2.is_moved());
+        assert_eq!(number_2.ref_count(), 1);
+        assert_eq!(*number_2.get::<Integer>(), Integer::from(10));
     }
 }

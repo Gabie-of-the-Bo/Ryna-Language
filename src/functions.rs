@@ -437,6 +437,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         return Ok(Object::empty());
     }).unwrap();
 
+    let idx = ctx.define_function("move".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, mut v, _| { 
+        return Ok(v.pop().unwrap().move_contents());
+    }).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

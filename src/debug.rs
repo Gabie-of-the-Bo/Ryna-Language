@@ -4,7 +4,7 @@ use crate::{context::NessaContext, parser::NessaExpr, operations::Operator};
 
 impl NessaContext {
     pub fn to_string(&self, expr: &NessaExpr) -> String  {
-        return match expr {
+        match expr {
             NessaExpr::NameReference(_, n) |
             NessaExpr::Variable(_, _, n, _) => n.clone().cyan().to_string(),
             NessaExpr::CompiledVariableDefinition(_, _, n, t, e) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
@@ -78,6 +78,6 @@ impl NessaContext {
             NessaExpr::Return(_, expr) => format!("return {}", self.to_string(expr)),
 
             _ => todo!("Unable to convert {:?} to pretty string", expr)
-        };
+        }
     }
 }

@@ -3,7 +3,7 @@ use crate::{context::NessaContext, operations::{Operator, ADD_BINOP_ID, SUB_BINO
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
         for (ov_id, (_, arg, _, _)) in operations.iter().enumerate() {
-            if let Some(opcode) = f(&arg) {
+            if let Some(opcode) = f(arg) {
                 let mut offset = arg.is_ref() as usize;
 
                 if opcode.needs_float() {

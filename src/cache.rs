@@ -70,6 +70,7 @@ impl UsageCache {
 
 // Full Nessa cache
 
+#[allow(clippy::type_complexity)]
 #[derive(Default, Clone)]
 pub struct NessaImportCache {
     pub functions: ImportCache<(usize, Vec<String>, Vec<(String, Type)>, Type)>,
@@ -107,8 +108,8 @@ pub struct NessaCache {
     pub ranges: StringCache<(usize, usize)>
 }
 
-pub fn needs_import<T: Hash + PartialEq + Eq>(module: &String, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    
-    return imports.contains_key(&import_type) && 
+pub fn needs_import<T: Hash + PartialEq + Eq>(module: &str, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    
+    imports.contains_key(&import_type) && 
            imports[&import_type].contains(name) && 
-           cache.insert((module.clone(), obj));
+           cache.insert((module.to_owned(), obj))
 }

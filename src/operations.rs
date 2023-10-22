@@ -10,9 +10,13 @@ use crate::number::*;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunction = Option<fn(&Vec<Type>, &Type, Object) -> Result<Object, String>>;
-pub type BinaryFunction = Option<fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>>;
-pub type NaryFunction = Option<fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>>;
+pub type UnaryFunctionInner = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
+pub type BinaryFunctionInner = fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>;
+pub type NaryFunctionInner = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
+
+pub type UnaryFunction = Option<UnaryFunctionInner>;
+pub type BinaryFunction = Option<BinaryFunctionInner>;
+pub type NaryFunction = Option<NaryFunctionInner>;
 
 pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
@@ -47,7 +51,7 @@ pub enum Operator {
 
 impl Operator {
     pub fn get_id(&self) -> usize {
-        return match self {
+        match self {
             Operator::Unary { id, .. } => *id,
             Operator::Binary { id, .. } => *id,
             Operator::Nary { id, .. } => *id
@@ -55,7 +59,7 @@ impl Operator {
     }
 
     pub fn get_precedence(&self) -> usize {
-        return match self {
+        match self {
             Operator::Unary { precedence: p, .. } => *p,
             Operator::Binary { precedence: p, .. } => *p,
             Operator::Nary { precedence: p, .. } => *p
@@ -63,7 +67,7 @@ impl Operator {
     }
 
     pub fn get_repr(&self) -> String {
-        return match self {
+        match self {
             Operator::Unary { representation: r, .. } => r.into(),
             Operator::Binary { representation: r, .. } => r.into(),
             Operator::Nary { open_rep: o, close_rep: c, .. } => format!("{o}{c}")
@@ -71,7 +75,7 @@ impl Operator {
     }
 
     pub fn is_right_associative(&self) -> bool {
-        return match self {
+        match self {
             Operator::Binary { right_associative, .. } => *right_associative,
             _ => unreachable!()
         }
@@ -132,7 +136,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 
     ctx.define_native_unary_operation(2, 1, T_0.to_mut(), T_0, |_, _, a| {
-        return Ok(a.deref_obj());
+        Ok(a.deref_obj())
     }).unwrap();
 }
 
@@ -346,7 +350,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
         T_0.to_mut(), T_0, Type::Empty, 
         Some(|_, _, a, b| {
             a.assign(b);
-            return Ok(Object::empty());
+            Ok(Object::empty())
         }
     )).unwrap();
 }
@@ -397,7 +401,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
                 *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
-                return Ok(());
+                Ok(())
             }
         ).unwrap();
 
@@ -414,7 +418,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
                 *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
-                return Ok(());
+                Ok(())
             }
         ).unwrap();
 
@@ -431,7 +435,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
                 *ip = f.loc as i32;
                 *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
                 
-                return Ok(());
+                Ok(())
             }
         ).unwrap();
     }  

@@ -38,14 +38,15 @@ pub struct TypeTemplate {
 
 impl TypeTemplate {
     pub fn is_nominal(&self) -> bool {
-        return self.alias.is_none();
+        self.alias.is_none()
     }
 
     pub fn is_structural(&self) -> bool {
-        return self.alias.is_some();
+        self.alias.is_some()
     }
 }
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum Type {
     // Empty type (also called void)
@@ -106,25 +107,25 @@ impl Eq for Type {}
 
 impl Type {
     pub fn is_ref(&self) -> bool {
-        return match self {
-            Type::Ref(_) | Type::MutRef(_) => true,
-            _ => false
-        };
+        matches!(
+            self,
+            Type::Ref(_) | Type::MutRef(_)
+        )
     }
 
     pub fn to_ref(self) -> Type {
-        return Type::Ref(Box::new(self));
+        Type::Ref(Box::new(self))
     }
 
     pub fn to_mut(self) -> Type {
-        return Type::MutRef(Box::new(self));
+        Type::MutRef(Box::new(self))
     }
 
     pub fn deref_type(&self) -> &Type {
-        return match self {
+        match self {
             Type::Ref(t) | Type::MutRef(t) => t,
             _ => self
-        };
+        }
     }
 
     pub fn get_name(&self, ctx: &NessaContext) -> String {
@@ -142,7 +143,7 @@ impl Type {
             Type::Wildcard => "*".cyan().to_string(),
 
             Type::TemplateParam(id, v) => {
-                if v.len() > 0 {
+                if !v.is_empty() {
                     format!(
                         "{} [{}]", 
                         format!("'T_{}", id).green(), 
@@ -154,7 +155,7 @@ impl Type {
                 }
             },
             Type::TemplateParamStr(name, v) => {
-                if v.len() > 0 {
+                if !v.is_empty() {
                     format!(
                         "{} [{}]", 
                         format!("'{}", name).green(), 
@@ -174,7 +175,7 @@ impl Type {
     pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
-            Type::SelfType => format!("{}", "Self"),
+            Type::SelfType => "Self".to_string(),
             Type::InferenceMarker => "[Inferred]".into(),
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().to_string(),
@@ -186,10 +187,10 @@ impl Type {
             Type::Wildcard => "*".to_string(),
 
             Type::TemplateParam(id, v) => {
-                if v.len() > 0 {
+                if !v.is_empty() {
                     format!(
-                        "{} [{}]", 
-                        format!("'T_{}", id), 
+                        "T_{} [{}]", 
+                        id, 
                         v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
                     )
 
@@ -198,10 +199,10 @@ impl Type {
                 }
             },
             Type::TemplateParamStr(name, v) => {
-                if v.len() > 0 {
+                if !v.is_empty() {
                     format!(
-                        "{} [{}]", 
-                        format!("'{}", name), 
+                        "'{} [{}]", 
+                        name, 
                         v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
                     )
                     
@@ -370,14 +371,14 @@ impl Type {
     }
 
     pub fn bindable_to(&self, other: &Type, ctx: &NessaContext) -> bool {
-        return self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new(), ctx);
+        self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new(), ctx)
     }
 
     pub fn bindable_to_subtitutions(&self, other: &Type, ctx: &NessaContext) -> (bool, HashMap<usize, Type>) {
         let mut assignments = HashMap::new();
         let res = self.template_bindable_to(other, &mut assignments, &mut HashMap::new(), ctx);
 
-        return (res, assignments);
+        (res, assignments)
     }
 
     pub fn bindable_to_template(&self, other: &Type, templates: &[Type], ctx: &NessaContext) -> bool {
@@ -984,10 +985,10 @@ pub const STR: Type = Type::Basic(STR_ID);
 pub const BOOL: Type = Type::Basic(BOOL_ID);
 
 #[macro_export]
-macro_rules! ARR_OF { ($t: expr) => { Type::Template(crate::types::ARR_ID, vec!($t)) }; }
+macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
 
 #[macro_export]
-macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template(crate::types::ARR_IT_ID, vec!($t)) }; }
+macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t)) }; }
 
 pub const T_0: Type = Type::TemplateParam(0, vec!());
 pub const T_1: Type = Type::TemplateParam(1, vec!());

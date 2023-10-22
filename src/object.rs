@@ -44,7 +44,9 @@ pub struct TypeInstance {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+#[derive(Default)]
 pub enum ObjectBlock {
+    #[default]
     NoValue, //  Empty is a type, this represents no value at all
 
     Empty,
@@ -65,21 +67,17 @@ pub enum ObjectBlock {
     Mut(DataBlock),
 }
 
-impl Default for ObjectBlock {
-    fn default() -> Self {
-        return ObjectBlock::NoValue;
-    }
-}
+
 
 impl Eq for ObjectBlock {}
 
 impl ObjectBlock {
     pub fn to_obj(self) -> Object {
-        return Object { inner: Rc::new(RefCell::new(self)) }
+        Object { inner: Rc::new(RefCell::new(self)) }
     } 
 
     pub fn get_type_id(&self) -> usize {
-        return match self {
+        match self {
             ObjectBlock::NoValue => unreachable!("Accessing moved object"),
             ObjectBlock::Empty => 0,
             ObjectBlock::Int(_) => INT_ID,
@@ -93,7 +91,7 @@ impl ObjectBlock {
             ObjectBlock::Instance(i) => i.id,
             ObjectBlock::Ref(_) => 0,
             ObjectBlock::Mut(_) => 0,
-        };
+        }
     }
 
     pub fn get_type(&self) -> Type {
@@ -115,10 +113,7 @@ impl ObjectBlock {
     }
 
     pub fn is_moved(&self) -> bool {
-        return match self {
-            ObjectBlock::NoValue => true,
-            _ => false
-        };
+        matches!(self, ObjectBlock::NoValue)
     }
 
     pub fn get_inner<T>(&self) -> &T where ObjectBlock: Get<T> {
@@ -129,7 +124,7 @@ impl ObjectBlock {
         return GetMut::<T>::get(self);
     }
 
-    pub fn deref(&self) -> &DataBlock {
+    pub fn dereference(&self) -> &DataBlock {
         if let ObjectBlock::Ref(n) | ObjectBlock::Mut(n) = self {
             return n;
         }
@@ -140,7 +135,7 @@ impl ObjectBlock {
     pub fn assign(&mut self, other: ObjectBlock) {
         use ObjectBlock::*;
 
-        match (&mut *self.deref().borrow_mut(), other) {
+        match (&mut *self.dereference().borrow_mut(), other) {
             (Int(a), Int(b)) => *a = b,
             (Float(a), Float(b)) => *a = b,
             (Str(a), Str(b)) => *a = b,
@@ -163,31 +158,31 @@ pub struct Object {
 
 impl Object {
     pub fn new<T: NessaData>(data: T) -> Self {
-        return data.data().to_obj();
+        data.data().to_obj()
     }
 
     pub fn get_ptr(&self) -> *mut ObjectBlock {
-        return self.inner.as_ptr();
+        self.inner.as_ptr()
     }
 
     pub fn arr(elements: Vec<Object>, elem_type: Type) -> Self {
-        return ObjectBlock::Array(NessaArray { elements, elem_type }).to_obj()
+        ObjectBlock::Array(NessaArray { elements, elem_type }).to_obj()
     }
 
     pub fn arr_it(it_type: Type, block: DataBlock, pos: usize) -> Self {
-        return ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type }).to_obj()
+        ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type }).to_obj()
     }
 
     pub fn lambda(loc: usize, args_type: Type, ret_type: Type) -> Self {
-        return ObjectBlock::Lambda(NessaLambda { loc, args_type, ret_type }).to_obj()
+        ObjectBlock::Lambda(NessaLambda { loc, args_type, ret_type }).to_obj()
     }
 
     pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {
-        return ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
+        ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
     }
 
     pub fn instance(attributes: Vec<Object>, params: Vec<Type>, id: usize) -> Self {
-        return ObjectBlock::Instance(TypeInstance { params, attributes, id }).to_obj()
+        ObjectBlock::Instance(TypeInstance { params, attributes, id }).to_obj()
     }
 
     pub fn get<T>(&self) -> Ref<T> where ObjectBlock: Get<T> {
@@ -208,7 +203,7 @@ impl Object {
     }
 
     pub fn ref_count(&self) -> usize {
-        return Rc::strong_count(&self.inner);
+        Rc::strong_count(&self.inner)
     }
 
     pub fn is_moved(&self) -> bool {
@@ -226,7 +221,7 @@ impl Object {
             _ => unreachable!()
         };
 
-        return res;
+        res
     }
     
     pub fn assign(&self, other_obj: Object) {
@@ -237,11 +232,11 @@ impl Object {
     }
 
     pub fn from_inner(inner: DataBlock) -> Self {
-        return Object { inner };
+        Object { inner }
     }
 
     pub fn empty() -> Object {
-        return ObjectBlock::Empty.to_obj();
+        ObjectBlock::Empty.to_obj()
     }
 
     pub fn get_ref(&self) -> Object {
@@ -263,7 +258,7 @@ impl Object {
     }
 
     pub fn to_debug_string(&self) -> String {
-        return format!("{:?}", self.inner.borrow());
+        format!("{:?}", self.inner.borrow())
     }
 
     pub fn deep_clone(&self) -> Object {
@@ -274,7 +269,7 @@ impl Object {
             ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()).to_obj(),
             ObjectBlock::Float(n) => ObjectBlock::Float(*n).to_obj(),
             ObjectBlock::Str(s) => ObjectBlock::Str(s.clone()).to_obj(),
-            ObjectBlock::Bool(b) => ObjectBlock::Bool(b.clone()).to_obj(),
+            ObjectBlock::Bool(b) => ObjectBlock::Bool(*b).to_obj(),
             ObjectBlock::Tuple(t) => ObjectBlock::Tuple(NessaTuple { 
                 elements: t.elements.iter().map(Object::deep_clone).collect(), 
                 elem_types: t.elem_types.clone()
@@ -324,15 +319,15 @@ pub trait NessaData {
 }
 
 pub trait Get<T> {
-    fn get<'a>(&self) -> &T;
+    fn get(&self) -> &T;
 }
 
 pub trait GetMut<T> {
-    fn get<'a>(&mut self) -> &mut T;
+    fn get(&mut self) -> &mut T;
 }
 
 pub trait Deref<T> {
-    fn deref<'a>(&self) -> Ref<T>;
+    fn deref(&self) -> Ref<T>;
 }
 
 macro_rules! impl_nessa_data {
@@ -344,7 +339,7 @@ macro_rules! impl_nessa_data {
         }
 
         impl Get<$t> for ObjectBlock {
-            fn get<'a>(&self) -> &$t {
+            fn get(&self) -> &$t {
                 if let ObjectBlock::$v(n) = self {
                     return n;
                 }
@@ -354,7 +349,7 @@ macro_rules! impl_nessa_data {
         }
 
         impl GetMut<$t> for ObjectBlock {
-            fn get<'a>(&mut self) -> &mut $t {
+            fn get(&mut self) -> &mut $t {
                 if let ObjectBlock::$v(n) = self {
                     return n;
                 }
@@ -364,8 +359,8 @@ macro_rules! impl_nessa_data {
         }
 
         impl Deref<$t> for ObjectBlock {
-            fn deref<'a>(&self) -> Ref<$t> {
-                return Ref::map(self.deref().borrow(), |i| Get::<$t>::get(i));
+            fn deref(&self) -> Ref<$t> {
+                return Ref::map(self.dereference().borrow(), |i| Get::<$t>::get(i));
             }
         }
     };
@@ -420,8 +415,8 @@ mod tests {
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
         assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
-        assert_eq!(number.get_ptr(), reference.inner.borrow().deref().as_ptr());
-        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().deref().as_ptr());
+        assert_eq!(number.get_ptr(), reference.inner.borrow().dereference().as_ptr());
+        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().dereference().as_ptr());
 
         {
             let mut struct_ref = reference.deref::<Integer>();
@@ -451,8 +446,8 @@ mod tests {
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
         assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
-        assert_eq!(number.get_ptr(), reference.inner.borrow().deref().as_ptr());
-        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().deref().as_ptr());
+        assert_eq!(number.get_ptr(), reference.inner.borrow().dereference().as_ptr());
+        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().dereference().as_ptr());
 
         assert_eq!(number.ref_count(), 3);
 

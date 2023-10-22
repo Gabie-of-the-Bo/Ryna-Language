@@ -14,28 +14,28 @@ pub struct CompiledNessaModule {
 }
 
 impl NessaContext {
-    pub fn get_serializable_module(&self, hash: String, instructions: &Vec<NessaInstruction>) -> CompiledNessaModule {
+    pub fn get_serializable_module(&self, hash: String, instructions: &[NessaInstruction]) -> CompiledNessaModule {
         return CompiledNessaModule {
             hash, 
-            type_templates: self.type_templates[NUM_STD_TYPES..].iter().cloned().collect(), 
-            interface_impls: self.interface_impls[NUM_STD_INT_IMPL..].iter().cloned().collect(), 
+            type_templates: self.type_templates[NUM_STD_TYPES..].to_vec(), 
+            interface_impls: self.interface_impls[NUM_STD_INT_IMPL..].to_vec(), 
             instructions: instructions.iter().map(|i| i.instruction.clone()).collect()
         };
     }
 }
 
 impl CompiledNessaModule {
-    pub fn deserialize(data: &Vec<u8>) -> Self {
-        return bitcode::deserialize(data).expect("Unable to deserialize code");
+    pub fn deserialize(data: &[u8]) -> Self {
+        bitcode::deserialize(data).expect("Unable to deserialize code")
     }
 
     pub fn serialize(&self) -> Vec<u8> {
-        return bitcode::serialize(self).expect("Unable to serialize code");
+        bitcode::serialize(self).expect("Unable to serialize code")
     }
 
     pub fn from_file(path: &Path) -> Self {
         let data = fs::read(path).expect("Unable to read serialized code from file");
-        return CompiledNessaModule::deserialize(&data);
+        CompiledNessaModule::deserialize(&data)
     }
 
     pub fn write_to_file(&self, path: &Path) {
@@ -48,6 +48,6 @@ impl CompiledNessaModule {
         ctx.type_templates.append(&mut self.type_templates);
         ctx.interface_impls.append(&mut self.interface_impls);
 
-        return ctx.execute_compiled_code::<DEBUG>(&self.instructions);
+        ctx.execute_compiled_code::<DEBUG>(&self.instructions)
     }
 }

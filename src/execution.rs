@@ -28,7 +28,7 @@ impl NessaContext {
             println!("{:<3} {}", idx, i.to_string(self));
         }
         
-        return self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect());
+        self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
     }
 
     pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<Option<ExecutionInfo>, NessaError> {
@@ -70,7 +70,7 @@ impl NessaContext {
                         err.emit();
                     }
 
-                    return ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect());
+                    return ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>());
                 },
 
                 Err(err) => err.emit(),
@@ -79,7 +79,7 @@ impl NessaContext {
             Err(err) => err.emit(),
         }
         
-        return Ok(None);
+        Ok(None)
     }
 }
 
@@ -98,7 +98,7 @@ pub struct ExecutionInfo {
 
 impl ExecutionInfo {
     pub fn process(&mut self) {
-        self.total_time = self.loc_time.iter().map(|(_, i)| *i).sum();
+        self.total_time = self.loc_time.values().copied().sum();
 
         self.fn_time = self.ranges.iter().map(|(n, (f, t))| {
             let time = (*f..*t).map(|j| *self.loc_time.get(&(j as i32)).unwrap_or(&0)).sum();
@@ -109,7 +109,7 @@ impl ExecutionInfo {
 }
 
 impl NessaContext {
-    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &Vec<CompiledNessaExpr>) -> Result<Option<ExecutionInfo>, NessaError> {
+    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr]) -> Result<Option<ExecutionInfo>, NessaError> {
         use CompiledNessaExpr::*;
 
         let mut ip: i32 = 0;
@@ -457,10 +457,10 @@ impl NessaContext {
 
             ex.process();
 
-            return Ok(Some(ex));
+            Ok(Some(ex))
 
         } else {
-            return Ok(None);
+            Ok(None)
         }
     }
 }
@@ -1015,7 +1015,7 @@ mod tests {
         let id = ctx.get_type_id("Range".into()).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(TypeInstance {
-            id: id,
+            id,
             params: vec!(),
             attributes: vec!(
                 Object::new(Integer::from(0)),
@@ -1047,7 +1047,7 @@ mod tests {
         let id = ctx.get_type_id("Option".into()).unwrap();
 
         assert_eq!(ctx.variables[0], Some(Object::new(TypeInstance {
-            id: id,
+            id,
             params: vec!(INT),
             attributes: vec!(
                 Object::new(true),

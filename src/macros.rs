@@ -13,8 +13,8 @@ pub enum NessaMacro {
     Seq(Vec<NessaMacro>)
 }
 
-pub fn parse_text<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return map(
+pub fn parse_text(input: Span<'_>) -> PResult<NessaMacro> {
+    map(
         delimited(
             tag("{#"),
             escaped_transform(
@@ -29,12 +29,12 @@ pub fn parse_text<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             ),
             tag("}")
         ),
-        |i| NessaMacro::Text(i)
-    )(input);
+        NessaMacro::Text
+    )(input)
 }
 
 pub fn parse_var<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return map(
+    map(
         delimited(
             tag("{$"),
             delimited(
@@ -45,22 +45,22 @@ pub fn parse_var<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             tag("}")
         ),
         |i: Span<'a>| NessaMacro::Var(i.to_string())
-    )(input);
+    )(input)
 }
 
-pub fn parse_loop_header<'a>(input: Span<'a>) -> PResult<(String, (), Span<'a>, (), Span<'a>, String)> {
-    return tuple((
+pub fn parse_loop_header(input: Span<'_>) -> PResult<(String, (), Span<'_>, (), Span<'_>, String)> {
+    tuple((
         identifier_parser,
         empty1,
         tag("in"),
         empty1,
         tag("$"),
         identifier_parser
-    ))(input);
+    ))(input)
 }
 
-pub fn parse_if<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return map(
+pub fn parse_if(input: Span<'_>) -> PResult<NessaMacro> {
+    map(
         tuple((
             delimited(
                 tag("{&"),
@@ -87,11 +87,11 @@ pub fn parse_if<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             )
         )),
         |(h, i, e)| NessaMacro::If(h, Box::new(i), Box::new(e.unwrap_or_else(|| NessaMacro::Text("".into()))))
-    )(input);
+    )(input)
 }
 
-pub fn parse_loop<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return map(
+pub fn parse_loop(input: Span<'_>) -> PResult<NessaMacro> {
+    map(
         tuple((
             delimited(
                 tag("{@"),
@@ -110,19 +110,19 @@ pub fn parse_loop<'a>(input: Span<'a>) -> PResult<NessaMacro> {
             )
         )),
         |(h, _, b)| NessaMacro::Loop(h.0, h.5.to_string(), Box::new(b))
-    )(input);
+    )(input)
 }
 
-pub fn parse_nessa_macro_line<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return alt((
+pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NessaMacro> {
+    alt((
         parse_var,
         parse_text,
         parse_if,
         parse_loop
-    ))(input);
+    ))(input)
 }
 
-pub fn parse_nessa_macro_lines<'a>(input: Span<'a>) -> PResult<Vec<NessaMacro>> {
+pub fn parse_nessa_macro_lines(input: Span<'_>) -> PResult<Vec<NessaMacro>> {
     return delimited(
         empty0,
         many_separated0(empty0, |input| parse_nessa_macro_line(input)),
@@ -130,11 +130,11 @@ pub fn parse_nessa_macro_lines<'a>(input: Span<'a>) -> PResult<Vec<NessaMacro>> 
     )(input);
 }
 
-pub fn parse_nessa_macro<'a>(input: Span<'a>) -> PResult<NessaMacro> {
-    return map(
+pub fn parse_nessa_macro(input: Span<'_>) -> PResult<NessaMacro> {
+    map(
         parse_nessa_macro_lines,
         NessaMacro::Seq
-    )(input);
+    )(input)
 }
 
 impl NessaMacro {
@@ -159,7 +159,7 @@ impl NessaMacro {
         };
     }
 
-    pub fn expand<'a>(&self, args: &HashMap<String, Vec<&'a str>>) -> Result<String, String> {
+    pub fn expand(&self, args: &HashMap<String, Vec<&str>>) -> Result<String, String> {
         return match self {
             NessaMacro::Text(s) => Ok(s.clone()),
             
@@ -176,7 +176,7 @@ impl NessaMacro {
 
             NessaMacro::If(n, i, e) => {
                 match args.get(n) {
-                    Some(v) if v.len() > 0 => i.expand(args),
+                    Some(v) if !v.is_empty() => i.expand(args),
                     _ => e.expand(args)
                 }
             },

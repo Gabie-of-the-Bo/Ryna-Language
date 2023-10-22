@@ -3,12 +3,14 @@ use serde::{Serialize, Deserialize};
 
 use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaContext, ARR_OF, ARR_IT_OF};
 
+pub type InterfaceFunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
+
 #[derive(Clone)]
 pub struct Interface {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
-    pub fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>
+    pub fns: Vec<InterfaceFunctionHeader>
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -26,37 +28,37 @@ pub struct InterfaceConstraint {
 
 impl InterfaceConstraint {
     pub fn new(id: usize, args: Vec<Type>) -> InterfaceConstraint {
-        return InterfaceConstraint {
-            id: id,
-            args: args
-        };
+        InterfaceConstraint {
+            id,
+            args
+        }
     }
 }
 
 impl InterfaceConstraint {
     pub fn get_name(&self, ctx: &NessaContext) -> String {
-        if self.args.len() > 0 {
-            return format!(
+        if !self.args.is_empty() {
+            format!(
                 "{}<{}>", 
                 ctx.interfaces[self.id].name.green(),
                 self.args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
-            );
+            )
 
         } else {
-            return format!("{}", ctx.interfaces[self.id].name.green());
+            format!("{}", ctx.interfaces[self.id].name.green())
         }
     }
 
     pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
-        if self.args.len() > 0 {
-            return format!(
+        if !self.args.is_empty() {
+            format!(
                 "{}<{}>", 
                 ctx.interfaces[self.id].name,
                 self.args.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")
-            );
+            )
 
         } else {
-            return format!("{}", ctx.interfaces[self.id].name);
+            ctx.interfaces[self.id].name.to_string()
         }
     }
 }

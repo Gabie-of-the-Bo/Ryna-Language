@@ -16,40 +16,38 @@ use crate::patterns::Pattern;
 */
 
 impl NessaContext {
-    pub fn ensured_return_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return match expr {
+    pub fn ensured_return_check(expr: &NessaExpr) -> Result<(), NessaError> {
+        match expr {
             NessaExpr::CompiledLambda(l, _, _, _, body) |
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => self.ensured_return_check_body(body, l),
+            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l),
 
             _ => Ok(())
-        };
+        }
     }
 
-    pub fn ensured_return_check_body(&self, lines: &Vec<NessaExpr>, l: &Location) -> Result<(), NessaError> {
+    pub fn ensured_return_check_body(lines: &Vec<NessaExpr>, l: &Location) -> Result<(), NessaError> {
         for line in lines {
             match line {
                 NessaExpr::Return(_, _) => return Ok(()),
 
-                NessaExpr::If(_, _, ib, ei, eb) => {
-                    if let Some(eb_inner) = eb {
-                        let mut returns = self.ensured_return_check_body(ib, l).is_ok() && self.ensured_return_check_body(eb_inner, l).is_ok();
+                NessaExpr::If(_, _, ib, ei, Some(eb_inner)) => {
+                    let mut returns = NessaContext::ensured_return_check_body(ib, l).is_ok() && NessaContext::ensured_return_check_body(eb_inner, l).is_ok();
 
-                        if returns { // Check every branch
-                            for (_, ei_b) in ei {
-                                if self.ensured_return_check_body(ei_b, l).is_err() {
-                                    returns = false;
-                                    break;
-                                }
+                    if returns { // Check every branch
+                        for (_, ei_b) in ei {
+                            if NessaContext::ensured_return_check_body(ei_b, l).is_err() {
+                                returns = false;
+                                break;
                             }
                         }
+                    }
 
-                        if returns {
-                            return Ok(());
-                        }
+                    if returns {
+                        return Ok(());
                     }
                 }
 
@@ -57,11 +55,11 @@ impl NessaContext {
             }
         }
         
-        return Err(NessaError::compiler_error("Function may not always return a value".into(), l, vec!()));
+        Err(NessaError::compiler_error("Function may not always return a value".into(), l, vec!()))
     }
 
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), NessaError> {
-        return match (expr, ret_type) {
+        match (expr, ret_type) {
             (NessaExpr::Literal(..), _) |
             (NessaExpr::Tuple(..), _) |
             (NessaExpr::Variable(..), _) |
@@ -83,7 +81,7 @@ impl NessaContext {
             (NessaExpr::Return(l, _), None) => {
                 Err(NessaError::compiler_error(
                     "Return statements are only allowed inside function and operation definition bodies".into(), 
-                    &l, vec!()
+                    l, vec!()
                 ))
             },
 
@@ -91,20 +89,20 @@ impl NessaContext {
                 self.return_check(e, ret_type)?;
 
                 if let Some(t) = self.infer_type(e) {
-                    if t.bindable_to(&expected_t, self) {
+                    if t.bindable_to(expected_t, self) {
                         Ok(())
 
                     } else {
                         Err(NessaError::compiler_error(
                             format!("Value of type {} is not bindable to expected return value of type {}", t.get_name(self), expected_t.get_name(self)), 
-                            &l, vec!()
+                            l, vec!()
                         ))
                     }
 
                 } else {
                     Err(NessaError::compiler_error(
                         "Unable to infer return value of return statement".into(), 
-                        &l, vec!()
+                        l, vec!()
                     ))
                 }
             },
@@ -122,7 +120,7 @@ impl NessaContext {
                     }
                 }
 
-                self.ensured_return_check(expr)
+                NessaContext::ensured_return_check(expr)
             }
 
             (NessaExpr::CompiledLambda(_, _, _, ret, body), None) => {
@@ -134,7 +132,7 @@ impl NessaContext {
 
                 self.repeated_arguments_check(expr)?;
                 self.lambda_check(expr)?;
-                self.ensured_return_check(expr)
+                NessaContext::ensured_return_check(expr)
             }
 
             (NessaExpr::While(_, cond, body), ret) |
@@ -208,11 +206,11 @@ impl NessaContext {
                             it.get_name(self),
                             n,
                             t.get_name(self)
-                        ), &l, vec!()))
+                        ), l, vec!()))
                     }
 
                 } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of right-hand of assignment".into(), &l, vec!()))
+                    Err(NessaError::compiler_error("Unable to infer return value of right-hand of assignment".into(), l, vec!()))
                 }
             },
 
@@ -226,7 +224,7 @@ impl NessaContext {
                         arg_types.push(t);
                     
                     } else {
-                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
                     }
                 }
 
@@ -239,7 +237,7 @@ impl NessaContext {
                             "Function call {}({}) is ambiguous",
                             f_name.green(),
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
-                        ), &l,
+                        ), l,
                         possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
                     ))
 
@@ -264,7 +262,7 @@ impl NessaContext {
                                         "Unary operation {}({}) is ambiguous",
                                         representation,
                                         t.get_name(self)
-                                    ), &l, 
+                                    ), l, 
                                     possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
                                 ))
 
@@ -276,7 +274,7 @@ impl NessaContext {
                                         "Unary operation ({}){} is ambiguous",
                                         t.get_name(self),
                                         representation
-                                    ), &l, 
+                                    ), l, 
                                     possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
                                 ))
                             }
@@ -289,13 +287,11 @@ impl NessaContext {
                         Ok(())
                     }
 
-                } else {
-                    if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), &l, vec!()))
+                } else if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), l, vec!()))
 
-                    } else {
-                        unreachable!();
-                    }
+                } else {
+                    unreachable!();
                 }
             },
 
@@ -320,7 +316,7 @@ impl NessaContext {
                                         t1.get_name(self),
                                         representation, 
                                         t2.get_name(self)
-                                    ), &l, 
+                                    ), l, 
                                     possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
                                 ))
 
@@ -332,22 +328,18 @@ impl NessaContext {
                             Ok(())
                         }
                         
-                    } else {
-                        if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                            Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), &l, vec!()))
-
-                        } else {
-                            unreachable!();
-                        }
-                    }
-                    
-                } else {
-                    if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), &l, vec!()))
+                    } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                        Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), l, vec!()))
 
                     } else {
                         unreachable!();
                     }
+                    
+                } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), l, vec!()))
+
+                } else {
+                    unreachable!();
                 }
             },
 
@@ -366,7 +358,7 @@ impl NessaContext {
                             arg_types.push(t);
                         
                         } else {
-                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
                         }
                     }
     
@@ -392,7 +384,7 @@ impl NessaContext {
                                     open_rep,
                                     arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                                     close_rep
-                                ), &l, 
+                                ), l, 
                                 possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
                             ))
 
@@ -404,13 +396,11 @@ impl NessaContext {
                         Ok(())
                     }
 
-                } else {
-                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), &l, vec!()))
+                } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), l, vec!()))
 
-                    } else {
-                        unreachable!()
-                    }
+                } else {
+                    unreachable!()
                 }
             },
 
@@ -421,11 +411,11 @@ impl NessaContext {
 
                 if let Some(t) = if_header_type {
                     if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                     }
 
                 } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), &l, vec!()));
+                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
                 }
 
                 for line in ib {
@@ -439,11 +429,11 @@ impl NessaContext {
 
                     if let Some(t) = elif_header_type {
                         if t != BOOL {
-                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));                            
+                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
                         }
     
                     } else {
-                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), &l, vec!()));
+                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -467,11 +457,11 @@ impl NessaContext {
 
                 if let Some(t) = while_header_type {
                     if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));                            
+                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
                     }
 
                 } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), &l, vec!()));                            
+                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), l, vec!()));                            
                 }
 
                 for line in body {
@@ -488,7 +478,7 @@ impl NessaContext {
                     Ok(())
 
                 } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), &l, vec!()))
+                    Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), l, vec!()))
                 }
             }
 
@@ -543,7 +533,7 @@ impl NessaContext {
                 self.invalid_type_check(e)
             }
 
-            NessaExpr::Tuple(_, args) => args.iter().map(|i| self.invalid_type_check(i)).collect(),
+            NessaExpr::Tuple(_, args) => args.iter().try_for_each(|i| self.invalid_type_check(i)),
             
             NessaExpr::If(_, i, ib, ei, eb) => {
                 self.invalid_type_check(i)?;
@@ -814,10 +804,10 @@ impl NessaContext {
             Type::MutRef(i) => self.check_type_well_formed(i, l),
 
             Type::Or(v) |
-            Type::And(v) => v.iter().map(|i| self.check_type_well_formed(i, l)).collect(),
+            Type::And(v) => v.iter().try_for_each(|i| self.check_type_well_formed(i, l)),
 
             Type::TemplateParam(_, c) |
-            Type::TemplateParamStr(_, c) => c.iter().flat_map(|i| &i.args).map(|i| self.check_type_well_formed(i, l)).collect(),
+            Type::TemplateParamStr(_, c) => c.iter().flat_map(|i| &i.args).try_for_each(|i| self.check_type_well_formed(i, l)),
 
             Type::Template(id, args) => {
                 let t = &self.type_templates[*id];
@@ -833,13 +823,13 @@ impl NessaContext {
                                 num_params, 
                                 args.len()
                             ), 
-                            &l, 
+                            l, 
                             vec!()
                         )
                     );
                 }
 
-                args.iter().map(|i| self.check_type_well_formed(i, l)).collect()
+                args.iter().try_for_each(|i| self.check_type_well_formed(i, l))
             },
             
             Type::Function(a, b) => {
@@ -850,7 +840,7 @@ impl NessaContext {
     }
 
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return match expr {
+        match expr {
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -883,11 +873,11 @@ impl NessaContext {
                             it.get_name(self),
                             n,
                             t.get_name(self)
-                        ), &l, vec!()))
+                        ), l, vec!()))
                     }
 
                 } else {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of right-hand of assignment"), &l, vec!()))
+                    Err(NessaError::compiler_error("Unable to infer return value of right-hand of assignment".to_string(), l, vec!()))
                 }
             },
 
@@ -905,7 +895,7 @@ impl NessaContext {
                         arg_types.push(t);
                     
                     } else {
-                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
                     }
                 }
 
@@ -918,7 +908,7 @@ impl NessaContext {
                             if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                             self.functions[*id].overloads[ov_id].0, templates.len()
-                        ), &l, vec!()))
+                        ), l, vec!()))
                     
                     } else {
                         // Update caches
@@ -934,7 +924,7 @@ impl NessaContext {
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
-                    ), &l, vec!()))
+                    ), l, vec!()))
                 }
             },
 
@@ -957,7 +947,7 @@ impl NessaContext {
                                         representation,
                                         t.get_name(self),
                                         operations[ov_id].0, templates.len()
-                                    ), &l, vec!()))
+                                    ), l, vec!()))
     
                                 } else {
                                     Err(NessaError::compiler_error(format!(
@@ -965,7 +955,7 @@ impl NessaContext {
                                         t.get_name(self),
                                         representation,
                                         operations[ov_id].0, templates.len()
-                                    ), &l, vec!()))
+                                    ), l, vec!()))
                                 }
     
                             } else {
@@ -980,35 +970,31 @@ impl NessaContext {
                             unreachable!()
                         }
 
-                    } else {
-                        if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
-                            if *prefix {
-                                Err(NessaError::compiler_error(format!(
-                                    "Unable to get unary operator overload for {}({})",
-                                    representation,
-                                    t.get_name(self)
-                                ), &l, vec!()))
-
-                            } else {
-                                Err(NessaError::compiler_error(format!(
-                                    "Unable to get unary operator overload for ({}){}",
-                                    t.get_name(self),
-                                    representation
-                                ), &l, vec!()))
-                            }
+                    } else if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                        if *prefix {
+                            Err(NessaError::compiler_error(format!(
+                                "Unable to get unary operator overload for {}({})",
+                                representation,
+                                t.get_name(self)
+                            ), l, vec!()))
 
                         } else {
-                            unreachable!()
+                            Err(NessaError::compiler_error(format!(
+                                "Unable to get unary operator overload for ({}){}",
+                                t.get_name(self),
+                                representation
+                            ), l, vec!()))
                         }
-                    }
-
-                } else {
-                    if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), &l, vec!()))
 
                     } else {
-                        unreachable!();
+                        unreachable!()
                     }
+
+                } else if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), l, vec!()))
+
+                } else {
+                    unreachable!();
                 }
             },
 
@@ -1034,7 +1020,7 @@ impl NessaContext {
                                         representation,
                                         t2.get_name(self),
                                         operations[ov_id].0, templates.len()
-                                    ), &l, vec!()))    
+                                    ), l, vec!()))    
 
                                 } else {
                                     // Update caches
@@ -1048,36 +1034,30 @@ impl NessaContext {
                                 unreachable!()
                             }
     
-                        } else {
-                            if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                                Err(NessaError::compiler_error(format!(
-                                    "Unable to get binary operator overload for ({}){}({})",
-                                    t1.get_name(self),
-                                    representation,
-                                    t2.get_name(self)
-                                ), &l, vec!()))
-    
-                            } else {
-                                unreachable!()
-                            }
-                        }
+                        } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                                                    Err(NessaError::compiler_error(format!(
+                                                        "Unable to get binary operator overload for ({}){}({})",
+                                                        t1.get_name(self),
+                                                        representation,
+                                                        t2.get_name(self)
+                                                    ), l, vec!()))
                         
-                    } else {
-                        if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                            Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), &l, vec!()))
-    
-                        } else {
-                            unreachable!();
-                        }
-                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                        
+                    } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                                            Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), l, vec!()))
                     
-                } else {
-                    if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), &l, vec!()))
+                                        } else {
+                                            unreachable!();
+                                        }
+                    
+                } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), l, vec!()))
 
-                    } else {
-                        unreachable!();
-                    }
+                } else {
+                    unreachable!();
                 }
             },
 
@@ -1100,7 +1080,7 @@ impl NessaContext {
                             arg_types.push(t);
                         
                         } else {
-                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
                         }
                     }
     
@@ -1114,7 +1094,7 @@ impl NessaContext {
                                     arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                                     close_rep,
                                     operations[ov_id].0, templates.len()
-                                ), &l, vec!()))
+                                ), l, vec!()))
 
                             } else {
                                 let mut all_args = vec!(t.clone());
@@ -1131,28 +1111,24 @@ impl NessaContext {
                             unreachable!()
                         }
     
-                    } else {
-                        if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                            Err(NessaError::compiler_error(format!(
-                                "Unable to get n-ary operator overload for {}{}{}{}",
-                                t.get_name(self),
-                                open_rep,
-                                arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                                close_rep
-                            ), &l, vec!()))
-
-                        } else {
-                            unreachable!()
-                        }
-                    }
-
-                } else {
-                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), &l, vec!()))
+                    } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                        Err(NessaError::compiler_error(format!(
+                            "Unable to get n-ary operator overload for {}{}{}{}",
+                            t.get_name(self),
+                            open_rep,
+                            arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                            close_rep
+                        ), l, vec!()))
 
                     } else {
                         unreachable!()
                     }
+
+                } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                    Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), l, vec!()))
+
+                } else {
+                    unreachable!()
                 }
             },
 
@@ -1163,11 +1139,11 @@ impl NessaContext {
 
                 if let Some(t) = if_header_type {
                     if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                     }
 
                 } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), &l, vec!()));
+                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
                 }
 
                 for line in ib {
@@ -1181,11 +1157,11 @@ impl NessaContext {
 
                     if let Some(t) = elif_header_type {
                         if t != BOOL {
-                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                         }
     
                     } else {
-                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), &l, vec!()));
+                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -1219,11 +1195,11 @@ impl NessaContext {
 
                 if let Some(t) = while_header_type {
                     if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                     }
 
                 } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), &l, vec!()));
+                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), l, vec!()));
                 }
 
                 for line in body {
@@ -1240,7 +1216,7 @@ impl NessaContext {
                     Ok(())
 
                 } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), &l, vec!()));
+                    Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), l, vec!()))
                 }
             }
 
@@ -1273,7 +1249,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1299,7 +1275,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1331,7 +1307,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1361,7 +1337,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1391,7 +1367,7 @@ impl NessaContext {
                             let offset_id = i + t.len();
 
                             if !templates.contains(&offset_id) {
-                                return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                                return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                             }    
                         }
                     }
@@ -1399,7 +1375,7 @@ impl NessaContext {
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
                 
@@ -1418,7 +1394,7 @@ impl NessaContext {
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
 
@@ -1441,7 +1417,7 @@ impl NessaContext {
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), &l, vec!()));
+                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
 
@@ -1451,12 +1427,13 @@ impl NessaContext {
             NessaExpr::Macro(..) => { Ok(()) },
 
             _ => unimplemented!("{:?}", expr)
-        };
+        }
     }
 
-    pub fn implicit_syntax_check(&self, name: &String, templates: &Vec<String>, attributes: &Vec<(String, Type)>, syntaxes: &Vec<Pattern>) -> Result<(), String> {
+    #[allow(clippy::never_loop)] // This seems like an bug in clippy
+    pub fn implicit_syntax_check(&self, name: &String, templates: &Vec<String>, attributes: &[(String, Type)], syntaxes: &Vec<Pattern>) -> Result<(), String> {
         if !syntaxes.is_empty() && !templates.is_empty() {
-            return Err(format!("Implicit syntaxes are not allowed when classes have type parameters"))
+            return Err("Implicit syntaxes are not allowed when classes have type parameters".to_string())
         }
 
         let atts = attributes.iter().map(|(n, _)| n.clone()).collect::<HashSet<_>>();
@@ -1464,7 +1441,7 @@ impl NessaContext {
         for s in syntaxes {
             let args = s.get_markers();
 
-            for diff in atts.symmetric_difference(&args) {
+            for diff in args.symmetric_difference(&atts) {
                 if args.contains(diff) {
                     return Err(format!("Syntax argument with name \"{}\" is not an attribute of {}", diff, name));
                 }
@@ -1473,11 +1450,11 @@ impl NessaContext {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn class_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return match expr {
+        match expr {
             NessaExpr::ClassDefinition(l, n, _, attributes, _, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
@@ -1489,11 +1466,11 @@ impl NessaContext {
             }
 
             _ => Ok(())
-        };
+        }
     }
 
     pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return match expr {
+        match expr {
             NessaExpr::Macro(l, n, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
@@ -1502,7 +1479,7 @@ impl NessaContext {
                     if !macro_args.contains(&(false, p.clone())) {
                         return Err(NessaError::compiler_error(
                             format!("Argument {} is not used inside {} syntax", p.green(), n.blue()),
-                            &l, vec!()
+                            l, vec!()
                         ));
                     }
                 }
@@ -1511,7 +1488,7 @@ impl NessaContext {
                     if !p.0 && !pattern_args.contains(&p.1) {
                         return Err(NessaError::compiler_error(
                             format!("Argument {} is referenced inside {} syntax, but is not present in its NDL pattern", p.1.green(), n.blue()),
-                            &l, vec!()
+                            l, vec!()
                         ));
                     }
                 }
@@ -1520,7 +1497,7 @@ impl NessaContext {
             }
 
             _ => Ok(())
-        };
+        }
     }
 
     pub fn interface_impl_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
@@ -1609,7 +1586,7 @@ impl NessaContext {
         }
     }
 
-    pub fn no_template_check_types(&self, t: &Vec<Type>, l: &Location) -> Result<(), NessaError> {
+    pub fn no_template_check_types(&self, t: &[Type], l: &Location) -> Result<(), NessaError> {
         if t.iter().any(Type::has_templates) {
             Err(NessaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
 
@@ -1619,7 +1596,7 @@ impl NessaContext {
     }
 
     pub fn no_template_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return match expr {
+        match expr {
             NessaExpr::Literal(..) |
             NessaExpr::CompiledLambda(..) => Ok(()),
 
@@ -1709,24 +1686,24 @@ impl NessaContext {
             NessaExpr::Return(_, e) => self.no_template_check(e),
             
             _ => unimplemented!("{:?}", expr)
-        };
+        }
     }
 
     pub fn lambda_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         if let NessaExpr::CompiledLambda(l, _, a, r, b) = expr {
             if r.has_templates() {
-                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda return types".into(), &l, vec!()));
+                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda return types".into(), l, vec!()));
             }
 
             if a.iter().map(|(_, t)| t).any(Type::has_templates) {
-                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda parameters".into(), &l, vec!()));
+                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda parameters".into(), l, vec!()));
             }
 
             for line in b {
                 self.no_template_check(line)?;
             }
 
-            return Ok(());
+            Ok(())
        
         } else {
             unreachable!()
@@ -1744,7 +1721,7 @@ impl NessaContext {
             args_set.insert(i);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
@@ -1754,13 +1731,13 @@ impl NessaContext {
                 let err = self.repeated_args(&vec!(n));
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
@@ -1770,13 +1747,13 @@ impl NessaContext {
                 let err = self.repeated_args(&vec!(n1, n2));
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
@@ -1789,13 +1766,13 @@ impl NessaContext {
                 let err = self.repeated_args(&args);
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
@@ -1805,13 +1782,13 @@ impl NessaContext {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
@@ -1821,7 +1798,7 @@ impl NessaContext {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect());
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, &l, vec!()));
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
                 
                 Ok(())
@@ -1841,11 +1818,11 @@ impl NessaContext {
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn static_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        return self.static_check_expected(expr, &None);
+        self.static_check_expected(expr, &None)
     }
 }
 

@@ -47,13 +47,13 @@ pub struct Integer{
 
 impl PartialOrd for Integer{
     fn partial_cmp(&self, b: &Integer) -> Option<Ordering>{
-        return Some(self.cmp(&b));
+        Some(self.cmp(b))
     }
 }
 
 impl Ord for Integer{
     fn cmp(&self, b: &Integer) -> Ordering{
-        return match (self.negative, b.negative){
+        match (self.negative, b.negative){
             (false, false) => comp_limbs(&self.limbs, &b.limbs),
             (true, true) => comp_limbs(&b.limbs, &self.limbs),
             (true, false) => Ordering::Less,
@@ -72,88 +72,88 @@ impl Ord for Integer{
 pub fn div_by_digit_lbase(number: &mut Vec<u64>, digit: u128) -> u64{
     let mut carry = 0;
 
-    *number = number.into_iter().map(|i| {
+    *number = number.iter_mut().map(|i| {
         carry = (carry << BITS_PER_LIMB) + *i as u128;
         let res = carry / digit;
 
         carry %= digit;
 
-        return res as u64;
+        res as u64
     
     }).skip_while(|i| *i == 0).collect();
 
-    return carry as u64;
+    carry as u64
 }
 
 #[inline]
 pub fn div_by_two(number: &mut Vec<u64>, base: u128) -> u64{
     let mut carry = 0;
 
-    *number = number.into_iter().map(|i| {
+    *number = number.iter_mut().map(|i| {
         carry = carry * base + *i as u128;
         let res = carry >> 1;
         carry &= 1;
 
-        return res as u64;
+        res as u64
     
     }).skip_while(|i| *i == 0).collect();
 
-    return carry as u64;
+    carry as u64
 }
 
 #[inline]
 pub fn div_by_two_lbase(number: &mut Vec<u64>) -> u64{
     let mut carry = 0;
 
-    *number = number.into_iter().map(|i| {
+    *number = number.iter_mut().map(|i| {
         carry = (carry << BITS_PER_LIMB) + *i as u128;
         let res = carry >> 1;
         carry &= 1;
 
-        return res as u64;
+        res as u64
     
     }).skip_while(|i| *i == 0).collect();
 
-    return carry as u64;
+    carry as u64
 }
 
 #[inline]
 pub fn div_by_digit_rev_lbase(number: &mut Vec<u64>, digit: u128) -> u64{
     let mut carry = 0;
 
-    *number = number.into_iter().rev().map(|i| {
+    *number = number.iter_mut().rev().map(|i| {
         carry = (carry << BITS_PER_LIMB) + *i as u128;
         let res = carry / digit;
 
         carry %= digit;
 
-        return res as u64;
+        res as u64
     
     }).collect();
 
-    *number = number.into_iter().skip_while(|i| **i == 0).map(|i| *i).collect();
+    *number = number.iter_mut().skip_while(|i| **i == 0).map(|i| *i).collect();
     number.reverse();
 
-    return carry as u64;
+    carry as u64
 }
 
 #[inline]
 pub fn div_by_two_rev_lbase(number: &mut Vec<u64>) -> u64{
     let mut carry = 0;
 
-    *number = number.into_iter().rev().map(|i| {
+    *number = number.iter_mut().rev().map(|i| {
         carry = (carry << BITS_PER_LIMB) + *i as u128;
         let res = carry >> 1;
         carry &= 1;
 
-        return res as u64;
+        res as u64
     
     }).collect();
 
-    *number = number.into_iter().skip_while(|i| **i == 0).map(|i| *i).collect();
+    *number = number.iter_mut().skip_while(|i| **i == 0).map(|i| *i).collect();
     number.reverse();
 
-    return carry as u64;
+    carry as u64
 }
 
 #[inline]
@@ -164,7 +164,7 @@ pub fn base_10_to_bin(b10: &mut Vec<u64>) -> Vec<u8>{
         res.push(div_by_two(b10, 10) as u8);
     }
 
-    return res;
+    res
 }
 
 #[inline]
@@ -175,7 +175,7 @@ pub fn bin_to_base_10(bin: &mut Vec<u64>) -> Vec<u8>{
         res.push(div_by_digit_lbase(bin, 10) as u8);
     }
 
-    return res;
+    res
 }
 
 #[inline]
@@ -187,18 +187,18 @@ fn slice_to_u64(bin: &[u8]) -> u64{
         res += *n as u64;
     }
 
-    return res;
+    res
 } 
 
 impl From<&str> for Integer{
     fn from(string: &str) -> Self{
-        let negative = string.starts_with("-");
+        let negative = string.starts_with('-');
         let number = if negative { &string[1..] } else { string };
 
         let mut digits = number.chars().map(|i| char::to_digit(i, 10).unwrap() as u64).collect::<Vec<_>>();
 
         let mut res = Integer{
-            negative: negative,
+            negative,
             limbs: base_10_to_bin(&mut digits).chunks(BITS_PER_LIMB as usize).map(slice_to_u64).collect()
         };
 
@@ -206,7 +206,7 @@ impl From<&str> for Integer{
             res.limbs.push(0);
         }
 
-        return res;
+        res
     }
 }
 
@@ -217,11 +217,11 @@ impl std::fmt::Display for Integer{
             write!(f, "-").unwrap();
         }
 
-        for d in bin_to_base_10(&mut cpy.limbs.into_iter().rev().map(|i| i as u64).collect()).iter().rev(){
+        for d in bin_to_base_10(&mut cpy.limbs.into_iter().rev().collect()).iter().rev(){
             write!(f, "{}", d).unwrap();
         }
 
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -233,44 +233,40 @@ impl std::fmt::Display for Integer{
 
 #[inline]
 pub fn comp_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Ordering{
-    if a.len() > b.len() {
-        return Ordering::Greater;
-    
-    } else if a.len() < b.len() {
-        return Ordering::Less;
+    match a.len().cmp(&b.len()) {
+        Ordering::Less => return Ordering::Less,
+        Ordering::Equal => {},
+        Ordering::Greater => return Ordering::Greater,
     }
 
     for (a, b) in a.iter().rev().zip(b.iter().rev()){
-        if a > b {
-            return Ordering::Greater;
-        
-        } else if a < b {
-            return Ordering::Less;
+        match a.cmp(b) {
+            Ordering::Less => return Ordering::Less,
+            Ordering::Equal => {},
+            Ordering::Greater => return Ordering::Greater,
         }
     }
 
-    return Ordering::Equal;
+    Ordering::Equal
 }
 
 #[inline]
 fn comp_slices(a: &[u64], b: &[u64]) -> Ordering{
-    if a.len() > b.len() {
-        return Ordering::Greater;
-    
-    } else if a.len() < b.len() {
-        return Ordering::Less;
+    match a.len().cmp(&b.len()) {
+        Ordering::Less => return Ordering::Less,
+        Ordering::Equal => {},
+        Ordering::Greater => return Ordering::Greater,
     }
 
-    for (a, b) in a.iter().rev().zip(b.iter().rev()){
-        if a > b {
-            return Ordering::Greater;
-        
-        } else if a < b {
-            return Ordering::Less;
+    for (a, b) in a.iter().rev().zip(b.iter().rev()) {
+        match a.cmp(b) {
+            Ordering::Less => return Ordering::Less,
+            Ordering::Equal => {},
+            Ordering::Greater => return Ordering::Greater,
         }
     }
 
-    return Ordering::Equal;
+    Ordering::Equal
 }
 
 /*
@@ -304,12 +300,12 @@ fn shift_limbs_left(a: &mut Vec<u64>, b: u64) {
 }
 
 #[inline]
-fn shift_limbs_left_cpy(a: &Vec<u64>, b: u64) -> Vec<u64> {
-    let mut limbs = a.clone();
+fn shift_limbs_left_cpy(a: &[u64], b: u64) -> Vec<u64> {
+    let mut limbs = a.to_owned();
 
     shift_limbs_left(&mut limbs, b);
 
-    return limbs;
+    limbs
 }
 
 #[inline]
@@ -333,12 +329,12 @@ fn shift_limbs_right(a: &mut Vec<u64>, b: u64) {
 }
 
 #[inline]
-fn shift_limbs_right_cpy(a: &Vec<u64>, b: u64) -> Vec<u64> {
-    let mut limbs = a.clone();
+fn shift_limbs_right_cpy(a: &[u64], b: u64) -> Vec<u64> {
+    let mut limbs = a.to_owned();
 
     shift_limbs_right(&mut limbs, b);
 
-    return limbs;
+    limbs
 }
 
 #[inline]
@@ -353,7 +349,7 @@ fn or_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64> {
         h.pop();
     }
 
-    return if h.is_empty() { vec!(0) } else { h };
+    if h.is_empty() { vec!(0) } else { h }
 }
 
 #[inline]
@@ -369,7 +365,7 @@ fn and_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64> {
         h.pop();
     }
 
-    return if h.is_empty() { vec!(0) } else { h };
+    if h.is_empty() { vec!(0) } else { h }
 }
 
 #[inline]
@@ -384,12 +380,12 @@ fn xor_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64> {
         h.pop();
     }
 
-    return if h.is_empty() { vec!(0) } else { h };
+    if h.is_empty() { vec!(0) } else { h }
 }
 
 #[inline]
-fn not_limbs(a: &Vec<u64>) -> Vec<u64> {
-    let mut h = a.clone();
+fn not_limbs(a: &[u64]) -> Vec<u64> {
+    let mut h = a.to_vec();
     
     for i in h.iter_mut() {
         *i = !*i;
@@ -399,7 +395,7 @@ fn not_limbs(a: &Vec<u64>) -> Vec<u64> {
         h.pop();
     }
 
-    return if h.is_empty() { vec!(0) } else { h };
+    if h.is_empty() { vec!(0) } else { h }
 }
 
 /*
@@ -420,15 +416,15 @@ fn add_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     }
 
     // From the smallest to the largest
-    for i in l.len()..h.len(){
-        carry = unsafe { _addcarry_u64(carry, h[i], 0, &mut h[i]) };
+    for i in h.iter_mut().skip(l.len()) {
+        carry = unsafe { _addcarry_u64(carry, *i, 0, i) };
     }
                             
     if carry > 0{
         h.push(carry as u64);
     }
 
-    return h;
+    h
 }
 
 #[inline]
@@ -449,8 +445,8 @@ fn add_limbs_offset(a: &mut Vec<u64>, b: &Vec<u64>, offset: usize){
             carry = unsafe { _addcarry_u64(carry, a[i], b[i - offset], &mut a[i]) };
         }
 
-        for i in (b.len() + offset)..a.len() {
-            carry = unsafe { _addcarry_u64(carry, a[i], 0, &mut a[i]) };
+        for i in a.iter_mut().skip(b.len() + offset) {
+            carry = unsafe { _addcarry_u64(carry, *i, 0, i) };
         }
     }
 
@@ -474,7 +470,7 @@ fn sub_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
         h.pop();
     }
 
-    return if h.is_empty() { vec!(0) } else { h };
+    if h.is_empty() { vec!(0) } else { h }
 }
 
 #[inline]
@@ -496,7 +492,7 @@ fn sub_slices(a: &mut [u64], b: &[u64]){
 */
 
 #[inline]
-pub fn mul_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+pub fn mul_limbs(a: &[u64], b: &[u64]) -> Vec<u64>{
     let mut res = vec!();
 
     b.iter().map(|n| {
@@ -508,14 +504,14 @@ pub fn mul_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
             let of = _addcarry_u64(0, _mulx_u64(*i, *n, &mut carry), prev_carry, &mut res);
             carry += of as u64;
 
-            return res;
+            res
         }).collect::<Vec<_>>();
 
         if carry > 0{
-            mul_res.push(carry as u64);
+            mul_res.push(carry);
         }
 
-        return mul_res;
+        mul_res
 
     }).enumerate().for_each(|(offset, v)| {
         if offset == 0{
@@ -526,7 +522,7 @@ pub fn mul_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
         }
     });
 
-    return res;
+    res
 }
 
 #[inline]
@@ -540,7 +536,7 @@ pub fn karatsuba_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 
     let mut v = [(&x0, &y0), (&x1, &y1), (&add_limbs(&x1, &x0), &add_limbs(&y1, &y0))]
                 .par_iter()
-                .map(|(a, b)| select_algorithm_and_multiply(&a, &b))
+                .map(|(a, b)| select_algorithm_and_multiply(a, b))
                 .collect::<Vec<_>>();
 
     let p = v.pop().unwrap();
@@ -551,7 +547,7 @@ pub fn karatsuba_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     add_limbs_offset(&mut z0, &z1, shift);
     add_limbs_offset(&mut z0, &z2, shift * 2);
 
-    return z0;
+    z0
 }
 
 #[inline]
@@ -595,7 +591,7 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 
     let mut v = [(&p0, &q0), (&p1, &q1), (&pn1, &qn1), (&pn2, &qn2), (&pi, &qi)]
                 .par_iter()
-                .map(|(a, b)| select_algorithm_and_multiply(&a, &b))
+                .map(|(a, b)| select_algorithm_and_multiply(a, b))
                 .collect::<Vec<_>>();
 
     let ri = Integer::new(false, v.pop().unwrap());
@@ -633,7 +629,7 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     add_limbs_offset(&mut f0.limbs, &f3.limbs, shift*3);
     add_limbs_offset(&mut f0.limbs, &f4.limbs, shift*4);
     
-    return f0.limbs;
+    f0.limbs
 }
 
 /*
@@ -644,48 +640,48 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 
 pub fn div_limbs_long(a: &Vec<u64>, b: &Vec<u64>, rem: Option<&mut Vec<u64>>) -> Vec<u64>{
     if a.len() < b.len() {
-        if rem.is_some() {
-            *rem.unwrap() = a.clone();
+        if let Some(rem_inner) = rem {
+            *rem_inner = a.clone();
         }
 
-        return vec!(0);
+        vec!(0)
     
     } else {
-        match comp_limbs(&a, &b) {
+        match comp_limbs(a, b) {
             Ordering::Less => {
-                if rem.is_some() {
-                    *rem.unwrap() = a.clone();
+                if let Some(rem_inner) = rem {
+                    *rem_inner = a.clone();
                 }
 
-                return vec!(0);
+                vec!(0)
             },
 
             Ordering::Equal => {
-                if rem.is_some() {
-                    *rem.unwrap() = vec!(0);
+                if let Some(rem_inner) = rem {
+                    *rem_inner = vec!(0);
                 }
 
-                return vec!(1);
+                vec!(1)
             },
 
             Ordering::Greater => {
                 let mut a_cpy = a.clone();
                 let mut b_cpy = b.clone();
 
-                return div_limbs_knuthd(&mut a_cpy, &mut b_cpy, rem);
+                div_limbs_knuthd(&mut a_cpy, &mut b_cpy, rem)
             }
         }
     }
 }
 
 fn to_wide(a0: u64, a1: u64) -> u128{
-    return ((a0 as u128) << BITS_PER_LIMB) | a1 as u128;
+    ((a0 as u128) << BITS_PER_LIMB) | a1 as u128
 }
 
 fn div_wide(a0: u64, a1: u64, b0: u64) -> (u128, u128){
     let lhs = to_wide(a0, a1);
 
-    return (lhs / b0 as u128, lhs % b0 as u128);
+    (lhs / b0 as u128, lhs % b0 as u128)
 }
 
 pub fn div_limbs_knuthd(u: &mut Vec<u64>, v: &mut Vec<u64>, rem: Option<&mut Vec<u64>>) -> Vec<u64>{
@@ -723,7 +719,7 @@ pub fn div_limbs_knuthd(u: &mut Vec<u64>, v: &mut Vec<u64>, rem: Option<&mut Vec
             }
         }
 
-        let mut p = mul_limbs(&v, &vec!(q0 as u64));
+        let mut p = mul_limbs(v, &[q0 as u64]);
 
         if let Ordering::Less = comp_slices(&u[j..=(n + j)], &p[..]){
             sub_slices(&mut p[..], &v[..]);
@@ -739,24 +735,24 @@ pub fn div_limbs_knuthd(u: &mut Vec<u64>, v: &mut Vec<u64>, rem: Option<&mut Vec
         q.pop();
     }
 
-    if rem.is_some() {
+    if let Some(rem_inner) = rem {
         while !u.is_empty() && *u.last().unwrap() == 0 {
             u.pop();
         }
 
-        *rem.unwrap() = shift_limbs_right_cpy(&u[0..n].to_vec(), leading_zeros as u64);
+        *rem_inner = shift_limbs_right_cpy(&u[0..n], leading_zeros as u64);
     }
 
-    return q;
+    q
 }
 
-pub fn div_limbs_u128(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+pub fn div_limbs_u128(a: &[u64], b: &[u64]) -> Vec<u64>{
     let a_wide = to_wide(*a.get(1).unwrap_or(&0), a[0]);
     let b_wide = to_wide(*b.get(1).unwrap_or(&0), b[0]);
 
     let res = a_wide / b_wide;
 
-    return if res <= u64::MAX as u128 {
+    if res <= u64::MAX as u128 {
         vec!(res as u64)
 
     } else{
@@ -764,13 +760,13 @@ pub fn div_limbs_u128(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     }
 }
 
-pub fn mod_limbs_u128(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+pub fn mod_limbs_u128(a: &[u64], b: &[u64]) -> Vec<u64> {
     let a_wide = to_wide(*a.get(1).unwrap_or(&0), a[0]);
     let b_wide = to_wide(*b.get(1).unwrap_or(&0), b[0]);
 
     let res = a_wide % b_wide;
 
-    return if res <= u64::MAX as u128 {
+    if res <= u64::MAX as u128 {
         vec!(res as u64)
 
     } else{
@@ -778,12 +774,12 @@ pub fn mod_limbs_u128(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     }
 }
 
-pub fn div_limbs_digit(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
-    let mut res = a.clone();
+pub fn div_limbs_digit(a: &[u64], b: &[u64]) -> Vec<u64>{
+    let mut res = a.to_owned();
 
     div_by_digit_rev_lbase(&mut res, b[0] as u128);
 
-    return res;
+    res
 }
 
 
@@ -798,44 +794,44 @@ fn select_algorithm_and_multiply(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     let min_size = a.len().min(b.len());
 
     if min_size < 50 {
-        return mul_limbs(&a, &b);
+        mul_limbs(a, b)
 
     } else if min_size < 250 {
-        return karatsuba_mul(&a, &b);
+        return karatsuba_mul(a, b);
 
     } else{
-        return toom_3_mul(&a, &b);
+        return toom_3_mul(a, b);
     }
 }
 
 #[inline]
 fn select_algorithm_and_divide(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     if a.len() == 1 && b.len() == 1 {
-        return vec!(a[0] / b[0]);
+        vec!(a[0] / b[0])
 
     } else if a.len() <= 2 && b.len() <= 2 {
-        return div_limbs_u128(&a, &b);
+        return div_limbs_u128(a, b);
 
     } else if b.len() == 1 {
-        return div_limbs_digit(&a, &b);
+        return div_limbs_digit(a, b);
 
     } else{
-        return div_limbs_long(&a, &b, None);
+        return div_limbs_long(a, b, None);
     }
 }
 
 #[inline]
 fn select_algorithm_and_mod(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     if a.len() == 1 && b.len() == 1 {
-        return vec!(a[0] % b[0]);
+        vec!(a[0] % b[0])
 
     } else if a.len() <= 2 && b.len() <= 2 {
-        return mod_limbs_u128(&a, &b);
+        return mod_limbs_u128(a, b);
 
     } else{
         let mut rem = vec!();
 
-        div_limbs_long(&a, &b, Some(&mut rem));
+        div_limbs_long(a, b, Some(&mut rem));
 
         return rem;
     }
@@ -849,7 +845,7 @@ fn select_algorithm_and_mod(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 
 #[inline]
 fn full_add(a: &Integer, b: &Integer) -> Integer{
-    return match (a.negative, b.negative){
+    match (a.negative, b.negative){
         (true, true) | (false, false) => Integer{
                                             negative: b.negative, 
                                             limbs: add_limbs(&a.limbs, &b.limbs)
@@ -877,7 +873,7 @@ fn full_add(a: &Integer, b: &Integer) -> Integer{
 
 #[inline]
 fn full_sub(a: &Integer, b: &Integer) -> Integer{
-    return match (a.negative, b.negative){
+    match (a.negative, b.negative){
         (true, false) | (false, true) => Integer{
                                             negative: a.negative, 
                                             limbs: add_limbs(&a.limbs, &b.limbs)
@@ -912,7 +908,7 @@ fn full_mul(a: &Integer, b: &Integer) -> Integer{
 
     res.normalize_sign();
 
-    return res;
+    res
 }
 
 #[inline]
@@ -924,7 +920,7 @@ fn full_div(a: &Integer, b: &Integer) -> Integer{
 
     res.normalize_sign();
 
-    return res;
+    res
 }
 
 #[inline]
@@ -936,49 +932,49 @@ fn full_mod(a: &Integer, b: &Integer) -> Integer{
 
     res.normalize_sign();
 
-    return res;
+    res
 }
 
 fn full_lshift(a: &Integer, b: u64) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: shift_limbs_left_cpy(&a.limbs, b)
-    };
+    }
 }
 
 fn full_rshift(a: &Integer, b: u64) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: shift_limbs_right_cpy(&a.limbs, b)
-    };
+    }
 }
 
 fn full_or(a: &Integer, b: &Integer) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: or_limbs(&a.limbs, &b.limbs)
-    };
+    }
 }
 
 fn full_and(a: &Integer, b: &Integer) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: and_limbs(&a.limbs, &b.limbs)
-    };
+    }
 }
 
 fn full_xor(a: &Integer, b: &Integer) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: xor_limbs(&a.limbs, &b.limbs)
-    };
+    }
 }
 
 fn full_not(a: &Integer) -> Integer{
-    return Integer{
+    Integer{
         negative: a.negative,
         limbs: not_limbs(&a.limbs)
-    };
+    }
 }
 
 /*
@@ -1008,7 +1004,7 @@ pub fn pow(b: &Integer, e: &Integer) -> Result<Integer, String>{
         div_by_two_lbase(&mut n.limbs);
     } 
 
-    return Ok(y);
+    Ok(y)
 }
 
 pub fn modpow(b: &Integer, e: &Integer, m: &Integer) -> Result<Integer, String>{
@@ -1038,7 +1034,7 @@ pub fn modpow(b: &Integer, e: &Integer, m: &Integer) -> Result<Integer, String>{
         div_by_two_lbase(&mut n.limbs);
     } 
 
-    return Ok(y);
+    Ok(y)
 }
 
 /*
@@ -1084,10 +1080,10 @@ impl_op_ex!(! |a: &Integer| -> Integer { full_not(a) });
 
 impl Integer {
     pub fn new(negative: bool, limbs: Vec<u64>) -> Integer{
-        return Integer{
-            negative: negative,
-            limbs: limbs
-        };
+        Integer{
+            negative,
+            limbs
+        }
     }
 
     pub fn rand_with_size(digits: usize, can_be_negative: bool) -> Integer{
@@ -1097,9 +1093,9 @@ impl Integer {
         let mut string = "".to_string();
 
         for _j in 0..digits{
-            let digit = distribution.sample(&mut rng).to_string().bytes().nth(0).unwrap() as char;
+            let digit = distribution.sample(&mut rng).to_string().as_bytes()[0] as char;
 
-            if string.len() > 0 || digit != '0'{
+            if !string.is_empty() || digit != '0'{
                 string.push(digit);
             }
         }
@@ -1119,11 +1115,11 @@ impl Integer {
             res.limbs.push(rng.next_u64());
         }
 
-        return res;
+        res
     }
 
     pub fn is_even(&self) -> bool{
-        return self.limbs[0] % 2 == 0;
+        self.limbs[0] % 2 == 0
     }
 
     pub fn is_zero(&self) -> bool{
@@ -1131,7 +1127,7 @@ impl Integer {
     }
 
     pub fn is_one(&self) -> bool{
-        return self.limbs.len() == 1 && self.limbs[0] == 1;
+        self.limbs.len() == 1 && self.limbs[0] == 1
     }
 
     pub fn normalize_sign(&mut self) -> &Self{
@@ -1139,7 +1135,7 @@ impl Integer {
             self.negative = false;
         }
         
-        return self;
+        self
     }
 
     pub fn bin(&self) -> String{
@@ -1159,7 +1155,7 @@ impl Integer {
         } else{
             let first = to_wide(self.limbs[self.limbs.len() - 1], self.limbs[self.limbs.len() - 2]); 
             let exponent = (self.limbs.len() - 2) as u64 * BITS_PER_LIMB;
-            return (first as f64) * 2_f64.powi(exponent as i32);
+            (first as f64) * 2_f64.powi(exponent as i32)
         }
 
     }
@@ -1173,7 +1169,7 @@ impl Integer {
 
 impl From<&Integer> for String {
     fn from(n: &Integer) -> String {
-        return n.to_string();
+        n.to_string()
     }
 }
 
@@ -1188,7 +1184,7 @@ fn check_integer_format(mut s: &str) -> bool {
         s = &s[1..];
     }
 
-    return s.chars().all(|i| i.is_digit(10));
+    return s.chars().all(|i| i.is_ascii_digit());
 }
 
 impl FromStr for Integer {
@@ -1199,7 +1195,7 @@ impl FromStr for Integer {
             return Ok(Integer::from(s));
         }
 
-        return Err(format!("Unable to parse Integer from {}", s));
+        Err(format!("Unable to parse Integer from {}", s))
     }
 }
 
@@ -1244,9 +1240,9 @@ mod tests {
             let mut string = "".to_string();
 
             for _j in 0..100{
-                let digit = distribution.sample(&mut rng).to_string().bytes().nth(0).unwrap() as char;
+                let digit = distribution.sample(&mut rng).to_string().as_bytes()[0] as char;
 
-                if string.len() > 0 || digit != '0'{
+                if !string.is_empty() || digit != '0'{
                     string.push(digit);
                 }
             }

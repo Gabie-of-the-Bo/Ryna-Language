@@ -60,7 +60,7 @@ impl Pattern{
         }
 
         return match self {
-            Pattern::Symbol('d') => value(HashMap::new(), satisfy(|c| c.is_digit(10)))(text),
+            Pattern::Symbol('d') => value(HashMap::new(), satisfy(|c| c.is_ascii_digit()))(text),
             Pattern::Symbol('l') => value(HashMap::new(), satisfy(|c| c.is_lowercase()))(text),
             Pattern::Symbol('L') => value(HashMap::new(), satisfy(|c| c.is_uppercase()))(text),
             Pattern::Symbol('a') => value(HashMap::new(), satisfy(|c| c.is_alphabetic()))(text),
@@ -134,14 +134,9 @@ impl Pattern{
                     }
 
                 } else {
-                    loop {
-                        if let Ok((i, o)) = p.extract(input, ctx) {
-                            input = i;
-                            merge(&mut res, o);
-    
-                        } else {
-                            break;
-                        }
+                    while let Ok((i, o)) = p.extract(input, ctx) {
+                        input = i;
+                        merge(&mut res, o);
                     }
                 }
 
@@ -160,7 +155,7 @@ impl Pattern{
     }
 }
 
-fn parse_and<'a>(text: Span<'a>, and: bool) -> PResult<'a, Pattern> {
+fn parse_and(text: Span<'_>, and: bool) -> PResult<'_, Pattern> {
     return if and {
         map(
             separated_list1(empty1, |i| parse_ndl_pattern(i, false, false)), 
@@ -172,7 +167,7 @@ fn parse_and<'a>(text: Span<'a>, and: bool) -> PResult<'a, Pattern> {
     }
 }
 
-fn parse_or<'a>(text: Span<'a>, or: bool) -> PResult<'a, Pattern> {
+fn parse_or(text: Span<'_>, or: bool) -> PResult<'_, Pattern> {
     return if or {
         return map(
             separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true)), 
@@ -196,9 +191,9 @@ pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a,
             tuple((empty0, tag(")")))
         ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
         map(tuple((
-            opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap())),
+            opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap())),
             delimited(tuple((tag("{"), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("}")))),
-            opt(map(take_while1(|c: char| c.is_digit(10)), |s: Span<'a>| s.parse::<usize>().unwrap()))
+            opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap()))
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
         map(delimited(tuple((tag("["), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
         delimited(tuple((tag("("), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(")")))),
@@ -232,8 +227,8 @@ mod tests {
     use crate::parser::{Span, PResult};
     use crate::patterns::Pattern;
 
-    fn ok_result<'a, T>(res: PResult<'a, T>) -> bool {
-        return res.is_ok() && res.unwrap().0.is_empty();
+    fn ok_result<T>(res: PResult<'_, T>) -> bool {
+        res.is_ok() && res.unwrap().0.is_empty()
     }
 
     #[test]
@@ -439,20 +434,20 @@ mod tests {
         ));
 
         assert_eq!(u_pattern.extract("125".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("".into())),
-            ("Int".into(), vec!("125".into())),
+            ("Sign".into(), vec!("")),
+            ("Int".into(), vec!("125")),
         )));
 
         assert_eq!(u_pattern.extract("0.056".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("".into())),
-            ("Int".into(), vec!("0".into())),
-            ("Dec".into(), vec!("056".into())),
+            ("Sign".into(), vec!("")),
+            ("Int".into(), vec!("0")),
+            ("Dec".into(), vec!("056")),
         )));
 
         assert_eq!(u_pattern.extract("-13.26".into(), &ctx).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("-".into())),
-            ("Int".into(), vec!("13".into())),
-            ("Dec".into(), vec!("26".into())),
+            ("Sign".into(), vec!("-")),
+            ("Int".into(), vec!("13")),
+            ("Dec".into(), vec!("26")),
         )));
 
         assert!(!ok_result(u_pattern.extract(Span::new("+100"), &ctx)));

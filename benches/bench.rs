@@ -30,7 +30,7 @@ pub fn execution_benchmarks(c: &mut Criterion) {
     }).collect::<Vec<_>>();
 
     for (path, file) in &files {
-        let mut group = c.benchmark_group(path.split("/").last().unwrap());
+        let mut group = c.benchmark_group(path.split('/').last().unwrap());
         group.sample_size(10);
         group.measurement_time(Duration::from_secs(15));
         group.throughput(criterion::Throughput::Bytes(file.len() as u64));
@@ -55,7 +55,7 @@ pub fn execution_benchmarks(c: &mut Criterion) {
         }));
 
         ctx.precompile_module(&mut parsed).unwrap();
-        let compiled = ctx.compiled_form(&parsed).unwrap().into_iter().map(|i| i.instruction).collect();
+        let compiled = ctx.compiled_form(&parsed).unwrap().into_iter().map(|i| i.instruction).collect::<Vec<_>>();
 
         group.sample_size(10);
 

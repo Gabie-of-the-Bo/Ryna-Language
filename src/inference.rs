@@ -9,7 +9,7 @@ impl NessaContext {
     pub fn get_first_unary_op(&self, id: usize, arg_type: Type, call_templates: Option<Vec<Type>>, sub_t: bool) -> Option<(usize, Type, bool, Vec<Type>)> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = arg_type.bindable_to_subtitutions(&a, self) { // Take first that matches
+                if let (true, subs) = arg_type.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -26,7 +26,7 @@ impl NessaContext {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn is_unary_op_ambiguous(&self, id: usize, arg_type: Type) -> Option<Vec<(Type, Type)>> {
@@ -52,7 +52,7 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
+                if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -69,7 +69,7 @@ impl NessaContext {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn is_binary_op_ambiguous(&self, id: usize, a_type: Type, b_type: Type) -> Option<Vec<(Type, Type, Type)>> {
@@ -77,7 +77,7 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(&a, self))
+                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
                             .map(|(_, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1].clone(), r.clone())
@@ -108,7 +108,7 @@ impl NessaContext {
 
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
+                if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -125,7 +125,7 @@ impl NessaContext {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn is_nary_op_ambiguous(&self, id: usize, a_type: Type, b_type: Vec<Type>) -> Option<Vec<(Type, Vec<Type>, Type)>> {
@@ -163,7 +163,7 @@ impl NessaContext {
         let t = Type::And(arg_type);
 
         for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
-            if let (true, subs) = t.bindable_to_subtitutions(&a, self) { // Take first that matches
+            if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                 if let Some(call_t) = call_templates {
                     for (i, t) in call_t.iter().enumerate() {
                         if let Some(s_t) = subs.get(&i) {
@@ -179,7 +179,7 @@ impl NessaContext {
             }
         }
 
-        return None;
+        None
     }
 
     pub fn is_function_overload_ambiguous(&self, id: usize, arg_type: Vec<Type>) -> Option<Vec<(Type, Type)>> {
@@ -191,10 +191,10 @@ impl NessaContext {
 
         // Return Some(overloads) if the call is ambiguous, else return None
         if overloads.len() > 1 {
-            return Some(overloads);
+            Some(overloads)
 
         } else {
-            return None;
+            None
         }
     }
 
@@ -205,7 +205,7 @@ impl NessaContext {
             }
         }
 
-        return false;
+        false
     }
 
     pub fn get_iterator_type(&self, container_type: &Type) -> Result<(usize, Type, Vec<Type>), String> {
@@ -213,7 +213,7 @@ impl NessaContext {
             return Ok((ov, it_type, it_args));
         }
 
-        return Err(format!("Unable to infer iterator type from container of type {}", container_type.get_name(self)));
+        Err(format!("Unable to infer iterator type from container of type {}", container_type.get_name(self)))
     }
 
     pub fn get_iterator_output_type(&self, iterator_type: &Type) -> Result<(usize, Type, Vec<Type>), String> {
@@ -223,7 +223,7 @@ impl NessaContext {
             return Ok((ov, r, next_args));
         }
 
-        return Err(format!("Unable to infer element type from iterator of type {}", iterator_type.get_name(self)));
+        Err(format!("Unable to infer element type from iterator of type {}", iterator_type.get_name(self)))
     }
 
     pub fn infer_type(&self, expr: &NessaExpr) -> Option<Type> {

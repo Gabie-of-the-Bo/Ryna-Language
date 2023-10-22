@@ -39,12 +39,13 @@ pub struct NessaConfig {
 }
 
 fn default_version() -> String {
-    return "0.1.0".into();
+    "0.1.0".into()
 }
 
 pub type Imports = HashMap<ImportType, HashSet<String>>;
 pub type ImportMap = HashMap<String, Imports>;
 pub type InnerDepGraph = DirectedGraph<(ImportType, usize), ()>;
+pub type VersionModCache = HashMap<(String, String), ModuleInfo>;
 
 type FileCache = HashMap<String, (NessaConfig, HashMap<String, HashMap<ImportType, HashSet<String>>>, String)>;
 
@@ -68,13 +69,13 @@ impl NessaModule {
         imports: ImportMap,
         inner_dependencies: InnerDepGraph
     ) -> NessaModule {
-        return NessaModule { name, hash, ctx, code, source, imports, inner_dependencies };
+        NessaModule { name, hash, ctx, code, source, imports, inner_dependencies }
     }
 }
 
 impl NessaConfig {
-    pub fn get_imports_topological_order(&self, all_modules: &HashMap<(String, String), ModuleInfo>) -> Result<Vec<(String, String)>, NessaError> {
-        fn topological_order(config: &NessaConfig, node: &(String, String), res: &mut Vec<(String, String)>, temp: &mut HashSet<(String, String)>, perm: &mut HashSet<(String, String)>, all_modules: &HashMap<(String, String), ModuleInfo>) -> Result<(), NessaError> {
+    pub fn get_imports_topological_order(&self, all_modules: &VersionModCache) -> Result<Vec<(String, String)>, NessaError> {
+        fn topological_order(node: &(String, String), res: &mut Vec<(String, String)>, temp: &mut HashSet<(String, String)>, perm: &mut HashSet<(String, String)>, all_modules: &VersionModCache) -> Result<(), NessaError> {
             if perm.contains(node) {
                 return Ok(());
             }
@@ -88,7 +89,7 @@ impl NessaConfig {
             match all_modules.get(node) {
                 Some(m) => {
                     for (n, v) in &m.dependencies {
-                        topological_order(config, &(n.clone(), v.clone()), res, temp, perm, all_modules)?;
+                        topological_order(&(n.clone(), v.clone()), res, temp, perm, all_modules)?;
                     }
                 },
 
@@ -101,24 +102,24 @@ impl NessaConfig {
             perm.insert(node.clone());
             res.push(node.clone());
 
-            return Ok(());
+            Ok(())
         }
 
         let mut res = vec!();
         let mut temp = HashSet::new();
         let mut perm = HashSet::new();
 
-        topological_order(self, &(self.module_name.clone(), self.version.clone()), &mut res, &mut temp, &mut perm, all_modules)?;
+        topological_order(&(self.module_name.clone(), self.version.clone()), &mut res, &mut temp, &mut perm, all_modules)?;
 
-        return Ok(res);
+        Ok(res)
     }
 
     fn is_outdated(&self) -> bool {
-        return true; // TODO: compilation cache
+        true// TODO: compilation cache
     }
 }
 
-fn parse_nessa_module_with_config<'a>(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &HashMap<(String, String), ModuleInfo>, file_cache: &FileCache) -> Result<NessaModule, NessaError> {
+fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache) -> Result<NessaModule, NessaError> {
     let (config_yml, imports, main) = file_cache.get(path).unwrap();
 
     // Refresh configuration and recompile if it is outdated
@@ -142,7 +143,7 @@ fn parse_nessa_module_with_config<'a>(path: &String, already_compiled: &mut Hash
                     format!(
                         "Multiple versions needed for module {} ({} and {})", 
                         name,
-                        all_but_last_vers.into_iter().map(|i| format!("{}", i.cyan())).collect::<Vec<_>>().join(", "),
+                        all_but_last_vers.iter().map(|i| format!("{}", i.cyan())).collect::<Vec<_>>().join(", "),
                         vers.last().unwrap().cyan()
                     )
                 ));
@@ -152,7 +153,7 @@ fn parse_nessa_module_with_config<'a>(path: &String, already_compiled: &mut Hash
         // Compile modules
 
         for dep in &topological_order {
-            if *dep.0 != config_yml.module_name && !already_compiled.contains_key(&dep) {
+            if *dep.0 != config_yml.module_name && !already_compiled.contains_key(dep) {
                 let module = all_modules.get(dep).unwrap();
                 let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache)?;
 
@@ -168,17 +169,17 @@ fn parse_nessa_module_with_config<'a>(path: &String, already_compiled: &mut Hash
                                                    .map(|i| (i.0.clone(), already_compiled.get(&i).unwrap()))
                                                    .collect();
     
-        let (module, source) = ctx.parse_with_dependencies(&config_yml.module_name, &main, &module_dependencies)?;
+        let (module, source) = ctx.parse_with_dependencies(&config_yml.module_name, main, &module_dependencies)?;
         let graph = ctx.get_inner_dep_graph(&module)?;
     
-        return Ok(NessaModule::new(config_yml.module_name.clone(), config_yml.hash.clone(), ctx, module, source, imports.clone(), graph));
+        Ok(NessaModule::new(config_yml.module_name.clone(), config_yml.hash.clone(), ctx, module, source, imports.clone(), graph))
 
     } else {
         unimplemented!();
     }
 }
 
-pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<String>, modules: &mut HashMap<(String, String), ModuleInfo>, file_cache: &mut FileCache) -> Result<(), NessaError> {
+pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<String>, modules: &mut VersionModCache, file_cache: &mut FileCache) -> Result<(), NessaError> {
     let main_path = module_path.join(Path::new("main.nessa"));
 
     if !main_path.exists() {
@@ -235,27 +236,27 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
         }
     }
 
-    return Ok(());
+    Ok(())
 }
 
-pub fn get_all_modules_cascade(module_path: &Path) -> Result<(HashMap<(String, String), ModuleInfo>, FileCache), NessaError> {
+pub fn get_all_modules_cascade(module_path: &Path) -> Result<(VersionModCache, FileCache), NessaError> {
     let mut res = HashMap::new();
     let mut file_cache = HashMap::new();
 
     get_all_modules_cascade_aux(module_path, &mut HashSet::new(), &mut res, &mut file_cache)?;
 
-    return Ok((res, file_cache));
+    Ok((res, file_cache))
 }
 
-pub fn precompile_nessa_module_with_config(path: &String, all_modules: HashMap<(String, String), ModuleInfo>, file_cache: FileCache) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
+pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
     let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache)?;
 
     module.ctx.precompile_module(&mut module.code)?;
 
-    return Ok((module.ctx, module.code));
+    Ok((module.ctx, module.code))
 }
 
-pub fn compute_project_hash(path: &String) -> Result<(String, HashMap<(String, String), ModuleInfo>, FileCache), NessaError> {
+pub fn compute_project_hash(path: &String) -> Result<(String, VersionModCache, FileCache), NessaError> {
     let module_path = Path::new(path);
     let (all_modules, file_cache) = get_all_modules_cascade(module_path)?;
 
@@ -271,7 +272,7 @@ pub fn compute_project_hash(path: &String) -> Result<(String, HashMap<(String, S
         final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 
-    return Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache));
+    Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache))
 }
 
 pub fn read_compiled_cache(path: &String) -> Option<CompiledNessaModule> {
@@ -290,7 +291,7 @@ pub fn read_compiled_cache(path: &String) -> Option<CompiledNessaModule> {
 
     let code = CompiledNessaModule::from_file(&code_path);
 
-    return Some(code);
+    Some(code)
 }
 
 pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Result<(), NessaError> {
@@ -304,11 +305,11 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
     let code_path = cache_path.join(Path::new("main.nessac"));
     module.write_to_file(&code_path);
 
-    return Ok(());
+    Ok(())
 }
 
 pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
-    let path_slashes = path.to_str().unwrap().replace("\\", "/");
+    let path_slashes = path.to_str().unwrap().replace('\\', "/");
     
     return match Path::new(&path_slashes).canonicalize() {
         Ok(p) => Ok(p.to_str().unwrap().into()),

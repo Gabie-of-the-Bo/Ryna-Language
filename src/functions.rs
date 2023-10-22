@@ -15,7 +15,8 @@ use crate::context::NessaContext;
 */
 
 // Takes type parameters, return type and arguments
-pub type FunctionOverload = Option<fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>>;
+pub type FunctionOverloadInner = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
+pub type FunctionOverload = Option<FunctionOverloadInner>;
 
 pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
@@ -95,51 +96,51 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
         *v[0].deref::<Integer>() += Integer::from(1);
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     let idx = ctx.define_function("print".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT], Type::Empty, |_, _, v, _| { 
-        print!("{}", v[0].get::<Integer>().to_string());
+        print!("{}", v[0].get::<Integer>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FLOAT], Type::Empty, |_, _, v, _| { 
-        print!("{}", v[0].get::<f64>().to_string());
+        print!("{}", v[0].get::<f64>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[BOOL], Type::Empty, |_, _, v, _| { 
-        print!("{}", v[0].get::<bool>().to_string());
+        print!("{}", v[0].get::<bool>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
         print!("{}", v[0].get::<String>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
     
     let idx = ctx.define_function("deref".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v, _| {
-        return Ok(v[0].deref_obj());
+        Ok(v[0].deref_obj())
     }).unwrap();
 
     let idx = ctx.define_function("ref".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), |_, _, v, _| {
-        return Ok(v[0].get_ref());
+        Ok(v[0].get_ref())
     }).unwrap();
 
     let idx = ctx.define_function("mut".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
-        return Ok(v[0].get_mut());
+        Ok(v[0].get_mut())
     }).unwrap();
 
     let idx = ctx.define_function("arr".into()).unwrap();
@@ -163,7 +164,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             array.elements.push(v[1].clone());
 
-            return Ok(Object::empty());
+            Ok(Object::empty())
         }
     ).unwrap();
 
@@ -177,7 +178,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         |t, _, v, _| {
             return Ok(Object::arr_it(
                 Type::MutRef(Box::new(t[0].clone())), 
-                v[0].inner.borrow().deref().clone(), 
+                v[0].inner.borrow().dereference().clone(), 
                 0
             ));
         }
@@ -191,7 +192,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         |t, _, v, _| {
             return Ok(Object::arr_it(
                 Type::Ref(Box::new(t[0].clone())), 
-                v[0].inner.borrow().deref().clone(), 
+                v[0].inner.borrow().dereference().clone(), 
                 0
             ));
         }
@@ -203,11 +204,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0)], 
         ARR_IT_OF!(T_0.to_mut()), 
         |t, _, v, _| {
-            return Ok(Object::arr_it(
+            Ok(Object::arr_it(
                 Type::MutRef(Box::new(t[0].clone())), 
                 v[0].inner.clone(), 
                 0
-            ));
+            ))
         }
     ).unwrap();
 
@@ -235,7 +236,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             iterator.pos += 1;
 
-            return Ok(item);
+            Ok(item)
         }
     ).unwrap();
 
@@ -408,39 +409,39 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("println".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _, _| { 
-        println!("");
+        println!();
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<Integer>().to_string());
+        println!("{}", v[0].get::<Integer>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FLOAT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<f64>().to_string());
+        println!("{}", v[0].get::<f64>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[BOOL], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<bool>().to_string());
+        println!("{}", v[0].get::<bool>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
         println!("{}", v[0].get::<String>());
 
-        return Ok(Object::empty());
+        Ok(Object::empty())
     }).unwrap();
 
     let idx = ctx.define_function("move".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, mut v, _| { 
-        return Ok(v.pop().unwrap().move_contents());
+        Ok(v.pop().unwrap().move_contents())
     }).unwrap();
 
     // Max tuple size is 10 for now
@@ -448,7 +449,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();
 
         seq!(J in 2..10 {
-            let ts = Type::And((0..J).into_iter().map(|i| Type::TemplateParam(i, vec!())).collect());
+            let ts = Type::And((0..J).map(|i| Type::TemplateParam(i, vec!())).collect());
 
             ctx.define_native_function_overload(
                 idx, 

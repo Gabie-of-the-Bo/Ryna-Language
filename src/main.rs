@@ -21,16 +21,16 @@ impl<'a> StringValidator for RegexValidator<'a> {
             return Ok(inquire::validator::Validation::Valid);
         }
 
-        return Ok(inquire::validator::Validation::Invalid(self.message.into()));
+        Ok(inquire::validator::Validation::Invalid(self.message.into()))
     }
 }
 
 impl<'a> RegexValidator<'a> {
     pub fn new(regex: &str, message: &'a str) -> Self {
-        return RegexValidator {
+        RegexValidator {
             regex: Regex::new(regex).unwrap(), 
-            message: message
-        };
+            message
+        }
     }
 }
 
@@ -69,7 +69,7 @@ impl Autocomplete for OptionsAutocompleter {
             max_common = substrs.into_iter().next().unwrap().to_string();
         }
 
-        return Ok(inquire::autocompletion::Replacement::Some(max_common))
+        Ok(inquire::autocompletion::Replacement::Some(max_common))
     }
 }
 
@@ -258,8 +258,8 @@ fn main() {
             let config = NessaConfig {
                 module_name: name.clone(),
                 hash: "".into(),
-                version: version,
-                module_paths: vec!(modules.into()),
+                version,
+                module_paths: vec!(modules),
                 modules: HashMap::new(),
             };
 
@@ -288,18 +288,12 @@ fn main() {
             let mut paths = HashMap::new();
 
             for path in &config_yml.module_paths {
-                for file in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path") {
-                    match file {
-                        Ok(f) => {
-                            let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
-                            let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
-                            module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
+                for f in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                    let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
+                    let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
+                    module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
 
-                            paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
-                        },
-        
-                        _ => {}
-                    }
+                    paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
                 }    
             }
 
@@ -345,7 +339,7 @@ fn main() {
 
             config_yml.modules.insert(name.clone(), ModuleInfo {
                 path: paths.get(&(name, version.clone())).cloned().unwrap_or("".into()),
-                version: version,
+                version,
                 dependencies: HashSet::new(),
             });
 

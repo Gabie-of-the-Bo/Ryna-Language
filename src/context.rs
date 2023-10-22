@@ -6,6 +6,7 @@ use colored::Colorize;
 use crate::cache::NessaCache;
 use crate::interfaces::Interface;
 use crate::interfaces::InterfaceConstraint;
+use crate::interfaces::InterfaceFunctionHeader;
 use crate::interfaces::InterfaceImpl;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
@@ -58,18 +59,18 @@ impl NessaContext {
                 *t = TypeTemplate {
                     id: t.id,
                     name: representation,
-                    params: params,
-                    attributes: attributes,
-                    alias: alias,
-                    patterns: patterns,
-                    parser: parser
+                    params,
+                    attributes,
+                    alias,
+                    patterns,
+                    parser
                 };
 
                 return Ok(());
             }
         }
 
-        return Err(format!("Class {} was not defined", representation));
+        Err(format!("Class {} was not defined", representation))
     }
 
     pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
@@ -84,34 +85,34 @@ impl NessaContext {
         self.type_templates.push(TypeTemplate {
             id: self.type_templates.len(),
             name: representation,
-            params: params,
-            attributes: attributes,
-            alias: alias,
-            patterns: patterns,
-            parser: parser
+            params,
+            attributes,
+            alias,
+            patterns,
+            parser
         });
 
-        return Ok(());
+        Ok(())
     }
 
-    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>) -> Result<(), String> {
+    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
         for i in self.interfaces.iter_mut() {
             if i.name == representation {
                 *i = Interface {
                     id: i.id,
                     name: representation,
-                    params: params,
-                    fns: fns
+                    params,
+                    fns
                 };
 
                 return Ok(());
             }
         }
 
-        return Err(format!("Interface {} was not defined", representation));
+        Err(format!("Interface {} was not defined", representation))
     }
 
-    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>) -> Result<(), String> {
+    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
         for i in &self.interfaces {
             if i.name == representation {
                 return Err(format!("Interface \"{}\" is already defined", representation))
@@ -123,11 +124,11 @@ impl NessaContext {
         self.interfaces.push(Interface {
             id: self.interfaces.len(),
             name: representation,
-            params: params,
-            fns: fns
+            params,
+            fns
         });
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn define_interface_impl(&mut self, representation: String, templates: Vec<String>, mut tp: Type, mut t_args: Vec<Type>) -> Result<(), String> {
@@ -142,7 +143,7 @@ impl NessaContext {
             interface_type: tp
         });
 
-        return Ok(());
+        Ok(())
     }
 
     /*
@@ -160,7 +161,7 @@ impl NessaContext {
                 let mut t_deps_cpy = t_deps.clone();
 
                 let args_match = Type::And(i.args.clone()).template_bindable_to(&cons_and, &mut t_assignments_cpy, &mut t_deps_cpy, self);
-                let type_matches = i.interface_type.template_bindable_to(&t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
+                let type_matches = i.interface_type.template_bindable_to(t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
     
                 if args_match && type_matches {
                     *t_assignments = t_assignments_cpy;
@@ -171,7 +172,7 @@ impl NessaContext {
             }
         }
 
-        return false;
+        false
     }
 
     /*
@@ -191,9 +192,9 @@ impl NessaContext {
 
         let op = Operator::Unary {
             id: self.unary_ops.len(),
-            representation: representation,
-            prefix: prefix,
-            precedence: precedence,
+            representation,
+            prefix,
+            precedence,
             operations: vec!()
         };
 
@@ -204,19 +205,19 @@ impl NessaContext {
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(usize, Type, Type, UnaryFunction)> {
         if let Operator::Unary{operations: o, ..} = &self.unary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| a.bindable_to(&t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| a.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
-        return vec!();
+        vec!()
     }
 
     pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<usize, String> {
-        return self.define_unary_operation(id, templates, a, ret, Some(f));
+        self.define_unary_operation(id, templates, a, ret, Some(f))
     }
 
     pub fn define_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<usize, String> {
@@ -224,7 +225,7 @@ impl NessaContext {
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
-                if a.bindable_to(&t, self) {
+                if a.bindable_to(t, self) {
                     return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                         r.green(), a.get_name(self), r.green(), t.get_name(self)));
                 }
@@ -239,7 +240,7 @@ impl NessaContext {
         if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
             o.push((templates, a, ret, f));
 
-            return Ok(o.len() - 1);
+            Ok(o.len() - 1)
         
         } else {
             unreachable!()
@@ -264,9 +265,9 @@ impl NessaContext {
 
         let op = Operator::Binary {
             id: self.binary_ops.len(),
-            right_associative: right_associative,
-            representation: representation,
-            precedence: precedence,
+            right_associative,
+            representation,
+            precedence,
             operations: vec!()
         };
 
@@ -277,21 +278,21 @@ impl NessaContext {
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(usize, Type, Type, BinaryFunction)> {
         let and = Type::And(vec!(a, b));
 
         if let Operator::Binary{operations: o, ..} = &self.binary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
-        return vec!();
+        vec!()
     }
 
     pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<usize, String> {
-        return self.define_binary_operation(id, templates, a, b, ret, Some(f));
+        self.define_binary_operation(id, templates, a, b, ret, Some(f))
     }
 
     pub fn define_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<usize, String> {
@@ -301,7 +302,7 @@ impl NessaContext {
         if let Operator::Binary{operations: o, representation: r, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
-                    if and.bindable_to(&t, self) {
+                    if and.bindable_to(t, self) {
                         return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
                                             a.get_name(self), r.green(), b.get_name(self), 
                                             v[0].get_name(self), r.green(), v[1].get_name(self)));
@@ -319,7 +320,7 @@ impl NessaContext {
         if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
             o.push((templates, and, ret, f));
 
-            return Ok(o.len() - 1);
+            Ok(o.len() - 1)
 
         } else {
             unreachable!();
@@ -344,9 +345,9 @@ impl NessaContext {
 
         let op = Operator::Nary {
             id: self.nary_ops.len(),
-            open_rep: open_rep,
-            close_rep: close_rep,
-            precedence: precedence,
+            open_rep,
+            close_rep,
+            precedence,
             operations: vec!()
         };
 
@@ -357,7 +358,7 @@ impl NessaContext {
             Err(pos) => self.sorted_ops.insert(pos, op)
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(usize, Type, Type, NaryFunction)> {
@@ -367,19 +368,19 @@ impl NessaContext {
         let and = Type::And(subtypes);
 
         if let Operator::Nary{operations: o, ..} = &self.nary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(&t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
-        return vec!();
+        vec!()
     }
 
-    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>) -> Result<usize, String> {
-        return self.define_nary_operation(id, templates, from, args, ret, Some(f));
+    pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunctionInner) -> Result<usize, String> {
+        self.define_nary_operation(id, templates, from, args, ret, Some(f))
     }
 
     pub fn define_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<usize, String> {
         let mut subtypes = vec!(from.clone());
-        subtypes.extend(args.into_iter().cloned());
+        subtypes.extend(args.iter().cloned());
 
         let and = Type::And(subtypes);
         let op = &self.nary_ops[id];
@@ -387,7 +388,7 @@ impl NessaContext {
         if let Operator::Nary{operations: o, open_rep: or, close_rep: cr, ..} = op {
             for (_, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
-                    if and.bindable_to(&t, self) {
+                    if and.bindable_to(t, self) {
                         return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
                                             from.get_name(self), or.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green(), 
                                             v[0].get_name(self), or.green(), v[1..].iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), cr.green()));
@@ -405,7 +406,7 @@ impl NessaContext {
         if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
             o.push((templates, and, ret, f));
 
-            return Ok(o.len() - 1);
+            Ok(o.len() - 1)
 
         } else {
             unreachable!()
@@ -429,21 +430,21 @@ impl NessaContext {
         
         self.functions.push(Function {
             id: self.functions.len(),
-            name: name,
+            name,
             overloads: vec!()
         });
 
-        return Ok(self.functions.len() - 1);
+        Ok(self.functions.len() - 1)
     }
 
     pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(usize, Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(&t, templates, self)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(t, templates, self)).collect::<Vec<_>>();
     }
 
-    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>) -> Result<usize, String> {
-        return self.define_function_overload(id, templates, args, ret, Some(f));
+    pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverloadInner) -> Result<usize, String> {
+        self.define_function_overload(id, templates, args, ret, Some(f))
     }
 
     pub fn define_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<usize, String> {
@@ -452,7 +453,7 @@ impl NessaContext {
 
         for (_, t, _, _) in &func.overloads{ // Check subsumption
             if let Type::And(v) = t {
-                if and.bindable_to(&t, self) {
+                if and.bindable_to(t, self) {
                     return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
                                         func.name.green(), args.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "), 
                                         func.name.green(), v.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")));
@@ -468,7 +469,7 @@ impl NessaContext {
 
         self.functions[id].overloads.push((templates, and, ret, f));
 
-        return Ok(self.functions[id].overloads.len() - 1);
+        Ok(self.functions[id].overloads.len() - 1)
     }
 }
 
@@ -602,5 +603,5 @@ pub fn standard_ctx() -> NessaContext {
 
     ctx.variables = vec!(None; 1000); // 1000 variables by default
 
-    return ctx;
+    ctx
 }

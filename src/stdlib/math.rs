@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use crate::number::*;
 
 pub fn rand_f64() -> f64 {
-    return rand::thread_rng().gen_range(0.0..1.0);
+    rand::thread_rng().gen_range(0.0..1.0)
 }
 
 impl Integer {
@@ -12,7 +12,7 @@ impl Integer {
         let mut res = self.clone();
         res.negative = false;
         
-        return res;
+        res
     }
 
     pub fn fact(&self) -> Result<Integer, String> {
@@ -21,11 +21,11 @@ impl Integer {
         let mut cpy = self.clone();
         
         while !cpy.is_zero() {
-            res = res * &cpy;
-            cpy = cpy - &one;
+            res *= &cpy;
+            cpy -= &one;
         }
 
-        Ok(Integer::from(res))
+        Ok(res)
     }
 
     /*
@@ -54,11 +54,11 @@ impl Integer {
             let mut zeroed = res[max_bits - 1] == 0;
 
             // First zeroes
-            for i in min_bits..(max_bits - 1) {
+            for i in res.iter_mut().take(max_bits - 1).skip(min_bits) {
                 let digit = rng.gen::<u64>();
                 zeroed &= digit == 0;
 
-                res[i] = digit;
+                *i = digit;
             }
 
             // Next zeroes
@@ -68,21 +68,21 @@ impl Integer {
                 }
 
             } else {
-                for i in 0..(min_bits - 1) {
-                    res[i] = rng.gen::<u64>();
+                for i in res.iter_mut().take(min_bits - 1) {
+                    *i = rng.gen::<u64>();
                 }
             }
 
-            return res;
+            res
         };
 
         if from >= to {
             return Err(format!("Invalid range for random generation [{}, {}]", String::from(from), String::from(to)));
         }
 
-        return match (from.negative, to.negative) {
-            (false, false) => Ok(Integer::from(Integer::new(false, rand_limbs_range(&from.limbs, &to.limbs)))),
-            (true, true) => Ok(Integer::from(Integer::new(true, rand_limbs_range(&to.limbs, &from.limbs)))),
+        match (from.negative, to.negative) {
+            (false, false) => Ok(Integer::new(false, rand_limbs_range(&from.limbs, &to.limbs))),
+            (true, true) => Ok(Integer::new(true, rand_limbs_range(&to.limbs, &from.limbs))),
             (true, false) => {
                 let limbs;
 
@@ -103,11 +103,11 @@ impl Integer {
                     res.negative = rng.gen::<bool>();
                 }
 
-                Ok(Integer::from(res))
+                Ok(res)
             },
 
             _ => unreachable!()
-        };
+        }
     }
 }
 

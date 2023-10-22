@@ -46,7 +46,7 @@ mod integration {
 
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
-        let (_, all_mods, files) = compute_project_hash(&path_str).unwrap();
+        let (_, all_mods, files) = compute_project_hash(path_str).unwrap();
         let err = precompile_nessa_module_with_config(path_str, all_mods, files);
 
         if let Err(err) = &err {
@@ -57,7 +57,7 @@ mod integration {
 
         match ctx.compiled_form(&lines) {
             Ok(code) => {
-                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect()) {
+                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>()) {
                     err.emit();
                 }
             },

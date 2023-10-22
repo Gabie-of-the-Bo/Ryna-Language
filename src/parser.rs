@@ -34,15 +34,20 @@ use crate::patterns::*;
 pub type Span<'a> = LocatedSpan<&'a str>;
 pub type PResult<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
 
+type UnaryOpHeader = (usize, Vec<String>, String, Type, Type);
+type BinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type);
+type NaryOpHeader = (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
+type FunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
+
 pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<VerboseError<Span<'a>>> {
-    return nom::Err::Error(VerboseError { 
+    nom::Err::Error(VerboseError { 
         errors: vec!(
             (input, VerboseErrorKind::Context(msg))
         ) 
-    });
+    })
 }
 
-#[derive(Debug, Clone, Hash, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -51,45 +56,45 @@ pub struct Location {
 
 impl Location {
     pub fn new(line: usize, column: usize, span: String) -> Self {
-        return Location { line, column, span };
+        Location { line, column, span }
     }
 
     pub fn none() -> Self {
-        return Self::new(0, 0, "".into());
+        Self::new(0, 0, "".into())
     }
 }
 
 impl PartialEq for Location {
     fn eq(&self, _: &Self) -> bool {
-        return true; // Always equal
+        true// Always equal
     }
 }
 
-fn normal_comment<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
-    return delimited(
+fn normal_comment(input: Span<'_>) -> PResult<'_, Span<'_>> {
+    delimited(
         tag("//"),
         take_until("\n"),
         tag("\n")
-    )(input);
+    )(input)
 }
 
-fn block_comment<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
-    return delimited(
+fn block_comment(input: Span<'_>) -> PResult<'_, Span<'_>> {
+    delimited(
         tag("/*"),
         take_until("*/"),
         tag("*/")
-    )(input);
+    )(input)
 }
 
-fn separator<'a>(input: Span<'a>) -> PResult<'a, Span<'a>> {
-    return alt((
+fn separator(input: Span<'_>) -> PResult<'_, Span<'_>> {
+    alt((
         multispace1,
         block_comment,
         normal_comment
-    ))(input);
+    ))(input)
 }
 
-fn skip_token<'a>(input: Span<'a>) -> PResult<'a, ()> {
+fn skip_token(input: Span<'_>) -> PResult<'_, ()> {
     return alt((
         map(block_comment, |_| ()),
         map(normal_comment, |_| ()),
@@ -100,41 +105,35 @@ fn skip_token<'a>(input: Span<'a>) -> PResult<'a, ()> {
     ))(input);
 }
 
-pub fn empty0<'a>(mut input: Span<'a>) -> PResult<'a, ()> {
-    loop {
-        match separator(input) {
-            Ok((i, _)) => input = i,
-            Err(_) => break,
-        }
+pub fn empty0(mut input: Span<'_>) -> PResult<'_, ()> {
+    while let Ok((i, _)) = separator(input) {
+        input = i;
     }
     
-    return Ok((input, ()));
+    Ok((input, ()))
 }
 
-pub fn empty1<'a>(mut input: Span<'a>) -> PResult<'a, ()> {
+pub fn empty1(mut input: Span<'_>) -> PResult<'_, ()> {
     input = separator(input)?.0;
 
-    loop {
-        match separator(input) {
-            Ok((i, _)) => input = i,
-            Err(_) => break,
-        }
+    while let Ok((i, _)) = separator(input) {
+        input = i;
     }
     
-    return Ok((input, ()));
+    Ok((input, ()))
 }
 
 // Parser combinator that allows to store the precise location of an element
 pub fn located<'a, O, P1: FnMut(Span<'a>) -> PResult<'a, O>>(mut parser: P1) -> impl FnMut(Span<'a>) -> PResult<'a, (Location, O)> {
-    return move |input| {
+    move |input| {
         let (rest, res) = parser(input)?;
 
         let line = input.location_line() as usize;
         let column = input.get_column();
         let span = &input[..(input.len() - rest.len())];
 
-        return Ok((rest, (Location::new(line, column, span.to_string()), res)));
-    };
+        Ok((rest, (Location::new(line, column, span.to_string()), res)))
+    }
 }
 
 pub fn many_separated0<
@@ -142,7 +141,7 @@ pub fn many_separated0<
     P: FnMut(Span<'a>) -> PResult<'a, OP>, 
     S: FnMut(Span<'a>) -> PResult<'a, OS>
 >(mut separator: S, mut parser: P) -> impl FnMut(Span<'a>) -> PResult<'a, Vec<OP>> {
-    return move |mut input| {
+    move |mut input| {
         let mut res = vec!();
         let mut first = true;
         
@@ -205,7 +204,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>),
+    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -225,7 +224,7 @@ pub enum ImportType {
 }
 
 pub fn get_op_chain(expr: NessaExpr, id: usize) -> (Vec<NessaExpr>, Vec<Vec<Type>>) {
-    return match expr {
+    match expr {
         NessaExpr::BinaryOperation(_, id2, t, a, b) if id == id2 => {
             let (mut chain_a, mut t_a) = get_op_chain(*a, id);
             let (chain_b, t_b) = get_op_chain(*b, id);
@@ -261,21 +260,21 @@ pub fn to_right_assoc(expr: NessaExpr) -> NessaExpr {
         }
     }
 
-    return res
+    res
 }
 
-pub fn identifier_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
-    return map(
+pub fn identifier_parser(input: Span<'_>) -> PResult<'_, String> {
+    map(
         tuple((
             take_while1(|c: char| c == '_' || c.is_alphabetic()),
             take_while(|c: char| c == '_' || c.is_alphanumeric())
         )),
         |(a, b)| format!("{}{}", a, b)
-    )(input);
+    )(input)
 }
 
-fn string_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
-    return delimited(
+fn string_parser(input: Span<'_>) -> PResult<'_, String> {
+    delimited(
         tag("\""), 
         alt((
             escaped_transform(
@@ -291,11 +290,11 @@ fn string_parser<'a>(input: Span<'a>) -> PResult<'a, String> {
             value(String::new(), tag(""))
         )),
         tag("\"")
-    )(input);
+    )(input)
 }
 
-fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType, HashSet<String>)> {
-    return map(
+fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
+    map(
         tuple((
             tag("import"),
             empty1,
@@ -355,15 +354,15 @@ fn module_import_parser<'a>(input: Span<'a>) -> PResult<'a, (String, ImportType,
     )(input)
 }
 
-pub fn nessa_info_parser<'a>(input: Span<'a>) -> PResult<'a, ()> {
-    return delimited(
+pub fn nessa_info_parser(input: Span<'_>) -> PResult<'_, ()> {
+    delimited(
         empty0,
         value((), module_import_parser),
         empty0
-    )(input);
+    )(input)
 }
 
-pub fn nessa_module_imports_parser<'a>(mut input: Span<'a>) -> PResult<'a, ImportMap> {
+pub fn nessa_module_imports_parser(mut input: Span<'_>) -> PResult<'_, ImportMap> {
     let mut ops: HashMap<String, HashMap<ImportType, HashSet<String>>> = HashMap::new();
 
     while input.len() > 0 {
@@ -376,7 +375,7 @@ pub fn nessa_module_imports_parser<'a>(mut input: Span<'a>) -> PResult<'a, Impor
         }
     }
 
-    return Ok(("".into(), ops));
+    Ok(("".into(), ops))
 }
 
 impl NessaExpr {
@@ -445,7 +444,7 @@ fn get_from_cache<'a>(cache: &OperatorCache<'a>, input: Span<'a>, key: (usize, B
         });
     }
 
-    return None;
+    None
 }
 
 fn store_in_cache<'a>(cache: &OperatorCache<'a>, input: Span<'a>, key: (usize, BitSet, BitSet, BitSet), value: &PResult<'a, NessaExpr>) {
@@ -464,41 +463,41 @@ impl NessaContext {
     
     pub fn get_type_id(&self, name: String) -> Result<usize, String> {
         return self.cache.class_id.get(name, |name| {
-            self.type_templates.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No type with name {}", name))
+            self.type_templates.iter().find(|t| t.name == name).map(|i| i.id).ok_or(format!("No type with name {}", name))
         });
     }
     
     pub fn get_interface_id(&self, name: String) -> Result<usize, String> {
         return self.cache.interface_id.get(name, |name| {
-            self.interfaces.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No interface with name {}", name))
+            self.interfaces.iter().find(|t| t.name == name).map(|i| i.id).ok_or(format!("No interface with name {}", name))
         });
     }
     
     pub fn get_function_id(&self, name: String) -> Result<usize, String> {
         return self.cache.function_id.get(name, |name| {
-            self.functions.iter().filter(|t| t.name == name).next().map(|i| i.id).ok_or(format!("No function with name {}", name))
+            self.functions.iter().find(|t| t.name == name).map(|i| i.id).ok_or(format!("No function with name {}", name))
         });
     }
     
     pub fn get_function(&self, name: &str) -> Option<&Function> {
-        return match self.get_function_id(name.to_string()) {
-            Ok(id) => return Some(&self.functions[id]),
+        match self.get_function_id(name.to_string()) {
+            Ok(id) => Some(&self.functions[id]),
             Err(_) => None,
-        };
+        }
     }
     
     pub fn get_interface(&self, name: &str) -> Option<&Interface> {
-        return match self.get_interface_id(name.to_string()) {
-            Ok(id) => return Some(&self.interfaces[id]),
+        match self.get_interface_id(name.to_string()) {
+            Ok(id) => Some(&self.interfaces[id]),
             Err(_) => None,
-        };
+        }
     }
     
     pub fn get_type_template(&self, name: &str) -> Option<&TypeTemplate> {
-        return match self.get_type_id(name.to_string()) {
-            Ok(id) => return Some(&self.type_templates[id]),
+        match self.get_type_id(name.to_string()) {
+            Ok(id) => Some(&self.type_templates[id]),
             Err(_) => None,
-        };
+        }
     }
 
     /*
@@ -508,23 +507,23 @@ impl NessaContext {
     */
 
     fn wildcard_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
-        return map(tag("*"), |_| Type::Wildcard)(input);
+        map(tag("*"), |_| Type::Wildcard)(input)
     }
 
     fn empty_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
-        return map(tag("()"), |_| Type::Empty)(input);
+        map(tag("()"), |_| Type::Empty)(input)
     }
 
     fn self_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
-        return map(tag("Self"), |_| Type::SelfType)(input);
+        map(tag("Self"), |_| Type::SelfType)(input)
     }
 
     fn basic_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
-        return map_res(identifier_parser, |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input);
+        map_res(identifier_parser, |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input)
     }
 
     fn interface_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
-        return map_res(identifier_parser, |n| Result::<_, String>::Ok(self.get_interface_id(n)?))(input);
+        map_res(identifier_parser, |n| self.get_interface_id(n))(input)
     }
 
     fn template_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
@@ -702,34 +701,34 @@ impl NessaContext {
     */
 
     fn bool_parser<'a>(&self, input: Span<'a>) -> PResult<'a, bool> {
-        return alt((
+        alt((
             map(tag("true"), |_| true),
             map(tag("false"), |_| false),
-        ))(input);
+        ))(input)
     }
 
     fn integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
         return map(
             tuple((
                 opt(tag("-")),
-                take_while1(|c: char| c.is_digit(10))
+                take_while1(|c: char| c.is_ascii_digit())
             )),
             |(s, n)| Integer::from(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str())
         )(input);
     }
 
     fn float_parser<'a>(&self, input: Span<'a>) -> PResult<'a, f64> {
-        return map(
+        map(
             tuple((
                 opt(tag("-")),
-                take_while1(|c: char| c.is_digit(10)),
+                take_while1(|c: char| c.is_ascii_digit()),
                 tuple((
                     tag("."),
-                    take_while1(|c: char| c.is_digit(10))
+                    take_while1(|c: char| c.is_ascii_digit())
                 ))
             )),
             |(s, n, d)| format!("{}{}{}{}", s.unwrap_or(Span::new("")), n, d.0, d.1).parse().unwrap()
-        )(input);
+        )(input)
     }
 
     pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: Span<'a>) -> PResult<'a, Object> {
@@ -790,10 +789,10 @@ impl NessaContext {
             located(
                 alt((
                     |input| self.custom_literal_parser(input),
-                    map(|input| self.bool_parser(input), |b| Object::new(b)),
-                    map(|input| self.float_parser(input), |n| Object::new(n)),
-                    map(|input| self.integer_parser(input), |n| Object::new(n)),
-                    map(string_parser, |s| Object::new(s)),
+                    map(|input| self.bool_parser(input), Object::new),
+                    map(|input| self.float_parser(input), Object::new),
+                    map(|input| self.integer_parser(input), Object::new),
+                    map(string_parser, Object::new),
                 ))
             ),
             |(l, o)| NessaExpr::Literal(l, o)
@@ -817,7 +816,7 @@ impl NessaContext {
                         )(Span::new(&code));
                         
                         match parsed_code {
-                            Ok((rest, lines)) if rest.trim().len() == 0 => {
+                            Ok((rest, lines)) if rest.trim().is_empty() => {
                                 return Ok((
                                     input, 
                                     NessaExpr::NaryOperation(
@@ -932,7 +931,7 @@ impl NessaContext {
                 Err(_) => Err(verbose_error(input, "Unable to parse"))
             });
 
-            return res;
+            res
         }
     }
     
@@ -990,7 +989,7 @@ impl NessaContext {
                 Err(_) => Err(verbose_error(input, "Unable to parse"))
             });
 
-            return res;
+            res
         }
     }
     
@@ -1035,7 +1034,7 @@ impl NessaContext {
                         empty0,
                         separated_list0(
                             tuple((empty0, tag(","), empty0)),
-                            |input| self.nessa_expr_parser_wrapper(input, &mut self.get_bi_bitset(), &mut self.get_n_bitset(), &mut self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
+                            |input| self.nessa_expr_parser_wrapper(input, &self.get_bi_bitset(), &self.get_n_bitset(), &self.get_unary_bitset(), cache_bin, cache_nary, cache_post, op_cache)
                         ),
                         empty0,
                         tag(close)
@@ -1049,25 +1048,25 @@ impl NessaContext {
                 Err(_) => Err(verbose_error(input, "Unable to parse"))
             });
 
-            return res;
+            res
         }
     }
     
     fn get_bi_bitset(&self) -> BitSet {
-        return BitSet::with_capacity(self.binary_ops.len());
+        BitSet::with_capacity(self.binary_ops.len())
     }
     
     fn get_n_bitset(&self) -> BitSet {
-        return BitSet::with_capacity(self.nary_ops.len());
+        BitSet::with_capacity(self.nary_ops.len())
     }
     
     fn get_unary_bitset(&self) -> BitSet {
-        return BitSet::with_capacity(self.unary_ops.len());
+        BitSet::with_capacity(self.unary_ops.len())
     }
 
     fn operation_parser<'a>(&self, input: Span<'a>, bi: &BitSet, nary: &BitSet, post: &BitSet, cache_bin: &mut ParserCache<'a>, cache_nary: &mut ParserCache<'a>, cache_post: &mut ParserCache<'a>, op_cache: &OperatorCache<'a>) -> PResult<'a, NessaExpr> {
         if let Some(r) = get_from_cache(op_cache, input, (input.len(), bi.clone(), nary.clone(), post.clone())) {
-            return r;
+            r
        
         } else{
             let mut post_cpy = post.clone();
@@ -1079,13 +1078,11 @@ impl NessaContext {
                     let res = if *prefix {
                          self.prefix_operation_parser(input, *id, representation, bi, nary, post, cache_bin, cache_nary, cache_post, op_cache)
 
-                    } else{
-                        if !post.contains(*id) {
-                            self.postfix_operation_parser(input, *id, representation, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache)
-                        
-                        } else {
-                            continue;
-                        }
+                    } else if !post.contains(*id) {
+                        self.postfix_operation_parser(input, *id, representation, bi, nary, &post_cpy, cache_bin, cache_nary, cache_post, op_cache)
+                    
+                    } else {
+                        continue;
                     };
     
                     if res.is_ok() {
@@ -1340,7 +1337,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn function_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (String, Option<Vec<String>>, Vec<(String, Type)>, Type)> {
+    fn function_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, FunctionHeader> {
         return map(
             tuple((
                 tag("fn"),
@@ -1437,7 +1434,7 @@ impl NessaContext {
                             "Expected precedence after operator representation in operator definition", 
                             cut(delimited(
                                 tuple((tag("("), empty0)),
-                                take_while1(|c: char| c.is_digit(10)),
+                                take_while1(|c: char| c.is_ascii_digit()),
                                 tuple((empty0, tag(")")))
                             ))
                         ),
@@ -1468,7 +1465,7 @@ impl NessaContext {
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
                                 tuple((tag("("), empty0)),
-                                take_while1(|c: char| c.is_digit(10)),
+                                take_while1(|c: char| c.is_ascii_digit()),
                                 tuple((empty0, tag(")")))
                             ))
                         ),
@@ -1503,7 +1500,7 @@ impl NessaContext {
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
                                 tuple((tag("("), empty0)),
-                                take_while1(|c: char| c.is_digit(10)),
+                                take_while1(|c: char| c.is_ascii_digit()),
                                 tuple((empty0, tag(")")))
                             ))
                         ),
@@ -1538,7 +1535,7 @@ impl NessaContext {
                             "Expected precedence after operator representation in operator definition",
                             cut(delimited(
                                 tuple((tag("("), empty0)),
-                                take_while1(|c: char| c.is_digit(10)),
+                                take_while1(|c: char| c.is_ascii_digit()),
                                 tuple((empty0, tag(")")))
                             ))
                         ),
@@ -1650,7 +1647,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn prefix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (usize, Vec<String>, String, Type, Type)> {
+    fn prefix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1706,7 +1703,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn postfix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (usize, Vec<String>, String, Type, Type)> {
+    fn postfix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1762,7 +1759,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn binary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (usize, Vec<String>, (String, Type), (String, Type), Type)> {
+    fn binary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, BinaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1841,7 +1838,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn nary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type)> {
+    fn nary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1993,11 +1990,11 @@ impl NessaContext {
     }
 
     fn macro_body_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaMacro> {
-        return delimited(
+        delimited(
             tuple((tag("{"), empty0)),
             parse_nessa_macro,
             tuple((empty0, tag("}")))
-        )(input);
+        )(input)
     }
 
     fn inline_class_syntax_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Pattern> {
@@ -2016,7 +2013,7 @@ impl NessaContext {
     }
 
     fn alias_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
-        return map(
+        map(
             tuple((
                 tag("type"),
                 empty1,
@@ -2041,7 +2038,7 @@ impl NessaContext {
                 context("Expected '=' after type name", cut(tag("=")))
             )),
             |(_, _, n, _, _, _)| n
-        )(input);
+        )(input)
     }
 
     fn alias_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
@@ -2086,7 +2083,7 @@ impl NessaContext {
     }
 
     fn class_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
-        return map(
+        map(
             tuple((
                 tag("class"),
                 empty1,
@@ -2111,7 +2108,7 @@ impl NessaContext {
                 tag("{")
             )),
             |(_, _, n, _, _, _)| n
-        )(input);
+        )(input)
     }
 
     fn class_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
@@ -2186,7 +2183,7 @@ impl NessaContext {
     }
 
     fn interface_definition_name_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
-        return map(
+        map(
             tuple((
                 tag("interface"),
                 empty1,
@@ -2211,7 +2208,7 @@ impl NessaContext {
                 tag("{")
             )),
             |(_, _, n, _, _, _)| n
-        )(input);
+        )(input)
     }
 
     fn interface_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
@@ -2344,14 +2341,14 @@ impl NessaContext {
                 ))
             ),
             |(l, (_, _, mut e, _, _))| {
-                if e.len() == 0 {
-                    return NessaExpr::Literal(l, Object::empty());
+                if e.is_empty() {
+                    NessaExpr::Literal(l, Object::empty())
 
-                } if e.len() == 1 {
-                    return e.pop().unwrap();
+                } else if e.len() == 1 {
+                    e.pop().unwrap()
 
                 } else {
-                    return NessaExpr::Tuple(l, e);
+                    NessaExpr::Tuple(l, e)
                 }
             }
         )(input);
@@ -2475,10 +2472,10 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
-    pub fn nessa_function_headers_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<(String, Option<Vec<String>>, Vec<(String, Type)>, Type)>> {
+    pub fn nessa_function_headers_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<FunctionHeader>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2491,7 +2488,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_operations_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2507,7 +2504,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_macros_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2523,7 +2520,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_interface_implementation_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2539,7 +2536,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_interface_definition_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2555,7 +2552,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_interface_definition_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<String>> {
@@ -2571,7 +2568,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_class_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2591,7 +2588,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_class_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, HashSet<String>> {
@@ -2611,7 +2608,7 @@ impl NessaContext {
             }
         }
 
-        return Ok(("".into(), ops));
+        Ok(("".into(), ops))
     }
 
     pub fn nessa_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
@@ -2767,7 +2764,7 @@ mod tests {
                     return Ok(o);
                 }
 
-                return Err(format!("Unable to parse {} from {}", c_type.name, s));
+                Err(format!("Unable to parse {} from {}", c_type.name, s))
             }
         )).unwrap();
         
@@ -2779,7 +2776,7 @@ mod tests {
         let id = ctx.get_type_id("Dice".into()).unwrap();
 
         assert_eq!(dice, NessaExpr::Literal(Location::none(), Object::new(TypeInstance {
-            id: id,
+            id,
             params: vec!(),
             attributes: vec!(
                 Object::new(Integer::from(2)),
@@ -2788,7 +2785,7 @@ mod tests {
         })));
 
         assert_eq!(ctx.type_templates.last().unwrap().parser.unwrap()(&ctx, &ctx.type_templates[id], &"2D20".into()), Ok(Object::new(TypeInstance {
-            id: id,
+            id,
             params: vec!(),
             attributes: vec!(
                 Object::new(Integer::from(2)),
@@ -2828,7 +2825,7 @@ mod tests {
             params: vec!(),
             attributes: vec!(
                 Object::new(TypeInstance {
-                    id: id,
+                    id,
                     params: vec!(),
                     attributes: vec!(
                         Object::new(Integer::from(2)),

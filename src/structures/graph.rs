@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DirectedGraph<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> {
     vertices: HashMap<Vertex, usize>,
     idxs: HashMap<usize, Vertex>,
@@ -10,15 +10,15 @@ pub struct DirectedGraph<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> {
 
 impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
     pub fn new() -> Self {
-        return DirectedGraph { 
+        DirectedGraph { 
             vertices: HashMap::new(), 
             idxs: HashMap::new(), 
             connections: HashMap::new() 
-        };
+        }
     }
 
     pub fn contains(&self, v: &Vertex) -> bool {
-        return self.vertices.contains_key(v);
+        self.vertices.contains_key(v)
     }
 
     fn vertex_by_idx(&self, idx: usize) -> &Vertex {
@@ -31,14 +31,14 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
 
     fn vertex_idx(&mut self, v: Vertex) -> usize {
         if let Some(idx) = self.vertices.get(&v) {
-            return *idx;
+            *idx
 
         } else {
             let idx = self.vertices.len();
             self.vertices.insert(v.clone(), idx);
             self.idxs.insert(idx, v);
 
-            return idx;
+            idx
         }
     }
 
@@ -51,7 +51,7 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
             }
         }
         
-        return Err("Vertex is not in the graph".into());
+        Err("Vertex is not in the graph".into())
     }
 
     pub fn connect(&mut self, from: Vertex, to: Vertex, edge: Edge) {
@@ -66,8 +66,8 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
             let mut seen: HashSet<usize> = HashSet::new();
             let mut stack = vec!(self.vertex_idx_unchecked(start));
     
-            while stack.len() > 0 {
-                let elem = stack.pop().unwrap();
+            while let Some(elem) = stack.pop() {
+                
                 seen.insert(elem);
     
                 op(self.vertex_by_idx(elem));
@@ -88,15 +88,15 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
             let mut seen: HashSet<usize> = HashSet::new();
             let mut layer = vec!(self.vertex_idx_unchecked(start));
 
-            while layer.len() > 0 {
+            while !layer.is_empty() {
                 let mut new_layer = vec!();
                 
                 for elem in &layer {
                     seen.insert(*elem);
                     op(self.vertex_by_idx(*elem));
 
-                    if self.connections.contains_key(&elem) {
-                        for (i, _) in self.connections.get(&elem).unwrap() {
+                    if self.connections.contains_key(elem) {
+                        for (i, _) in self.connections.get(elem).unwrap() {
                             if !seen.contains(i) {
                                 new_layer.push(*i);
                             }
@@ -120,7 +120,7 @@ impl<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> DirectedGraph<Vertex, Edge> {
             }
         }
 
-        return format!("digraph G {{\n{}\n}}", lines.join("\n"));
+        format!("digraph G {{\n{}\n}}", lines.join("\n"))
     }
 }
 

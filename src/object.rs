@@ -13,7 +13,7 @@ type DataBlock = Rc<RefCell<ObjectBlock>>;
 #[derive(Clone, PartialEq, Debug)]
 pub struct NessaArray {
     pub elements: Vec<Object>,
-    pub elem_type: Type
+    pub elem_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -26,14 +26,14 @@ pub struct NessaTuple {
 pub struct NessaArrayIt {
     pub pos: usize,
     pub block: DataBlock,
-    pub it_type: Type
+    pub it_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct NessaLambda {
     pub loc: usize,
-    pub args_type: Type,
-    pub ret_type: Type
+    pub args_type: Box<Type>,
+    pub ret_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -103,9 +103,9 @@ impl ObjectBlock {
             ObjectBlock::Str(_) => STR,
             ObjectBlock::Bool(_) => BOOL,
             ObjectBlock::Tuple(t) => Type::And(t.elem_types.clone()),
-            ObjectBlock::Array(a) => ARR_OF!(a.elem_type.clone()),
-            ObjectBlock::ArrayIter(i) => ARR_IT_OF!(i.it_type.clone()),
-            ObjectBlock::Lambda(l) => Type::Function(Box::new(l.args_type.clone()), Box::new(l.ret_type.clone())),
+            ObjectBlock::Array(a) => ARR_OF!(*a.elem_type.clone()),
+            ObjectBlock::ArrayIter(i) => ARR_IT_OF!(*i.it_type.clone()),
+            ObjectBlock::Lambda(l) => Type::Function(l.args_type.clone(), l.ret_type.clone()),
             ObjectBlock::Instance(i) => if i.params.is_empty() { Type::Basic(i.id) } else { Type::Template(i.id, i.params.clone()) },
             ObjectBlock::Ref(r) => Type::Ref(Box::new(r.borrow().get_type())),
             ObjectBlock::Mut(r) => Type::MutRef(Box::new(r.borrow().get_type())),
@@ -166,15 +166,15 @@ impl Object {
     }
 
     pub fn arr(elements: Vec<Object>, elem_type: Type) -> Self {
-        ObjectBlock::Array(NessaArray { elements, elem_type }).to_obj()
+        ObjectBlock::Array(NessaArray { elements, elem_type: Box::new(elem_type) }).to_obj()
     }
 
     pub fn arr_it(it_type: Type, block: DataBlock, pos: usize) -> Self {
-        ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type }).to_obj()
+        ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type: Box::new(it_type) }).to_obj()
     }
 
     pub fn lambda(loc: usize, args_type: Type, ret_type: Type) -> Self {
-        ObjectBlock::Lambda(NessaLambda { loc, args_type, ret_type }).to_obj()
+        ObjectBlock::Lambda(NessaLambda { loc, args_type: Box::new(args_type), ret_type: Box::new(ret_type) }).to_obj()
     }
 
     pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {
@@ -223,6 +223,17 @@ impl Object {
 
         res
     }
+
+    pub fn swap_contents(&self, other: &Object) {
+        match (&mut *self.inner.borrow_mut(), &mut *other.inner.borrow_mut()) {
+            (ObjectBlock::Mut(a), ObjectBlock::Mut(b)) => std::mem::swap(&mut *a.borrow_mut(), &mut *b.borrow_mut()),
+            _ => unreachable!()
+        };
+    }
+
+    pub fn drop_contents(&self) {
+        self.move_contents();
+    }
     
     pub fn assign(&self, other_obj: Object) {
         match Rc::try_unwrap(other_obj.inner) {
@@ -233,6 +244,10 @@ impl Object {
 
     pub fn from_inner(inner: DataBlock) -> Self {
         Object { inner }
+    }
+
+    pub fn no_value() -> Object {
+        ObjectBlock::NoValue.to_obj()
     }
 
     pub fn empty() -> Object {

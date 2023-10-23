@@ -88,7 +88,7 @@ impl NessaError {
         }
     }
 
-    pub fn emit(&self) {
+    pub fn emit(&self) -> ! {
         if self.has_location {
             let mut frag = self.fragment.as_str();
             
@@ -2141,7 +2141,7 @@ impl NessaContext{
                     res.extend(NessaContext::compile_literal(i));
                 }
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::Array(obj_t.elements.len(), obj_t.elem_type.clone())));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Array(obj_t.elements.len(), *obj_t.elem_type.clone())));
 
                 res
             },

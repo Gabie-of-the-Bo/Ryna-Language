@@ -438,10 +438,28 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(Object::empty())
     }).unwrap();
 
+    let idx = ctx.define_function("drop".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 
+        v.pop().unwrap().drop_contents();
+        Ok(Object::empty())
+    }).unwrap();
+
     let idx = ctx.define_function("move".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, mut v, _| { 
         Ok(v.pop().unwrap().move_contents())
+    }).unwrap();
+
+    let idx = ctx.define_function("swap".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut(), T_0.to_mut()], Type::Empty, |_, _, mut v, _| {
+        let a = v.pop().unwrap();
+        let b = v.pop().unwrap();
+
+        a.swap_contents(&b);
+
+        Ok(Object::empty())
     }).unwrap();
 
     // Max tuple size is 10 for now

@@ -32,9 +32,9 @@ impl NessaContext {
     }
 
     pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<Option<ExecutionInfo>, NessaError> {
-        let mut combined_hash = "".into();
-        let mut all_modules = HashMap::new();
-        let mut file_cache = HashMap::new();
+        let combined_hash;
+        let all_modules;
+        let file_cache;
 
         match compute_project_hash(&path) {
             Ok((hash, all_mods, files)) => {
@@ -78,8 +78,6 @@ impl NessaContext {
 
             Err(err) => err.emit(),
         }
-        
-        Ok(None)
     }
 }
 

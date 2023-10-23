@@ -218,20 +218,36 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         idx, 
         1,
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
-        T_0, 
-        |t, _, v, _| {
+        T_0.to_mut(), 
+        |_, _, v, _| {
             let mut iterator = v[0].deref::<NessaArrayIt>();
             let item;
 
             {
                 let mut reference = iterator.block.borrow_mut();
                 let array = &reference.mut_inner::<NessaArray>();
+                item = array.elements[iterator.pos].get_mut();
+            }
 
-                item = match t[0] {
-                    Type::MutRef(_) => array.elements[iterator.pos].get_mut(),
-                    Type::Ref(_) => array.elements[iterator.pos].get_ref(),
-                    _ => array.elements[iterator.pos].clone(),
-                };
+            iterator.pos += 1;
+
+            Ok(item)
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_ref())))], 
+        T_0.to_ref(), 
+        |_, _, v, _| {
+            let mut iterator = v[0].deref::<NessaArrayIt>();
+            let item;
+
+            {
+                let mut reference = iterator.block.borrow_mut();
+                let array = &reference.mut_inner::<NessaArray>();
+                item = array.elements[iterator.pos].get_ref();
             }
 
             iterator.pos += 1;
@@ -246,6 +262,18 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         idx, 
         1,
         &[ARR_IT_OF!(T_0.to_mut()).to_mut()], 
+        BOOL, 
+        |_, _, v, _| {
+            let iterator = v[0].deref::<NessaArrayIt>();
+
+            return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<NessaArray>().elements.len()));
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0.to_ref()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
             let iterator = v[0].deref::<NessaArrayIt>();

@@ -38,7 +38,7 @@ pub struct NessaContext {
 
     pub macros: Vec<(String, Pattern, NessaMacro)>,
 
-    pub variables: Vec<Option<Object>>,
+    pub variables: Vec<Object>,
 
     pub lambdas: usize,
 
@@ -601,7 +601,7 @@ pub fn standard_ctx() -> NessaContext {
 
     load_optimized_opcodes(&mut ctx);
 
-    ctx.variables = vec!(None; 1000); // 1000 variables by default
+    ctx.variables = vec!(Object::no_value(); 1000); // 1000 variables by default
 
     ctx
 }

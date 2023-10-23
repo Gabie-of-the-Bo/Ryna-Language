@@ -5,6 +5,7 @@ use std::path::Path;
 use colored::Colorize;
 use glob::glob;
 use md5::compute;
+use regex::{Regex, Captures};
 use serde::{Serialize, Deserialize};
 use serde_yaml::{from_str, to_string};
 
@@ -13,6 +14,10 @@ use crate::context::*;
 use crate::graph::DirectedGraph;
 use crate::parser::*;
 use crate::serialization::CompiledNessaModule;
+
+const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
+
+pub const NESSA_MODULES_ENV_VAR: &str = "NESSA_MODULES_PATH"; 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
@@ -308,14 +313,60 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
     Ok(())
 }
 
+// Taken from regex's docs
+fn replace_all_fallible<E>(
+    re: &Regex,
+    haystack: &str,
+    replacement: impl Fn(&Captures) -> Result<String, E>,
+) -> Result<String, E> {
+    let mut new = String::with_capacity(haystack.len());
+    let mut last_match = 0;
+    for caps in re.captures_iter(haystack) {
+        let m = caps.get(0).unwrap();
+        new.push_str(&haystack[last_match..m.start()]);
+        new.push_str(&replacement(&caps)?);
+        last_match = m.end();
+    }
+    new.push_str(&haystack[last_match..]);
+    Ok(new)
+}
+
 pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     let path_slashes = path.to_str().unwrap().replace('\\', "/");
+    let sub_path = parse_env_vars_and_normalize(&path_slashes)?;
     
-    return match Path::new(&path_slashes).canonicalize() {
+    return match Path::new(&sub_path).canonicalize() {
         Ok(p) => Ok(p.to_str().unwrap().into()),
         Err(_) => Err(NessaError::module_error(format!(
             "Unable to normalize path: {} (does it exist?)",
             path_slashes.green()
         ))),
     };
+}
+
+pub fn parse_env_vars_and_normalize(path: &String) -> Result<String, NessaError> {
+    let res = path.clone();
+    let env_var_regex = Regex::new(ENV_VAR_REGEX).unwrap();
+
+    let replacement = |caps: &Captures| {
+        let cap = caps.get(1).unwrap().as_str();
+        
+        if let Ok(var) = std::env::var(cap) {
+            Ok(var)
+ 
+        } else {
+            Err(NessaError::module_error(format!("Unable to find {} environment variable", cap)))
+        }
+    };
+    
+    return Ok(replace_all_fallible(&env_var_regex, res.as_str(), &replacement)?);
+}
+
+pub fn get_nessa_modules_var() -> Option<String> {
+    if let Ok(var) = std::env::var(NESSA_MODULES_ENV_VAR) {
+        Some(var)
+
+    } else {
+        None
+    }
 }

@@ -2,11 +2,11 @@ use std::{fs, collections::{HashMap, HashSet}, path::Path};
 
 use clap::{Arg, Command, ArgAction};
 use colored::Colorize;
-use inquire::{Text, required, validator::StringValidator, Autocomplete};
+use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm};
 use regex::Regex;
 use glob::glob;
 
-use nessa::{context::*, config::{NessaConfig, ModuleInfo}, nessa_warning};
+use nessa::{context::*, config::{NessaConfig, ModuleInfo, get_nessa_modules_var, NESSA_MODULES_ENV_VAR}, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -209,7 +209,7 @@ fn main() {
         Some(("new", run_args)) => {
             let name;
             let version;
-            let modules;
+            let mut modules = vec!();
 
             if let Some(n) = run_args.get_one::<String>("name") {
                 name = n.clone();
@@ -236,15 +236,39 @@ fn main() {
             }
 
             if let Some(m) = run_args.get_one::<String>("modules") {
-                modules = m.clone();
+                modules.push(m.clone());
 
             } else {
-                modules = Text::new("Modules path:")
-                    .with_default("libs")
-                    .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
-                    .with_placeholder("path/to/modules")
-                    .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
-                    .prompt().unwrap().trim().to_string();
+                if let Some(var) = get_nessa_modules_var() {
+                    let add_env = Confirm::new(&format!("{} was detected. Add it to module paths?", NESSA_MODULES_ENV_VAR)).prompt().unwrap();
+
+                    if add_env {
+                        modules.push(var);
+                    }
+                
+                } else {
+                    nessa_warning!(
+                        "{} env variable was not found. Skipping this dependency folder...",
+                        NESSA_MODULES_ENV_VAR
+                    );    
+                }
+
+                let mut res = true;
+
+                if modules.len() > 0 {
+                    res = Confirm::new("Add a secondary modules folder?").prompt().unwrap();
+                }
+
+                if res {
+                    modules.push(
+                        Text::new("Modules path:")
+                        .with_default("libs")
+                        .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
+                        .with_placeholder("path/to/modules")
+                        .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
+                        .prompt().unwrap().trim().to_string()
+                    );
+                }
             }
 
             let module_path = Path::new(&name);
@@ -259,7 +283,7 @@ fn main() {
                 module_name: name.clone(),
                 hash: "".into(),
                 version,
-                module_paths: vec!(modules),
+                module_paths: modules,
                 modules: HashMap::new(),
             };
 

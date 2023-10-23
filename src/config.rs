@@ -344,8 +344,8 @@ pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     };
 }
 
-pub fn parse_env_vars_and_normalize(path: &String) -> Result<String, NessaError> {
-    let res = path.clone();
+pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, NessaError> {
+    let res = path.to_owned();
     let env_var_regex = Regex::new(ENV_VAR_REGEX).unwrap();
 
     let replacement = |caps: &Captures| {
@@ -359,7 +359,7 @@ pub fn parse_env_vars_and_normalize(path: &String) -> Result<String, NessaError>
         }
     };
     
-    return Ok(replace_all_fallible(&env_var_regex, res.as_str(), &replacement)?);
+    return replace_all_fallible(&env_var_regex, res.as_str(), replacement);
 }
 
 pub fn get_nessa_modules_var() -> Option<String> {

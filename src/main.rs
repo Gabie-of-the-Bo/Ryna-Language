@@ -255,7 +255,7 @@ fn main() {
 
                 let mut res = true;
 
-                if modules.len() > 0 {
+                if !modules.is_empty() {
                     res = Confirm::new("Add a secondary modules folder?").prompt().unwrap();
                 }
 

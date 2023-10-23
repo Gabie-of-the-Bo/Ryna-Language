@@ -70,7 +70,7 @@ impl NessaContext {
                         err.emit();
                     }
 
-                    return ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>());
+                    ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
 
                 Err(err) => err.emit(),

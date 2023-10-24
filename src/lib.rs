@@ -200,4 +200,9 @@ mod integration {
     fn hash_extensions() {
         module_test("test/modules/hash_extensions");
     }
+
+    #[test]
+    fn hash_structs_test() {
+        module_test("test/modules/hash_structs_test");
+    }
 }

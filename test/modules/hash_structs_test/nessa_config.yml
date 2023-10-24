@@ -1,0 +1,13 @@
+---
+module_name: hash_structs_test
+version: 0.1.0
+hash: 3875434956f7067555558fc5082702aa
+module_paths:
+  - test/lib
+modules:
+  hashmap:
+    path: "test\\lib\\hashmap"
+    version: 0.1.0
+  hashset:
+    path: "test\\lib\\hashset"
+    version: 0.1.0

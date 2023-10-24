@@ -1,0 +1,42 @@
+import class HashSet from hashset;
+import fn { hashset, init, rehash, add, contains } from hashset;
+
+import class HashMap from hashmap;
+import fn { hashmap, get, init, rehash, add, contains } from hashmap;
+
+// HashSet
+
+let set = hashset<Int>();
+set.add(1);
+set.add(5);
+set.add(12);
+set.add(75);
+
+if !set.contains(1.mut()) || !set.contains(5.mut()) || !set.contains(12.mut()) || !set.contains(75.mut()) {
+    panic("Invalid contents!");
+}
+
+if set.contains(2.mut()) || set.contains(7.mut()) || set.contains(24.mut()) || set.contains(90.mut()) {
+    panic("Invalid contents!");
+}
+
+// HashMap
+
+let map = hashmap<Int, String>();
+map.add(2, "Test 1");
+map.add(5, "Test 2");
+map.add(11, "Test 3");
+map.add(44, "Test 4");
+
+if !map.contains(2.mut()) || !map.contains(5.mut()) || !map.contains(11.mut()) || !map.contains(44.mut()) {
+    panic("Invalid contents!");
+}
+
+if map.get(2.mut()).as<&&String>() != "Test 1"  || map.get(5.mut()).as<&&String>() != "Test 2" || 
+   map.get(11.mut()).as<&&String>() != "Test 3" || map.get(44.mut()).as<&&String>() != "Test 4" {
+    panic("Invalid contents!");
+}
+
+if map.contains(1.mut()) || map.contains(7.mut()) || map.contains(24.mut()) || map.contains(90.mut()) {
+    panic("Invalid contents!");
+}

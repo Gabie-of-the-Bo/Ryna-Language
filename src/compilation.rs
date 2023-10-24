@@ -3085,6 +3085,12 @@ impl NessaContext{
                 self.map_nessa_expression(e, ctx, functions, unary_operators, binary_operators, nary_operators, classes, interfaces)?;
             }
 
+            NessaExpr::Tuple(_, b) => {
+                for arg in b {
+                    self.map_nessa_expression(arg, ctx, functions, unary_operators, binary_operators, nary_operators, classes, interfaces)?;
+                }
+            }
+
             NessaExpr::UnaryOperation(l, id, t, a) => {
                 *id = self.map_nessa_unary_operator(ctx, *id, unary_operators, l)?;
 
@@ -3238,13 +3244,12 @@ impl NessaContext{
 
                 NessaExpr::FunctionDefinition(l, id, t, a, r, b) => {
                     let f_name = &ctx.functions[*id].name;
+                    let fn_id = self.map_nessa_function(ctx, *id, &mut functions, l)?;
 
-                    if needs_import(module, ImportType::Fn, f_name, imports, &mut self.cache.imports.functions, (*id, t.clone(), a.clone(), r.clone())) {
-                        let fn_id = self.map_nessa_function(ctx, *id, &mut functions, l)?;
+                    let mapped_args = a.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
+                    let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
-                        let mapped_args = a.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
-                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
-
+                    if needs_import(module, ImportType::Fn, f_name, imports, &mut self.cache.imports.functions, (fn_id, t.clone(), mapped_args.clone(), mapped_return.clone())) {
                         let mut mapped_body = b.clone();
 
                         // Map each line of the definition to the target context
@@ -3279,12 +3284,12 @@ impl NessaContext{
                         unreachable!();
                     }
 
-                    if needs_import(module, op_import_type, rep, imports, &mut self.cache.imports.unary, (*id, t.clone(), arg_t.clone(), r.clone())) {
-                        let op_id = self.map_nessa_unary_operator(ctx, *id, &mut unary_operators, l)?;
+                    let op_id = self.map_nessa_unary_operator(ctx, *id, &mut unary_operators, l)?;
 
-                        let mapped_arg_t = arg_t.map_type(self, ctx, &mut classes, &mut interfaces);
-                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
+                    let mapped_arg_t = arg_t.map_type(self, ctx, &mut classes, &mut interfaces);
+                    let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
+                    if needs_import(module, op_import_type, rep, imports, &mut self.cache.imports.unary, (op_id, t.clone(), mapped_arg_t.clone(), mapped_return.clone())) {
                         let mut mapped_body = body.clone();
 
                         // Map each line of the definition to the target context
@@ -3311,13 +3316,13 @@ impl NessaContext{
                 NessaExpr::BinaryOperationDefinition(l, id, t, a, b, r, body) => {
                     let rep = ctx.binary_ops[*id].get_repr();
 
-                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.binary, (*id, t.clone(), a.1.clone(), b.1.clone(), r.clone())) {
-                        let op_id = self.map_nessa_binary_operator(ctx, *id, &mut binary_operators, l)?;
+                    let op_id = self.map_nessa_binary_operator(ctx, *id, &mut binary_operators, l)?;
 
-                        let mapped_arg1 = (a.0.clone(), a.1.map_type(self, ctx, &mut classes, &mut interfaces));
-                        let mapped_arg2 = (b.0.clone(), b.1.map_type(self, ctx, &mut classes, &mut interfaces));
-                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
+                    let mapped_arg1 = (a.0.clone(), a.1.map_type(self, ctx, &mut classes, &mut interfaces));
+                    let mapped_arg2 = (b.0.clone(), b.1.map_type(self, ctx, &mut classes, &mut interfaces));
+                    let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
+                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.binary, (op_id, t.clone(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone())) {
                         let mut mapped_body = body.clone();
 
                         // Map each line of the definition to the target context
@@ -3338,13 +3343,13 @@ impl NessaContext{
                 NessaExpr::NaryOperationDefinition(l, id, t, arg, args, r, body) => {
                     let rep = ctx.nary_ops[*id].get_repr();
 
-                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.nary, (*id, t.clone(), arg.1.clone(), args.clone(), r.clone())) {
-                        let op_id = self.map_nessa_nary_operator(ctx, *id, &mut nary_operators, l)?;
+                    let op_id = self.map_nessa_nary_operator(ctx, *id, &mut nary_operators, l)?;
 
-                        let mapped_arg = (arg.0.clone(), arg.1.map_type(self, ctx, &mut classes, &mut interfaces));
-                        let mapped_args = args.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
-                        let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
+                    let mapped_arg = (arg.0.clone(), arg.1.map_type(self, ctx, &mut classes, &mut interfaces));
+                    let mapped_args = args.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut classes, &mut interfaces))).collect::<Vec<_>>();
+                    let mapped_return = r.map_type(self, ctx, &mut classes, &mut interfaces);
 
+                    if needs_import(module, ImportType::Binary, &rep, imports, &mut self.cache.imports.nary, (*id, t.clone(), mapped_arg.1.clone(), mapped_args.clone(), mapped_return.clone())) {
                         let mut mapped_body = body.clone();
 
                         // Map each line of the definition to the target context

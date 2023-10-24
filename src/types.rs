@@ -623,7 +623,7 @@ impl Type {
                     InterfaceConstraint::new(mapping(i.id).unwrap(), mapped_args)
                 }).collect())
             }
-            Type::Template(id, t) => Type::Template(mapping(*id).unwrap(), t.iter().map(|i| i.map_interfaces(mapping)).collect()),
+            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.map_interfaces(mapping)).collect()),
 
             _ => self.clone()
         };

@@ -86,9 +86,9 @@ macro_rules! define_binary_function_overloads {
 }
 
 // Constant identifiers
-pub const ITERATOR_FUNC_ID: usize = 7;
-pub const NEXT_FUNC_ID: usize = 8;
-pub const IS_CONSUMED_FUNC_ID: usize = 9;
+pub const ITERATOR_FUNC_ID: usize = 8;
+pub const NEXT_FUNC_ID: usize = 9;
+pub const IS_CONSUMED_FUNC_ID: usize = 10;
 
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
@@ -165,6 +165,26 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             array.elements.push(v[1].clone());
 
             Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("reserve".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let size = v[1].get::<Integer>();
+
+            if size.limbs.len() == 1 && size.limbs[0] < usize::MAX as u64 && array.elements.try_reserve(size.limbs[0] as usize).is_ok() {
+                Ok(Object::empty())
+    
+            } else {
+                Err(format!("Unable to reserve {} elements", size))
+            }
         }
     ).unwrap();
 

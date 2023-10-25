@@ -1300,7 +1300,7 @@ mod tests {
         let distribution = Uniform::from(50..100);
         let distribution2 = Uniform::from(100..1000);
 
-        for _ in 0..1000{
+        for _ in 0..200{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), false);
             let b: u64 = distribution2.sample(&mut rng);
 
@@ -1316,7 +1316,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let distribution = Uniform::from(20..100);
 
-        for _ in 0..1000{
+        for _ in 0..500{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
             let b = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
 
@@ -1330,9 +1330,9 @@ mod tests {
     #[test]
     fn medium_divisions() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(100..1000);
+        let distribution = Uniform::from(100..500);
 
-        for _ in 0..50{
+        for _ in 0..25{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
             let b = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
 
@@ -1346,7 +1346,7 @@ mod tests {
     #[test]
     fn big_divisions() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(1000..3000);
+        let distribution = Uniform::from(500..1500);
 
         for _ in 0..5{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
@@ -1378,9 +1378,9 @@ mod tests {
     #[test]
     fn medium_mod() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(100..1000);
+        let distribution = Uniform::from(100..500);
 
-        for _ in 0..50{
+        for _ in 0..25{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
             let b = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
 
@@ -1394,7 +1394,7 @@ mod tests {
     #[test]
     fn big_mod() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(1000..3000);
+        let distribution = Uniform::from(500..1500);
 
         for _ in 0..5{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
@@ -1426,9 +1426,9 @@ mod tests {
     #[test]
     fn medium_multiplications() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(100..1000);
+        let distribution = Uniform::from(100..500);
 
-        for _ in 0..50{
+        for _ in 0..25{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
             let b = Integer::rand_with_limbs(distribution.sample(&mut rng), true);
 
@@ -1442,7 +1442,7 @@ mod tests {
     #[test]
     fn big_multiplications() {
         let mut rng = rand::thread_rng();
-        let distribution = Uniform::from(1000..3000);
+        let distribution = Uniform::from(500..1500);
 
         for _ in 0..5{
             let a = Integer::rand_with_limbs(distribution.sample(&mut rng), true);

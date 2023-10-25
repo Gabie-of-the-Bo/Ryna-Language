@@ -1,8 +1,7 @@
-import class HashSet from hashset;
-import fn { hashset, init, rehash, add, contains } from hashset;
+import class * from hashset;
+import fn * from hashset;
 
-import class HashMap from hashmap;
-import fn { hashmap, get, init, rehash, add, contains } from hashmap;
+import * from hashmap;
 
 // HashSet
 

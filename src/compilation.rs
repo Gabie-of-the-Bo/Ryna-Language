@@ -3442,17 +3442,23 @@ impl NessaContext{
             let module = &modules.get(m).unwrap();
 
             for (t, names) in imps.iter() {
-                if let ImportType::Syntax = t { // Syntaxes do not have to be mapped
+                if let ImportType::Syntax | ImportType::All = t { // Syntaxes do not have to be mapped
                     new_imports.entry(t.clone()).or_default().extend(names.iter().cloned());                    
 
                 } else {
                     for name in names.iter() {
-                        let id = module.ctx.map_import(t, name);
+                        // Import all
+                        if name == "*" {
+                            new_imports.entry(t.clone()).or_default().insert(name.clone());
+
+                        } else {
+                            let id = module.ctx.map_import(t, name);
     
-                        module.inner_dependencies.dfs(&(t.clone(), id), |(tp, id)| {
-                            let mapped_name = module.ctx.rev_map_import(tp, *id);
-                            new_imports.entry(tp.clone()).or_default().insert(mapped_name);
-                        });
+                            module.inner_dependencies.dfs(&(t.clone(), id), |(tp, id)| {
+                                let mapped_name = module.ctx.rev_map_import(tp, *id);
+                                new_imports.entry(tp.clone()).or_default().insert(mapped_name);
+                            }); 
+                        }
                     }
                 }
             }

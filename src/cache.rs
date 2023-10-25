@@ -109,7 +109,8 @@ pub struct NessaCache {
 }
 
 pub fn needs_import<T: Hash + PartialEq + Eq>(module: &str, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    
-    imports.contains_key(&import_type) && 
-           imports[&import_type].contains(name) && 
-           cache.insert((module.to_owned(), obj))
+    (imports.contains_key(&ImportType::All) || (
+        imports.contains_key(&import_type) && 
+        (imports[&import_type].contains(name) || imports[&import_type].contains("*"))
+    )) && cache.insert((module.to_owned(), obj))
 }

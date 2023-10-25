@@ -220,7 +220,7 @@ pub enum NessaExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
-    Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer
+    Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer, All
 }
 
 pub fn get_op_chain(expr: NessaExpr, id: usize) -> (Vec<NessaExpr>, Vec<Vec<Type>>) {
@@ -298,59 +298,71 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
         tuple((
             tag("import"),
             empty1,
-            context(
-                "Expected import type after 'import' keyword",
-                cut(alt((
-                    value(ImportType::Interface, tag("interface")),
-                    value(ImportType::Class, tag("class")),
-                    value(ImportType::Fn, tag("fn")),
-                    value(ImportType::Syntax, tag("syntax")),
-                    value(ImportType::Prefix, tuple((tag("prefix"), empty1, tag("op")))),
-                    value(ImportType::Postfix, tuple((tag("postfix"), empty1, tag("op")))),
-                    value(ImportType::Binary, tuple((tag("binary"), empty1, tag("op")))),
-                    value(ImportType::Nary, tuple((tag("nary"), empty1, tag("op")))),
-                )))
-            ),
-            empty1,
-            context(
-                "Expected a String, an identifier or a brace-enclosed list of identifiers after import type",
-                cut(alt((
-                    map(
-                        tuple((
-                            alt((
-                                string_parser,
-                                identifier_parser
-                            )),
-                            empty1
-                        )),
-                        |(s, _)| vec!(s)
+            alt((
+                map(
+                    tuple((
+                        tag("*"),
+                        empty1
+                    )),
+                    |_| (ImportType::All, (), vec!("*".into()))
+                ),
+                tuple((
+                    context(
+                        "Expected import type after 'import' keyword",
+                        cut(alt((
+                            value(ImportType::Interface, tag("interface")),
+                            value(ImportType::Class, tag("class")),
+                            value(ImportType::Fn, tag("fn")),
+                            value(ImportType::Syntax, tag("syntax")),
+                            value(ImportType::Prefix, tuple((tag("prefix"), empty1, tag("op")))),
+                            value(ImportType::Postfix, tuple((tag("postfix"), empty1, tag("op")))),
+                            value(ImportType::Binary, tuple((tag("binary"), empty1, tag("op")))),
+                            value(ImportType::Nary, tuple((tag("nary"), empty1, tag("op")))),
+                        )))
                     ),
-                    map(
-                        tuple((
-                            tag("{"),
-                            empty0,
-                            separated_list1(
-                                tuple((empty0, tag(","), empty0)),
-                                alt((
-                                    string_parser,
-                                    identifier_parser
-                                ))
+                    empty1,
+                    context(
+                        "Expected a String, an identifier or a brace-enclosed list of identifiers after import type",
+                        cut(alt((
+                            map(
+                                tuple((
+                                    alt((
+                                        string_parser,
+                                        identifier_parser,
+                                        map(tag("*"), |i: Span<'_>| i.to_string())
+                                    )),
+                                    empty1
+                                )),
+                                |(s, _)| vec!(s)
                             ),
-                            empty0,
-                            tag("}"),
-                            empty0
-                        )),
-                        |(_, _, v, _, _, _)| v
+                            map(
+                                tuple((
+                                    tag("{"),
+                                    empty0,
+                                    separated_list1(
+                                        tuple((empty0, tag(","), empty0)),
+                                        alt((
+                                            string_parser,
+                                            identifier_parser
+                                        ))
+                                    ),
+                                    empty0,
+                                    tag("}"),
+                                    empty0
+                                )),
+                                |(_, _, v, _, _, _)| v
+                            )
+                        )))
                     )
-                )))
-            ),
+                ))
+            )),
             context("Expected 'from' after import type", cut(tag("from"))),
             empty1,
             context("Expected identifier after 'from' in import statement", cut(identifier_parser)),
             empty0,
             context("Expected ';' at the end of import statement", cut(tag(";")))
         )),
-        |(_, _, t, _, v, _, _, n, _, _)| (n, t, v.into_iter().collect())
+        |(_, _, (t, _, v), _, _, n, _, _)| (n, t, v.into_iter().collect())
     )(input)
 }
 
@@ -2834,6 +2846,27 @@ mod tests {
                 })
             )
         })));
+    }
+
+    #[test]
+    fn import_parsing() {
+        let import_fns_str = "import fn test from module;";
+        let import_fns_2_str = "import fn { test, test2 } from module;";
+        let import_prefix_str = "import prefix op \"**\" from module;";
+        let import_all_classes_str = "import class * from module;";
+        let import_everything_str = "import * from module;";
+
+        let (_, import_fns) = module_import_parser(Span::new(import_fns_str)).unwrap();
+        let (_, import_fns_2) = module_import_parser(Span::new(import_fns_2_str)).unwrap();
+        let (_, import_prefix) = module_import_parser(Span::new(import_prefix_str)).unwrap();
+        let (_, import_all_classes) = module_import_parser(Span::new(import_all_classes_str)).unwrap();
+        let (_, import_everything) = module_import_parser(Span::new(import_everything_str)).unwrap();
+
+        assert_eq!(import_fns, ("module".into(), ImportType::Fn, ["test".into()].iter().cloned().collect()));
+        assert_eq!(import_fns_2, ("module".into(), ImportType::Fn, ["test".into(), "test2".into()].iter().cloned().collect()));
+        assert_eq!(import_prefix, ("module".into(), ImportType::Prefix, ["**".into()].iter().cloned().collect()));
+        assert_eq!(import_all_classes, ("module".into(), ImportType::Class, ["*".into()].iter().cloned().collect()));
+        assert_eq!(import_everything, ("module".into(), ImportType::All, ["*".into()].iter().cloned().collect()));
     }
 
     #[test]

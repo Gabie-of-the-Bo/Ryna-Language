@@ -1,13 +1,13 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
-use nom::bytes::complete::take_until;
+use nom::bytes::complete::{take_until, take_till};
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::sequence::preceded;
 use nom::{
     IResult,
-    combinator::{map, map_res, opt, eof, value},
+    combinator::{map, map_res, opt, eof, value, recognize},
     bytes::complete::{take_while, take_while1, tag, escaped_transform},
     sequence::{tuple, delimited, terminated},
     branch::alt,
@@ -71,10 +71,12 @@ impl PartialEq for Location {
 }
 
 fn normal_comment(input: Span<'_>) -> PResult<'_, Span<'_>> {
-    delimited(
+    preceded(
         tag("//"),
-        take_until("\n"),
-        tag("\n")
+        alt((
+            recognize(tuple((take_until("\n"), tag("\n")))),
+            recognize(take_till(|_| false))
+        ))
     )(input)
 }
 

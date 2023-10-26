@@ -167,6 +167,11 @@ mod integration {
     }
 
     #[test]
+    fn file_manip() {
+        integration_test("test/file_manip.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

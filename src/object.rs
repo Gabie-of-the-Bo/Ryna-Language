@@ -1,6 +1,6 @@
-use std::{cell::{RefCell, Ref, RefMut}, rc::Rc};
+use std::{cell::{RefCell, Ref, RefMut}, rc::Rc, fs::File};
 
-use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID}, ARR_OF, ARR_IT_OF};
+use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID, FILE_ID, FILE}, ARR_OF, ARR_IT_OF};
 
 type DataBlock = Rc<RefCell<ObjectBlock>>;
 
@@ -36,6 +36,17 @@ pub struct NessaLambda {
     pub ret_type: Box<Type>
 }
 
+#[derive(Clone, Debug)]
+pub struct NessaFile {
+    pub file: Rc<RefCell<File>>
+}
+
+impl PartialEq for NessaFile {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.file, &other.file)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct TypeInstance {
     pub id: usize,
@@ -43,8 +54,7 @@ pub struct TypeInstance {
     pub attributes: Vec<Object>
 }
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive(Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub enum ObjectBlock {
     #[default]
     NoValue, //  Empty is a type, this represents no value at all
@@ -60,6 +70,8 @@ pub enum ObjectBlock {
     ArrayIter(NessaArrayIt),
 
     Lambda(NessaLambda),
+
+    File(NessaFile),
 
     Instance(TypeInstance),
 
@@ -88,6 +100,7 @@ impl ObjectBlock {
             ObjectBlock::Array(_) => ARR_ID,
             ObjectBlock::ArrayIter(_) => ARR_IT_ID,
             ObjectBlock::Lambda(_) => 0,
+            ObjectBlock::File(_) => FILE_ID,
             ObjectBlock::Instance(i) => i.id,
             ObjectBlock::Ref(_) => 0,
             ObjectBlock::Mut(_) => 0,
@@ -106,6 +119,7 @@ impl ObjectBlock {
             ObjectBlock::Array(a) => ARR_OF!(*a.elem_type.clone()),
             ObjectBlock::ArrayIter(i) => ARR_IT_OF!(*i.it_type.clone()),
             ObjectBlock::Lambda(l) => Type::Function(l.args_type.clone(), l.ret_type.clone()),
+            ObjectBlock::File(_) => FILE,
             ObjectBlock::Instance(i) => if i.params.is_empty() { Type::Basic(i.id) } else { Type::Template(i.id, i.params.clone()) },
             ObjectBlock::Ref(r) => Type::Ref(Box::new(r.borrow().get_type())),
             ObjectBlock::Mut(r) => Type::MutRef(Box::new(r.borrow().get_type())),
@@ -179,6 +193,10 @@ impl Object {
 
     pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {
         ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
+    }
+
+    pub fn file(file: File) -> Self {
+        ObjectBlock::File(NessaFile { file: Rc::new(RefCell::new(file)) }).to_obj()
     }
 
     pub fn instance(attributes: Vec<Object>, params: Vec<Type>, id: usize) -> Self {
@@ -303,6 +321,7 @@ impl Object {
                 args_type: l.args_type.clone(), 
                 ret_type: l.ret_type.clone() 
             }).to_obj(),
+            ObjectBlock::File(f) => ObjectBlock::File(f.clone()).to_obj(),
             ObjectBlock::Instance(i) => ObjectBlock::Instance(TypeInstance {
                 id: i.id, 
                 params: i.params.clone(), 
@@ -390,6 +409,7 @@ impl_nessa_data!(NessaArray, Array);
 impl_nessa_data!(NessaTuple, Tuple);
 impl_nessa_data!(NessaLambda, Lambda);
 impl_nessa_data!(NessaArrayIt, ArrayIter);
+impl_nessa_data!(NessaFile, File);
 
 /*
                                                   ╒═════════╕

@@ -1,3 +1,6 @@
+use std::io::Read;
+use std::io::Write;
+
 use seq_macro::seq;
 
 use crate::ARR_IT_OF;
@@ -86,9 +89,9 @@ macro_rules! define_binary_function_overloads {
 }
 
 // Constant identifiers
-pub const ITERATOR_FUNC_ID: usize = 8;
-pub const NEXT_FUNC_ID: usize = 9;
-pub const IS_CONSUMED_FUNC_ID: usize = 10;
+pub const ITERATOR_FUNC_ID: usize = 9;
+pub const NEXT_FUNC_ID: usize = 10;
+pub const IS_CONSUMED_FUNC_ID: usize = 11;
 
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
@@ -141,6 +144,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
         Ok(v[0].get_mut())
+    }).unwrap();
+
+    let idx = ctx.define_function("demut".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0.to_ref(), |_, _, v, _| {
+        Ok(v[0].get_ref())
     }).unwrap();
 
     let idx = ctx.define_function("arr".into()).unwrap();
@@ -508,6 +517,130 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         a.swap_contents(&b);
 
         Ok(Object::empty())
+    }).unwrap();
+
+    let idx = ctx.define_function("create_file".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR], FILE, |_, _, v, _| {
+        let path = &*v[0].get::<String>();
+        let file = std::fs::File::create(std::path::Path::new(path));
+
+        match file {
+            Ok(inner) => Ok(Object::file(inner)),
+            Err(_) => Err(format!("Unable to create file file at {}", path)),
+        }
+    }).unwrap();
+
+    let idx = ctx.define_function("open_file".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR, BOOL, BOOL, BOOL], FILE, |_, _, v, _| {
+        let path = &*v[0].get::<String>();
+        let read = *v[1].get::<bool>();
+        let write = *v[2].get::<bool>();
+        let append = *v[3].get::<bool>();
+
+        let file = std::fs::OpenOptions::new()
+            .read(read)
+            .write(write)
+            .append(append)
+            .open(path);
+
+        match file {
+            Ok(inner) => Ok(Object::file(inner)),
+            Err(_) => Err(format!("Unable to open file file at {}", path))
+        }    
+    }).unwrap();
+
+    let idx = ctx.define_function("remove_file".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR], BOOL, |_, _, v, _| {
+        let path = &*v[0].get::<String>();
+
+        Ok(ObjectBlock::Bool(std::fs::remove_file(std::path::Path::new(path)).is_ok()).to_obj())
+    }).unwrap();
+
+    let idx = ctx.define_function("read_str".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], STR, |_, _, v, _| {
+        let file = v[0].deref::<NessaFile>();
+        let mut buf = String::new();
+        let res = file.file.borrow_mut().read_to_string(&mut buf);
+
+        match res {
+            Ok(_) => Ok(ObjectBlock::Str(buf).to_obj()),
+            Err(_) => Err("Unable to read file".into())
+        }    
+    }).unwrap();
+
+    let idx = ctx.define_function("read_bytes".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], ARR_OF!(INT), |_, _, v, _| {
+        let file = v[0].deref::<NessaFile>();
+        let mut buf = vec!();
+        let res = file.file.borrow_mut().read_to_end(&mut buf);
+
+        match res {
+            Ok(_) => {
+                let arr = buf.into_iter().map(|i| ObjectBlock::Int(Integer::from(i as u32)).to_obj()).collect();
+                Ok(Object::arr(arr, INT))
+            },
+            Err(_) => Err("Unable to read file".into())
+        }    
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), INT], ARR_OF!(INT), |_, _, v, _| {
+        let file = v[0].deref::<NessaFile>();
+        let num_bytes = v[1].get::<Integer>();
+
+        if num_bytes.negative || num_bytes.is_zero() || num_bytes.limbs.len() > 1 || num_bytes.limbs[0] > usize::MAX as u64 {
+            return Err(format!("Unable to read {} bytes from file", num_bytes));
+        }
+
+        let mut buf = vec!(0; num_bytes.limbs[0] as usize);
+        let res = file.file.borrow_mut().read_exact(&mut buf);
+
+        match res {
+            Ok(_) => {
+                let arr = buf.into_iter().map(|i| ObjectBlock::Int(Integer::from(i as u32)).to_obj()).collect();
+                Ok(Object::arr(arr, INT))
+            },
+            Err(_) => Err("Unable to read file".into())
+        }    
+    }).unwrap();
+
+    let idx = ctx.define_function("write_str".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), STR.to_ref()], BOOL, |_, _, v, _| {
+        let file = v[0].deref::<NessaFile>();
+        let content = &*v[1].deref::<String>();
+
+        let ok = file.file.borrow_mut().write_all(content.as_bytes()).is_ok();
+
+        Ok(ObjectBlock::Bool(ok).to_obj())
+    }).unwrap();
+
+    let idx = ctx.define_function("write_bytes".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), ARR_OF!(INT).to_ref()], BOOL, |_, _, v, _| {
+        let file = v[0].deref::<NessaFile>();
+        let content = &*v[1].deref::<NessaArray>();
+        let mut bytes = vec!();
+        bytes.reserve(content.elements.len());
+
+        for n in &content.elements {
+            let byte = &*n.get::<Integer>();
+
+            if byte.limbs.len() == 1 && byte.limbs[0] < 256 && !byte.negative {
+                bytes.push(byte.limbs[0] as u8);
+            
+            } else {
+                return Err(format!("{} is not a valid byte value", byte));
+            }
+        }
+
+        let ok = file.file.borrow_mut().write_all(&bytes).is_ok();
+
+        Ok(ObjectBlock::Bool(ok).to_obj())
     }).unwrap();
 
     // Max tuple size is 10 for now

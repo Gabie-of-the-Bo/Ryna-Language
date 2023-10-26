@@ -978,11 +978,13 @@ pub const STR_ID: usize = 2;
 pub const BOOL_ID: usize = 3;
 pub const ARR_ID: usize = 4;
 pub const ARR_IT_ID: usize = 5;
+pub const FILE_ID: usize = 6;
 
 pub const INT: Type = Type::Basic(INT_ID);
 pub const FLOAT: Type = Type::Basic(FLOAT_ID);
 pub const STR: Type = Type::Basic(STR_ID);
 pub const BOOL: Type = Type::Basic(BOOL_ID);
+pub const FILE: Type = Type::Basic(FILE_ID);
 
 #[macro_export]
 macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
@@ -1011,4 +1013,6 @@ pub fn standard_types(ctx: &mut NessaContext) {
 
     ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
     ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+
+    ctx.define_type("File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 } 

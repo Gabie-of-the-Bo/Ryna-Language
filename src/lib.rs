@@ -215,4 +215,9 @@ mod integration {
     fn json_test() {
         module_test("test/modules/json_test");
     }
+
+    #[test]
+    fn set_syntax_test() {
+        module_test("test/modules/set_syntax_test");
+    }
 }

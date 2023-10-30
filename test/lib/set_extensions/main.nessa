@@ -1,0 +1,18 @@
+import * from hashset;
+
+syntax set_initialization from '<' Arg(<type>, type) '>{' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] '}' {
+    {#let res = hashset<} {$type} {#>(} {#);\n}
+    {@i in $elems} {
+        {#res.add(} {$i} {#);\n}
+    }
+    {#return *res;}
+}
+
+syntax set_comprehension from '{' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '} 'in' {' '} Arg(<expr>, container) {' '} '}' {
+    {#let res = hashset<} {$type} {#>();\n}
+    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
+    {#for _it_ in }{$container}{# \{\n}
+        {#  res.add(func(*_it_));\n}
+    {#\}\n\n}
+    {#return res;}
+}

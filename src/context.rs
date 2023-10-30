@@ -157,16 +157,26 @@ impl NessaContext {
 
         for i in &self.interface_impls {
             if i.interface_id == constraint.id {
+                let mut int_type = i.interface_type.clone();
+                let mut int_args = Type::And(i.args.clone());
+
+                let max_tms = int_type.max_template().max(int_args.max_template());
+
+                if max_tms >= 0 {
+                    int_type.offset_templates(max_tms as usize + 1);
+                    int_args.offset_templates(max_tms as usize + 1);    
+                }
+
                 let mut t_assignments_cpy = t_assignments.clone();
                 let mut t_deps_cpy = t_deps.clone();
 
-                let args_match = Type::And(i.args.clone()).template_bindable_to(&cons_and, &mut t_assignments_cpy, &mut t_deps_cpy, self);
-                let type_matches = i.interface_type.template_bindable_to(t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
+                let args_match = int_args.template_bindable_to(&cons_and, &mut t_assignments_cpy, &mut t_deps_cpy, self);
+                let type_matches = int_type.template_bindable_to(t, &mut t_assignments_cpy, &mut t_deps_cpy, self);
     
                 if args_match && type_matches {
                     *t_assignments = t_assignments_cpy;
                     *t_deps = t_deps_cpy;
-
+                
                     return true;
                 }
             }

@@ -17,6 +17,6 @@ iterator(*<Range>r);
 next(r);
 is_consumed(r);
 
-if sum(Range(0, 0, 100)) != 5050 {
+if sum(Range(0, 0, 101)) != 5050 {
     panic("Invalid result");
 }

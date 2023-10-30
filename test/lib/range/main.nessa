@@ -12,7 +12,7 @@ fn next(it: &&Range) -> Int {
     let curr: &&Int = it.current();
     curr.inc();
 
-    return *curr;
+    return *curr - 1;
 }
 
 fn is_consumed(it: &&Range) -> Bool {

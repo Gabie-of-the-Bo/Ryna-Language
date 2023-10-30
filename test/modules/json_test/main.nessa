@@ -1,0 +1,28 @@
+import * from json;
+
+class Test {
+    att_a: Int;
+    att_b: Array<Float>;
+}
+
+implement Serializable<JSONSerializer> for Test;
+
+fn serialize(serializer: &&JSONSerializer, obj: Test) -> String {
+    let a = serializer.serialize_map_field("att_a", move(obj.att_a()));
+    let b = serializer.serialize_map_field("att_b", move(obj.att_b()));
+
+    return "{" + a + ", " + b + "}";
+}
+
+let serializer = JSONSerializer();
+let a = arr<Float>();
+a.push(5.2);
+a.push(8.76);
+a.push(15.9);
+
+let test = Test(10, move(a));
+let json_rep = serializer.serialize(move(test));
+
+if json_rep != "{\"att_a\": 10, \"att_b\": [5.2, 8.76, 15.9]}" {
+    panic("Invalid serialization");
+}

@@ -210,4 +210,9 @@ mod integration {
     fn hash_structs_test() {
         module_test("test/modules/hash_structs_test");
     }
+
+    #[test]
+    fn json_test() {
+        module_test("test/modules/json_test");
+    }
 }

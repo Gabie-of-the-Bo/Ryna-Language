@@ -1,10 +1,10 @@
 ---
 module_name: sum
-version: "0.1.0"
-hash: c3932d6e0d2162e9bd81c82f8d5cc67c
+version: 0.1.0
+hash: 32029cb76f9d5c36eb522eeab46c5478
 module_paths:
   - test/lib
 modules:
   range:
     path: "test\\lib\\range"
-    version: "0.1.0"
+    version: 0.1.0

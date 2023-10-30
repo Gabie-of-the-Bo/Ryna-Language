@@ -643,6 +643,20 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(ObjectBlock::Bool(ok).to_obj())
     }).unwrap();
 
+    let idx = ctx.define_function("to_string".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, mut v, _| {
+        let obj = v.pop().unwrap().get::<Integer>().to_string();
+
+        Ok(ObjectBlock::Str(obj).to_obj())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FLOAT], STR, |_, _, mut v, _| {
+        let obj = v.pop().unwrap().get::<f64>().to_string();
+
+        Ok(ObjectBlock::Str(obj).to_obj())
+    }).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

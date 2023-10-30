@@ -545,6 +545,30 @@ impl Type {
         }
     }
 
+    pub fn max_template(&self) -> i32 {
+        return match self {
+            Type::Ref(t) => t.max_template(),
+            Type::MutRef(t) => t.max_template(),
+
+            Type::Or(v) => v.iter().map(|i| i.max_template()).max().unwrap_or(-1),
+            Type::And(v) => v.iter().map(|i| i.max_template()).max().unwrap_or(-1),
+            
+            Type::TemplateParam(id, v) => {
+                v.iter().flat_map(|i| {
+                    i.args.iter().map(|j| j.max_template())
+                }).max().unwrap_or(-1).max(*id as i32)
+            },
+            
+            Type::Template(_, v) => v.iter().map(|i| i.max_template()).max().unwrap_or(-1),
+
+            Type::Function(f, t) => {
+                f.max_template().max(t.max_template())
+            },
+
+            _ => -1
+        }
+    }
+
     pub fn sub_templates(&self, args: &HashMap<usize, Type>) -> Type {
         return match self {
             Type::Ref(t) => Type::Ref(Box::new(t.sub_templates(args))),

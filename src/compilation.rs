@@ -1991,11 +1991,21 @@ impl NessaContext{
         use NessaExpr::*;
 
         match expr {
-            Variable(..) | CompiledLambda(..) => Ok(1), 
+            Variable(..) | CompiledLambda(..) => {
+                *root_counter += root as usize; // Add drop instruction
+
+                Ok(1)
+            }, 
             
-            Literal(_, obj) => Ok(NessaContext::compiled_literal_size(obj)),
+            Literal(_, obj) => {
+                *root_counter += root as usize; // Add drop instruction
+                
+                Ok(NessaContext::compiled_literal_size(obj))
+            },
             
             UnaryOperation(l, id, t, arg) => {
+                *root_counter += root as usize; // Add drop instruction
+
                 let a_t = self.infer_type(arg).ok_or_else(|| NessaError::compiler_error(
                     "Unable to infer type of binary operation argument".into(), l, vec!()
                 ))?;
@@ -2007,6 +2017,8 @@ impl NessaContext{
             }
 
             BinaryOperation(l, id, t, a, b) => {
+                *root_counter += root as usize; // Add drop instruction
+
                 let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
                     "Unable to infer type of binary operation argument".into(), l, vec!()
                 ))?;
@@ -2025,7 +2037,11 @@ impl NessaContext{
                 Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1 + offset)
             },
 
-            NaryOperation(_, _, _, a, b) => Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_body_size(b, false)? + 1),
+            NaryOperation(_, _, _, a, b) => {
+                *root_counter += root as usize; // Add drop instruction
+
+                Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_body_size(b, false)? + 1)
+            },
 
             Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
             
@@ -2047,7 +2063,11 @@ impl NessaContext{
 
             While(_, c, b) => Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2),
 
-            Tuple(_, b) => Ok(1 + self.compiled_form_body_size(b, false)?),
+            Tuple(_, b) => {            
+                *root_counter += root as usize; // Add drop instruction
+
+                Ok(1 + self.compiled_form_body_size(b, false)?)
+            },
 
             FunctionCall(l, id, t, a) => {
                 *root_counter += root as usize; // Add drop instruction
@@ -2156,14 +2176,28 @@ impl NessaContext{
         root: bool
     ) -> Result<Vec<NessaInstruction>, NessaError> {
         return match expr {
-            NessaExpr::Literal(_, obj) => Ok(NessaContext::compile_literal(obj)),
+            NessaExpr::Literal(_, obj) => {
+                let mut res = NessaContext::compile_literal(obj);
+                
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
+
+                Ok(res)
+            },
 
             NessaExpr::CompiledLambda(_, i, a, r, _) => {
-                Ok(vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
+                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
                     *lambda_positions.get(i).unwrap(),
                     Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
                     r.clone()
-                ))))
+                )));
+                
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
+
+                Ok(res)
             },
 
             NessaExpr::Tuple(_, e) => {
@@ -2174,11 +2208,24 @@ impl NessaContext{
                 }
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(e.len())));
+                
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
 
                 Ok(res)
             }
 
-            NessaExpr::Variable(_, id, _, _) => Ok(vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)))), 
+            NessaExpr::Variable(_, id, _, _) => {
+                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)));
+                
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
+
+                Ok(res)
+            }, 
+
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) | NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
                 let mut res = self.compiled_form_expr(e, lambda_positions, false)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
@@ -2199,23 +2246,27 @@ impl NessaContext{
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
                 } else if let Some((opcode, _)) = self.cache.opcodes.unary.get_checked(&(*id, ov_id)) {                    
-                                    // Deref if necessary
-                                    if opcode.needs_deref() && i_t.is_ref() {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
-                                    }
-                
-                                    // Convert to float if necessary
-                                    if opcode.needs_float() {
-                                        if let Type::Basic(INT_ID) = i_t.deref_type() {
-                                            res.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
-                                        }
-                                    }
+                    // Deref if necessary
+                    if opcode.needs_deref() && i_t.is_ref() {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                    }
 
-                                    res.push(NessaInstruction::from(opcode));
+                    // Convert to float if necessary
+                    if opcode.needs_float() {
+                        if let Type::Basic(INT_ID) = i_t.deref_type() {
+                            res.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                        }
+                    }
 
-                                } else {
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
-                                }
+                    res.push(NessaInstruction::from(opcode));
+
+                } else {
+                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
+                }   
+
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
 
                 Ok(res)
             },
@@ -2300,6 +2351,10 @@ impl NessaContext{
 
                 res.push(res_op);    
 
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                }
+
                 Ok(res)
             },
 
@@ -2330,6 +2385,10 @@ impl NessaContext{
 
                 } else {                    
                     res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, t.clone())));
+                }   
+
+                if root { // Drop if the return value is unused
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 
                 Ok(res)
@@ -2375,6 +2434,7 @@ impl NessaContext{
 
                 Ok(res)
             },
+
             NessaExpr::While(_, c, b) => {
                 // Start with the condition
                 let mut res = self.compiled_form_expr(c, lambda_positions, false)?;
@@ -2391,6 +2451,7 @@ impl NessaContext{
 
                 Ok(res)
             },
+
             NessaExpr::CompiledFor(l, it_var_id, elem_var_id, _, c, b) => {
                 if let Some(t) = self.infer_type(c) {
                     let mut res = self.compiled_form_expr(c, lambda_positions, false)?;
@@ -2474,12 +2535,14 @@ impl NessaContext{
                     Err(NessaError::compiler_error("Container expression does not return a valid value".into(), l, vec!()))
                 }
             },
+
             NessaExpr::Return(_, e) => {
                 let mut res = self.compiled_form_expr(e, lambda_positions, false)?;
                 res.push(NessaInstruction::from(CompiledNessaExpr::Return));
 
                 Ok(res)
             },
+
             NessaExpr::FunctionCall(l, id, t, a) => {
                 let mut res = vec!();
 
@@ -2516,6 +2579,7 @@ impl NessaContext{
 
                 Ok(res)
             }
+            
             _ => { Ok(vec!()) }
         };
     }

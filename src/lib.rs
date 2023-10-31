@@ -29,6 +29,9 @@ pub mod math;
 #[path = "structures/graph.rs"]
 pub mod graph;
 
+#[path = "structures/variable_map.rs"]
+pub mod variable_map;
+
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;

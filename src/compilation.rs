@@ -21,6 +21,7 @@ use crate::types::*;
 use crate::object::Object;
 use crate::functions::*;
 use crate::operations::*;
+use crate::variable_map::VariableMap;
 
 /*
                                                   ╒══════════════════╕
@@ -243,11 +244,11 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
-    fn compile_expr_variables(&mut self, expr: &mut NessaExpr, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, curr_ctx: &mut HashMap<String, usize>) -> Result<(), NessaError> {
+    fn compile_expr_variables(&mut self, expr: &mut NessaExpr, registers: &mut Vec<usize>, var_map: &mut VariableMap) -> Result<(), NessaError> {
         match expr {
             // Compile variable references
-            NessaExpr::NameReference(l, n) if ctx_idx.contains_key(n) => {
-                let (idx, t) = ctx_idx.get(n).unwrap();
+            NessaExpr::NameReference(l, n) if var_map.is_var_defined(n) => {
+                let (idx, t) = var_map.get_var(n).unwrap();
                 *expr = NessaExpr::Variable(l.clone(), *idx, n.clone(), t.clone());
             },
 
@@ -256,7 +257,7 @@ impl NessaContext {
             },
 
             NessaExpr::NameReference(l, n) => {
-                let similar_vars = ctx_idx.keys().filter(|name| levenshtein(n, name) < 3)
+                let similar_vars = var_map.var_names().iter().filter(|name| levenshtein(n, name) < 3)
                                                  .map(|i| format!("{} (Variable)", i.cyan()))
                                                  .collect::<Vec<_>>();
 
@@ -271,24 +272,28 @@ impl NessaContext {
                 ));
             }
 
-            NessaExpr::VariableAssignment(l, n, e) if ctx_idx.contains_key(n) => {
-                if ctx_idx.contains_key(n) {
-                    self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+            NessaExpr::VariableAssignment(l, n, e) if var_map.is_var_defined(n) => {
+                if var_map.is_var_defined(n) {
+                    self.compile_expr_variables(e, registers, var_map)?;
 
-                    let (idx, t) = ctx_idx.get(n).unwrap();
+                    let (idx, t) = var_map.get_var(n).unwrap();
 
                     *expr = NessaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone());
                 
                 } else {
-                    return Err(NessaError::compiler_error(format!("Variable with name {} is not defined", n), l, vec!()));
+                    return Err(NessaError::compiler_error(format!("Variable with name {} is not defined", n.green()), l, vec!()));
                 }
             },
 
             // Compile variable definitions
             NessaExpr::VariableDefinition(l, n, t, e) => {
+                if var_map.is_var_defined_in_last_ctx(n) {
+                    return Err(NessaError::compiler_error(format!("Variable with name {} is already defined", n.green()), l, vec!()));
+                }
+
                 let idx = registers.pop().unwrap();
 
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, var_map)?;
 
                 if let Type::InferenceMarker = t {
                     *t = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
@@ -296,26 +301,28 @@ impl NessaContext {
                     ))?;
                 }
 
-                ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
-                curr_ctx.entry(n.clone()).or_insert(idx);
+                var_map.define_var(n.clone(), idx, t.clone());
 
                 *expr = NessaExpr::CompiledVariableDefinition(l.clone(), idx, n.clone(), t.clone(), e.clone());
             },
 
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, var_map)?;
             }
 
-            NessaExpr::CompiledVariableDefinition(_, id, n, t, e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+            NessaExpr::CompiledVariableDefinition(l, id, n, t, e) => {
+                if var_map.is_var_defined_in_last_ctx(n) {
+                    return Err(NessaError::compiler_error(format!("Variable with name {} is already defined", n.green()), l, vec!()));
+                }
 
-                ctx_idx.entry(n.clone()).or_insert((*id, t.clone()));
-                curr_ctx.entry(n.clone()).or_insert(*id);
+                self.compile_expr_variables(e, registers, var_map)?;
+
+                var_map.define_var(n.clone(), *id, t.clone());
             }
 
             // Compile operations
             NessaExpr::UnaryOperation(l, id, t, e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, var_map)?;
 
                 if t.is_empty() {
                     let arg_type = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
@@ -333,8 +340,8 @@ impl NessaContext {
             }
 
             NessaExpr::BinaryOperation(l, id, t, a, b) => {
-                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
-                self.compile_expr_variables(b, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(a, registers, var_map)?;
+                self.compile_expr_variables(b, registers, var_map)?;
 
                 let is_func = matches!(b.as_ref(), NessaExpr::FunctionCall(..));
 
@@ -348,7 +355,7 @@ impl NessaContext {
                         *expr = NessaExpr::FunctionCall(l.clone(), *f_id, t.clone(), new_args);
     
                         // Recompile after transformation
-                        self.compile_expr_variables(expr, registers, ctx_idx, curr_ctx)?;
+                        self.compile_expr_variables(expr, registers, var_map)?;
                     }
 
                 } else if t.is_empty() {
@@ -371,10 +378,10 @@ impl NessaContext {
             }
             
             NessaExpr::NaryOperation(l, id, t, a, b) => {
-                self.compile_expr_variables(a, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(a, registers, var_map)?;
 
                 for i in b.iter_mut() {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;
+                    self.compile_expr_variables(i, registers, var_map)?;
                 }
 
                 let is_func = matches!(a.as_ref(), NessaExpr::FunctionName(..));
@@ -384,7 +391,7 @@ impl NessaContext {
                         *expr = NessaExpr::FunctionCall(l.clone(), *id, t.clone(), b.clone());
     
                         // Recompile after transformation
-                        self.compile_expr_variables(expr, registers, ctx_idx, curr_ctx)?;
+                        self.compile_expr_variables(expr, registers, var_map)?;
                     }
                 
                 } else if t.is_empty() {
@@ -408,13 +415,13 @@ impl NessaContext {
 
             NessaExpr::Tuple(_, args) => {
                 for i in args {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
+                    self.compile_expr_variables(i, registers, var_map)?;                    
                 }
             }
 
             NessaExpr::FunctionCall(l, id, t, args) => {
                 for i in args.iter_mut() {
-                    self.compile_expr_variables(i, registers, ctx_idx, curr_ctx)?;                    
+                    self.compile_expr_variables(i, registers, var_map)?;                    
                 }
 
                 if t.is_empty() {
@@ -436,26 +443,26 @@ impl NessaContext {
 
             // Compile flow control
             NessaExpr::If(_, h, ib, ei, eb) => {
-                self.compile_expr_variables(h, registers, ctx_idx, curr_ctx)?;
-                self.compile_vars_and_infer_ctx(ib, registers, ctx_idx, &vec!())?;
+                self.compile_expr_variables(h, registers, var_map)?;
+                self.compile_vars_and_infer_ctx(ib, registers, var_map, &vec!())?;
 
                 for (ei_h, ei_b) in ei {
-                    self.compile_expr_variables(ei_h, registers, ctx_idx, curr_ctx)?;
-                    self.compile_vars_and_infer_ctx(ei_b, registers, ctx_idx, &vec!())?;
+                    self.compile_expr_variables(ei_h, registers, var_map)?;
+                    self.compile_vars_and_infer_ctx(ei_b, registers, var_map, &vec!())?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    self.compile_vars_and_infer_ctx(eb_inner, registers, ctx_idx, &vec!())?;
+                    self.compile_vars_and_infer_ctx(eb_inner, registers, var_map, &vec!())?;
                 }
             }
 
             NessaExpr::While(_, c, b) => {
-                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
-                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!())?;
+                self.compile_expr_variables(c, registers, var_map)?;
+                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!())?;
             }
 
             NessaExpr::For(l, i, c, b) => {
-                self.compile_expr_variables(c, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(c, registers, var_map)?;
 
                 let container_type = self.infer_type(c).ok_or_else(|| NessaError::compiler_error(
                     "Unable to infer type of for loop container".into(), l, vec!()
@@ -499,13 +506,13 @@ impl NessaContext {
                     self.cache.overloads.functions.insert((IS_CONSUMED_FUNC_ID, vec!(c_mut.clone()), consumed_args.clone()), consumed_ov_id);
                 }
 
-                self.compile_vars_and_infer_ctx(b, registers, ctx_idx, &vec!(("__iterator__".into(), iterator_type.clone()), (i.clone(), element_type.clone())))?;
+                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!(("__iterator__".into(), iterator_type.clone()), (i.clone(), element_type.clone())))?;
 
                 *expr = NessaExpr::CompiledFor(l.clone(), iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
             }
 
             NessaExpr::Return(_, e) => {
-                self.compile_expr_variables(e, registers, ctx_idx, curr_ctx)?;
+                self.compile_expr_variables(e, registers, var_map)?;
             }
 
             NessaExpr::Lambda(l, a, r, b) => {
@@ -589,35 +596,34 @@ impl NessaContext {
         Ok(())
     }
     
-    fn compile_vars_and_infer_ctx(&mut self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, ctx_idx: &mut HashMap<String, (usize, Type)>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
-        let mut curr_ctx = HashMap::new();
+    fn compile_vars_and_infer_ctx(&mut self, body: &mut Vec<NessaExpr>, registers: &mut Vec<usize>, var_map: &mut VariableMap, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
+        var_map.add_context();
 
         for (n, t) in args {
             let idx = registers.pop().unwrap();
-            ctx_idx.entry(n.clone()).or_insert((idx, t.clone()));
-            curr_ctx.entry(n.clone()).or_insert(idx);
+            var_map.define_var(n.clone(), idx, t.clone());
         }
 
         // Compile each expression sequentially
         for e in body {
-            self.compile_expr_variables(e, registers, ctx_idx, &mut curr_ctx)?;
+            self.compile_expr_variables(e, registers, var_map)?;
         }
 
         let mut max_var = 0;
 
         // Free the registers inside the context
-        curr_ctx.into_iter().for_each(|(n, i)| {
-            ctx_idx.remove(&n);
+        var_map.for_each_last_ctx(|i| {
             registers.push(i);
-
             max_var = max_var.max(i + 1); // Maximum register
         });
+
+        var_map.remove_context();
 
         Ok(max_var)
     }
 
     pub fn compile_vars_and_infer(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
-        self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut HashMap::new(), args)
+        self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut VariableMap::new(), args)
     }
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {

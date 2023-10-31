@@ -172,6 +172,11 @@ mod integration {
     }
 
     #[test]
+    fn string_manip() {
+        integration_test("test/string_manip.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

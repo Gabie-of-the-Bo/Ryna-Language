@@ -341,6 +341,22 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<NessaArray>().elements.len() as u64)))
     ).unwrap();
 
+    ctx.define_native_function_overload(
+        idx, 
+        0,
+        &[STR.to_ref()], 
+        INT, 
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<String>().len() as u64)))
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0,
+        &[STR.to_mut()], 
+        INT, 
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<String>().len() as u64)))
+    ).unwrap();
+
     let idx = ctx.define_function("sin".into()).unwrap();
 
     define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sin());
@@ -630,7 +646,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         for n in &content.elements {
             let byte = &*n.get::<Integer>();
 
-            if byte.limbs.len() == 1 && byte.limbs[0] < 256 && !byte.negative {
+            if byte.is_valid_byte() {
                 bytes.push(byte.limbs[0] as u8);
             
             } else {
@@ -655,6 +671,111 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let obj = v.pop().unwrap().get::<f64>().to_string();
 
         Ok(ObjectBlock::Str(obj).to_obj())
+    }).unwrap();
+
+    // String functions
+    let idx = ctx.define_function("code_point_at".into()).unwrap();
+    
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref(), INT], INT, |_, _, v, _| {
+        let string = &*v[0].deref::<String>();
+        let idx = &*v[1].get::<Integer>();
+
+        if !idx.is_valid_index() {
+            return Err(format!("{} is not a valid index", idx));
+        }
+
+        if let Some(character) = string[idx.as_usize()..].chars().next() {
+            Ok(ObjectBlock::Int(Integer::from(character as u64)).to_obj())
+
+        } else {
+            Err(format!("Invalid character start at position {}", idx))
+        }
+    }).unwrap();
+    
+    ctx.define_native_function_overload(idx, 0, &[STR.to_mut(), INT], INT, |_, _, v, _| {
+        let string = &*v[0].deref::<String>();
+        let idx = &*v[1].get::<Integer>();
+
+        if !idx.is_valid_index() {
+            return Err(format!("{} is not a valid index", idx));
+        }
+
+        if let Some(character) = string[idx.as_usize()..].chars().next() {
+            Ok(ObjectBlock::Int(Integer::from(character as u64)).to_obj())
+
+        } else {
+            Err(format!("Invalid character start at position {}", idx))
+        }
+    }).unwrap();
+
+    let idx = ctx.define_function("code_point_to_str".into()).unwrap();
+    
+    ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, v, _| {
+        let cp = &*v[0].get::<Integer>();
+
+        if !cp.is_valid_index() {
+            return Err(format!("{} is not a valid code point", cp));
+        }
+
+        if let Some(character) = char::from_u32(cp.limbs[0] as u32) {
+            Ok(ObjectBlock::Str(character.to_string()).to_obj())
+
+        } else {
+            Err(format!("{} is not a valid code point", cp))
+        }
+    }).unwrap();
+
+    let idx = ctx.define_function("code_point_length".into()).unwrap();
+    
+    ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
+        let cp = &*v[0].get::<Integer>();
+
+        if !cp.is_valid_index() {
+            return Err(format!("{} is not a valid code point", cp));
+        }
+
+        if let Some(character) = char::from_u32(cp.limbs[0] as u32) {
+            Ok(ObjectBlock::Int(Integer::from(character.len_utf8() as u64)).to_obj())
+
+        } else {
+            Err(format!("{} is not a valid code point", cp))
+        }
+    }).unwrap();
+
+    let idx = ctx.define_function("utf8_array".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref()], ARR_OF!(INT), |_, _, v, _| {
+        let string = &*v[0].deref::<String>();
+        let arr = string.bytes()
+                        .map(|i| ObjectBlock::Int(Integer::from(i as u64)).to_obj())
+                        .collect();
+
+        Ok(Object::arr(arr, INT))
+    }).unwrap();
+
+    let idx = ctx.define_function("utf8_to_str".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref()], STR, |_, _, v, _| {
+        let arr = &*v[0].deref::<NessaArray>();
+        let mut bytes = vec!();
+        bytes.reserve(arr.elements.len());
+
+        for i in &arr.elements {
+            let n = &*i.get::<Integer>();
+
+            if !n.is_valid_byte() {
+                return Err(format!("{} is not a valid byte", n));
+            }
+            
+            bytes.push(n.as_u8());
+        }
+
+        if let Ok(string) = String::from_utf8(bytes) {
+            Ok(ObjectBlock::Str(string).to_obj())
+
+        } else {
+            Err("Invalid UTF-8 array".into())
+        }
     }).unwrap();
 
     // Max tuple size is 10 for now

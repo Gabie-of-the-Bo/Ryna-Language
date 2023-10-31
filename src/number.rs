@@ -1086,6 +1086,22 @@ impl Integer {
         }
     }
 
+    pub fn is_valid_index(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0] <= usize::MAX as u64
+    }
+
+    pub fn is_valid_byte(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0] < 256
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.limbs[0] as usize
+    }
+
+    pub fn as_u8(&self) -> u8 {
+        self.limbs[0] as u8
+    }
+
     pub fn rand_with_size(digits: usize, can_be_negative: bool) -> Integer{
         let mut rng = rand::thread_rng();
         let distribution = Uniform::from(0..10);

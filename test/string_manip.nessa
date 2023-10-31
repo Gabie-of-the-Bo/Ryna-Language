@@ -1,0 +1,40 @@
+class CodePointIterator {
+    str: &String;
+    pos: Int;
+}
+
+fn iterator(it: CodePointIterator) -> CodePointIterator {
+    return move(it);
+}
+
+fn next(it: &&CodePointIterator) -> Int {
+    let res = it.str().code_point_at(*it.pos());
+
+    it.pos() := it.pos() + res.deref().code_point_length();
+
+    return move(res);
+}
+
+fn is_consumed(it: &&CodePointIterator) -> Bool {
+    return it.pos() >= it.str().len();
+}
+
+implement Iterable<CodePointIterator, Int> for CodePointIterator;
+
+// Iterator construction and usage
+let str = "Hello!";
+let it = CodePointIterator(str.demut(), 0);
+
+for char in *it {
+    print(char.deref().code_point_to_str());
+}
+
+let bytes = str.demut().utf8_array();
+
+if bytes.len() != 6 {
+    panic("Invalid bytes!");
+}
+
+if bytes.demut().utf8_to_str() != "Hello!" {
+    panic("Invalid bytes!");
+}

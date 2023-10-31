@@ -1,0 +1,52 @@
+import * from array_extensions;
+
+let zeros = arr_with_capacity<Int>(10);
+zeros.fill(0);
+
+if zeros.len() != 10 {
+    panic("Invalid length");
+}
+
+for i in zeros {
+    if i != 0 {
+        panic("Invalid value");
+    }
+}
+
+zeros.transform_inplace((i: Int) 1);
+
+for i in zeros {
+    if i != 1 {
+        panic("Invalid value");
+    }
+}
+
+let strings = zeros.transform((i: Int) i.deref().to_string());
+
+for i in strings {
+    if i != "1" {
+        panic("Invalid value");
+    }
+}
+
+let data = arr_with_capacity<Int>(3);
+
+data.fill_with((idx: Int) move(idx))
+    .reverse()
+    .transform_inplace((i: Int) i + 1)
+    .transform_inplace((i: Int) i * i);
+
+if data[0] != 9 || data[1] != 4 || data[2] != 1 {
+    panic("Invalid value");
+}
+
+print(move(data));
+
+let big_sum = arr_with_capacity<Int>(1001)
+    .mut()
+    .fill_with((idx: Int) move(idx))
+    .reduce(0, (a: Int, b: Int) a + b);
+
+if big_sum != 500500 {
+    panic("Invalid value");
+}

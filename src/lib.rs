@@ -225,4 +225,9 @@ mod integration {
     fn set_syntax_test() {
         module_test("test/modules/set_syntax_test");
     }
+
+    #[test]
+    fn array_algorithms() {
+        module_test("test/modules/array_algorithms");
+    }
 }

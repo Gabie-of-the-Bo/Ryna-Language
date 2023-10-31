@@ -89,9 +89,9 @@ macro_rules! define_binary_function_overloads {
 }
 
 // Constant identifiers
-pub const ITERATOR_FUNC_ID: usize = 9;
-pub const NEXT_FUNC_ID: usize = 10;
-pub const IS_CONSUMED_FUNC_ID: usize = 11;
+pub const ITERATOR_FUNC_ID: usize = 10;
+pub const NEXT_FUNC_ID: usize = 11;
+pub const IS_CONSUMED_FUNC_ID: usize = 12;
 
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
@@ -188,13 +188,31 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let size = v[1].get::<Integer>();
 
-            if size.limbs.len() == 1 && size.limbs[0] < usize::MAX as u64 && array.elements.try_reserve(size.limbs[0] as usize).is_ok() {
+            if size.limbs.len() == 1 && size.limbs[0] < usize::MAX as u64 && array.elements.try_reserve_exact(size.limbs[0] as usize).is_ok() {
                 Ok(Object::empty())
     
             } else {
                 Err(format!("Unable to reserve {} elements", size))
             }
         }
+    ).unwrap();
+
+    let idx = ctx.define_function("capacity".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_ref()], 
+        INT, 
+        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<NessaArray>().elements.capacity() as u64)))
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut()], 
+        INT, 
+        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<NessaArray>().elements.capacity() as u64)))
     ).unwrap();
 
     let idx = ctx.define_function("iterator".into()).unwrap();
@@ -641,7 +659,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let file = v[0].deref::<NessaFile>();
         let content = &*v[1].deref::<NessaArray>();
         let mut bytes = vec!();
-        bytes.reserve(content.elements.len());
+        bytes.reserve_exact(content.elements.len());
 
         for n in &content.elements {
             let byte = &*n.get::<Integer>();
@@ -758,7 +776,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref()], STR, |_, _, v, _| {
         let arr = &*v[0].deref::<NessaArray>();
         let mut bytes = vec!();
-        bytes.reserve(arr.elements.len());
+        bytes.reserve_exact(arr.elements.len());
 
         for i in &arr.elements {
             let n = &*i.get::<Integer>();

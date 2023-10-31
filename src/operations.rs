@@ -245,7 +245,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 0, STR, STR, String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
 
-    ctx.define_binary_operator("-".into(), false, 700).unwrap();
+    ctx.define_binary_operator("-".into(), true, 700).unwrap();
 
     define_binary_native_op_combinations!(ctx, 1, INT, INT, Integer, arg_1, arg_2, arg_1 - arg_2);
     define_binary_native_op_combinations!(ctx, 1, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 - arg_2);

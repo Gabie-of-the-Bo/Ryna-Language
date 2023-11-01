@@ -806,8 +806,39 @@ impl NessaContext {
             Type::Or(v) |
             Type::And(v) => v.iter().try_for_each(|i| self.check_type_well_formed(i, l)),
 
-            Type::TemplateParam(_, c) |
-            Type::TemplateParamStr(_, c) => c.iter().flat_map(|i| &i.args).try_for_each(|i| self.check_type_well_formed(i, l)),
+            Type::TemplateParam(_, cs) |
+            Type::TemplateParamStr(_, cs) => {
+                for c in cs {
+                    let interface = &self.interfaces[c.id];
+                    let interface_args = interface.params.len();
+
+                    if c.args.len() != interface_args {
+                        return Err(
+                            NessaError::compiler_error(
+                                format!(
+                                    "Interface {}{} expected {} arguments (got {})", 
+                                    interface.name.cyan(), 
+                                    if interface_args == 0 { 
+                                        "".into() 
+                                    } else { 
+                                        format!("<{}>", interface.params.iter().map(|i| i.green().to_string()).collect::<Vec<_>>().join(", ")) 
+                                    },
+                                    interface_args, 
+                                    c.args.len()
+                                ), 
+                                l, 
+                                vec!()
+                            )
+                        );
+                    }
+
+                    for arg in &c.args {
+                        self.check_type_well_formed(arg, l)?;
+                    }
+                }
+
+                Ok(())
+            },
 
             Type::Template(id, args) => {
                 let t = &self.type_templates[*id];

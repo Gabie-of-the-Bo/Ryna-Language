@@ -1,3 +1,7 @@
+/*
+    MAP ITERATOR
+*/
+
 class MapIterator<It, Elem, Trf> {
     iter: 'It [Iterable<'It, 'Elem>];
     f: 'Elem => 'Trf;
@@ -21,3 +25,62 @@ fn<Cont, It, Elem, Trf> map(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => 'Trf) 
 }
 
 implement<It, Elem, Trf> Iterable<MapIterator<'It, 'Elem, 'Trf>, 'Trf> for MapIterator<'It, 'Elem, 'Trf>;
+
+/*
+    FILTER ITERATOR
+*/
+
+class FilterIterator<It, Elem> {
+    iter: 'It [Iterable<'It, 'Elem>];
+    f: 'Elem => Bool;
+    curr: 'Elem;
+    consumed: Bool;
+}
+
+fn<It, Elem> advance_till_true(it: &&FilterIterator<'It, 'Elem>) {
+    let fnc = it.f();
+    let iter_i = it.iter();
+
+    while !iter_i.is_consumed() {
+        it.curr() := iter_i.next();
+
+        if fnc(*it.curr()) {
+            return;
+        }
+    }
+    
+    it.consumed() := true;
+}
+
+fn<It, Elem> iterator(it: FilterIterator<'It, 'Elem>) -> FilterIterator<'It, 'Elem> {
+    return *it;
+}
+
+fn<It, Elem> next(it: &&FilterIterator<'It, 'Elem>) -> 'Elem {    
+    let res = *it.curr();
+
+    if it.iter().is_consumed() {
+        it.consumed() := true;
+    }
+
+    it.advance_till_true();
+
+    return *res;
+}
+
+fn<It, Elem> is_consumed(it: &&FilterIterator<'It, 'Elem>) -> Bool {
+    return it.iter().is_consumed() && it.consumed();
+}
+
+fn<Cont, It, Elem> filter(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => Bool) -> FilterIterator<'It, 'Elem> {
+    let iter_i = iterator(move(it));
+    let res = FilterIterator(move(iter_i), *f, iter_i.next(), false);
+
+    if !f(*res.curr()) {
+        res.advance_till_true();
+    }
+
+    return *res;
+}
+
+implement<It, Elem> Iterable<FilterIterator<'It, 'Elem>, 'Elem> for FilterIterator<'It, 'Elem>;

@@ -296,7 +296,7 @@ impl NessaContext {
                                            .map(|i| i.sub_templates(&t_sub_call))
                                            .collect();
 
-                let (_, r, _, subs) = self.get_first_function_overload(*id, arg_types, None, false)?;
+                let (_, r, _, subs) = self.get_first_function_overload(*id, arg_types, None, true)?;
                 let t_sub_ov = subs.iter().cloned().enumerate().collect();
 
                 return Some(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));

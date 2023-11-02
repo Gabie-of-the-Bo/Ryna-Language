@@ -1,0 +1,13 @@
+---
+module_name: iterators_test
+version: 0.1.0
+hash: a924b0318a3e3bccd6047fe15dc5a176
+module_paths:
+  - test/lib
+modules:
+  range:
+    path: "test\\lib\\range"
+    version: 0.1.0
+  iterators:
+    path: "test\\lib\\iterators"
+    version: 0.1.0

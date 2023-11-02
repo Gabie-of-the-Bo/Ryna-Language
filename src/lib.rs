@@ -233,4 +233,9 @@ mod integration {
     fn array_algorithms() {
         module_test("test/modules/array_algorithms");
     }
+
+    #[test]
+    fn iterators_test() {
+        module_test("test/modules/iterators_test");
+    }
 }

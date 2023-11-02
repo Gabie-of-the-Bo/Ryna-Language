@@ -1,0 +1,23 @@
+class MapIterator<It, Elem, Trf> {
+    iter: 'It [Iterable<'It, 'Elem>];
+    f: 'Elem => 'Trf;
+}
+
+fn<It, Elem, Trf> iterator(it: MapIterator<'It, 'Elem, 'Trf>) -> MapIterator<'It, 'Elem, 'Trf> {
+    return *it;
+}
+
+fn<It, Elem, Trf> next(it: &&MapIterator<'It, 'Elem, 'Trf>) -> 'Trf {
+    let fnc = it.f();
+    return fnc(it.iter().next());
+}
+
+fn<It, Elem, Trf> is_consumed(it: &&MapIterator<'It, 'Elem, 'Trf>) -> Bool {
+    return it.iter().is_consumed();
+}
+
+fn<Cont, It, Elem, Trf> map(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => 'Trf) -> MapIterator<'It, 'Elem, 'Trf> {
+    return MapIterator(iterator(move(it)), move(f));
+}
+
+implement<It, Elem, Trf> Iterable<MapIterator<'It, 'Elem, 'Trf>, 'Trf> for MapIterator<'It, 'Elem, 'Trf>;

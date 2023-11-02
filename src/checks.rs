@@ -379,7 +379,7 @@ impl NessaContext {
                             
                             Err(NessaError::compiler_error(
                                 format!(
-                                    "Function call {}{}{}{} is ambiguous",
+                                    "N-ary operation {}{}{}{} is ambiguous",
                                     t.get_name(self), 
                                     open_rep,
                                     arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
@@ -1579,13 +1579,20 @@ impl NessaContext {
                                             }
                                         },
                                         
-                                        Some(_) => {
+                                        Some(ov) => {
+                                            // Do not check templated types. TODO: use type instantiations
+                                            if t.has_templates() || ts.iter().any(|i| i.has_templates()) {
+                                                return Ok(());
+                                            }
+                                            
+                                            let possibilities = ov.iter().map(|(a, r)| format!("{}{} -> {}", self.functions[fn_id].name, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
+
                                             return Err(NessaError::compiler_error(
                                                 format!(
                                                     "Function call {}({}) is ambiguous", 
                                                     f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
                                                 ), 
-                                                l, vec!()
+                                                l, possibilities
                                             ));
                                         },
                                     }

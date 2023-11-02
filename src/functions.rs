@@ -259,6 +259,22 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0.to_mut())], 
+        ARR_IT_OF!(T_0.to_mut()), 
+        |_, _, mut v, _| Ok(v.pop().unwrap())
+    ).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0.to_ref())], 
+        ARR_IT_OF!(T_0.to_ref()), 
+        |_, _, mut v, _| Ok(v.pop().unwrap())
+    ).unwrap();
+
     let idx = ctx.define_function("next".into()).unwrap();
 
     ctx.define_native_function_overload(

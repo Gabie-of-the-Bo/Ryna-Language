@@ -422,8 +422,15 @@ impl Type {
 
             (Type::TemplateParam(id, cs), b) |
             (b, Type::TemplateParam(id, cs)) => {
-                if let Some(t) = t_assignments.get(id) {
-                    return b == t;
+                if let Some(t) = t_assignments.get(id).cloned() {    
+                    // More specific type
+                    if b.template_bindable_to(&t, t_assignments, t_deps, ctx) {
+                        t_assignments.insert(*id, b.clone());
+    
+                        return true;
+                    } 
+                    
+                    false
                 
                 } else {
                     for c in cs {
@@ -570,21 +577,38 @@ impl Type {
     }
 
     pub fn sub_templates(&self, args: &HashMap<usize, Type>) -> Type {
+        self.sub_templates_rec(args, 100)
+    }
+
+    pub fn sub_templates_rec(&self, args: &HashMap<usize, Type>, rec: i32) -> Type {
         return match self {
-            Type::Ref(t) => Type::Ref(Box::new(t.sub_templates(args))),
-            Type::MutRef(t) => Type::MutRef(Box::new(t.sub_templates(args))),
-            Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_templates(args)).collect()),
-            Type::And(t) => Type::And(t.iter().map(|i| i.sub_templates(args)).collect()),
-            Type::Function(f, t) => Type::Function(Box::new(f.sub_templates(args)), Box::new(t.sub_templates(args))),
+            Type::Ref(t) => Type::Ref(Box::new(t.sub_templates_rec(args, rec))),
+            Type::MutRef(t) => Type::MutRef(Box::new(t.sub_templates_rec(args, rec))),
+            Type::Or(t) => Type::Or(t.iter().map(|i| i.sub_templates_rec(args, rec)).collect()),
+            Type::And(t) => Type::And(t.iter().map(|i| i.sub_templates_rec(args, rec)).collect()),
+            Type::Function(f, t) => Type::Function(Box::new(f.sub_templates_rec(args, rec)), Box::new(t.sub_templates_rec(args, rec))),
             Type::TemplateParam(id, v) => {
-                args.get(id).cloned().unwrap_or_else(||
+                let res = args.get(id).cloned().unwrap_or_else(||
                     Type::TemplateParam(*id, v.iter().map(|i| {
-                        let mapped_args = i.args.iter().map(|j| j.sub_templates(args)).collect();
+                        let mapped_args = i.args.iter().map(|j| j.sub_templates_rec(args, rec)).collect();
                         InterfaceConstraint::new(i.id, mapped_args)
                     }).collect())
-                )
+                );
+
+                let mut templates = HashSet::new();
+                res.template_dependencies(&mut templates);
+                
+                if templates.contains(id) { // Edge case
+                    res
+
+                } else if rec > 0 {
+                    res.sub_templates_rec(args, rec - 1)
+                    
+                } else {
+                    panic!("Exceeded type recursion limit (100)"); // TODO: return a compiler error
+                }
             },
-            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates(args)).collect()),
+            Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates_rec(args, rec)).collect()),
             _ => self.clone()
         };
     }

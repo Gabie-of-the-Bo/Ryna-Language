@@ -160,11 +160,12 @@ impl NessaContext {
                 let mut int_type = i.interface_type.clone();
                 let mut int_args = Type::And(i.args.clone());
 
-                let max_tms = int_type.max_template().max(int_args.max_template());
+                let max_key = t_assignments.keys().copied().map(|i| i as i32).max().unwrap_or(-1);
+                let max_tms = int_type.max_template().max(int_args.max_template()).max(max_key); // TODO: should come from parent type
 
                 if max_tms >= 0 {
-                    int_type.offset_templates(max_tms as usize + 1);
-                    int_args.offset_templates(max_tms as usize + 1);    
+                    int_type.offset_templates(max_tms as usize + 20);
+                    int_args.offset_templates(max_tms as usize + 20);    
                 }
 
                 let mut t_assignments_cpy = t_assignments.clone();

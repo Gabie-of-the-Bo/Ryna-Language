@@ -63,3 +63,22 @@ let l = next(cpy3);
 if j != 25 || k != 49 || l != 81 {
     panic("Invalid iterator value!");
 }
+
+// Terminal operators
+
+if irange(0, 1000).sum() != 500500 {
+    panic("Invalid value");
+}
+
+if irange(1, 25).reduce((a: Int, b: Int) a * b, 1) != 15511210043330985984000000 {
+    panic("Invalid value");
+}
+
+let sqrs_end_1 = range(0, 100)
+    .map((i: Int) i * i)
+    .filter((i: Int) i % 10 == 1)
+    .count();
+
+if sqrs_end_1 != 20 {
+    panic("Invalid value");
+}

@@ -84,3 +84,45 @@ fn<Cont, It, Elem> filter(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => Bool) ->
 }
 
 implement<It, Elem> Iterable<FilterIterator<'It, 'Elem>, 'Elem> for FilterIterator<'It, 'Elem>;
+
+// Terminal operators
+
+fn<It> sum(it: 'It [Iterable<'It, Int>]) -> Int {
+    let res = 0;
+
+    for i in move(it) {
+        res := res + i;
+    }
+
+    return move(res);
+}
+
+fn<It> sum(it: 'It [Iterable<'It, Float>]) -> Float {
+    let res = 0;
+
+    for i in *it {
+        res := res + i;
+    }
+
+    return *res;
+}
+
+fn<It, Elem> reduce(it: 'It [Iterable<'It, 'Elem>], op: ('Elem, 'Elem) => 'Elem, start: 'Elem) -> 'Elem {
+    let res = move(start);
+
+    for i in *it {
+        res := op(*res, *i);
+    }
+
+    return *res;
+}
+
+fn<It> count(it: 'It [Iterable<'It, Int>]) -> Int {
+    let res = 0;
+
+    for i in move(it) {
+        res.inc();
+    }
+
+    return move(res);
+}

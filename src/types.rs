@@ -420,6 +420,10 @@ impl Type {
                 return a.template_bindable_to(&sub_alias, t_assignments, t_deps, ctx);
             },
 
+            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
+            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),
+            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps, ctx),
+
             (Type::TemplateParam(id, cs), b) |
             (b, Type::TemplateParam(id, cs)) => {
                 if let Some(t) = t_assignments.get(id).cloned() {    
@@ -462,10 +466,6 @@ impl Type {
 
                 return false;
             },
-
-            (Type::And(va), Type::And(vb)) => va.len() == vb.len() && va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),
-            (Type::And(va), b) => va.len() == 1 && va[0].template_bindable_to(b, t_assignments, t_deps, ctx),
-            (a, Type::And(vb)) => vb.len() == 1 && a.template_bindable_to(&vb[0], t_assignments, t_deps, ctx),
                         
             (Type::Template(id_a, va), Type::Template(id_b, vb)) => id_a == id_b && va.len() == vb.len() && 
                                                                     va.iter().zip(vb).all(|(i, j)| i.template_bindable_to(j, t_assignments, t_deps, ctx)),

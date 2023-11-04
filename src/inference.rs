@@ -230,10 +230,20 @@ impl NessaContext {
         return match expr {
             NessaExpr::Literal(_, obj) => Some(obj.get_type()),
 
-            NessaExpr::CompiledLambda(_, _, a, r, _) => Some(Type::Function(
-                Box::new(Type::And(a.iter().map(|(_, t)| t).cloned().collect())),
-                Box::new(r.clone())
-            )),
+            NessaExpr::CompiledLambda(_, _, a, r, _) => Some(
+                if a.len() == 1 {
+                    Type::Function(
+                        Box::new(a[0].1.clone()),
+                        Box::new(r.clone())
+                    )
+
+                } else {
+                    Type::Function(
+                        Box::new(Type::And(a.iter().map(|(_, t)| t).cloned().collect())),
+                        Box::new(r.clone())
+                    )
+                }
+            ),
             
             NessaExpr::Tuple(_, e) => {
                 let mut args = vec!();

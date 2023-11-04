@@ -2195,7 +2195,12 @@ impl NessaContext{
             NessaExpr::CompiledLambda(_, i, a, r, _) => {
                 let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
                     *lambda_positions.get(i).unwrap(),
-                    Type::And(a.iter().map(|(_, t)| t).cloned().collect()),
+                    if a.len() == 1 {
+                        a[0].1.clone()
+
+                    } else {
+                        Type::And(a.iter().map(|(_, t)| t).cloned().collect())
+                    },
                     r.clone()
                 )));
                 

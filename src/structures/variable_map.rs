@@ -6,6 +6,12 @@ pub struct VariableMap {
     vars: Vec<FxHashMap<String, (usize, Type)>>
 }
 
+impl Default for VariableMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VariableMap {
     pub fn new() -> Self {
         VariableMap { vars: vec!(FxHashMap::default()) }
@@ -47,7 +53,7 @@ impl VariableMap {
         None
     }
 
-    pub fn for_each_last_ctx<T: FnMut(usize) -> ()>(&self, f: T) {
+    pub fn for_each_last_ctx<T: FnMut(usize)>(&self, f: T) {
         self.vars.last().unwrap().values().map(|(i, _)| *i).for_each(f);
     }
 

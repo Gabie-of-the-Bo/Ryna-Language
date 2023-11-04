@@ -187,7 +187,7 @@ impl NessaContext {
         ╘══════════════════════╛
     */
 
-    fn infer_lambda_return_type(&mut self, lines: &mut Vec<NessaExpr>) -> Option<Type> {
+    fn infer_lambda_return_type(&mut self, lines: &mut Vec<NessaExpr>) -> Result<Option<Type>, NessaError> {
         let merge_types = |a: Option<Type>, b: Option<Type>, ctx: &mut NessaContext| -> Option<Type> {
             if b.is_none() {
                 return a;
@@ -215,27 +215,27 @@ impl NessaContext {
         for expr in lines {
             match expr {
                 NessaExpr::While(_, _, b) |
-                NessaExpr::CompiledFor(_, _, _, _, _, b) => res = merge_types(res, self.infer_lambda_return_type(b), self),
+                NessaExpr::CompiledFor(_, _, _, _, _, b) => res = merge_types(res, self.infer_lambda_return_type(b)?, self),
 
                 NessaExpr::If(_, _, ib, ei, eb) => {
-                    res = merge_types(res, self.infer_lambda_return_type(ib), self);
+                    res = merge_types(res, self.infer_lambda_return_type(ib)?, self);
 
                     for (_, eib) in ei {
-                        res = merge_types(res, self.infer_lambda_return_type(eib), self);
+                        res = merge_types(res, self.infer_lambda_return_type(eib)?, self);
                     }
 
                     if let Some(eb_inner) = eb {
-                        res = merge_types(res, self.infer_lambda_return_type(eb_inner), self);
+                        res = merge_types(res, self.infer_lambda_return_type(eb_inner)?, self);
                     }
                 },
 
-                NessaExpr::Return(_, expr) => res = merge_types(res, self.infer_type(expr), self),
+                NessaExpr::Return(_, expr) => res = merge_types(res, Some(self.infer_type(expr)?), self),
 
                 _ => {}
             }
         }
 
-        res
+        Ok(res)
     }
 
     /*
@@ -296,9 +296,7 @@ impl NessaContext {
                 self.compile_expr_variables(e, registers, var_map)?;
 
                 if let Type::InferenceMarker = t {
-                    *t = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of definition right handside".into(), l, vec!()
-                    ))?;
+                    *t = self.infer_type(e)?;
                 }
 
                 var_map.define_var(n.clone(), idx, t.clone());
@@ -325,12 +323,10 @@ impl NessaContext {
                 self.compile_expr_variables(e, registers, var_map)?;
 
                 if t.is_empty() {
-                    let arg_type = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of unary operation argument".into(), l, vec!()
-                    ))?;
+                    let arg_type = self.infer_type(e)?;
 
                     if self.is_unary_op_ambiguous(*id, arg_type.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_unary_op(*id, arg_type.clone(), None, true) {
+                        if let Ok((_, _, _, it_args)) = self.get_first_unary_op(*id, arg_type.clone(), None, true, l) {
                             if !it_args.is_empty() {
                                 *t = it_args;
                             }
@@ -344,7 +340,7 @@ impl NessaContext {
                 self.compile_expr_variables(b, registers, var_map)?;
 
                 let is_func = matches!(b.as_ref(), NessaExpr::FunctionCall(..));
-
+                                
                 // Member function calls
                 if *id == DOT_BINOP_ID && is_func {
                     if let NessaExpr::FunctionCall(_, f_id, t, args) = b.as_ref() {
@@ -359,16 +355,11 @@ impl NessaContext {
                     }
 
                 } else if t.is_empty() {
-                    let arg_type_1 = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of binary operation argument".into(), l, vec!()
-                    ))?;
-
-                    let arg_type_2 = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of binary operation argument".into(), l, vec!()
-                    ))?;
+                    let arg_type_1 = self.infer_type(a)?;
+                    let arg_type_2 = self.infer_type(b)?;
 
                     if self.is_binary_op_ambiguous(*id, arg_type_1.clone(), arg_type_2.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type_2.clone(), None, true) {
+                        if let Ok((_, _, _, it_args)) = self.get_first_binary_op(*id, arg_type_1.clone(), arg_type_2.clone(), None, true, l) {
                             if !it_args.is_empty() {
                                 *t = it_args;
                             }
@@ -395,16 +386,11 @@ impl NessaContext {
                     }
                 
                 } else if t.is_empty() {
-                    let arg_type = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of n-ary operation argument".into(), l, vec!()
-                    ))?;
-
-                    let arg_types: Vec<_> = b.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of unary operation argument".into(), l, vec!()
-                    ))).collect::<Result<_, _>>()?;
+                    let arg_type = self.infer_type(a)?;
+                    let arg_types: Vec<_> = b.iter().map(|a| self.infer_type(a)).collect::<Result<_, _>>()?;
                     
                     if self.is_nary_op_ambiguous(*id, arg_type.clone(), arg_types.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_nary_op(*id, arg_type.clone(), arg_types, None, true) {
+                        if let Ok((_, _, _, it_args)) = self.get_first_nary_op(*id, arg_type.clone(), arg_types, None, true, l) {
                             if !it_args.is_empty() {
                                 *t = it_args;
                             }
@@ -425,12 +411,10 @@ impl NessaContext {
                 }
 
                 if t.is_empty() {
-                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                        "Unable to infer type of function argument".into(), l, vec!()
-                    ))).collect::<Result<_, _>>()?;
+                    let arg_types: Vec<_> = args.iter().map(|a| self.infer_type(a)).collect::<Result<_, _>>()?;
 
                     if self.is_function_overload_ambiguous(*id, arg_types.clone()).is_none() {
-                        if let Some((_, _, _, it_args)) = self.get_first_function_overload(*id, arg_types.clone(), None, true) {
+                        if let Ok((_, _, _, it_args)) = self.get_first_function_overload(*id, arg_types.clone(), None, true, l) {
                             if !it_args.is_empty() {
                                 *t = it_args;
                             }
@@ -464,9 +448,7 @@ impl NessaContext {
             NessaExpr::For(l, i, c, b) => {
                 self.compile_expr_variables(c, registers, var_map)?;
 
-                let container_type = self.infer_type(c).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of for loop container".into(), l, vec!()
-                ))?;
+                let container_type = self.infer_type(c)?;
 
                 if !self.implements_iterable(&container_type) {
                     return Err(NessaError::compiler_error(
@@ -475,36 +457,23 @@ impl NessaContext {
                     ));
                 }
 
-                let iterator_type_r = self.get_iterator_type(&container_type);
-
-                if let Err(msg) = &iterator_type_r {
-                    return Err(NessaError::compiler_error(msg.clone(), l, vec!()));
-                }
-
-                let (it_ov_id, iterator_type, it_args) = iterator_type_r.as_ref().unwrap();
-
-                let element_type_r = self.get_iterator_output_type(iterator_type);
-
-                if let Err(msg) = element_type_r {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
-                }
-
-                let (next_ov_id, element_type, next_args) = element_type_r.as_ref().unwrap();
+                let (it_ov_id, iterator_type, _, it_args) = self.get_iterator_type(&container_type, l)?;
+                let (next_ov_id, element_type, _, next_args) = self.get_iterator_output_type(&iterator_type, l)?;
 
                 let iterator_idx = *registers.last().unwrap();
                 let element_idx = *registers.get(registers.len() - 2).unwrap();
 
-                let c_mut = container_type.clone().to_mut();
+                let it_mut = iterator_type.clone().to_mut();
 
-                if let Some((consumed_ov_id, _, _, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(container_type.clone().to_mut()), None, true) {
-                    self.cache.usages.functions.add_new(ITERATOR_FUNC_ID, vec!(container_type.clone()), it_args.clone());
-                    self.cache.usages.functions.add_new(NEXT_FUNC_ID, vec!(c_mut.clone()), next_args.clone());
-                    self.cache.usages.functions.add_new(IS_CONSUMED_FUNC_ID, vec!(c_mut.clone()), consumed_args.clone());
+                let (consumed_ov_id, _, _, consumed_args) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), None, true, l)?;
 
-                    self.cache.overloads.functions.insert((ITERATOR_FUNC_ID, vec!(container_type.clone()), it_args.clone()), *it_ov_id);
-                    self.cache.overloads.functions.insert((NEXT_FUNC_ID, vec!(c_mut.clone()), next_args.clone()), *next_ov_id);            
-                    self.cache.overloads.functions.insert((IS_CONSUMED_FUNC_ID, vec!(c_mut.clone()), consumed_args.clone()), consumed_ov_id);
-                }
+                self.cache.usages.functions.add_new(ITERATOR_FUNC_ID, vec!(container_type.clone()), it_args.clone());
+                self.cache.usages.functions.add_new(NEXT_FUNC_ID, vec!(it_mut.clone()), next_args.clone());
+                self.cache.usages.functions.add_new(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone());
+
+                self.cache.overloads.functions.insert((ITERATOR_FUNC_ID, vec!(container_type.clone()), it_args.clone()), it_ov_id);
+                self.cache.overloads.functions.insert((NEXT_FUNC_ID, vec!(it_mut.clone()), next_args.clone()), next_ov_id);            
+                self.cache.overloads.functions.insert((IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone()), consumed_ov_id);
 
                 self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!(("__iterator__".into(), iterator_type.clone()), (i.clone(), element_type.clone())))?;
 
@@ -520,7 +489,7 @@ impl NessaContext {
 
                 // Infer further
                 if *r == Type::InferenceMarker {
-                    *r = self.infer_lambda_return_type(b).unwrap();
+                    *r = self.infer_lambda_return_type(b)?.unwrap_or(Type::Empty);
                 }
 
                 *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, a.clone(), r.clone(), b.clone());
@@ -2009,12 +1978,10 @@ impl NessaContext{
                 Ok(NessaContext::compiled_literal_size(obj))
             },
             
-            UnaryOperation(l, id, t, arg) => {
+            UnaryOperation(_, id, t, arg) => {
                 *root_counter += root as usize; // Add drop instruction
 
-                let a_t = self.infer_type(arg).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of binary operation argument".into(), l, vec!()
-                ))?;
+                let a_t = self.infer_type(arg)?;
 
                 let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(a_t.clone()), t.clone())).unwrap();
                 let offset = self.cache.opcodes.unary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
@@ -2022,16 +1989,11 @@ impl NessaContext{
                 Ok(self.compiled_form_size(arg, false, root_counter)? + 1 + offset)
             }
 
-            BinaryOperation(l, id, t, a, b) => {
+            BinaryOperation(_, id, t, a, b) => {
                 *root_counter += root as usize; // Add drop instruction
 
-                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of binary operation argument".into(), l, vec!()
-                ))?;
-
-                let b_t = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of binary operation argument".into(), l, vec!()
-                ))?;
+                let a_t = self.infer_type(a)?;
+                let b_t = self.infer_type(b)?;
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
                 let mut offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
@@ -2075,12 +2037,10 @@ impl NessaContext{
                 Ok(1 + self.compiled_form_body_size(b, false)?)
             },
 
-            FunctionCall(l, id, t, a) => {
+            FunctionCall(_, id, t, a) => {
                 *root_counter += root as usize; // Add drop instruction
 
-                let args_types = a.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of function argument".into(), l, vec!()
-                ))).collect::<Result<Vec<_>, _>>()?;
+                let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
                 let offset = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
@@ -2244,12 +2204,10 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::UnaryOperation(l, id, t, e) => {
+            NessaExpr::UnaryOperation(_, id, t, e) => {
                 let mut res = self.compiled_form_expr(e, lambda_positions, false)?;
 
-                let i_t = self.infer_type(e).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of unary operation argument".into(), l, vec!()
-                ))?;
+                let i_t = self.infer_type(e)?;
 
                 let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())).unwrap();
 
@@ -2282,17 +2240,12 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::BinaryOperation(l, id, t, a, b) => {
+            NessaExpr::BinaryOperation(_, id, t, a, b) => {
                 let mut res_a = self.compiled_form_expr(b, lambda_positions, false)?;
                 let mut res_b = self.compiled_form_expr(a, lambda_positions, false)?;
                 
-                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of binary operation argument".into(), l, vec!()
-                ))?;
-
-                let b_t = self.infer_type(b).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of binary operation argument".into(), l, vec!()
-                ))?;
+                let a_t = self.infer_type(a)?;
+                let b_t = self.infer_type(b)?;
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
 
@@ -2369,7 +2322,7 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::NaryOperation(l, id, t, a, b) => {
+            NessaExpr::NaryOperation(_, id, t, a, b) => {
                 let mut res = vec!();
 
                 for i in b.iter().rev() {
@@ -2378,13 +2331,8 @@ impl NessaContext{
                 
                 res.extend(self.compiled_form_expr(a, lambda_positions, false)?);
 
-                let a_t = self.infer_type(a).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of n-ary operation argument".into(), l, vec!()
-                ))?;
-
-                let b_t = b.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of n-ary operation argument".into(), l, vec!()
-                ))).collect::<Result<Vec<_>, _>>()?;
+                let a_t = self.infer_type(a)?;
+                let b_t = b.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
 
                 let mut arg_types = vec!(a_t.clone());
                 arg_types.extend(b_t.iter().cloned());
@@ -2464,86 +2412,73 @@ impl NessaContext{
             },
 
             NessaExpr::CompiledFor(l, it_var_id, elem_var_id, _, c, b) => {
-                if let Some(t) = self.infer_type(c) {
-                    let mut res = self.compiled_form_expr(c, lambda_positions, false)?;
+                let t = self.infer_type(c)?;
 
-                    // Get "iterator", "next" and "is_consumed" function overloads and check them
-                    if let Some((it_ov_id, it_type, it_native, it_args)) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone()), None, true) {
-                        let it_mut = Type::MutRef(Box::new(it_type.clone()));
+                let mut res = self.compiled_form_expr(c, lambda_positions, false)?;
 
-                        if let Some((next_ov_id, _, next_native, next_args)) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true) {
-                            if let Some((consumed_ov_id, consumed_res, consumed_native, consumed_args)) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), None, true) {
-                                if let Type::Basic(BOOL_ID) = consumed_res {
-                                    let for_body = self.compiled_form_body(b, lambda_positions)?;
+                // Get "iterator", "next" and "is_consumed" function overloads and check them
+                let (it_ov_id, it_type, it_native, it_args) = self.get_first_function_overload(ITERATOR_FUNC_ID, vec!(t.clone()), None, true, l)?;
 
-                                    // Convert the iterable into an iterator
-                                    if it_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)));
-    
-                                    } else {
-                                        let pos = self.cache.locations.functions.get_checked(&(ITERATOR_FUNC_ID, vec!(t.clone()), it_args.clone())).unwrap();
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
-                                    }
+                let it_mut = Type::MutRef(Box::new(it_type.clone()));
 
-                                    // Store the iterator
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*it_var_id)));
+                let (next_ov_id, _, next_native, next_args) = self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true, l)?;
+                let (consumed_ov_id, consumed_res, consumed_native, consumed_args) = self.get_first_function_overload(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), None, true, l)?;
 
-                                    // Check end of iterator
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+                if let Type::Basic(BOOL_ID) = consumed_res {
+                    let for_body = self.compiled_form_body(b, lambda_positions)?;
 
-                                    if consumed_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)));
-    
-                                    } else {
-                                        let pos = self.cache.locations.functions.get_checked(&(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone())).unwrap();
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
-                                    }                                    
-
-                                    // Jump to end of loop
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5, false)));
-
-                                    // Get next value
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
-
-                                    if next_native {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)));
-    
-                                    } else {
-                                        let pos = self.cache.locations.functions.get_checked(&(NEXT_FUNC_ID, vec!(it_mut.clone()), next_args.clone())).unwrap();
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
-                                    }
-
-                                    // Store next value
-                                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
-
-                                    // Add for body
-                                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body.len() as i32 + 6));
-
-                                    res.extend(for_body);
-
-                                    // Jump to the beginning of the loop
-                                    res.push(NessaInstruction::from(beginning_jmp));
-    
-                                    Ok(res)
-
-                                } else {
-                                    Err(NessaError::compiler_error(format!("Funtion overload is_consumed({}) returns {} (expected Bool)", it_mut.get_name(self), consumed_res.get_name(self)), l, vec!()))
-                                }
-
-                            } else {
-                                Err(NessaError::compiler_error(format!("Funtion overload for is_consumed({}) is not defined", it_mut.get_name(self)), l, vec!()))
-                            }
-
-                        } else {
-                            Err(NessaError::compiler_error(format!("Funtion overload for next({}) is not defined", it_mut.get_name(self)), l, vec!()))
-                        }
+                    // Convert the iterable into an iterator
+                    if it_native {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)));
 
                     } else {
-                        Err(NessaError::compiler_error(format!("Funtion overload for iterator({}) is not defined", t.get_name(self)), l, vec!()))
+                        let pos = self.cache.locations.functions.get_checked(&(ITERATOR_FUNC_ID, vec!(t.clone()), it_args.clone())).unwrap();
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
                     }
-                    
+
+                    // Store the iterator
+                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*it_var_id)));
+
+                    // Check end of iterator
+                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+
+                    if consumed_native {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)));
+
+                    } else {
+                        let pos = self.cache.locations.functions.get_checked(&(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone())).unwrap();
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                    }                                    
+
+                    // Jump to end of loop
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5, false)));
+
+                    // Get next value
+                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+
+                    if next_native {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)));
+
+                    } else {
+                        let pos = self.cache.locations.functions.get_checked(&(NEXT_FUNC_ID, vec!(it_mut.clone()), next_args.clone())).unwrap();
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                    }
+
+                    // Store next value
+                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
+
+                    // Add for body
+                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body.len() as i32 + 6));
+
+                    res.extend(for_body);
+
+                    // Jump to the beginning of the loop
+                    res.push(NessaInstruction::from(beginning_jmp));
+
+                    Ok(res)
+
                 } else {
-                    Err(NessaError::compiler_error("Container expression does not return a valid value".into(), l, vec!()))
+                    Err(NessaError::compiler_error(format!("Funtion overload is_consumed({}) returns {} (expected Bool)", it_mut.get_name(self), consumed_res.get_name(self)), l, vec!()))
                 }
             },
 
@@ -2554,16 +2489,14 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::FunctionCall(l, id, t, a) => {
+            NessaExpr::FunctionCall(_, id, t, a) => {
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
                     res.extend(self.compiled_form_expr(i, lambda_positions, false)?);
                 }
                 
-                let args_types = a.iter().map(|i| self.infer_type(i).ok_or_else(|| NessaError::compiler_error(
-                    "Unable to infer type of function argument".into(), l, vec!()
-                ))).collect::<Result<Vec<_>, _>>()?;
+                let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
 

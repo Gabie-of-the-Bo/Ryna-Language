@@ -87,21 +87,14 @@ impl NessaContext {
 
             (NessaExpr::Return(l, e), Some(expected_t)) => {
                 self.return_check(e, ret_type)?;
+                let t = self.infer_type(e)?;
 
-                if let Some(t) = self.infer_type(e) {
-                    if t.bindable_to(expected_t, self) {
-                        Ok(())
-
-                    } else {
-                        Err(NessaError::compiler_error(
-                            format!("Value of type {} is not bindable to expected return value of type {}", t.get_name(self), expected_t.get_name(self)), 
-                            l, vec!()
-                        ))
-                    }
+                if t.bindable_to(expected_t, self) {
+                    Ok(())
 
                 } else {
                     Err(NessaError::compiler_error(
-                        "Unable to infer return value of return statement".into(), 
+                        format!("Value of type {} is not bindable to expected return value of type {}", t.get_name(self), expected_t.get_name(self)), 
                         l, vec!()
                     ))
                 }
@@ -193,39 +186,29 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
             NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
                 self.ambiguity_check(e)?;
+                let it = self.infer_type(e)?;
 
-                let inferred_type = self.infer_type(e);
+                if it.bindable_to(t, self) {
+                    Ok(())
 
-                if let Some(it) = inferred_type {
-                    if it.bindable_to(t, self) {
-                        Ok(())
-
-                    } else{
-                        Err(NessaError::compiler_error(format!(
-                            "Unable to bind value of type {} to variable \"{}\", which is of type {}",
-                            it.get_name(self),
-                            n,
-                            t.get_name(self)
-                        ), l, vec!()))
-                    }
-
-                } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of right-hand of assignment".into(), l, vec!()))
+                } else{
+                    Err(NessaError::compiler_error(format!(
+                        "Unable to bind value of type {} to variable \"{}\", which is of type {}",
+                        it.get_name(self),
+                        n,
+                        t.get_name(self)
+                    ), l, vec!()))
                 }
             },
 
             NessaExpr::FunctionCall(l, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (i, arg) in args.iter().enumerate() {
+                for (_, arg) in args.iter().enumerate() {
                     self.ambiguity_check(arg)?;
 
-                    if let Some(t) = self.infer_type(arg) {
-                        arg_types.push(t);
-                    
-                    } else {
-                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
-                    }
+                    let t = self.infer_type(arg)?;
+                    arg_types.push(t);
                 }
 
                 if let Some(ov) = self.is_function_overload_ambiguous(*id, arg_types.clone()) {
@@ -248,50 +231,41 @@ impl NessaContext {
 
             NessaExpr::UnaryOperation(l, id, _, arg) => {
                 self.ambiguity_check(arg)?;
+                let t = self.infer_type(arg)?;
 
-                let inferred_type = self.infer_type(arg);
-
-                if let Some(t) = inferred_type {
-                    if let Some(ov) = self.is_unary_op_ambiguous(*id, t.clone()) {
-                        if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
-                            if *prefix {
-                                let possibilities = ov.iter().map(|(a, r)| format!("{}({}) -> {}", representation, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
-                                
-                                Err(NessaError::compiler_error(
-                                    format!(
-                                        "Unary operation {}({}) is ambiguous",
-                                        representation,
-                                        t.get_name(self)
-                                    ), l, 
-                                    possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
-                                ))
-
-                            } else {
-                                let possibilities = ov.iter().map(|(a, r)| format!("({}){} -> {}", a.get_name(self), representation, r.get_name(self))).collect::<Vec<_>>();
-            
-                                Err(NessaError::compiler_error(
-                                    format!(
-                                        "Unary operation ({}){} is ambiguous",
-                                        t.get_name(self),
-                                        representation
-                                    ), l, 
-                                    possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
-                                ))
-                            }
+                if let Some(ov) = self.is_unary_op_ambiguous(*id, t.clone()) {
+                    if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                        if *prefix {
+                            let possibilities = ov.iter().map(|(a, r)| format!("{}({}) -> {}", representation, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
                             
+                            Err(NessaError::compiler_error(
+                                format!(
+                                    "Unary operation {}({}) is ambiguous",
+                                    representation,
+                                    t.get_name(self)
+                                ), l, 
+                                possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                            ))
+
                         } else {
-                            unreachable!();
+                            let possibilities = ov.iter().map(|(a, r)| format!("({}){} -> {}", a.get_name(self), representation, r.get_name(self))).collect::<Vec<_>>();
+        
+                            Err(NessaError::compiler_error(
+                                format!(
+                                    "Unary operation ({}){} is ambiguous",
+                                    t.get_name(self),
+                                    representation
+                                ), l, 
+                                possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                            ))
                         }
-    
+                        
                     } else {
-                        Ok(())
+                        unreachable!();
                     }
 
-                } else if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), l, vec!()))
-
                 } else {
-                    unreachable!();
+                    Ok(())
                 }
             },
 
@@ -299,123 +273,86 @@ impl NessaContext {
                 self.ambiguity_check(arg1)?;
                 self.ambiguity_check(arg2)?;
 
-                let inferred_type_1 = self.infer_type(arg1);
-                let inferred_type_2 = self.infer_type(arg2);
-
-                if let Some(t1) = inferred_type_1 {
-                    if let Some(t2) = inferred_type_2 {
-                        if let Some(ov) = self.is_binary_op_ambiguous(*id, t1.clone(), t2.clone()) {
-                            if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                                let possibilities = ov.iter()
-                                    .map(|(a1, a2, r)| format!("({}){}({}) -> {}", a1.get_name(self), representation, a2.get_name(self), r.get_name(self)))
-                                    .collect::<Vec<_>>();                
-                                
-                                Err(NessaError::compiler_error(
-                                    format!(
-                                        "Binary operation ({}){}({}) is ambiguous",
-                                        t1.get_name(self),
-                                        representation, 
-                                        t2.get_name(self)
-                                    ), l, 
-                                    possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
-                                ))
-
-                            } else {
-                                unreachable!();
-                            }
-        
-                        } else {
-                            Ok(())
-                        }
+                let t1 = self.infer_type(arg1)?;
+                let t2 = self.infer_type(arg2)?;
+                
+                if let Some(ov) = self.is_binary_op_ambiguous(*id, t1.clone(), t2.clone()) {
+                    if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
+                        let possibilities = ov.iter()
+                            .map(|(a1, a2, r)| format!("({}){}({}) -> {}", a1.get_name(self), representation, a2.get_name(self), r.get_name(self)))
+                            .collect::<Vec<_>>();                
                         
-                    } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                        Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), l, vec!()))
+                        Err(NessaError::compiler_error(
+                            format!(
+                                "Binary operation ({}){}({}) is ambiguous",
+                                t1.get_name(self),
+                                representation, 
+                                t2.get_name(self)
+                            ), l, 
+                            possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                        ))
 
                     } else {
                         unreachable!();
                     }
-                    
-                } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), l, vec!()))
 
                 } else {
-                    unreachable!();
+                    Ok(())
                 }
             },
 
             NessaExpr::NaryOperation(l, id, _, first, args) => {
                 self.ambiguity_check(first)?;
+                let t = self.infer_type(first)?;
 
-                let first_type = self.infer_type(first);
+                let mut arg_types = Vec::with_capacity(args.len());
 
-                if let Some(t) = first_type {
-                    let mut arg_types = Vec::with_capacity(args.len());
+                for (_, arg) in args.iter().enumerate() {
+                    self.ambiguity_check(arg)?;
+                    arg_types.push(self.infer_type(arg)?);
+                }
 
-                    for (i, arg) in args.iter().enumerate() {
-                        self.ambiguity_check(arg)?;
-    
-                        if let Some(t) = self.infer_type(arg) {
-                            arg_types.push(t);
-                        
-                        } else {
-                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
-                        }
-                    }
-    
-                    if let Some(ov) = self.is_nary_op_ambiguous(*id, t.clone(), arg_types.clone()) {
-                        if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                            let possibilities = ov.iter()
-                                .map(|(f, a, r)| 
-                                    format!(
-                                        "{}{}{}{} -> {}", 
-                                        f.get_name(self), 
-                                        open_rep,
-                                        a.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                                        close_rep,
-                                        r.get_name(self)
-                                    )
-                                )
-                                .collect::<Vec<_>>();
-                            
-                            Err(NessaError::compiler_error(
+                if let Some(ov) = self.is_nary_op_ambiguous(*id, t.clone(), arg_types.clone()) {
+                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                        let possibilities = ov.iter()
+                            .map(|(f, a, r)| 
                                 format!(
-                                    "N-ary operation {}{}{}{} is ambiguous",
-                                    t.get_name(self), 
+                                    "{}{}{}{} -> {}", 
+                                    f.get_name(self), 
                                     open_rep,
-                                    arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                                    close_rep
-                                ), l, 
-                                possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
-                            ))
+                                    a.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                    close_rep,
+                                    r.get_name(self)
+                                )
+                            )
+                            .collect::<Vec<_>>();
+                        
+                        Err(NessaError::compiler_error(
+                            format!(
+                                "N-ary operation {}{}{}{} is ambiguous",
+                                t.get_name(self), 
+                                open_rep,
+                                arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                close_rep
+                            ), l, 
+                            possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                        ))
 
-                        } else {
-                            unreachable!()
-                        }
-    
                     } else {
-                        Ok(())
+                        unreachable!()
                     }
-
-                } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), l, vec!()))
 
                 } else {
-                    unreachable!()
+                    Ok(())
                 }
             },
 
             NessaExpr::If(l, ih, ib, ei, eb) => {
                 self.ambiguity_check(ih)?;
+                let t = self.infer_type(ih)?;
 
-                let if_header_type = self.infer_type(ih);
-
-                if let Some(t) = if_header_type {
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                    }
-
-                } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
+                if t != BOOL {
+                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in ib {
@@ -424,16 +361,10 @@ impl NessaContext {
 
                 for (ei_h, ei_b) in ei {
                     self.ambiguity_check(ei_h)?;
+                    let t = self.infer_type(ei_h)?;
 
-                    let elif_header_type = self.infer_type(ei_h);
-
-                    if let Some(t) = elif_header_type {
-                        if t != BOOL {
-                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                        }
-    
-                    } else {
-                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
+                    if t != BOOL {
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
                     }
 
                     for line in ei_b {
@@ -452,16 +383,10 @@ impl NessaContext {
 
             NessaExpr::While(l, cond, body) => {
                 self.ambiguity_check(cond)?;
+                let t = self.infer_type(cond)?;
 
-                let while_header_type = self.infer_type(cond);
-
-                if let Some(t) = while_header_type {
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                    }
-
-                } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), l, vec!()));                            
+                if t != BOOL {
+                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
                 }
 
                 for line in body {
@@ -471,15 +396,11 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::Return(l, e) => {
+            NessaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
+                self.infer_type(e)?;
 
-                if self.infer_type(e).is_some() {
-                    Ok(())
-
-                } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), l, vec!()))
-                }
+                Ok(())
             }
 
             NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
@@ -892,23 +813,18 @@ impl NessaContext {
                 self.check_type_well_formed(t, l)?;
                 self.type_check(e)?;
 
-                let inferred_type = self.infer_type(e);
+                let it = self.infer_type(e)?;
 
-                if let Some(it) = inferred_type {
-                    if it.bindable_to(t, self) {
-                        Ok(())
+                if it.bindable_to(t, self) {
+                    Ok(())
 
-                    } else{
-                        Err(NessaError::compiler_error(format!(
-                            "Unable to bind value of type {} to variable \"{}\", which is of type {}",
-                            it.get_name(self),
-                            n,
-                            t.get_name(self)
-                        ), l, vec!()))
-                    }
-
-                } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of right-hand of assignment".to_string(), l, vec!()))
+                } else{
+                    Err(NessaError::compiler_error(format!(
+                        "Unable to bind value of type {} to variable \"{}\", which is of type {}",
+                        it.get_name(self),
+                        n,
+                        t.get_name(self)
+                    ), l, vec!()))
                 }
             },
 
@@ -919,43 +835,29 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (i, arg) in args.iter().enumerate() {
+                for (_, arg) in args.iter().enumerate() {
                     self.type_check(arg)?;
-
-                    if let Some(t) = self.infer_type(arg) {
-                        arg_types.push(t);
-                    
-                    } else {
-                        return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
-                    }
+                    arg_types.push(self.infer_type(arg)?);
                 }
 
-                if let Some((ov_id, _, _, _)) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false) {
-                    //Invalid number of template arguments
-                    if self.functions[*id].overloads[ov_id].0 != templates.len() {
-                        Err(NessaError::compiler_error(format!(
-                            "Function overload for {}{}({}) expected {} type arguments (got {})",
-                            self.functions[*id].name.green(),
-                            if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
-                            arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                            self.functions[*id].overloads[ov_id].0, templates.len()
-                        ), l, vec!()))
-                    
-                    } else {
-                        // Update caches
-                        self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
-                        self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
+                let (ov_id, _, _, _) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false, l)?;
 
-                        Ok(())
-                    }
-
-                } else {
+                //Invalid number of template arguments
+                if self.functions[*id].overloads[ov_id].0 != templates.len() {
                     Err(NessaError::compiler_error(format!(
-                        "Unable to get function overload for {}{}({})",
+                        "Function overload for {}{}({}) expected {} type arguments (got {})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
-                        arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
+                        arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                        self.functions[*id].overloads[ov_id].0, templates.len()
                     ), l, vec!()))
+                
+                } else {
+                    // Update caches
+                    self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
+                    self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
+
+                    Ok(())
                 }
             },
 
@@ -965,67 +867,39 @@ impl NessaContext {
                 }
 
                 self.type_check(arg)?;
+                let t = self.infer_type(arg)?;
 
-                let inferred_type = self.infer_type(arg);
+                let (ov_id, _, _, _) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false, l)?;
 
-                if let Some(t) = inferred_type {
-                    if let Some((ov_id, _, _, _)) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false) {
-                        if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
-                            if operations[ov_id].0 != templates.len() {
-                                if *prefix {
-                                    Err(NessaError::compiler_error(format!(
-                                        "Unary operator overload for {}({}) expected {} type arguments (got {})",
-                                        representation,
-                                        t.get_name(self),
-                                        operations[ov_id].0, templates.len()
-                                    ), l, vec!()))
-    
-                                } else {
-                                    Err(NessaError::compiler_error(format!(
-                                        "Unary operator overload for ({}){} expected {} type arguments (got {})",
-                                        t.get_name(self),
-                                        representation,
-                                        operations[ov_id].0, templates.len()
-                                    ), l, vec!()))
-                                }
-    
-                            } else {
-                                // Update caches
-                                self.cache.usages.unary.add_new(*id, vec!(t.clone()), templates.clone());
-                                self.cache.overloads.unary.insert((*id, vec!(t.clone()), templates.clone()), ov_id);
-        
-                                Ok(())                            
-                            }
-                        
-                        } else {
-                            unreachable!()
-                        }
-
-                    } else if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*id] {
+                if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
+                    if operations[ov_id].0 != templates.len() {
                         if *prefix {
                             Err(NessaError::compiler_error(format!(
-                                "Unable to get unary operator overload for {}({})",
+                                "Unary operator overload for {}({}) expected {} type arguments (got {})",
                                 representation,
-                                t.get_name(self)
+                                t.get_name(self),
+                                operations[ov_id].0, templates.len()
                             ), l, vec!()))
 
                         } else {
                             Err(NessaError::compiler_error(format!(
-                                "Unable to get unary operator overload for ({}){}",
+                                "Unary operator overload for ({}){} expected {} type arguments (got {})",
                                 t.get_name(self),
-                                representation
+                                representation,
+                                operations[ov_id].0, templates.len()
                             ), l, vec!()))
                         }
 
                     } else {
-                        unreachable!()
+                        // Update caches
+                        self.cache.usages.unary.add_new(*id, vec!(t.clone()), templates.clone());
+                        self.cache.overloads.unary.insert((*id, vec!(t.clone()), templates.clone()), ov_id);
+
+                        Ok(())                            
                     }
-
-                } else if let Operator::Unary{representation, ..} = &self.unary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of argument of unary operator {}", representation), l, vec!()))
-
+                
                 } else {
-                    unreachable!();
+                    unreachable!()
                 }
             },
 
@@ -1037,58 +911,31 @@ impl NessaContext {
                 self.type_check(arg1)?;
                 self.type_check(arg2)?;
 
-                let inferred_type_1 = self.infer_type(arg1);
-                let inferred_type_2 = self.infer_type(arg2);
+                let t1 = self.infer_type(arg1)?;
+                let t2 = self.infer_type(arg2)?;
+                
+                let (ov_id, _, _, _) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false, l)?;
 
-                if let Some(t1) = inferred_type_1 {
-                    if let Some(t2) = inferred_type_2 {
-                        if let Some((ov_id, _, _, _)) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false) {
-                            if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
-                                if operations[ov_id].0 != templates.len() {
-                                    Err(NessaError::compiler_error(format!(
-                                        "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
-                                        t1.get_name(self),
-                                        representation,
-                                        t2.get_name(self),
-                                        operations[ov_id].0, templates.len()
-                                    ), l, vec!()))    
+                if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
+                    if operations[ov_id].0 != templates.len() {
+                        Err(NessaError::compiler_error(format!(
+                            "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
+                            t1.get_name(self),
+                            representation,
+                            t2.get_name(self),
+                            operations[ov_id].0, templates.len()
+                        ), l, vec!()))    
 
-                                } else {
-                                    // Update caches
-                                    self.cache.usages.binary.add_new(*id, vec!(t1.clone(), t2.clone()), templates.clone());
-                                    self.cache.overloads.binary.insert((*id, vec!(t1.clone(), t2.clone()), templates.clone()), ov_id);
-    
-                                    Ok(())
-                                }
-    
-                            } else {
-                                unreachable!()
-                            }
-    
-                        } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                                                    Err(NessaError::compiler_error(format!(
-                                                        "Unable to get binary operator overload for ({}){}({})",
-                                                        t1.get_name(self),
-                                                        representation,
-                                                        t2.get_name(self)
-                                                    ), l, vec!()))
-                        
-                                                } else {
-                                                    unreachable!()
-                                                }
-                        
-                    } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                                            Err(NessaError::compiler_error(format!("Unable to infer return value of right argument of binary operator {}", representation), l, vec!()))
-                    
-                                        } else {
-                                            unreachable!();
-                                        }
-                    
-                } else if let Operator::Binary{representation, ..} = &self.binary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of left argument of binary operator {}", representation), l, vec!()))
+                    } else {
+                        // Update caches
+                        self.cache.usages.binary.add_new(*id, vec!(t1.clone(), t2.clone()), templates.clone());
+                        self.cache.overloads.binary.insert((*id, vec!(t1.clone(), t2.clone()), templates.clone()), ov_id);
+
+                        Ok(())
+                    }
 
                 } else {
-                    unreachable!();
+                    unreachable!()
                 }
             },
 
@@ -1098,65 +945,38 @@ impl NessaContext {
                 }
                 
                 self.type_check(first)?;
+                let t = self.infer_type(first)?;
 
-                let first_type = self.infer_type(first);
+                let mut arg_types = Vec::with_capacity(args.len());
 
-                if let Some(t) = first_type {
-                    let mut arg_types = Vec::with_capacity(args.len());
+                for (_, arg) in args.iter().enumerate() {
+                    self.type_check(arg)?;
+                    arg_types.push(self.infer_type(arg)?);
+                }
 
-                    for (i, arg) in args.iter().enumerate() {
-                        self.type_check(arg)?;
-    
-                        if let Some(t) = self.infer_type(arg) {
-                            arg_types.push(t);
-                        
-                        } else {
-                            return Err(NessaError::compiler_error(format!("Unable to infer return value for argument with index {}", i), l, vec!()));
-                        }
-                    }
-    
-                    if let Some((ov_id, _, _, _)) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false) {
-                        if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
-                            if operations[ov_id].0 != templates.len() {
-                                Err(NessaError::compiler_error(format!(
-                                    "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
-                                    t.get_name(self),
-                                    open_rep,
-                                    arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                                    close_rep,
-                                    operations[ov_id].0, templates.len()
-                                ), l, vec!()))
+                let (ov_id, _, _, _) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false, l)?;
 
-                            } else {
-                                let mut all_args = vec!(t.clone());
-                                all_args.extend(arg_types);
-        
-                                // Update caches
-                                self.cache.usages.nary.add_new(*id, all_args.clone(), templates.clone());
-                                self.cache.overloads.nary.insert((*id, all_args, templates.clone()), ov_id);
-                                
-                                Ok(())    
-                            }
-
-                        } else {
-                            unreachable!()
-                        }
-    
-                    } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
+                if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
+                    if operations[ov_id].0 != templates.len() {
                         Err(NessaError::compiler_error(format!(
-                            "Unable to get n-ary operator overload for {}{}{}{}",
+                            "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
                             t.get_name(self),
                             open_rep,
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                            close_rep
+                            close_rep,
+                            operations[ov_id].0, templates.len()
                         ), l, vec!()))
 
                     } else {
-                        unreachable!()
-                    }
+                        let mut all_args = vec!(t.clone());
+                        all_args.extend(arg_types);
 
-                } else if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*id] {
-                    Err(NessaError::compiler_error(format!("Unable to infer return value of first argument of n-ary operator {}{}", open_rep, close_rep), l, vec!()))
+                        // Update caches
+                        self.cache.usages.nary.add_new(*id, all_args.clone(), templates.clone());
+                        self.cache.overloads.nary.insert((*id, all_args, templates.clone()), ov_id);
+                        
+                        Ok(())    
+                    }
 
                 } else {
                     unreachable!()
@@ -1166,15 +986,10 @@ impl NessaContext {
             NessaExpr::If(l, ih, ib, ei, eb) => {
                 self.type_check(ih)?;
 
-                let if_header_type = self.infer_type(ih);
+                let t = self.infer_type(ih)?;
 
-                if let Some(t) = if_header_type {
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                    }
-
-                } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
+                if t != BOOL {
+                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in ib {
@@ -1183,16 +998,10 @@ impl NessaContext {
 
                 for (ei_h, ei_b) in ei {
                     self.type_check(ei_h)?;
+                    let t = self.infer_type(ei_h)?;
 
-                    let elif_header_type = self.infer_type(ei_h);
-
-                    if let Some(t) = elif_header_type {
-                        if t != BOOL {
-                            return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                        }
-    
-                    } else {
-                        return Err(NessaError::compiler_error("Unable to infer return value of if condition".into(), l, vec!()));
+                    if t != BOOL {
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -1221,16 +1030,10 @@ impl NessaContext {
 
             NessaExpr::While(l, cond, body) => {
                 self.type_check(cond)?;
+                let t = self.infer_type(cond)?;
 
-                let while_header_type = self.infer_type(cond);
-
-                if let Some(t) = while_header_type {
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                    }
-
-                } else {
-                    return Err(NessaError::compiler_error("Unable to infer return value of while condition".into(), l, vec!()));
+                if t != BOOL {
+                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in body {
@@ -1240,15 +1043,11 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::Return(l, e) => {
+            NessaExpr::Return(_, e) => {
                 self.type_check(e)?;
-
-                if self.infer_type(e).is_some() {
-                    Ok(())
-
-                } else {
-                    Err(NessaError::compiler_error("Unable to infer return value of return statement".into(), l, vec!()))
-                }
+                self.infer_type(e)?;
+                
+                Ok(())
             }
 
             NessaExpr::CompiledLambda(l, _, args, _, b) => {
@@ -1554,7 +1353,7 @@ impl NessaContext {
 
                                     match self.is_function_overload_ambiguous(fn_id, args_sub.clone()) {
                                         None => {
-                                            if let Some((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), None, true) {
+                                            if let Ok((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), None, true, l) {
                                                 if !r.bindable_to(&ret_sub, self) {
                                                     return Err(NessaError::compiler_error(
                                                         format!(
@@ -1575,7 +1374,7 @@ impl NessaContext {
                                                     ), 
                                                     l, vec!()
                                                 ));
-      
+    
                                             }
                                         },
                                         

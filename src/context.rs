@@ -152,6 +152,12 @@ impl NessaContext {
         ╘══════════════════╛
     */
 
+    /*
+        Theoretically this is not correct, but no "sane" program would countain more than this many templates and the compiler would probably crash anyway.
+        It is assumed that if you offset templates by this constant then the template indexes are free.
+    */
+    const FREE_TEMPLATE_OFFSET: usize = 10_000_000;
+
     pub fn implements_interface(&self, t: &Type, constraint: &InterfaceConstraint, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>) -> bool {
         let cons_and = Type::And(constraint.args.clone());
 
@@ -161,11 +167,11 @@ impl NessaContext {
                 let mut int_args = Type::And(i.args.clone());
 
                 let max_key = t_assignments.keys().copied().map(|i| i as i32).max().unwrap_or(-1);
-                let max_tms = int_type.max_template().max(int_args.max_template()).max(max_key); // TODO: should come from parent type
+                let max_tms = int_type.max_template().max(int_args.max_template()).max(max_key);
 
                 if max_tms >= 0 {
-                    int_type.offset_templates(max_tms as usize + 20);
-                    int_args.offset_templates(max_tms as usize + 20);    
+                    int_type.offset_templates(max_tms as usize + Self::FREE_TEMPLATE_OFFSET);
+                    int_args.offset_templates(max_tms as usize + Self::FREE_TEMPLATE_OFFSET);    
                 }
 
                 let mut t_assignments_cpy = t_assignments.clone();

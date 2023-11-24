@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use colored::Colorize;
@@ -2562,7 +2563,7 @@ impl NessaContext{
                 let err = if self.get_type_template(&n).is_some() {
                     self.redefine_type(n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
-                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
+                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
                             }
     
@@ -2573,7 +2574,7 @@ impl NessaContext{
                 } else {
                     self.define_type(n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
-                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str())) {
+                            if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
                             }
     

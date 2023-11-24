@@ -228,6 +228,8 @@ pub const NEQ_BINOP_ID: usize = 11;
 pub const OR_BINOP_ID: usize = 12;
 pub const AND_BINOP_ID: usize = 13;
 
+pub const LT_BINOP_PREC: usize = 900;
+
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     
     /*

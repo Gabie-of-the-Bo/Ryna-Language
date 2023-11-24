@@ -32,6 +32,9 @@ pub mod graph;
 #[path = "structures/variable_map.rs"]
 pub mod variable_map;
 
+#[path = "structures/precedence_cache.rs"]
+pub mod precedence_cache;
+
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;

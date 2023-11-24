@@ -1,6 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
+use nom::AsChar;
 use nom::bytes::complete::{take_until, take_till};
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
@@ -711,6 +712,26 @@ impl NessaContext {
         )(input);
     }
 
+    fn binary_integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+        return map(
+            preceded(
+                tag("0b"),
+                take_while1(|c: char| c == '0' || c == '1')
+            ),
+            |n: Span<'a>| Integer::from_bin(n.to_string().as_str())
+        )(input);
+    }
+
+    fn hex_integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+        return map(
+            preceded(
+                tag("0x"),
+                take_while1(|c: char| c.is_hex_digit())
+            ),
+            |n: Span<'a>| Integer::from_hex(n.to_string().as_str())
+        )(input);
+    }
+
     fn float_parser<'a>(&self, input: Span<'a>) -> PResult<'a, f64> {
         map(
             tuple((
@@ -785,6 +806,8 @@ impl NessaContext {
                     |input| self.custom_literal_parser(input, cache),
                     map(|input| self.bool_parser(input), Object::new),
                     map(|input| self.float_parser(input), Object::new),
+                    map(|input| self.binary_integer_parser(input), Object::new),
+                    map(|input| self.hex_integer_parser(input), Object::new),
                     map(|input| self.integer_parser(input), Object::new),
                     map(string_parser, Object::new),
                 ))
@@ -2637,16 +2660,22 @@ mod tests {
         let mut ctx = standard_ctx();
 
         let number_str = "123";
+        let binary_str = "0b1001101";
+        let hex_str = "0x1A6F0";
         let bool_v_str = "true";
         let string_str = "\"test\"";
         let escaped_string_str = "\"test\\ntest2\\ttest3\\\"\\\\\"";
 
         let (_, number) = ctx.literal_parser(Span::new(number_str), &RefCell::default()).unwrap();
+        let (_, binary) = ctx.literal_parser(Span::new(binary_str), &RefCell::default()).unwrap();
+        let (_, hex) = ctx.literal_parser(Span::new(hex_str), &RefCell::default()).unwrap();
         let (_, bool_v) = ctx.literal_parser(Span::new(bool_v_str), &RefCell::default()).unwrap();
         let (_, string) = ctx.literal_parser(Span::new(string_str), &RefCell::default()).unwrap();
         let (_, escaped_string) = ctx.literal_parser(Span::new(escaped_string_str), &RefCell::default()).unwrap();
 
         assert_eq!(number, NessaExpr::Literal(Location::none(), Object::new(Integer::from(123))));
+        assert_eq!(binary, NessaExpr::Literal(Location::none(), Object::new(Integer::from(77))));
+        assert_eq!(hex, NessaExpr::Literal(Location::none(), Object::new(Integer::from(108272))));
         assert_eq!(bool_v, NessaExpr::Literal(Location::none(), Object::new(true)));
         assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));

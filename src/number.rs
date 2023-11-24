@@ -1154,6 +1154,33 @@ impl Integer {
         self
     }
 
+    pub fn from_bin(string: &str) -> Self {
+        Integer::from_radix(string, 2, BITS_PER_LIMB as usize)
+    }
+
+    pub fn from_hex(string: &str) -> Self {
+        Integer::from_radix(string, 16, BITS_PER_LIMB as usize / 4)
+    }
+
+    pub fn from_radix(mut string: &str, radix: u32, limb_length: usize) -> Self {
+        let mut limbs = vec!();
+
+        while string.len() > limb_length {
+            let idx = string.len() - limb_length;
+            let limb_str = &string[idx..];
+
+            limbs.push(u64::from_str_radix(limb_str, radix).unwrap());
+
+            string = &string[..idx];
+        }
+
+        limbs.push(u64::from_str_radix(string, radix).unwrap());
+
+        limbs.reverse();
+
+        Integer::new(false, limbs)
+    }
+
     pub fn bin(&self) -> String{
         return self.limbs.iter().rev()
                                 .map(|i| format!("{:064b}", i))

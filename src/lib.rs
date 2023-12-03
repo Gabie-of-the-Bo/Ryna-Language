@@ -183,6 +183,11 @@ mod integration {
     }
 
     #[test]
+    fn ambiguous_impl() {
+        integration_test("test/ambiguous_impl.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

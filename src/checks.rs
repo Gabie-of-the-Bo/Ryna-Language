@@ -1379,7 +1379,7 @@ impl NessaContext {
                                         },
                                         
                                         Some(ov) => {
-                                            // Do not check templated types. TODO: use type instantiations
+                                            // Do not check templated types. Check later on calls
                                             if t.has_templates() || ts.iter().any(|i| i.has_templates()) {
                                                 return Ok(());
                                             }

@@ -1,7 +1,7 @@
 [![Rust](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml/badge.svg)](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
 
 <p align="center">
-  <img src="doc/img/logo.png" width="60%">
+  <img src="docs/img/logo.png" width="60%">
 </p>
   
 # What is _Nessa_?

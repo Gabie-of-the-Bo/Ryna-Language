@@ -1,0 +1,56 @@
+p {
+    text-align: justify;
+}
+
+.md-typeset {
+    font-size: 11pt !important;
+}
+
+.mermaid {
+    /* Center the Mermaid chart */
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+}
+
+.md-typeset__table {
+    /* Center the Mermaid chart */
+    margin: 0 auto;
+    display: flex;
+    justify-content: center;
+
+    width: fit-content;
+}
+
+p code {
+    color: hsla(var(--md-hue), 18%, 86%, 0.82) !important;
+    background: hsla(var(--md-hue), 15%, 18%, 1) !important;
+}
+
+code.hljs {
+    color: hsla(var(--md-hue), 18%, 86%, 0.82) !important;
+    background: hsla(var(--md-hue), 15%, 18%, 1);
+}
+
+.hljs-ln-n {
+    padding-right: 0.66em;
+    font-family: 'consolas';
+}
+
+.hljs-ln-code {
+    padding-left: 0.66em !important;
+}
+
+.hljs-ln-numbers {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+
+    text-align: center;
+    color: #ccc;
+    border-right: 1px solid hsla(var(--md-hue), 18%, 86%, 0.82) !important;
+    vertical-align: top;
+}

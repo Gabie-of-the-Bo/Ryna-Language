@@ -1,0 +1,113 @@
+site_name: Nessa Language
+
+repo_url: https://github.com/Gabie-of-the-Bo/Nessa-Language/
+
+nav:
+  - Home: 'index.md'
+  - Tutorial:
+    - Getting Started: 
+      - Installation: 'pages/tutorial/start/install.md'
+      - Creating a Project: 'pages/tutorial/start/create.md'
+      - Executing and Profiling: 'pages/tutorial/start/run.md'
+    - Step by step:
+      - Introduction: 'pages/tutorial/steps/first.md'
+      - Type System:
+        - Nessa Memory Model: 'pages/tutorial/steps/memory.md'
+        - Built-in Basic Types: 'pages/tutorial/steps/builtin.md'
+        - References: 'pages/tutorial/steps/references.md'
+        - Algebraic Types: 'pages/tutorial/steps/algebraic.md'
+        - Other Types: 'pages/tutorial/steps/other.md'
+        - Template-based Generics: 'pages/tutorial/steps/templates.md'
+        - Structural Types: 'pages/tutorial/steps/structural.md'
+        - Binding Rules: 'pages/tutorial/steps/binding.md'
+      - Variables: 'pages/tutorial/steps/variables.md'
+      - Functions: 
+        - Defining new Functions: 'pages/tutorial/steps/functions.md'
+        - Generic Functions: 'pages/tutorial/steps/functions.md'
+        - Special Functions: 'pages/tutorial/steps/functions.md'
+      - Operators and Operations: 
+        - Defining new Operators: 'pages/tutorial/steps/operators.md'
+        - Precedence and Arity: 'pages/tutorial/steps/operators.md'
+      - Creating Types: 
+        - Classes: 'pages/tutorial/steps/classes.md'
+        - Structural Types: 'pages/tutorial/steps/classes.md'
+      - Extending the Syntax:
+        - Literals: 'pages/tutorial/steps/literals.md'
+        - Macros: 'pages/tutorial/steps/macros.md'
+    - Learn by example:
+      - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
+      - Serialization Interface: 'pages/tutorial/examples/serialization.md'
+      - Building a Ternary Operator: 'pages/tutorial/examples/ternary.md'
+      - List Comprehension Syntax: 'pages/tutorial/examples/comprehension.md'
+  - Contribute: 'pages/contribute.md'
+
+theme: 
+  name: material
+  logo: img/logo_nl_t.png
+  favicon: img/logo_nl.png
+  font:
+    text: Roboto
+    code: Roboto Mono
+    
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.tracking
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - header.autohide
+
+  language: en
+  
+  palette: 
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: indigo
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - scheme: default
+      primary: indigo
+      media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: indigo
+      media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra:
+  social:
+    - icon: fontawesome/brands/github 
+      link: https://github.com/Gabie-of-the-Bo
+    - icon: fontawesome/brands/linkedin 
+      link: https://www.linkedin.com/in/javier-castillo-delgado-3582b1191/
+
+extra_javascript:
+  - 'js/highlight.min.js'
+  - 'js/highlightjs-line-numbers.min.js'
+  - 'js/nessa.js'
+
+extra_css:
+  - 'css/main.css'
+  - 'css/atom-one-dark.css'
+
+plugins:
+  - search
+  - mermaid2
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom

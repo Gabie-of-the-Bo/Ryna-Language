@@ -1,0 +1,56 @@
+# About
+
+``` mermaid
+%% mermaid
+graph LR
+    hello --> world
+    world --> again
+    again --> hello
+```
+
+## What is Nessa?
+
+``` nessa
+class Nil {}
+
+class ListNode<T> {
+    elem: 'T;
+    rest: List<'T>;
+}
+
+// Structural type
+type List<T> = Nil | ListNode<'T>;
+
+fn<T> add(list: &&List<'T>, element: 'T) -> List<'T> {
+    return ListNode<'T>(*element, *list);
+}
+
+/*
+    This is a multiline comment
+*/
+fn<T> size(list: &&List<'T>) -> Int {
+    if list.is<&&Nil>() {
+        return 0;
+    }
+
+    return 1 + list.as<&&ListNode<'T>>().rest().size();
+}
+
+let list: List<Int> = Nil();
+
+if list.size() != 0 {
+    panic("Invalid list size");
+}
+
+list = list.add(1);
+list = list.add(2);
+list = list.add(3);
+list = list.add(4);
+list = list.add(5);
+
+if list.size() != 5 {
+    panic("Invalid list \" size");
+}
+```
+
+## Is it ready for production use?

@@ -22,14 +22,10 @@ nav:
         - Binding Rules: 'pages/tutorial/steps/binding.md'
       - The Basics: 'pages/tutorial/steps/basics.md'
       - Functions: 
-        - Defining new Functions: 'pages/tutorial/steps/def_functions.md'
+        - Defining Functions: 'pages/tutorial/steps/def_functions.md'
         - Special Functions: 'pages/tutorial/steps/esp_functions.md'
-      - Operators and Operations: 
-        - Defining new Operators: 'pages/tutorial/steps/operators.md'
-        - Precedence and Arity: 'pages/tutorial/steps/operators.md'
-      - Creating Types: 
-        - Classes: 'pages/tutorial/steps/classes.md'
-        - Structural Types: 'pages/tutorial/steps/classes.md'
+      - Defining Operators: 'pages/tutorial/steps/operators.md'
+      - Defining Classes: 'pages/tutorial/steps/classes.md'
       - Extending the Syntax:
         - Literals: 'pages/tutorial/steps/literals.md'
         - Macros: 'pages/tutorial/steps/macros.md'

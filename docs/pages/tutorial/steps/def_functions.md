@@ -22,7 +22,7 @@ this is a simple example. Now let's modify this code to create a generic functio
 
 ```
 // Definition
-fn funtion_name_2<T, G>(param_1: Type_1, param_2: Type_2, ...) -> Return_type {
+fn<T, G> funtion_name_2(param_1: Type_1, param_2: Type_2, ...) -> Return_type {
 
     [...]
 
@@ -41,7 +41,7 @@ let variable_1: Return_type = funtion_name_2<Type_3, Type_4>(something_1, someth
 let variable_2: Return_type = funtion_name_2(something_1, something_2);
 ```
 
-Here you can see that putting `<T, G>` after the function name in the definition **defines** the templates `T` and `G` inside the function body.
+Here you can see that putting `<T, G>` after the `fn` keyword in the definition **defines** the templates `T` and `G` inside the function body.
 They **cannot** be used outside the function body.
 
 > ***Note:*** the `<T, G>` syntax might change to `<'T, 'G>` in a future release for ease of highlighting and uniformization.
@@ -74,7 +74,7 @@ fn factorial_iterative(n: Int) -> Int {
 Now let's dive into generics and make a function that counts how many elements in an array are equal to one given as a parameter:
 
 ```
-fn count<T>(array: &Array<'T>, elem: &'T) -> Int {
+fn<T> count(array: &Array<'T>, elem: &'T) -> Int {
     let res = 0;
 
     for i in array {

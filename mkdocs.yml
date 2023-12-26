@@ -22,9 +22,8 @@ nav:
         - Binding Rules: 'pages/tutorial/steps/binding.md'
       - The Basics: 'pages/tutorial/steps/basics.md'
       - Functions: 
-        - Defining new Functions: 'pages/tutorial/steps/functions.md'
-        - Generic Functions: 'pages/tutorial/steps/functions.md'
-        - Special Functions: 'pages/tutorial/steps/functions.md'
+        - Defining new Functions: 'pages/tutorial/steps/def_functions.md'
+        - Special Functions: 'pages/tutorial/steps/esp_functions.md'
       - Operators and Operations: 
         - Defining new Operators: 'pages/tutorial/steps/operators.md'
         - Precedence and Arity: 'pages/tutorial/steps/operators.md'

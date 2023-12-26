@@ -26,6 +26,7 @@ nav:
         - Special Functions: 'pages/tutorial/steps/esp_functions.md'
       - Defining Operators: 'pages/tutorial/steps/operators.md'
       - Defining Classes: 'pages/tutorial/steps/classes.md'
+      - Defining Interfaces: 'pages/tutorial/steps/interfaces.md'
       - Extending the Syntax:
         - Literals: 'pages/tutorial/steps/literals.md'
         - Macros: 'pages/tutorial/steps/macros.md'

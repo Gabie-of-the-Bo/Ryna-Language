@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', _ => {
                 },
 
                 {
+                    className: 'title',
+                    begin: '(?<=let\\s*)[a-zA-Z_0-9]+'
+                },
+
+                {
                     className: 'string',
                     begin: '"',
                     end: '"',
@@ -60,6 +65,18 @@ document.addEventListener('DOMContentLoaded', _ => {
                 {
                     className: 'number',
                     begin: '\\b\\d+(.\\d+)?\\b',
+                    relevance: 0
+                },
+
+                {
+                    className: 'number',
+                    begin: '\\b0b(0|1)+\\b',
+                    relevance: 0
+                },
+
+                {
+                    className: 'number',
+                    begin: '\\b0x([0-9ABCDEF])+\\b',
                     relevance: 0
                 }
             ]

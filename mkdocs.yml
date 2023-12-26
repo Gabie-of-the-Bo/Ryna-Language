@@ -20,7 +20,7 @@ nav:
         - Template-based Generics: 'pages/tutorial/steps/templates.md'
         - Structural Types: 'pages/tutorial/steps/structural.md'
         - Binding Rules: 'pages/tutorial/steps/binding.md'
-      - Variables: 'pages/tutorial/steps/variables.md'
+      - The Basics: 'pages/tutorial/steps/basics.md'
       - Functions: 
         - Defining new Functions: 'pages/tutorial/steps/functions.md'
         - Generic Functions: 'pages/tutorial/steps/functions.md'

@@ -137,3 +137,51 @@ Just as most programming languages, Nessa has **operators** and **operations**. 
 
 All these operators and operations can be defined in a similar way as functions. The syntax for generics varies depending on the type of operator
 and will be explained in their corresponding section.
+
+## Flow control
+
+These are the flow-control operations that are allowed in Nessa.
+
+### If-else
+
+The language supports if-else control flow with the following syntax:
+
+```
+// Else ifs and elses are optional
+if condition {
+    [...]
+} else if condition {
+    [...]
+} else {
+    [...]
+}
+```
+
+conditions must evaluate to `Bool`.
+
+### While
+
+While loops have the following syntax:
+
+```
+while condition {
+    [...]
+}
+```
+
+conditions must also evaluate to `Bool`.
+
+### For
+
+For loops are the most complicated of the three. To begin with, you need an `Iterable` object, which is defined as
+one that implements the `Iterable` interface (more information about interfaces in their section). After this, you can write
+the following:
+
+```
+// container must implement Iterable
+for i in container {
+    [...]
+}
+```
+
+if you want to make a custom class iterable you have to implement that Interface manually.

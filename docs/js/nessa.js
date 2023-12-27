@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', _ => {
             contains: [
                 {
                     className: 'literal',
-                    begin: '\'[a-zA-Z_0-9]+'
+                    begin: '\'[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')'
                 },
 
                 {

@@ -28,6 +28,7 @@ nav:
       - Defining Classes: 'pages/tutorial/steps/classes.md'
       - Defining Interfaces: 'pages/tutorial/steps/interfaces.md'
       - Extending the Syntax:
+        - Nessa Definition Language: 'pages/tutorial/steps/ndl.md'
         - Literals: 'pages/tutorial/steps/literals.md'
         - Macros: 'pages/tutorial/steps/macros.md'
     - Learn by example:

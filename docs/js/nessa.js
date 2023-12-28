@@ -19,12 +19,12 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'title',
-                    begin: '[a-zA-Z_0-9]+(?=\\s*:)'
+                    begin: '[a-zA-Z_][a-zA-Z_0-9]*(?=\\s*:)'
                 },
 
                 {
                     className: 'title',
-                    begin: '(?<=let\\s*)[a-zA-Z_0-9]+'
+                    begin: '(?<=let\\s*)[a-zA-Z_][a-zA-Z_0-9]*'
                 },
 
                 {

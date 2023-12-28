@@ -188,6 +188,11 @@ mod integration {
     }
 
     #[test]
+    fn ternary() {
+        integration_test("test/ternary.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

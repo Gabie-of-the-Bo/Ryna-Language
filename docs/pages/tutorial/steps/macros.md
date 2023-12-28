@@ -25,7 +25,7 @@ syntax macro_name from 'Macro' {
 print(Macro);
 
 // ... is compiled to this
-print((() => { return 5; })())
+print((() { return 5; })())
 ```
 
 You may have noticed that the syntax inside a macro body is not the same as a function. This is because you can only write
@@ -68,7 +68,7 @@ let array = <Int>[1, 2, 3, 4, 5];
 Which will then be compiled to this:
 
 ```
-let array = (() => {
+let array = (() {
     let res = arr<Int>();
 
     res.push(1);

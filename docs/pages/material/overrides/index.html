@@ -40,7 +40,7 @@ This file was automatically generated - do not edit
     }
 
     .lower {
-        height: 10vh;
+        height: 5vh;
         background: var(--md-primary-fg-color--light);
     }
 
@@ -71,7 +71,7 @@ This file was automatically generated - do not edit
 
     h1 {
         margin: auto !important;
-        margin-top: 1em !important;
+        margin-top: 0.5em !important;
         margin-bottom: 0.25em !important;
         
         width: fit-content;
@@ -80,7 +80,7 @@ This file was automatically generated - do not edit
         font-size: 3em !important;
     }
     
-    h2 {
+    .upper h2 {
         margin: auto !important;
 
         margin-top: 0.25em !important;
@@ -143,6 +143,41 @@ This file was automatically generated - do not edit
     #write-bar {
         display: inline;
         margin-left: -.15em;
+    }
+
+    .quick-links {
+        color: var(--md-primary-fg-color) !important;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        justify-items: center;
+
+        margin-top: 0.5em;
+
+        user-select: none;
+    }
+
+    .quick-links h2 {
+        font-weight: bold;
+        font-size: 20pt !important;
+    }
+
+    .quick-link {
+        display: grid;
+        grid-template-columns: 1fr 3fr;
+        align-items: center;
+    }
+
+    .quick-link svg {
+        width: 35%;
+        justify-self: right;
+        margin-right: 1em;
+        cursor: pointer;
+    }
+
+    .quick-link > div {
+        justify-self: left;
+        margin-left: 1em;
+        cursor: pointer;
     }
 
 </style>
@@ -235,7 +270,37 @@ let res = gcd(5, 10);
 <div class="lower">
 </div>
 
+<div class="quick-links">
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/tutorial/start/install/')" class="fa-solid fa-book"></i>
+        <div onclick="gotoPage('pages/tutorial/start/install/')">
+            <h2>Getting Started</h2>
+            <p>Install the interpreter and learn about the language</p>    
+        </div>
+    </div>
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/tutorial/examples/linked%20list/')" class="fa-solid fa-code"></i>
+        <div onclick="gotoPage('pages/tutorial/examples/linked%20list/')">
+            <h2>Examples</h2>
+            <p>See some examples of what you can do with Nessa</p>    
+        </div>
+    </div>
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/contribute/')" class="fa-solid fa-list-check"></i>
+        <div onclick="gotoPage('pages/contribute/')">
+            <h2>Contribute</h2>
+            <p>Want to share your thoughts or propose a feature?</p>    
+        </div>
+    </div>
+</div>
+
 <script>
+    function gotoPage(path) {
+        const base = window.location.origin;
+
+        window.location = base + '/' + path;
+    }
+
     var carouselItems = document.getElementsByClassName('code-example');
     var carouselIdx = 0;
     const caouselTime = 10000;

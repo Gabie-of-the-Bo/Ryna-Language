@@ -93,10 +93,12 @@ extra:
 extra_javascript:
   - 'js/highlight.min.js'
   - 'js/highlightjs-line-numbers.min.js'
+  - 'js/fa.min.js'
   - 'js/nessa.js'
 
 extra_css:
   - 'css/main.css'
+  - 'css/fa.min.css'
   - 'css/atom-one-dark.css'
 
 plugins:

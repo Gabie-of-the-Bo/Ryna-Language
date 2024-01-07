@@ -25,6 +25,32 @@ This file was automatically generated - do not edit
         }
     }
 
+    @media only screen and (max-width: 600px) {
+        h1 {
+            margin: auto !important;
+            margin-top: 0.5em !important;
+            margin-bottom: 0.25em !important;
+            
+            width: fit-content;
+
+            color: white !important;
+            font-size: 2em !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        h1 {
+            margin: auto !important;
+            margin-top: 0.5em !important;
+            margin-bottom: 0.25em !important;
+            
+            width: fit-content;
+
+            color: white !important;
+            font-size: 3em !important;
+        }
+    }
+
     .md-content, .upper, .lower {
         width: 100%;
     }
@@ -42,10 +68,8 @@ This file was automatically generated - do not edit
     .lower {
         height: 5vh;
         background: var(--md-primary-fg-color--light);
-    }
-
-    .md-sidebar {
-        display: none !important;;
+        margin-top: -1px;
+        z-index: -1;
     }
 
     .md-main__inner {
@@ -67,17 +91,6 @@ This file was automatically generated - do not edit
 
     pre > code {
         width: 90%;
-    }
-
-    h1 {
-        margin: auto !important;
-        margin-top: 0.5em !important;
-        margin-bottom: 0.25em !important;
-        
-        width: fit-content;
-
-        color: white !important;
-        font-size: 3em !important;
     }
     
     .upper h2 {
@@ -104,8 +117,6 @@ This file was automatically generated - do not edit
         align-self: center;
         justify-self: center;
         align-items: center;
-
-        width: 75%;
     }
 
     .code-example {
@@ -115,10 +126,65 @@ This file was automatically generated - do not edit
         justify-self: center;
         align-items: center;
 
-        grid-template-columns: 1fr 1fr;
-
         transition-property: opacity;
         transition-duration: 1s;
+    }
+
+    @media only screen and (max-width: 600px) {
+        .code-desc > h2 {
+            margin-top: 1em !important;
+        }
+
+        .md-typeset pre {
+            display: grid !important;
+            justify-items: center;
+        }
+
+        .code-example-background {
+            width: 90%;
+            overflow-x: auto;
+        }
+
+        .code-example {
+            width: 90%;
+            grid-template-rows: 1fr 1fr;        
+        }
+        
+        .code-example.hidden {
+            height: 0 !important;
+            overflow: hidden !important;
+            grid-area: 3 / 1 !important;
+        }
+
+        .code-example.shown {
+            height: inherit !important;
+            overflow: inherit !important;
+            grid-area: 3 / 1 !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        .code-example-background {
+            width: 75%;
+            overflow-x: auto;
+        }
+
+        .code-example {
+            width: 90%;
+            grid-template-columns: 1fr 1fr;        
+        }
+
+        .code-example.hidden {
+            height: 0 !important;
+            overflow: hidden !important;
+            grid-area: 1 / 3 !important;
+        }
+
+        .code-example.shown {
+            height: inherit !important;
+            overflow: inherit !important;
+            grid-area: 1 / 3 !important;
+        }
     }
 
     .code-desc {
@@ -145,15 +211,38 @@ This file was automatically generated - do not edit
         margin-left: -.15em;
     }
 
-    .quick-links {
-        color: var(--md-primary-fg-color) !important;
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        justify-items: center;
+    @media only screen and (max-width: 600px) {
+        .quick-links {
+            color: var(--md-primary-fg-color) !important;
+            display: grid;
+            grid-template-rows: 1fr 1fr 1fr;
+            justify-items: center;
 
-        margin-top: 0.5em;
+            margin-top: 0.5em;
 
-        user-select: none;
+            user-select: none;
+        }
+
+        .quick-link {
+            width: 90%;
+        }
+
+        .quick-link svg {
+            width: 50% !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        .quick-links {
+            color: var(--md-primary-fg-color) !important;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            justify-items: center;
+
+            margin-top: 0.5em;
+
+            user-select: none;
+        }
     }
 
     .quick-links h2 {
@@ -165,11 +254,12 @@ This file was automatically generated - do not edit
         display: grid;
         grid-template-columns: 1fr 3fr;
         align-items: center;
+        margin-bottom: 0.5em;
     }
 
     .quick-link svg {
         width: 35%;
-        justify-self: right;
+        justify-self: center;
         margin-right: 1em;
         cursor: pointer;
     }
@@ -308,15 +398,13 @@ let res = gcd(5, 10);
     let colcc = 2;
 
     function hide(elem) {
-        elem.style.height = 0;
-        elem.style.overflow = 'hidden';
-        elem.style.gridArea = '1 / 3';
+        elem.classList.remove('shown');
+        elem.classList.add('hidden');
     }
 
     function show(elem) {
-        elem.style.height = 'inherit';
-        elem.style.overflow = 'inherit';
-        elem.style.gridArea = '1 / 3';
+        elem.classList.add('shown');
+        elem.classList.remove('hidden');
     }
 
     for (let item of carouselItems) {

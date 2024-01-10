@@ -3,6 +3,7 @@ name = "nessa-language"
 version = "0.1.0"
 authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
+license = "MIT"
 
 [lib]
 name = "nessa"

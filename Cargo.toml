@@ -1,7 +1,7 @@
 [package]
 name = "nessa-language"
 version = "0.1.0"
-authors = ["Gabie <jacadel1998@hotmail.com>"]
+authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 
 [lib]

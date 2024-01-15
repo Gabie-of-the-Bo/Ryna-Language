@@ -19,10 +19,10 @@ path = "src/main.rs"
 
 [dependencies]
 seq-macro = "0.2"
-rand = "*"
-impl_ops = "*"
+rand = "0.8.5"
+impl_ops = "0.1.1"
 rayon = "1.5"
-bit-set = "*"
+bit-set = "0.5.3"
 nom = "7"
 nom_locate = "4.1.0"
 clap = "4.4.2"

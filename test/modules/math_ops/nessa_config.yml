@@ -1,0 +1,10 @@
+---
+module_name: math_ops
+version: 0.1.0
+hash: 170e29575b283ce83ad984c7fe5f87d9
+module_paths:
+  - test/lib
+modules:
+  math:
+    path: "test\\lib\\math"
+    version: 0.1.0

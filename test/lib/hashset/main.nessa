@@ -1,0 +1,65 @@
+import interface Hashable from hash;
+import fn hash from hash;
+import fn { iterator, next, is_consumed, range } from range;
+
+class HashSet<V> {
+    buckets: Array<Array<'V [Hashable]>>;
+}
+
+fn<T> init(set: &&HashSet<'T [Hashable]>, size: Int) {
+    let _buckets = set.buckets();
+    _buckets.reserve(*size);
+
+    for i in range(0, *size) {
+        _buckets.push(arr<'T>());
+    }
+}
+
+fn<T> hashset() -> HashSet<'T [Hashable]> {
+    let res = HashSet(arr<Array<'T>>());
+    res.init(10);
+
+    return move(res);
+}
+
+fn<T> rehash(set: &&HashSet<'T [Hashable]>) {
+    let b = set.buckets();
+    let size = b.len();
+
+    let aux = HashSet(arr<Array<'T>>());
+    aux.init(size * 2);
+
+    for bucket in set.buckets() {
+        for elem in bucket {
+            aux.add(move(elem));
+        }
+    }
+
+    set.buckets() := move(aux.buckets());
+}
+
+fn<T> add(set: &&HashSet<'T [Hashable]>, elem: 'T) {
+    let b = set.buckets();
+    let size = b.len();
+    let pos = hash(*elem) % size;
+
+    b[*pos].push(move(elem));
+
+    if b[*pos].len() > size {
+        set.rehash();
+    }
+}
+
+fn<T> contains(set: &&HashSet<'T [Hashable]>, elem: &&'T) -> Bool {
+    let b = set.buckets();
+    let size = b.len();
+    let pos = hash(*elem) % size;
+
+    for i in b[*pos] {
+        if i == elem {
+            return true;
+        }
+    }
+
+    return false;
+}

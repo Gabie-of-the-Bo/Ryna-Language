@@ -1,0 +1,10 @@
+---
+module_name: set_extensions
+version: 0.1.0
+hash: 740aa5bd8ed2b30017870f8aafee6940
+module_paths:
+  - test/lib
+modules:
+  hashset:
+    path: "test\\lib\\hashset"
+    version: 0.1.0

@@ -1,0 +1,14 @@
+import syntax { set_initialization, set_comprehension } from set_extensions;
+import syntax { array_initialization } from array_extensions;
+
+let set = <Int>{1, 2, 3 * 2, 4 + 1};
+
+if !set.contains(1.mut()) || !set.contains(2.mut()) || !set.contains(6.mut()) || !set.contains(5.mut()) {
+    panic("Invalid contents!");
+}
+
+let set2 = {i * i for i: Int in <Int>[1, 2, 3, 4, 5]};
+
+if !set2.contains(1.mut()) || !set2.contains(4.mut()) || !set2.contains(9.mut()) || !set2.contains(16.mut()) || !set2.contains(25.mut()) {
+    panic("Invalid contents!");
+}

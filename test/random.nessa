@@ -1,0 +1,59 @@
+let it: Int = 0;
+
+while it < 1000 {
+    let r: Float = rand();
+
+    if r > 1 || r < 0 {
+        panic("Invalid Int");
+    } 
+
+    it = it + 1;
+}
+
+it = 0;
+
+while it < 1000 {
+    let r: Int = rand_int(5, 10);
+
+    if r > 10 || r < 5 {
+        panic("Invalid Int");
+    } 
+
+    it = it + 1;
+}
+
+it = 0;
+
+while it < 1000 {
+    let r: Int = rand_int(-15, 10);
+
+    if r > 10 || r < -15 {
+        panic("Invalid Int");
+    } 
+
+    it = it + 1;
+}
+
+it = 0;
+
+while it < 1000 {
+    let r: Int = rand_int(-5, 10);
+
+    if r > 10 || r < -5 {
+        panic("Invalid Int");
+    } 
+
+    it = it + 1;
+}
+
+it = 0;
+
+while it < 1000 {
+    let r: Int = rand_int(-10, -5);
+
+    if r > -5 || r < -10 {
+        panic("Invalid Int");
+    } 
+
+    it = it + 1;
+}

@@ -1,0 +1,5 @@
+import fn is_prime from primes;
+
+if !is_prime(7919) {
+    panic("Invalid prime calculation");
+}

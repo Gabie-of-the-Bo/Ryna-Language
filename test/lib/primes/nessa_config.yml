@@ -1,0 +1,10 @@
+---
+module_name: primes
+version: 0.1.0
+hash: b38226d4053ca6c140bd77615d3e40ac
+module_paths:
+  - test/lib
+modules:
+  range:
+    path: test/lib/range
+    version: 0.1.0

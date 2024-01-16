@@ -1,0 +1,84 @@
+import * from iterators;
+import * from range;
+
+// Map test
+
+let map_arr = arr<Int>().map((i: &&Int) i * i).map((i: Int) i - 1);
+let map_rng = range(0, 10).map((i: Int) i * i).map((i: Int) i - 1);
+let cpy = *map_rng;
+
+for i in *map_arr {
+    println(*i);
+}
+
+for i in *map_rng {
+    println(*i);
+}
+
+let a = next(cpy);
+let b = next(cpy);
+let c = next(cpy);
+let d = next(cpy);
+let e = next(cpy);
+
+if a != -1 || b != 0 || c != 3 || d != 8 || e != 15 {
+    panic("Invalid iterator value!");
+}
+
+// Filter test
+
+let even = range(0, 10).filter((i: Int) i % 2 == 0);
+let cpy2 = *even;
+
+for i in *even {
+    println(*i);
+}
+
+let f = next(cpy2);
+let g = next(cpy2);
+let h = next(cpy2);
+let i = next(cpy2);
+
+if f != 0 || g != 2 || h != 4 || i != 6 {
+    panic("Invalid iterator value!");
+}
+
+// Mixed test
+
+let big_odd_sqrs = range(0, 10)
+    .filter((i: Int) i % 2 == 1)
+    .map((i: Int) i * i)
+    .filter((i: Int) i >= 25);
+
+let cpy3 = *big_odd_sqrs;
+
+for i in *big_odd_sqrs {
+    println(*i);
+}
+
+let j = next(cpy3);
+let k = next(cpy3);
+let l = next(cpy3);
+
+if j != 25 || k != 49 || l != 81 {
+    panic("Invalid iterator value!");
+}
+
+// Terminal operators
+
+if irange(0, 1000).sum() != 500500 {
+    panic("Invalid value");
+}
+
+if irange(1, 25).reduce((a: Int, b: Int) a * b, 1) != 15511210043330985984000000 {
+    panic("Invalid value");
+}
+
+let sqrs_end_1 = range(0, 100)
+    .map((i: Int) i * i)
+    .filter((i: Int) i % 10 == 1)
+    .count();
+
+if sqrs_end_1 != 20 {
+    panic("Invalid value");
+}

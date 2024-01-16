@@ -1,0 +1,10 @@
+---
+module_name: json_test
+version: 0.1.0
+hash: 4109647b56ff82f6e007322b5328d240
+module_paths:
+  - test/lib
+modules:
+  json:
+    path: "test\\lib\\json"
+    version: 0.1.0

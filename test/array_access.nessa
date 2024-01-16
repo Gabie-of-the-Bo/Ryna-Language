@@ -1,0 +1,31 @@
+let a: Array<Int> = arr<Int>();
+a.push<Int>(1);
+a.push<Int>(3);
+a.push<Int>(5);
+a.push<Int>(7);
+a.push<Int>(9);
+a.push<Int>(11);
+
+if a<Int>[0] != 1 {
+    panic("Invalid index");
+}
+
+if a<Int>[1] != 3 {
+    panic("Invalid index");
+}
+
+if a<Int>[2] != 5 {
+    panic("Invalid index");
+}
+
+if a<Int>[3] != 7 {
+    panic("Invalid index");
+}
+
+if a<Int>[4] != 9 {
+    panic("Invalid index");
+}
+
+if a<Int>[5] != 11 {
+    panic("Invalid index");
+}

@@ -1,0 +1,13 @@
+---
+module_name: set_syntax_test
+version: 0.1.0
+hash: e9032527da47a786e7f68d1dd7c325a8
+module_paths:
+  - test/lib
+modules:
+  set_extensions:
+    path: "test\\lib\\set_extensions"
+    version: 0.1.0
+  array_extensions:
+    path: "test\\lib\\array_extensions"
+    version: 0.1.0

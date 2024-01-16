@@ -1,0 +1,10 @@
+---
+module_name: syntax_test
+version: "0.1.0"
+hash: 099ebaa63ec7714532d98b158eaaead3
+module_paths:
+  - test/lib
+modules:
+  array_extensions:
+    path: "test\\lib\\array_extensions"
+    version: "0.1.0"

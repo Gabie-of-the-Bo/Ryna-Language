@@ -1,0 +1,25 @@
+import postfix op "++" from math;
+import fn * from math;
+
+let n: Int = 10;
+n ++;
+
+if n != 11 {
+    panic("This should not be happening...");
+}
+
+if gcd(5634276542, 652347652432) != 2 {
+    panic("Invalid value");
+}
+
+if lcm(22, 86) != 946 {
+    panic("Invalid value");
+}
+
+if !coprime(5, 7) {
+    panic("Invalid value");
+}
+
+if droot(562) != 4 {
+    panic("Invalid value");
+}

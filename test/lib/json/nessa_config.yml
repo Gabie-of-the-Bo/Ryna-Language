@@ -1,0 +1,10 @@
+---
+module_name: json
+version: 0.1.0
+hash: 6fff09eb6cbf9fa3751d22627bc2fbea
+module_paths:
+  - test/lib
+modules:
+  range:
+    path: test/lib/range
+    version: 0.1.0

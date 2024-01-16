@@ -1,0 +1,45 @@
+fn arg_or_1() -> Bool {
+    return true;
+}
+
+fn arg_or_2() -> Bool {
+    panic("This should not be evaluated");
+    return true;
+}
+
+fn arg_and_1() -> Bool {
+    return false;
+}
+
+fn arg_and_2() -> Bool {
+    panic("This should not be evaluated");
+    return false;
+}
+
+if arg_or_1() || arg_or_2() {
+    println("OK!");
+    
+} else {
+    panic("This should not happen");
+}
+
+if false || arg_or_1() || arg_or_2() {
+    println("OK!");
+    
+} else {
+    panic("This should not happen");
+}
+
+if arg_and_1() && arg_and_2() {
+    panic("This should not happen");
+    
+} else {
+    println("OK!");
+}
+
+if true && arg_and_1() && arg_and_2() {
+    panic("This should not happen");
+    
+} else {
+    println("OK!");
+}

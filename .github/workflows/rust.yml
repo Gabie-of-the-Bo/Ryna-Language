@@ -1,0 +1,34 @@
+name: Rust
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Setup | Checkout
+      uses: actions/checkout@v2
+    - name: Build
+      uses: ATiltedTree/setup-rust@v1
+      with:
+        rust-version: stable
+        components: clippy
+    - run: cargo build --release
+      
+    - name: Run tests
+      run: cargo test --release
+      
+    - name: Run cargo-tarpaulin
+      uses: actions-rs/tarpaulin@v0.1
+      with:
+        version: '0.15.0'
+        args: '--timeout 10000'
+
+    - name: Upload to codecov.io
+      uses: codecov/codecov-action@v1.0.2
+      with:
+        token: ${{secrets.CODECOV_TOKEN}}

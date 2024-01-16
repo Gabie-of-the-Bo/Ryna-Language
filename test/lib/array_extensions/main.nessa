@@ -1,0 +1,107 @@
+// Construction syntax
+
+syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+    {#let res = arr<} {$type} {#>(} {#);\n}
+    {@i in $elems} {
+        {#res.push(} {$i} {#);\n}
+    }
+    {#return *res;}
+}
+
+syntax list_comprehension from '[' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '} 'in' {' '} Arg(<expr>, container) {' '} ']' {
+    {#let res = arr<} {$type} {#>();\n}
+    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
+    {#for _it_ in }{$container}{# \{\n}
+        {#  res.push(func(*_it_));\n}
+    {#\}\n\n}
+    {#return res;}
+}
+
+// Algorithms
+
+fn<T> arr_with_capacity(size: Int) -> Array<'T> {
+    let res = arr<'T>();
+    res.reserve(move(size));
+    
+    return move(res);
+}
+
+fn<T> fill(array: &&Array<'T>, value: 'T) -> &&Array<'T> {
+    while array.capacity() > array.len() {
+        array.push(*value);
+    }
+
+    return array;
+}
+
+fn<T> fill_with(array: &&Array<'T>, f: Int => 'T) -> &&Array<'T> {
+    let idx = array.len();
+
+    while array.capacity() > array.len() {
+        array.push(f(*idx));
+        idx.inc();
+    }
+
+    return array;
+}
+
+fn<T, G> transform(array: &&Array<'T>, f: 'T => 'G) -> Array<'G> {
+    let res = arr_with_capacity<'G>(array.len());
+
+    for i in array {
+        res.push(f(*i));
+    }
+
+    return move(res);
+}
+
+fn<T> transform_inplace(array: &&Array<'T>, f: 'T => 'T) -> &&Array<'T> {
+    for i in array {
+        i := f(*i);
+    }
+
+    return array;
+}
+
+fn<T> reverse(array: &&Array<'T>) -> &&Array<'T> {
+    let length = array.len();
+    let half = length / 2;
+    let i = 0;
+    
+    while i < half {
+        swap(array[i], array[length - i - 1]);
+        i.inc();
+    }
+
+    return array;
+}
+
+fn<T> reduce(array: &&Array<'T>, base: 'T, op: ('T, 'T) => 'T) -> 'T {
+    for i in array {
+        base := op(*base, *i);
+    }
+
+    return move(base);
+}
+
+// Printable interface
+
+fn<T> print(array: Array<'T [Printable]>) {
+    let idx = 0;
+
+    print("[");
+
+    for i in array {
+        print(*i);
+
+        idx.inc();
+
+        if idx < array.len() {
+            print(", ");
+        }
+    }
+
+    print("]");
+}
+
+implement<T> Printable for Array<'T [Printable]>;

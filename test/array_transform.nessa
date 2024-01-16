@@ -1,0 +1,21 @@
+fn<T> double(array: &&Array<'T>) {
+    for i in array {
+        i := i * 2;
+    }
+} 
+
+let array = arr<Int>();
+
+array.push(1);
+array.push(2);
+array.push(3);
+array.push(4);
+array.push(5);
+
+double(array);
+
+if array[0] != 2 { panic("Invalid value"); }
+if array[1] != 4 { panic("Invalid value"); }
+if array[2] != 6 { panic("Invalid value"); }
+if array[3] != 8 { panic("Invalid value"); }
+if array[4] != 10 { panic("Invalid value"); }

@@ -1,0 +1,13 @@
+---
+module_name: hashset
+version: 0.1.0
+hash: 24c74155f26c7f0bd3136c669446f819
+module_paths:
+  - test/lib
+modules:
+  hash:
+    path: test/lib/hash
+    version: 0.1.0
+  range:
+    path: test/lib/range
+    version: 0.1.0

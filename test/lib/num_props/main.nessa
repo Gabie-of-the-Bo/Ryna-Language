@@ -1,0 +1,7 @@
+fn odd(n: Int) -> Bool {
+    return n % 2 == 1;
+}
+
+fn even(n: Int) -> Bool {
+    return !n.deref().odd();
+}

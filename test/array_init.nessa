@@ -1,0 +1,12 @@
+syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+    // Initialize an array
+    {#let res = arr<} {$type} {#>(} {#);\n}
+    {@i in $elems} {
+        // Create a "push" for each element
+        {#res.push(} {$i} {#);\n}
+    }
+    {#return *res;}
+}
+
+// Now we can use this syntax
+let arr = <Int>[1, 2, 3, 4];

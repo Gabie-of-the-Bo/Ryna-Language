@@ -1,0 +1,5 @@
+import fn { even } from num_props;
+
+if 5.even() {
+    panic("Something is wrong here...");
+}

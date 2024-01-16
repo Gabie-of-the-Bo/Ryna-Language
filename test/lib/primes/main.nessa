@@ -1,0 +1,43 @@
+import fn { range, iterator, next, is_consumed } from range;
+
+fn is_prime(n: Int) -> Bool {
+    if n <= 1 {
+        return false;
+    }
+    
+    for i in range(2, *n) {
+        if n % i == 0 {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+class Primes {
+    start: Int;
+    current: Int;
+}
+
+fn primes() -> Primes {
+    return Primes(1, 1);
+}
+
+fn iterator(it: Primes) -> Primes {
+    return *it;
+}
+
+fn next(it: &&Primes) -> Int {
+    let curr: &&Int = it.current();
+    curr.inc();
+
+    while !is_prime(*curr) {
+        curr.inc();
+    }
+
+    return *curr;
+}
+
+fn is_consumed(it: &&Primes) -> Bool {
+    return false;
+}

@@ -1,0 +1,19 @@
+/*
+    The fact that this works is a design choice, since
+    the type system cannot determine right now whether
+    or not Array<'T> implements Test for every 'T.
+*/
+
+interface Test {
+    fn test(v: Self);
+}
+
+fn test(v: Array<Int>) {}
+fn test(v: Array<Float>) {}
+
+implement<T> Test for Array<'T>;
+
+fn<T> test2(v: 'T [Test]) {}
+
+test2(arr<Int>());
+test2(arr<Float>());

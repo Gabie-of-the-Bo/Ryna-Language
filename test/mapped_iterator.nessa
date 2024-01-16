@@ -1,0 +1,35 @@
+class DoubleIterator<T> {
+    iter: ArrayIterator<&&'T>;
+}
+
+fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
+    return it.deref();
+}
+
+fn<T> next(it: &&DoubleIterator<'T>) -> Int {
+    return it.iter().next() * 2;
+}
+
+fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
+    return it.iter().is_consumed();
+}
+
+implement<T> Iterable<DoubleIterator<'T>, 'T> for DoubleIterator<'T>;
+
+let a = arr<Int>();
+a.push(0);
+a.push(1);
+a.push(2);
+a.push(3);
+a.push(4);
+a.push(5);
+
+let sum = 0;
+
+for i in DoubleIterator(iterator(a)) {
+    sum = sum + i;
+}
+
+if sum != 30 {
+    panic("Invalid result");
+}

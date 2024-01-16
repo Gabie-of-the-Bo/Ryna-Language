@@ -1,0 +1,128 @@
+/*
+    MAP ITERATOR
+*/
+
+class MapIterator<It, Elem, Trf> {
+    iter: 'It [Iterable<'It, 'Elem>];
+    f: 'Elem => 'Trf;
+}
+
+fn<It, Elem, Trf> iterator(it: MapIterator<'It, 'Elem, 'Trf>) -> MapIterator<'It, 'Elem, 'Trf> {
+    return *it;
+}
+
+fn<It, Elem, Trf> next(it: &&MapIterator<'It, 'Elem, 'Trf>) -> 'Trf {
+    let fnc = it.f();
+    return fnc(it.iter().next());
+}
+
+fn<It, Elem, Trf> is_consumed(it: &&MapIterator<'It, 'Elem, 'Trf>) -> Bool {
+    return it.iter().is_consumed();
+}
+
+fn<Cont, It, Elem, Trf> map(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => 'Trf) -> MapIterator<'It, 'Elem, 'Trf> {
+    return MapIterator(iterator(move(it)), move(f));
+}
+
+implement<It, Elem, Trf> Iterable<MapIterator<'It, 'Elem, 'Trf>, 'Trf> for MapIterator<'It, 'Elem, 'Trf>;
+
+/*
+    FILTER ITERATOR
+*/
+
+class FilterIterator<It, Elem> {
+    iter: 'It [Iterable<'It, 'Elem>];
+    f: 'Elem => Bool;
+    curr: 'Elem;
+    consumed: Bool;
+}
+
+fn<It, Elem> advance_till_true(it: &&FilterIterator<'It, 'Elem>) {
+    let fnc = it.f();
+    let iter_i = it.iter();
+
+    while !iter_i.is_consumed() {
+        it.curr() := iter_i.next();
+
+        if fnc(*it.curr()) {
+            return;
+        }
+    }
+    
+    it.consumed() := true;
+}
+
+fn<It, Elem> iterator(it: FilterIterator<'It, 'Elem>) -> FilterIterator<'It, 'Elem> {
+    return *it;
+}
+
+fn<It, Elem> next(it: &&FilterIterator<'It, 'Elem>) -> 'Elem {    
+    let res = *it.curr();
+
+    if it.iter().is_consumed() {
+        it.consumed() := true;
+    }
+
+    it.advance_till_true();
+
+    return *res;
+}
+
+fn<It, Elem> is_consumed(it: &&FilterIterator<'It, 'Elem>) -> Bool {
+    return it.iter().is_consumed() && it.consumed();
+}
+
+fn<Cont, It, Elem> filter(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => Bool) -> FilterIterator<'It, 'Elem> {
+    let iter_i = iterator(move(it));
+    let res = FilterIterator(move(iter_i), *f, iter_i.next(), false);
+
+    if !f(*res.curr()) {
+        res.advance_till_true();
+    }
+
+    return *res;
+}
+
+implement<It, Elem> Iterable<FilterIterator<'It, 'Elem>, 'Elem> for FilterIterator<'It, 'Elem>;
+
+// Terminal operators
+
+fn<It> sum(it: 'It [Iterable<'It, Int>]) -> Int {
+    let res = 0;
+
+    for i in move(it) {
+        res := res + i;
+    }
+
+    return move(res);
+}
+
+fn<It> sum(it: 'It [Iterable<'It, Float>]) -> Float {
+    let res = 0;
+
+    for i in *it {
+        res := res + i;
+    }
+
+    return *res;
+}
+
+fn<It, Elem> reduce(it: 'It [Iterable<'It, 'Elem>], op: ('Elem, 'Elem) => 'Elem, start: 'Elem) -> 'Elem {
+    let res = move(start);
+
+    for i in *it {
+        res := op(*res, *i);
+    }
+
+    return *res;
+}
+
+fn<It> count(it: 'It [Iterable<'It, Int>]) -> Int {
+    let res = 0;
+
+    for i in move(it) {
+        res.inc();
+    }
+
+    return move(res);
+}

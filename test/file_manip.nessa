@@ -1,0 +1,34 @@
+let file = create_file("test.json");
+file.drop();
+
+let file2 = open_file("test.json", false, true, false);
+
+file2.write_str("This is content".ref());
+
+let bytes = arr<Int>();
+bytes.push(46); // dot
+file2.write_bytes(bytes.demut());
+
+file2.drop();
+
+let file3 = open_file("test.json", true, false, false);
+let contents = file3.read_str();
+
+if contents != "This is content." {
+    panic("Invalid contents");
+}
+
+file3.drop();
+
+let file4 = open_file("test.json", true, false, false);
+let contents_b = file4.read_bytes(5);
+
+if contents_b.len() != 5 {
+    panic("Invalid contents_b");
+}
+
+file4.drop();
+
+if !remove_file("test.json") {
+    panic("Unable to remove file");
+}

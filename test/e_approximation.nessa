@@ -1,0 +1,17 @@
+fn e(iters: Int) -> Float {
+    let i = 0;
+    let res = 0.0;
+
+    while i < iters {
+        res = res + 1.0 / fact(i);
+        i := i + 1;
+    }
+
+    return *res;
+}
+
+let constant_e = e(10);
+
+if abs(constant_e - 2.7182) > 0.001 {
+    panic("This is wrong...");
+}

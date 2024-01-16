@@ -1,0 +1,10 @@
+---
+module_name: prime_check
+version: "0.1.0"
+hash: a5386dc7be87e672e66bab620bd42d75
+module_paths:
+  - test/lib
+modules:
+  primes:
+    path: "test\\lib\\primes"
+    version: "0.1.0"

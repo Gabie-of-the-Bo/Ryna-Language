@@ -1,0 +1,19 @@
+import fn { range, iterator, next, is_consumed } from range;
+import binary op "=>" from range;
+
+import fn primes from primes;
+import fn { iterator, next, is_consumed } from primes;
+
+fn stream_primes(limit: Int) -> Bool {
+    let p = primes();
+
+    for i in 0 => *limit {
+        if !is_prime(p.next()) {
+            panic("This should not happen...");
+        }
+    }
+
+    return true;
+}
+
+stream_primes(100);

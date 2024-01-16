@@ -1,0 +1,13 @@
+let tuple: (Int, Bool, String) = (5, true, "test");
+
+if tuple.get_0<Int, Bool, String>() != 5 {
+    panic("Invalid tuple member");
+}
+
+if tuple.get_1<Int, Bool, String>() != true {
+    panic("Invalid tuple member");
+}
+
+if tuple.get_2<Int, Bool, String>() != "test" {
+    panic("Invalid tuple member");
+}

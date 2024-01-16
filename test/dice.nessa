@@ -1,0 +1,63 @@
+class Dice {
+    /*
+        This syntax is used automatically in the code.
+        The arguments are parsed as the corresponding types and 
+        assigned as needed
+    */
+    syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
+
+    rolls: Int;
+    sides: Int;
+}
+
+fn roll(dice: &&Dice) -> Int {
+    let res: Int = 0;
+    let it: Int = 0;
+
+    while it < dice.rolls() {
+        res = res + rand_int(1, dice.sides());
+        it.inc();
+    }
+
+    return *<Int>res;
+}
+
+let d1: Dice = 2D20;
+let d2: Dice = 5D6;
+let d3: Dice = 9D10;
+
+if d1.rolls() != 2 || d1.sides() != 20 {
+    panic("Invalid d1");
+}
+
+if d2.rolls() != 5 || d2.sides() != 6 {
+    panic("Invalid d2");
+}
+
+if d3.rolls() != 9 || d3.sides() != 10 {
+    panic("Invalid d3");
+}
+
+let it: Int = 0;
+
+while it < 1000 {
+    let r: Int = d3.roll();
+
+    if r < d3.rolls() || r > d3.rolls() * d3.sides() {
+        panic("Invalid roll");
+    }
+
+    it.inc();
+}
+
+class InnerDice {
+    syntax from '[' Arg(1{d} 'D' 1{d}, inner_dice) ']';
+
+    inner_dice: Dice;
+}
+
+let id: InnerDice = [7D4];
+
+if inner_dice(id).rolls() != 7 || inner_dice(id).sides() != 4 {
+    panic("Invalid inner dice");
+}

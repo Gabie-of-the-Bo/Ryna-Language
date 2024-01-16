@@ -1,0 +1,7 @@
+class Ints {
+    syntax from '[' Arg(1{d}, ints) {', ' Arg(1{d}, ints)} ']';
+
+    ints: Array<Int>;
+}
+
+let a: Ints = [1, 2, 3];

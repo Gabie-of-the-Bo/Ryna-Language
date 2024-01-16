@@ -1,0 +1,62 @@
+/*
+    Simple parametric implementation
+*/
+
+interface HasOp<A, B> {
+    fn<R> example(a: 'A, b: 'B) -> ('R, Self);
+}
+
+fn example(a: Int, b: Int) -> (Bool, Int) {
+    return (a + b < 5, 5);
+}
+
+implement HasOp<Int, Int> for Int;
+
+fn<T> example(a: Array<Int>, b: Array<'T>) -> (Int, Array<Int>) {
+    return (5, *a);
+}
+
+implement HasOp<Array<Int>, Array<Float>> for Array<Int>;
+
+/*
+    Full parametric implementation
+*/
+
+interface Addable {
+    fn add(a: Self, b: Self) -> Self;
+}
+
+fn add(a: Int, b: Int) -> Int {
+    return a + b;
+}
+
+fn add(a: Float, b: Float) -> Float {
+    return a + b;
+}
+
+implement Addable for Int;
+implement Addable for Float;
+
+fn<T> add(a: Array<'T [Addable]>, b: Array<'T [Addable]>) -> Array<'T [Addable]> {
+    return arr<'T>();
+}
+
+// Parametric implementation
+implement<T> Addable for Array<'T [Addable]>;
+
+let arr_1 = arr<Int>();
+
+add(*arr_1, *arr_1);
+
+let arr_2 = arr<Float>();
+
+add(*arr_2, *arr_2);
+
+fn<T> test(v: 'T [Addable]) -> Bool {
+    return true;
+}
+
+test(1);
+test(2.5);
+test(*arr_1);
+test(*arr_2);

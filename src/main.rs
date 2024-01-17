@@ -364,6 +364,7 @@ fn main() {
             config_yml.modules.insert(name.clone(), ModuleInfo {
                 path: paths.get(&(name, version.clone())).cloned().unwrap_or("".into()),
                 version,
+                is_local: false,
                 dependencies: HashSet::new(),
             });
 

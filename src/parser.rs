@@ -297,6 +297,19 @@ fn string_parser(input: Span<'_>) -> PResult<'_, String> {
     )(input)
 }
 
+fn parse_import_location(input: Span<'_>) -> PResult<String> {
+    alt((
+        identifier_parser,
+        map(
+            preceded(
+                tag("/"),
+                separated_list1(tag("/"), identifier_parser)
+            ),
+            |s| format!("/{}", s.join("/"))
+        )
+    ))(input)
+}
+
 fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
     map(
         tuple((
@@ -362,7 +375,7 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
             )),
             context("Expected 'from' after import type", cut(tag("from"))),
             empty1,
-            context("Expected identifier after 'from' in import statement", cut(identifier_parser)),
+            context("Expected identifier after 'from' in import statement", cut(parse_import_location)),
             empty0,
             context("Expected ';' at the end of import statement", cut(tag(";")))
         )),

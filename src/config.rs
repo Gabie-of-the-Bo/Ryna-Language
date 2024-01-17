@@ -25,6 +25,9 @@ pub struct ModuleInfo {
     pub version: String,
 
     #[serde(skip)]
+    pub is_local: bool,
+
+    #[serde(skip)]
     pub dependencies: HashSet<(String, String)>
 }
 
@@ -173,7 +176,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
                                                    .map(|i| (i.0.clone(), i.1.clone()))
                                                    .map(|i| (i.0.clone(), already_compiled.get(&i).unwrap()))
                                                    .collect();
-    
+
         let (module, source) = ctx.parse_with_dependencies(&config_yml.module_name, main, &module_dependencies)?;
         let graph = ctx.get_inner_dep_graph(&module)?;
     
@@ -209,6 +212,58 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
         fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
     }
 
+    let norm_mod_path = normalize_path(&module_path)?;
+
+    for local_file in glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str()).expect("Error while reading module path") {
+        let path = local_file.unwrap();
+        let full_import_path = normalize_path(&path)?;
+        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace("\\", "/");
+
+        if import_name != "/main" {
+            config_yml.modules.entry(import_name.clone()).or_insert(ModuleInfo {
+                path: full_import_path.clone(),
+                version: config_yml.version.clone(),
+                is_local: true,
+                dependencies: HashSet::new(),
+            });
+        }
+    }
+
+    let all_deps = config_yml.modules.iter().map(|i| (i.0.clone(), i.1.version.clone())).collect::<HashMap<_, _>>();
+    let mut local_imports = HashMap::new();
+
+    for (module_name, info) in config_yml.modules.iter_mut() {
+        if info.is_local {
+            let local_main = fs::read_to_string(&info.path).expect("Error while reading main file");
+            let local_file_imports = nessa_module_imports_parser(Span::new(&local_main)).unwrap().1;
+
+            local_imports.entry(module_name.clone()).or_insert((local_file_imports.clone(), local_main));
+
+            for module in local_file_imports.keys() {
+                if !all_deps.contains_key(module) {
+                    return Err(NessaError::module_error(format!("Module with name {} was not found", module.green())));
+                }
+            }
+
+            info.dependencies = local_file_imports.keys()
+                                                  .map(|i| (i.clone(), all_deps.get(i).unwrap().clone()))
+                                                  .collect();
+
+            modules.entry((module_name.clone(), config_yml.version.clone())).or_insert(info.clone());
+        }
+    }
+
+    for (module_name, info) in config_yml.modules.iter() {
+        if info.is_local {
+            let mut local_yml = config_yml.clone();
+            local_yml.module_name = module_name.clone();
+
+            let (local_imports, local_main) = local_imports.get(module_name).unwrap().clone();
+
+            file_cache.insert(info.path.clone(), (local_yml, local_imports, local_main));
+        }
+    }
+
     file_cache.insert(normalize_path(module_path)?, (config_yml.clone(), imports.clone(), main.clone()));
 
     for module in imports.keys() {
@@ -220,6 +275,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
     modules.entry((config_yml.module_name, config_yml.version.clone())).or_insert(ModuleInfo { 
         path: normalize_path(module_path)?, 
         version: config_yml.version, 
+        is_local: false,
         dependencies: config_yml.modules.into_iter().map(|i| (i.0, i.1.version)).filter(|(i, _)| imports.contains_key(i)).collect()
     });
 

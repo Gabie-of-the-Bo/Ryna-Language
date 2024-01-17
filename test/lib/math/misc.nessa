@@ -1,0 +1,26 @@
+import * from /discrete;
+
+// This should go in the discrete submodule, but is here for the test
+fn lcm(a: Int, b: Int) -> Int {
+    let n = a * b;
+    
+    return n / gcd(*a, *b);
+}
+
+fn droot(n: Int) -> Int {
+    if n < 10 {
+        return move(n);
+    
+    } else {
+        let res = 0;
+
+        while n > 0 {
+            let last_digit = n % 10;
+            res = res + last_digit;
+            n := n - last_digit;
+            n := n / 10;
+        }
+
+        return droot(move(res));
+    }
+}

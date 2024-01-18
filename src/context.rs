@@ -308,7 +308,7 @@ impl NessaContext {
         vec!()
     }
 
-    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<usize, String> {
+    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunctionInner) -> Result<usize, String> {
         self.define_binary_operation(id, templates, a, b, ret, Some(f))
     }
 
@@ -513,9 +513,9 @@ mod tests {
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_binary_operation(0, 0, INT, STR, STR, |_, _, a, _| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_binary_operation(0, 0, STR, STR, STR, |_, _, a, _| { Ok(a.clone()) });
-        let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_binary_operation(0, 0, INT, STR, STR, |_, _, a, _, _| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_binary_operation(0, 0, STR, STR, STR, |_, _, a, _, _| { Ok(a.clone()) });
+        let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _, _| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

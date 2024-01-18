@@ -11,7 +11,7 @@ use crate::number::*;
 */
 
 pub type UnaryFunctionInner = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
-pub type BinaryFunctionInner = fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>;
+pub type BinaryFunctionInner = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
 pub type NaryFunctionInner = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
 
 pub type UnaryFunction = Option<UnaryFunctionInner>;
@@ -142,7 +142,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
 
 macro_rules! define_binary_native_op {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type_1: ident, $unwrap_type_2: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b, _| {
             let $a = &*a.get::<$unwrap_type_1>();
             let $b = &*b.get::<$unwrap_type_2>();
     
@@ -153,7 +153,7 @@ macro_rules! define_binary_native_op {
 
 macro_rules! define_binary_native_op_deref_l {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type_1: ident, $unwrap_type_2: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b, _| {
             let $a = &*a.deref::<$unwrap_type_1>();
             let $b = &*b.get::<$unwrap_type_2>();
     
@@ -164,7 +164,7 @@ macro_rules! define_binary_native_op_deref_l {
 
 macro_rules! define_binary_native_op_deref_r {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type_1: ident, $unwrap_type_2: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b, _| {
             let $a = &*a.get::<$unwrap_type_1>();
             let $b = &*b.deref::<$unwrap_type_2>();
     
@@ -175,7 +175,7 @@ macro_rules! define_binary_native_op_deref_r {
 
 macro_rules! define_binary_native_op_deref {
     ($ctx: ident, $id: expr, $l_type: expr, $r_type: expr, $return_type: expr, $unwrap_type_1: ident, $unwrap_type_2: ident, $a: ident, $b: ident, $result: expr) => {
-        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b| {
+        $ctx.define_native_binary_operation($id, 0, $l_type, $r_type, $return_type, |_, _, a, b, _| {
             let $a = &*a.deref::<$unwrap_type_1>();
             let $b = &*b.deref::<$unwrap_type_2>();
     
@@ -350,8 +350,8 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operation(
         14, 1, 
         T_0.to_mut(), T_0, Type::Empty, 
-        Some(|_, _, a, b| {
-            a.assign(b);
+        Some(|_, _, a, b, ctx| {
+            a.assign(b, ctx)?;
             Ok(Object::empty())
         }
     )).unwrap();

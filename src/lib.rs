@@ -193,6 +193,11 @@ mod integration {
     }
 
     #[test]
+    fn adt_assignment() {
+        integration_test("test/adt_assignment.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

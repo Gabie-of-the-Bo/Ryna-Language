@@ -212,12 +212,12 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
         fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
     }
 
-    let norm_mod_path = normalize_path(&module_path)?;
+    let norm_mod_path = normalize_path(module_path)?;
 
     for local_file in glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str()).expect("Error while reading module path") {
         let path = local_file.unwrap();
         let full_import_path = normalize_path(&path)?;
-        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace("\\", "/");
+        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
 
         if import_name != "/main" {
             config_yml.modules.entry(import_name.clone()).or_insert(ModuleInfo {

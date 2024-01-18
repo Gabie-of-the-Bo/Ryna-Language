@@ -580,7 +580,7 @@ impl NessaContext {
     fn mutable_reference_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             tuple((
-                tag("&&"),
+                tag("@"),
                 context("Invalid mutable reference type", cut(|input| self.type_parser(input)))
             )), 
             |(_, t)| Type::MutRef(Box::new(t))
@@ -2594,16 +2594,16 @@ mod tests {
 
         let number_str = "Int";
         let number_ref_str = "&Int";
-        let string_mut_str = "&&String";
-        let wildcard_mut_str = "&&*";
+        let string_mut_str = "@String";
+        let wildcard_mut_str = "@*";
 
-        let or_str = "Int | &&String";
-        let and_str = "(Int, &&String, &Bool)";
+        let or_str = "Int | @String";
+        let and_str = "(Int, @String, &Bool)";
         let and_one_str = "(Int)";
 
         let array_str = "Array<Int>";
         let map_str = "Map<(Int), String>";
-        let map_refs_str = "&Map<&Int, &&String>";
+        let map_refs_str = "&Map<&Int, @String>";
 
         let basic_func_str = "Int => (String)";
         let complex_func_str = "(Int, Array<Bool>) => Map<Int, *>";
@@ -3101,9 +3101,9 @@ mod tests {
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let number_header_str = "fn test(a: Int) -> Int";
-        let ref_header_str = "fn test(arg: &Int) -> &&Int";
+        let ref_header_str = "fn test(arg: &Int) -> @Int";
         let two_args_header_str = "fn test_3(arg_1: &Int, arg: String | Int) -> Int | String";
-        let complex_args_header_str = "fn test_4(a: String | &Int, b: &Array<(Bool, Int)>, c: &&*) -> Map<Int, String>";
+        let complex_args_header_str = "fn test_4(a: String | &Int, b: &Array<(Bool, Int)>, c: @*) -> Map<Int, String>";
 
         let (_, number_header) = ctx.function_header_parser(Span::new(number_header_str)).unwrap();
         let (_, ref_header) = ctx.function_header_parser(Span::new(ref_header_str)).unwrap();

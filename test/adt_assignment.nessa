@@ -1,5 +1,5 @@
 let val: Int = 5;
-let val2: &&(Int | Float) = val;
+let val2: @(Int | Float) = val;
 
 val2 := 10;
 
@@ -15,6 +15,6 @@ if val != 10 {
     panic("Invalid value");
 }
 
-if val2.as<&&Float>() != 10.5 {
+if val2.as<@Float>() != 10.5 {
     panic("Invalid value");
 }

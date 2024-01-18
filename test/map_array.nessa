@@ -1,18 +1,18 @@
-fn<T, G> map(array: &&Array<'T>, f: (&&'T) => 'G) -> Array<'G> {
+fn<T, G> map(array: @Array<'T>, f: (@'T) => 'G) -> Array<'G> {
     let res: Array<'G> = arr<'G>();
 
     for i in array {
-        res.push<'G>(f<&&'T, 'G>(i));
+        res.push<'G>(f<@'T, 'G>(i));
     }
 
     return *<Array<'G>>res;
 }
 
-fn<T> filter(array: &&Array<'T>, f: (&&'T) => Bool) -> Array<'T> {
+fn<T> filter(array: @Array<'T>, f: (@'T) => Bool) -> Array<'T> {
     let res: Array<'T> = arr<'T>();
 
     for i in array {
-        if f<&&'T, Bool>(i) {
+        if f<@'T, Bool>(i) {
             res.push<'T>(*<'T>i);
         }
     }
@@ -27,8 +27,8 @@ a.push<Int>(3);
 a.push<Int>(4);
 a.push<Int>(5);
 
-let b: Array<Int> = a.map<Int, Int>((n: &&Int) -> Int n * 2);
-let c: Array<Bool> = a.map<Int, Bool>((n: &&Int) -> Bool n > 2);
+let b: Array<Int> = a.map<Int, Int>((n: @Int) -> Int n * 2);
+let c: Array<Bool> = a.map<Int, Bool>((n: @Int) -> Bool n > 2);
 
 if b<Int>[0] != 2 || b<Int>[1] != 4 || b<Int>[2] != 6 || b<Int>[3] != 8 || b<Int>[4] != 10 {
     panic("Invalid array contents");
@@ -38,7 +38,7 @@ if *<Bool>c<Bool>[0] || *<Bool>c<Bool>[1] || !*<Bool>c<Bool>[2] || !*<Bool>c<Boo
     panic("Invalid array contents");
 }
 
-let d: Array<Int> = a.filter<Int>((n: &&Int) -> Bool n % 2 == 0);
+let d: Array<Int> = a.filter<Int>((n: @Int) -> Bool n % 2 == 0);
 
 if d<Int>[0] != 2 || d<Int>[1] != 4 {
     panic("Invalid array contents");

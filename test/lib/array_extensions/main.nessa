@@ -26,7 +26,7 @@ fn<T> arr_with_capacity(size: Int) -> Array<'T> {
     return move(res);
 }
 
-fn<T> fill(array: &&Array<'T>, value: 'T) -> &&Array<'T> {
+fn<T> fill(array: @Array<'T>, value: 'T) -> @Array<'T> {
     while array.capacity() > array.len() {
         array.push(*value);
     }
@@ -34,7 +34,7 @@ fn<T> fill(array: &&Array<'T>, value: 'T) -> &&Array<'T> {
     return array;
 }
 
-fn<T> fill_with(array: &&Array<'T>, f: Int => 'T) -> &&Array<'T> {
+fn<T> fill_with(array: @Array<'T>, f: Int => 'T) -> @Array<'T> {
     let idx = array.len();
 
     while array.capacity() > array.len() {
@@ -45,7 +45,7 @@ fn<T> fill_with(array: &&Array<'T>, f: Int => 'T) -> &&Array<'T> {
     return array;
 }
 
-fn<T, G> transform(array: &&Array<'T>, f: 'T => 'G) -> Array<'G> {
+fn<T, G> transform(array: @Array<'T>, f: 'T => 'G) -> Array<'G> {
     let res = arr_with_capacity<'G>(array.len());
 
     for i in array {
@@ -55,7 +55,7 @@ fn<T, G> transform(array: &&Array<'T>, f: 'T => 'G) -> Array<'G> {
     return move(res);
 }
 
-fn<T> transform_inplace(array: &&Array<'T>, f: 'T => 'T) -> &&Array<'T> {
+fn<T> transform_inplace(array: @Array<'T>, f: 'T => 'T) -> @Array<'T> {
     for i in array {
         i := f(*i);
     }
@@ -63,7 +63,7 @@ fn<T> transform_inplace(array: &&Array<'T>, f: 'T => 'T) -> &&Array<'T> {
     return array;
 }
 
-fn<T> reverse(array: &&Array<'T>) -> &&Array<'T> {
+fn<T> reverse(array: @Array<'T>) -> @Array<'T> {
     let length = array.len();
     let half = length / 2;
     let i = 0;
@@ -76,7 +76,7 @@ fn<T> reverse(array: &&Array<'T>) -> &&Array<'T> {
     return array;
 }
 
-fn<T> reduce(array: &&Array<'T>, base: 'T, op: ('T, 'T) => 'T) -> 'T {
+fn<T> reduce(array: @Array<'T>, base: 'T, op: ('T, 'T) => 'T) -> 'T {
     for i in array {
         base := op(*base, *i);
     }

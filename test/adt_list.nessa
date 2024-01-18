@@ -4,12 +4,12 @@ fn add(list: List, number: Int) -> List {
     return (*number, *list);
 }
 
-fn rest(list: &&List) -> &&List {
-    return list.as<&&(Int, List)>().get_1();
+fn rest(list: @List) -> @List {
+    return list.as<@(Int, List)>().get_1();
 }
 
-fn size(list: &&List) -> Int {
-    if list.is<&&Int>() {
+fn size(list: @List) -> Int {
+    if list.is<@Int>() {
         return 1;
     }
 

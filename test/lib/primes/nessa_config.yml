@@ -1,7 +1,7 @@
 ---
 module_name: primes
 version: 0.1.0
-hash: b38226d4053ca6c140bd77615d3e40ac
+hash: 0cfb25b8743e4261e8afd7c24f79f7c4
 module_paths:
   - test/lib
 modules:

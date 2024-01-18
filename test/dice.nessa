@@ -10,7 +10,7 @@ class Dice {
     sides: Int;
 }
 
-fn roll(dice: &&Dice) -> Int {
+fn roll(dice: @Dice) -> Int {
     let res: Int = 0;
     let it: Int = 0;
 

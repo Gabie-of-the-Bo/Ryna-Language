@@ -1733,7 +1733,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn inc(a: String) -> &&String {
+            fn inc(a: String) -> @String {
                 return a;
             }
 
@@ -1766,7 +1766,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            op !(a: String) -> &&String {
+            op !(a: String) -> @String {
                 return a;
             }
 
@@ -1796,7 +1796,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            op (a: String) + (b: Bool) -> &&String {
+            op (a: String) + (b: Bool) -> @String {
                 return a;
             }
 
@@ -1826,7 +1826,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            op (a: String)[b: Bool] -> &&String {
+            op (a: String)[b: Bool] -> @String {
                 return a;
             }
 
@@ -1856,7 +1856,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test(a: String) -> &&String {
+            fn test(a: String) -> @String {
                 return a;
             }
 
@@ -1882,7 +1882,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn test(a: String) -> &&String {
+            fn test(a: String) -> @String {
                 return a;
             }
             

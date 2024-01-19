@@ -136,7 +136,11 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 
     ctx.define_native_unary_operation(2, 1, T_0.to_mut(), T_0, |_, _, a| {
-        Ok(a.deref_obj())
+        Ok(a.deref_obj().deep_clone())
+    }).unwrap();
+
+    ctx.define_native_unary_operation(2, 1, T_0.to_ref(), T_0, |_, _, a| {
+        Ok(a.deref_obj().deep_clone())
     }).unwrap();
 }
 

@@ -38,8 +38,10 @@ pub mod precedence_cache;
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
+    use crate::compilation::NessaError;
     use crate::context::standard_ctx;
     use crate::config::{precompile_nessa_module_with_config, compute_project_hash};
+    use glob::glob;
 
     fn integration_test(file_path: &str) {
         let file = read_to_string(file_path).expect("Unable to locate file");
@@ -47,6 +49,52 @@ mod integration {
 
         if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
             err.emit();
+        }
+    }
+
+    fn integration_test_batch(glob_path: &str) {
+        for file_path in glob(glob_path).expect("Invalid glob") {
+            let file = read_to_string(file_path.unwrap()).expect("Unable to locate file");
+
+            if file.starts_with("// ") {
+                // Negative test
+                let expected_msg = &file.lines().next().unwrap()[3..];
+
+                let result = std::panic::catch_unwind(|| {
+                    let mut ctx = standard_ctx();
+                    ctx.parse_and_execute_nessa_module(&file)
+        
+                }).unwrap_or_else(|err| {
+                    Err(NessaError::execution_error(panic_message::panic_message(&err).to_owned()))
+                });
+        
+                if let Err(err) = result {
+                    let exp_chars = expected_msg.chars().collect::<Vec<_>>();
+                    let err_chars = err.message.chars().collect::<Vec<_>>();
+                    let mut exp_idx = 0;
+                    let mut err_idx = 0;
+        
+                    while exp_idx < exp_chars.len() && err_idx < err_chars.len() {
+                        exp_idx += (err_chars[err_idx] == exp_chars[exp_idx]) as usize;
+                        err_idx += 1;
+                    }
+        
+                    if exp_idx != exp_chars.len() {
+                        panic!("Error message was different from expected:\n - Expected: {}\n - Got: {}", expected_msg, err.message);
+                    }
+        
+                } else {
+                    panic!("Test did not fail!");
+                }
+        
+            } else {
+                // Positive test
+                let mut ctx = standard_ctx();
+
+                if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
+                    err.emit();
+                }        
+            }
         }
     }
 
@@ -195,6 +243,11 @@ mod integration {
     #[test]
     fn adt_assignment() {
         integration_test("test/adt_assignment.nessa");
+    }
+
+    #[test]
+    fn moving() {
+        integration_test_batch("test/batches/moving/*.nessa");
     }
 
     #[test]

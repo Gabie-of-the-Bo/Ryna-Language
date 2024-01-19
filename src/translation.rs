@@ -79,6 +79,7 @@ pub fn load_optimized_unop_opcodes(ctx: &mut NessaContext) {
     use CompiledNessaExpr::*;
 
     ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 0), (Copy, 0));
+    ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 1), (Copy, 0));
 
     let ids = [NEG_UNOP_ID];
     let opcodes = [(Negi, Negf)];
@@ -111,6 +112,7 @@ pub fn load_optimized_fn_opcodes(ctx: &mut NessaContext) {
 
     let deref_id = ctx.get_function_id("deref".into()).unwrap();
     ctx.cache.opcodes.functions.insert((deref_id, 0), (Copy, 0));
+    ctx.cache.opcodes.functions.insert((deref_id, 1), (Copy, 0));
 }
 
 pub fn load_optimized_opcodes(ctx: &mut NessaContext) {

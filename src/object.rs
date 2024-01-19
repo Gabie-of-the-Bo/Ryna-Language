@@ -296,6 +296,14 @@ impl Object {
         }
     }
 
+    pub fn get_ref_nostack(&self) -> Object {
+        ObjectBlock::Ref(self.inner.clone()).to_obj()
+    }
+
+    pub fn get_mut_nostack(&self) -> Object {
+        ObjectBlock::Mut(self.inner.clone()).to_obj()
+    }
+
     pub fn to_debug_string(&self) -> String {
         format!("{:?}", self.inner.borrow())
     }

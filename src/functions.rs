@@ -141,13 +141,13 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("ref".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), |_, _, v, _| {
-        Ok(v[0].get_ref())
+        Ok(v[0].get_ref_nostack())
     }).unwrap();
 
     let idx = ctx.define_function("mut".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
-        Ok(v[0].get_mut())
+        Ok(v[0].get_mut_nostack())
     }).unwrap();
 
     let idx = ctx.define_function("demut".into()).unwrap();

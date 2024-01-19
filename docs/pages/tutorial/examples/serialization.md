@@ -13,7 +13,7 @@ One way to do this is to define a `Serializable` interface and a class for each 
 
 ```
 interface Serializable<Serializer> {
-    fn serialize(serializer: &&'Serializer, obj: Self) -> String;
+    fn serialize(serializer: @'Serializer, obj: Self) -> String;
 }
 
 // A class for each format. These might have state
@@ -26,7 +26,7 @@ class SerializerFormat3 {}
 After this, you could implement `Serializable<FormatClass>` for each datat type that you want to be able to serialize:
 
 ```
-fn serialize(serializer: &&SerializerFormat1, obj: Int) -> String {
+fn serialize(serializer: @SerializerFormat1, obj: Int) -> String {
     [...]
 }
 
@@ -42,15 +42,15 @@ Let's build an example for JSON using a class called `JSONSerializer`:
 class JSONSerializer {}
 
 // Functions
-fn serialize(serializer: &&JSONSerializer, obj: Int) -> String {
+fn serialize(serializer: @JSONSerializer, obj: Int) -> String {
     return obj.deref().to_string();
 }
 
-fn serialize(serializer: &&JSONSerializer, obj: Float) -> String {
+fn serialize(serializer: @JSONSerializer, obj: Float) -> String {
     return obj.deref().to_string();
 }
 
-fn serialize(serializer: &&JSONSerializer, obj: String) -> String {
+fn serialize(serializer: @JSONSerializer, obj: String) -> String {
     return "\"" + obj + "\"";
 }
 
@@ -65,7 +65,7 @@ Now you can make use of what you built to create `Array` serialization:
 ```
 import * from range;
 
-fn<T> serialize(serializer: &&JSONSerializer, obj: Array<'T [Serializable<JSONSerializer>]>) -> String {
+fn<T> serialize(serializer: @JSONSerializer, obj: Array<'T [Serializable<JSONSerializer>]>) -> String {
     let res = "[";
 
     for i in range(0, obj.len()) {
@@ -95,11 +95,11 @@ class Test {
 }
 
 // Fucntions
-fn<K, V> serialize_map_field(serializer: &&JSONSerializer, key: 'K [Serializable<JSONSerializer>], value: 'V [Serializable<JSONSerializer>]) -> String {
+fn<K, V> serialize_map_field(serializer: @JSONSerializer, key: 'K [Serializable<JSONSerializer>], value: 'V [Serializable<JSONSerializer>]) -> String {
     return serializer.serialize(*key) + ": " + serializer.serialize(*value);
 }
 
-fn serialize(serializer: &&JSONSerializer, obj: Test) -> String {
+fn serialize(serializer: @JSONSerializer, obj: Test) -> String {
     let a = serializer.serialize_map_field("att_a", move(obj.att_a()));
     let b = serializer.serialize_map_field("att_b", move(obj.att_b()));
 

@@ -3,7 +3,7 @@ import * from range;
 
 // Map test
 
-let map_arr = arr<Int>().map((i: &&Int) i * i).map((i: Int) i - 1);
+let map_arr = arr<Int>().map((i: @Int) i * i).map((i: Int) i - 1);
 let map_rng = range(0, 10).map((i: Int) i * i).map((i: Int) i - 1);
 let cpy = *map_rng;
 

@@ -136,7 +136,7 @@ impl Type {
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
             Type::Ref(t) => format!("{}{}", "&".magenta(), t.get_name(ctx)),
-            Type::MutRef(t) => format!("{}{}", "&&".magenta(), t.get_name(ctx)),
+            Type::MutRef(t) => format!("{}{}", "@".magenta(), t.get_name(ctx)),
             Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
 
@@ -180,7 +180,7 @@ impl Type {
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().to_string(),
             Type::Ref(t) => format!("{}{}", "&", t.get_name_plain(ctx)),
-            Type::MutRef(t) => format!("{}{}", "&&", t.get_name_plain(ctx)),
+            Type::MutRef(t) => format!("{}{}", "@", t.get_name_plain(ctx)),
             Type::Or(v) => v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")),
 

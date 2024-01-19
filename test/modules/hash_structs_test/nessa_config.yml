@@ -1,7 +1,7 @@
 ---
 module_name: hash_structs_test
 version: 0.1.0
-hash: 144e4eedb3d468fd3a6f2e91fe9758d9
+hash: 94eca1dda729ead6681276543d461fca
 module_paths:
   - test/lib
 modules:

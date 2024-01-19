@@ -1,0 +1,5 @@
+// Accessing moved object
+let n = 5;
+let m = fwd<Int>(n);
+
+print(*n);

@@ -27,8 +27,8 @@ fn iterator(it: Primes) -> Primes {
     return *it;
 }
 
-fn next(it: &&Primes) -> Int {
-    let curr: &&Int = it.current();
+fn next(it: @Primes) -> Int {
+    let curr: @Int = it.current();
     curr.inc();
 
     while !is_prime(*curr) {
@@ -38,6 +38,6 @@ fn next(it: &&Primes) -> Int {
     return *curr;
 }
 
-fn is_consumed(it: &&Primes) -> Bool {
+fn is_consumed(it: @Primes) -> Bool {
     return false;
 }

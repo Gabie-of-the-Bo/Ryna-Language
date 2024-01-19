@@ -53,13 +53,13 @@ fn add(list: List, number: Int) -> List {
 }
 
 // Get every element but the first
-fn rest(list: &&List) -> &&List {
-    return list.as<&&(Int, List)>().get_1();
+fn rest(list: @List) -> @List {
+    return list.as<@(Int, List)>().get_1();
 }
 
 // Get size of the list
-fn size(list: &&List) -> Int {
-    if list.is<&&Nil>() { // The size of an empty list is 0
+fn size(list: @List) -> Int {
+    if list.is<@Nil>() { // The size of an empty list is 0
         return 0;
     }
 

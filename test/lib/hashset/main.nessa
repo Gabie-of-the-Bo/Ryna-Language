@@ -6,7 +6,7 @@ class HashSet<V> {
     buckets: Array<Array<'V [Hashable]>>;
 }
 
-fn<T> init(set: &&HashSet<'T [Hashable]>, size: Int) {
+fn<T> init(set: @HashSet<'T [Hashable]>, size: Int) {
     let _buckets = set.buckets();
     _buckets.reserve(*size);
 
@@ -22,7 +22,7 @@ fn<T> hashset() -> HashSet<'T [Hashable]> {
     return move(res);
 }
 
-fn<T> rehash(set: &&HashSet<'T [Hashable]>) {
+fn<T> rehash(set: @HashSet<'T [Hashable]>) {
     let b = set.buckets();
     let size = b.len();
 
@@ -38,7 +38,7 @@ fn<T> rehash(set: &&HashSet<'T [Hashable]>) {
     set.buckets() := move(aux.buckets());
 }
 
-fn<T> add(set: &&HashSet<'T [Hashable]>, elem: 'T) {
+fn<T> add(set: @HashSet<'T [Hashable]>, elem: 'T) {
     let b = set.buckets();
     let size = b.len();
     let pos = hash(*elem) % size;
@@ -50,7 +50,7 @@ fn<T> add(set: &&HashSet<'T [Hashable]>, elem: 'T) {
     }
 }
 
-fn<T> contains(set: &&HashSet<'T [Hashable]>, elem: &&'T) -> Bool {
+fn<T> contains(set: @HashSet<'T [Hashable]>, elem: @'T) -> Bool {
     let b = set.buckets();
     let size = b.len();
     let pos = hash(*elem) % size;

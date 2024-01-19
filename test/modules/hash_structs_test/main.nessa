@@ -31,8 +31,8 @@ if !map.contains(2.mut()) || !map.contains(5.mut()) || !map.contains(11.mut()) |
     panic("Invalid contents!");
 }
 
-if map.get(2.mut()).as<&&String>() != "Test 1"  || map.get(5.mut()).as<&&String>() != "Test 2" || 
-   map.get(11.mut()).as<&&String>() != "Test 3" || map.get(44.mut()).as<&&String>() != "Test 4" {
+if map.get(2.mut()).as<@String>() != "Test 1"  || map.get(5.mut()).as<@String>() != "Test 2" || 
+   map.get(11.mut()).as<@String>() != "Test 3" || map.get(44.mut()).as<@String>() != "Test 4" {
     panic("Invalid contents!");
 }
 

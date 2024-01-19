@@ -1,4 +1,4 @@
-fn is_prime(n: &&Int) -> Bool {
+fn is_prime(n: @Int) -> Bool {
     if n <= 1 {
         return false;
     }

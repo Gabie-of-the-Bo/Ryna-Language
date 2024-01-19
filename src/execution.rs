@@ -367,7 +367,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        match ov.3.unwrap()(type_args, &ov.2, a, b) {
+                        match ov.3.unwrap()(type_args, &ov.2, a, b, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };
@@ -545,10 +545,10 @@ mod tests {
             let array: Array<Int> = arr<Int>();
             array.push<Int>(5);
 
-            let iter: ArrayIterator<&&Int> = array.iterator<Int>();
+            let iter: ArrayIterator<@Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
-            let elem: &&Int = iter.next<Int>();
+            let elem: @Int = iter.next<Int>();
             let ended_2: Bool = iter.is_consumed();
 
             let array_2: Array<Int> = arr<Int>();
@@ -632,7 +632,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn is_prime(n: &&Int) -> Bool {
+            fn is_prime(n: @Int) -> Bool {
                 if n <= 1 {
                     return false;
                 }
@@ -690,24 +690,24 @@ mod tests {
         let code_str = "
             unary prefix op \"~\" (201);
 
-            op ~(arg: &&Int) -> &&Int {
+            op ~(arg: @Int) -> @Int {
                 return arg;
             }
 
             unary postfix op \"¡\" (301);
 
-            op (arg: &&Int)¡ -> &&Int {
+            op (arg: @Int)¡ -> @Int {
                 return arg;
             }
 
             let a: Int = 3;
-            let b: &&Int = ~a¡;
+            let b: @Int = ~a¡;
 
             binary op \"·\" (401);
             binary op \"$\" (501);
             binary op \"@\" (601);
 
-            op (a: &&Int) · (b: &&Int) -> Int {
+            op (a: @Int) · (b: @Int) -> Int {
                 return a + b;
             }
 
@@ -715,7 +715,7 @@ mod tests {
 
             nary op from \"`\" to \"´\" (701);
 
-            op (a: &&Int)`b: &&Int, c: &&Int´ -> Int {
+            op (a: @Int)`b: @Int, c: @Int´ -> Int {
                 return a + b + ~c;
             }
 
@@ -734,13 +734,13 @@ mod tests {
                 return 5;
             }
         
-            fn test_2() -> &&Int {
+            fn test_2() -> @Int {
                 let res: Int = 0;
 
                 return res;
             }
         
-            fn test_3() -> &&String {
+            fn test_3() -> @String {
                 let res: String = \"\";
 
                 res = \"Hello\";
@@ -748,19 +748,19 @@ mod tests {
                 return res;
             }
         
-            fn test_4() -> &&Int {
+            fn test_4() -> @Int {
                 let res: Int = test_1() + test_1();
 
                 return res;
             }
         
-            fn test_5(a: Int, b: Int) -> &&Int {
+            fn test_5(a: Int, b: Int) -> @Int {
                 let res: Int = a + b;
 
                 return res;
             }
         
-            fn test_6(a: Int) -> Int | &&Int {
+            fn test_6(a: Int) -> Int | @Int {
                 if true {
                     return a;
 
@@ -930,12 +930,12 @@ mod tests {
             return it.deref<Int>();
         }
 
-        fn next(it: &&Int) -> Int {
+        fn next(it: @Int) -> Int {
             it.inc();
             return it.deref<Int>();
         }
 
-        fn is_consumed(it: &&Int) -> Bool {
+        fn is_consumed(it: @Int) -> Bool {
             return it >= 10;
         }
 
@@ -965,14 +965,14 @@ mod tests {
             return it.deref<Range>();
         }
 
-        fn next(it: &&Range) -> Int {
-            let curr: &&Int = it.current();
+        fn next(it: @Range) -> Int {
+            let curr: @Int = it.current();
             curr.inc();
 
             return curr.deref<Int>();
         }
 
-        fn is_consumed(it: &&Range) -> Bool {
+        fn is_consumed(it: @Range) -> Bool {
             return it.current() >= it.end();
         }
 
@@ -1087,10 +1087,10 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-        let apply: (Int, &&(Int => Int)) => Int = (n: Int, f: &&(Int => Int)) -> Int f<Int, Int>(*<Int>n);
+        let apply: (Int, @(Int => Int)) => Int = (n: Int, f: @(Int => Int)) -> Int f<Int, Int>(*<Int>n);
         let f: (Int) => Int = (n: Int) -> Int n * n;
 
-        let a = apply<Int, &&(Int => Int), Int>(5, f);
+        let a = apply<Int, @(Int => Int), Int>(5, f);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

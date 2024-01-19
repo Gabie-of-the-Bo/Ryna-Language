@@ -1,0 +1,5 @@
+let n = 5;
+let m = fwd<Int>(n.demut());
+
+print(*n);
+print(*m);

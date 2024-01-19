@@ -1,4 +1,4 @@
-fn<T> double(array: &&Array<'T>) {
+fn<T> double(array: @Array<'T>) {
     for i in array {
         i := i * 2;
     }

@@ -18,7 +18,7 @@ As you might expect, you can mix these with everything we have seen before. All 
 ```
 Int | &Float         // Either an Int or a constant reference to a Float
 &(Int | Bool)        // A constant reference to either an Int or a Bool
-&&(String, Int)      // Mutable reference to a tuple of a String and an Int
+@(String, Int)       // Mutable reference to a tuple of a String and an Int
 Bool | &(Bool, Bool) // Either a Bool or a constant reference to a tuple of two Bools
 ```
 

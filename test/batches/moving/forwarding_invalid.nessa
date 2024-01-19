@@ -1,0 +1,3 @@
+// Unable to forward value of type @Int as type Float
+let n = 5;
+let m = fwd<Float>(n);

@@ -5,11 +5,11 @@ fn<T> succ(n: 'T) -> Succ<'T> {
     return (Zero(), *n);
 }
 
-fn to_int(n: &&Zero) -> Int {
+fn to_int(n: @Zero) -> Int {
     return 0;
 }
 
-fn<T> to_int(n: &&Succ<'T>) -> Int {
+fn<T> to_int(n: @Succ<'T>) -> Int {
     return get_1(n).to_int() + 1;
 }
 

@@ -40,7 +40,7 @@ The parameters are ordered from top to bottom. Let's see an example:
 class ExampleClass {
     attrib_1: Int;
     attrib_2: &Int;
-    attrib_3: &&Int;
+    attrib_3: @Int;
 }
 
 let a = 1;
@@ -55,7 +55,7 @@ Each attribute creates a function with the same name that takes an instance of t
 returned as references to allow modifications. Following the previous example, you could access `ExampleClass`'s attributes like this:
 
 ```
-ex.attrib_1(); // Returns &&Int
+ex.attrib_1(); // Returns @Int
 ex.attrib_2(); // Returns &Int
-ex.attrib_3(); // Returns &&Int
+ex.attrib_3(); // Returns @Int
 ```

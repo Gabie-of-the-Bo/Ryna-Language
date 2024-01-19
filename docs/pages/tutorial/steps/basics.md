@@ -98,8 +98,8 @@ to prevent the user from making unnecessary copies:
 ```
 let big = "Imagine this is a very big string ...";
 
-let big_2: String = big;            // ERROR: &&String is not bindable to String
-let big_3: &&String = big;          // Keeps a reference
+let big_2: String = big;            // ERROR: @String is not bindable to String
+let big_3: @String = big;           // Keeps a reference
 let big_4: String = big.deref();    // Copies the original data
 let big_5: &String = big.demut();   // Keeps a constant reference
 ```

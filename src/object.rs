@@ -1,6 +1,6 @@
 use std::{cell::{RefCell, Ref, RefMut}, rc::Rc, fs::File};
 
-use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID, FILE_ID, FILE}, ARR_OF, ARR_IT_OF};
+use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID, FILE_ID, FILE}, ARR_OF, ARR_IT_OF, context::NessaContext};
 
 type DataBlock = Rc<RefCell<ObjectBlock>>;
 
@@ -146,7 +146,7 @@ impl ObjectBlock {
         unreachable!();
     }
 
-    pub fn assign(&mut self, other: ObjectBlock) {
+    pub fn assign(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
         use ObjectBlock::*;
 
         match (&mut *self.dereference().borrow_mut(), other) {
@@ -154,14 +154,20 @@ impl ObjectBlock {
             (Float(a), Float(b)) => *a = b,
             (Str(a), Str(b)) => *a = b,
             (Bool(a), Bool(b)) => *a = b,
-            (Array(a), Array(b)) => *a = b,
-            (ArrayIter(a), ArrayIter(b)) => *a = b,
-            (Lambda(a), Lambda(b)) => *a = b,
-            (Instance(a), Instance(b)) => *a = b,
-            (Tuple(a), Tuple(b)) => *a = b,
+            (Array(a), Array(b)) if a.elem_type == b.elem_type => *a = b,
+            (ArrayIter(a), ArrayIter(b)) if a.it_type == b.it_type => *a = b,
+            (Lambda(a), Lambda(b)) if a.args_type == b.args_type && a.ret_type == b.ret_type => *a = b,
+            (Instance(a), Instance(b)) if a.id == b.id && a.params == b.params => *a = b,
+            (Tuple(a), Tuple(b)) if a.elem_types == b.elem_types => *a = b,
 
-            (a, b) => unreachable!("{:?}, {:?}", a, b)
-        }
+            (a, b) => return Err(format!(
+                "Unable to assign value of type {} to block of type {}", 
+                b.get_type().get_name(ctx),
+                a.get_type().get_name(ctx)
+            ))
+        };
+
+        Ok(())
     }
 }
 
@@ -253,11 +259,11 @@ impl Object {
         self.move_contents();
     }
     
-    pub fn assign(&self, other_obj: Object) {
+    pub fn assign(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
         match Rc::try_unwrap(other_obj.inner) {
-            Ok(inner) => self.inner.borrow_mut().assign(RefCell::take(&inner)),
-            Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone())
-        };
+            Ok(inner) => self.inner.borrow_mut().assign(RefCell::take(&inner), ctx),
+            Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone(), ctx)
+        }
     }
 
     pub fn from_inner(inner: DataBlock) -> Self {
@@ -288,6 +294,14 @@ impl Object {
 
             _ => ObjectBlock::Mut(self.inner.clone()).to_obj()
         }
+    }
+
+    pub fn get_ref_nostack(&self) -> Object {
+        ObjectBlock::Ref(self.inner.clone()).to_obj()
+    }
+
+    pub fn get_mut_nostack(&self) -> Object {
+        ObjectBlock::Mut(self.inner.clone()).to_obj()
     }
 
     pub fn to_debug_string(&self) -> String {
@@ -419,6 +433,7 @@ impl_nessa_data!(NessaFile, File);
 
 #[cfg(test)]
 mod tests {
+    use crate::context::standard_ctx;
     use crate::number::Integer;
     use crate::object::*;
 
@@ -437,6 +452,8 @@ mod tests {
 
     #[test]
     fn references() {
+        let ctx = standard_ctx();
+
         let number = Object::new(Integer::from(10));
         
         assert_eq!(*number.get::<Integer>(), Integer::from(10));
@@ -462,7 +479,7 @@ mod tests {
         assert_eq!(*reference.deref::<Integer>(), Integer::from(15));
         assert_eq!(*ref_of_ref.deref::<Integer>(), Integer::from(15));
 
-        reference.assign(ObjectBlock::Int(Integer::from(20)).to_obj());
+        reference.assign(ObjectBlock::Int(Integer::from(20)).to_obj(), &ctx).unwrap();
 
         assert_eq!(*number.get::<Integer>(), Integer::from(20));
         assert_eq!(*reference.deref::<Integer>(), Integer::from(20));

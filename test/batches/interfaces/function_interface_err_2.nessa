@@ -1,0 +1,10 @@
+// Function overload for test(Int) needed by interface Test returns Float, which is not bindable to the required Int
+interface Test {
+    fn test(n: Self) -> Int;
+}
+
+fn test(n: Int) -> Float {
+    return 5.0;
+}
+
+implement Test for Int;

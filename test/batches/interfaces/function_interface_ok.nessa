@@ -1,0 +1,9 @@
+interface Test {
+    fn test(n: Self) -> Int;
+}
+
+fn test(n: Int) -> Int {
+    return 5;
+}
+
+implement Test for Int;

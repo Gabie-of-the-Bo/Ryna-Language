@@ -1175,7 +1175,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::InterfaceDefinition(l, _, t, fns) => {
+            NessaExpr::InterfaceDefinition(l, _, t, fns, uns, bin, nary) => {
                 let mut templates = HashSet::new();
 
                 for (_, f_t, args, r) in fns {
@@ -1200,6 +1200,61 @@ impl NessaContext {
                                 return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                             }    
                         }
+                    }
+                }
+
+                for (_, f_t, _, at, r) in uns {
+                    self.check_type_well_formed(at, l)?;
+                    self.check_type_well_formed(r, l)?;
+
+                    at.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (i, n) in f_t.iter().enumerate() {
+                        let offset_id = i + t.len();
+
+                        if !templates.contains(&offset_id) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        }    
+                    }
+                }
+
+                for (_, f_t, (_, a0t), (_, a1t), r) in bin {
+                    self.check_type_well_formed(a0t, l)?;
+                    self.check_type_well_formed(a1t, l)?;
+                    self.check_type_well_formed(r, l)?;
+
+                    a0t.template_dependencies(&mut templates);
+                    a1t.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (i, n) in f_t.iter().enumerate() {
+                        let offset_id = i + t.len();
+
+                        if !templates.contains(&offset_id) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        }    
+                    }
+                }
+
+                for (_, f_t, (_, a0t), args, r) in nary {
+                    self.check_type_well_formed(a0t, l)?;
+                    self.check_type_well_formed(r, l)?;
+
+                    a0t.template_dependencies(&mut templates);
+                    r.template_dependencies(&mut templates);
+
+                    for (_, i) in args {
+                        self.check_type_well_formed(i, l)?;
+                        i.template_dependencies(&mut templates);
+                    }
+
+                    for (i, n) in f_t.iter().enumerate() {
+                        let offset_id = i + t.len();
+
+                        if !templates.contains(&offset_id) {
+                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        }    
                     }
                 }
 
@@ -1336,7 +1391,15 @@ impl NessaContext {
                 match self.get_interface_id(n.clone()) {
                     Ok(int_id) => {
                         let fns = &self.interfaces[int_id].fns;
-                        let max_tms = fns.iter().map(|i| i.1.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap() + self.interfaces[int_id].params.len();
+                        let uns = &self.interfaces[int_id].uns;
+                        let bin = &self.interfaces[int_id].bin;
+                        let nary = &self.interfaces[int_id].nary;
+
+                        let max_tms = fns.iter().map(|i| i.1.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap_or(0) + 
+                                      uns.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
+                                      bin.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
+                                      nary.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
+                                      self.interfaces[int_id].params.len();
 
                         let mut offset_t = t.clone();
                         let mut offset_ts = ts.clone();
@@ -1373,8 +1436,7 @@ impl NessaContext {
                                                         n.green()
                                                     ), 
                                                     l, vec!()
-                                                ));
-    
+                                                ));    
                                             }
                                         },
                                         
@@ -1399,6 +1461,230 @@ impl NessaContext {
 
                                 Err(err) => {
                                     return Err(NessaError::compiler_error(err, l, vec!()));
+                                }
+                            }
+                        }
+
+                        for (op_id, _, _, at, ret) in uns {
+                            let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
+                            let arg_sub = at.sub_self(&offset_t).sub_templates(&t_subs);
+
+                            match self.is_unary_op_ambiguous(*op_id, arg_sub.clone()) {
+                                None => {
+                                    if let Ok((_, r, _, _)) = self.get_first_unary_op(*op_id, arg_sub.clone(), None, true, l) {
+                                        if !r.bindable_to(&ret_sub, self) {
+                                            if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
+                                                if *prefix {
+                                                    return Err(NessaError::compiler_error(
+                                                        format!(
+                                                            "Unary operation overload for {}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
+                                                            representation, arg_sub.get_name(self),
+                                                            n.green(), r.get_name(self), ret_sub.get_name(self)
+                                                        ), 
+                                                        l, vec!()
+                                                    ));     
+
+                                                } else {
+                                                    return Err(NessaError::compiler_error(
+                                                        format!(
+                                                            "Unary operation overload for ({}){} needed by interface {} returns {}, which is not bindable to the required {}", 
+                                                            arg_sub.get_name(self), representation,
+                                                            n.green(), r.get_name(self), ret_sub.get_name(self)
+                                                        ), 
+                                                        l, vec!()
+                                                    ));      
+                                                }
+                                            }        
+                                        }
+                                    
+                                    } else {
+                                        if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
+                                            if *prefix {
+                                                return Err(NessaError::compiler_error(
+                                                    format!(
+                                                        "Unable to find the unary operation overload overload for {}({}) needed by interface {}", 
+                                                        representation, arg_sub.get_name(self),
+                                                        n.green()
+                                                    ), 
+                                                    l, vec!()
+                                                ));   
+
+                                            } else {
+                                                return Err(NessaError::compiler_error(
+                                                    format!(
+                                                        "Unable to find the unary operation overload overload for ({}){} needed by interface {}", 
+                                                        arg_sub.get_name(self), representation,
+                                                        n.green()
+                                                    ), 
+                                                    l, vec!()
+                                                ));   
+                                            }                                     
+                                        }
+                                    }
+                                },
+                                
+                                Some(ov) => {
+                                    // Do not check templated types. Check later on calls
+                                    if t.has_templates() || ts.iter().any(|i| i.has_templates()) {
+                                        return Ok(());
+                                    }
+                                    
+                                    if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
+                                        if *prefix {
+                                            let possibilities = ov.iter().map(|(a, r)| format!("{}({}) -> {}", representation, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
+                                            
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unary operation {}({}) is ambiguous",
+                                                    representation,
+                                                    t.get_name(self)
+                                                ), l, 
+                                                possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                                            ));
+                
+                                        } else {
+                                            let possibilities = ov.iter().map(|(a, r)| format!("({}){} -> {}", a.get_name(self), representation, r.get_name(self))).collect::<Vec<_>>();
+                        
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unary operation ({}){} is ambiguous",
+                                                    t.get_name(self),
+                                                    representation
+                                                ), l, 
+                                                possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                                            ));
+                                        }
+                                        
+                                    } else {
+                                        unreachable!();
+                                    }
+                                },
+                            }
+                        }
+
+                        for (op_id, _, (_, a0t), (_, a1t), ret) in bin {
+                            let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
+                            let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
+                            let arg1_sub = a1t.sub_self(&offset_t).sub_templates(&t_subs);
+                    
+                            match self.is_binary_op_ambiguous(*op_id, arg0_sub.clone(), arg1_sub.clone()) {
+                                None => {
+                                    if let Operator::Binary{representation, ..} = &self.binary_ops[*op_id] {
+                                        if let Ok((_, r, _, _)) = self.get_first_binary_op(*op_id, arg0_sub.clone(), arg1_sub.clone(), None, true, l) {
+                                            if !r.bindable_to(&ret_sub, self) {
+                                                return Err(NessaError::compiler_error(
+                                                    format!(
+                                                        "Binary operation overload for ({}){}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
+                                                        arg0_sub.get_name(self), representation, arg1_sub.get_name(self),
+                                                        n.green(), r.get_name(self), ret_sub.get_name(self)
+                                                    ), 
+                                                    l, vec!()
+                                                ));    
+                                            }
+    
+                                        } else {
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unable to find the binary operation overload for ({}){}({}) needed by interface {}", 
+                                                    arg0_sub.get_name(self), representation, arg1_sub.get_name(self),
+                                                    n.green()
+                                                ), 
+                                                l, vec!()
+                                            ));    
+                                        }    
+                                    }
+                                },
+                                
+                                Some(ov) => {
+                                    // Do not check templated types. Check later on calls
+                                    if t.has_templates() || ts.iter().any(|i| i.has_templates()) {
+                                        return Ok(());
+                                    }
+                                    
+                                    if let Operator::Binary{representation, ..} = &self.binary_ops[*op_id] {
+                                        let possibilities = ov.iter()
+                                            .map(|(a1, a2, r)| format!("({}){}({}) -> {}", a1.get_name(self), representation, a2.get_name(self), r.get_name(self)))
+                                            .collect::<Vec<_>>();                
+                                        
+                                        return Err(NessaError::compiler_error(
+                                            format!(
+                                                "Binary operation ({}){}({}) is ambiguous",
+                                                arg0_sub.get_name(self),
+                                                representation, 
+                                                arg1_sub.get_name(self)
+                                            ), l, 
+                                            possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+
+                        for (op_id, _, (_, a0t), args, ret) in nary {
+                            let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
+                            let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
+                            let args_sub = args.iter().map(|(_, tp)| tp.sub_self(&offset_t).sub_templates(&t_subs)).collect::<Vec<_>>();
+
+                            match self.is_nary_op_ambiguous(*op_id, arg0_sub.clone(), args_sub.clone()) {
+                                None => {
+                                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*op_id] {
+                                        if let Ok((_, r, _, _)) = self.get_first_nary_op(*op_id, arg0_sub.clone(), args_sub.clone(), None, true, l) {
+                                            if !r.bindable_to(&ret_sub, self) {
+                                                return Err(NessaError::compiler_error(
+                                                    format!(
+                                                        "N-ary operation overload for {}{}{}{} needed by interface {} returns {}, which is not bindable to the required {}", 
+                                                        arg0_sub.get_name(self), 
+                                                        open_rep,
+                                                        args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                        close_rep,        
+                                                        n.green(), r.get_name(self), ret_sub.get_name(self)
+                                                    ), 
+                                                    l, vec!()
+                                                ));    
+                                            }
+
+                                        } else {
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unable to find the n-ary operation overload for {}{}{}{} needed by interface {}", 
+                                                    arg0_sub.get_name(self), 
+                                                    open_rep,
+                                                    args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                    close_rep,        
+                                                    n.green()
+                                                ), 
+                                                l, vec!()
+                                            ));    
+                                        }
+                                    }
+                                },
+
+                                Some(ov) => {
+                                    if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*op_id] {
+                                        let possibilities = ov.iter()
+                                            .map(|(f, a, r)| 
+                                                format!(
+                                                    "{}{}{}{} -> {}", 
+                                                    f.get_name(self), 
+                                                    open_rep,
+                                                    a.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                    close_rep,
+                                                    r.get_name(self)
+                                                )
+                                            )
+                                            .collect::<Vec<_>>();
+                                
+                                        return Err(NessaError::compiler_error(
+                                            format!(
+                                                "N-ary operation {}{}{}{} is ambiguous",
+                                                arg0_sub.get_name(self), 
+                                                open_rep,
+                                                args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                                                close_rep
+                                            ), l, 
+                                            possibilities.into_iter().map(|i| format!("Possible overload: {}", i)).collect()
+                                        ));
+                                    }
                                 }
                             }
                         }

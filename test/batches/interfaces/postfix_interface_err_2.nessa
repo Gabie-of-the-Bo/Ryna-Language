@@ -1,0 +1,6 @@
+// Unary operation overload for !(Bool) needed by interface Test returns Bool, which is not bindable to the required Int
+interface Test {
+    op !(n: Self) -> Int;
+}
+
+implement Test for Bool;

@@ -1,0 +1,11 @@
+unary postfix op "?" (10000);
+
+interface Test {
+    op (n: Self)? -> Bool;
+}
+
+op (n: Int)? -> Bool {
+    return n > 5;
+}
+
+implement Test for Int;

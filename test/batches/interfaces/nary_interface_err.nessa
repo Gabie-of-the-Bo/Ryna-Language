@@ -1,0 +1,6 @@
+// Unable to find the n-ary operation overload for Int[Int] needed by interface Test
+interface Test {
+    op (a: Self)[idx: Int] -> Int;
+}
+
+implement Test for Int;

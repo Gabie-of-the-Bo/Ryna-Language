@@ -216,7 +216,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>),
+    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -2228,6 +2228,7 @@ impl NessaContext {
                 let mut fns: Vec<FunctionHeader> = vec!();
                 let mut unary: Vec<UnaryOpHeader> = vec!();
                 let mut binary: Vec<BinaryOpHeader> = vec!();
+                let mut nary: Vec<NaryOpHeader> = vec!();
 
                 p.into_iter().for_each(|h| {
                     match h {
@@ -2265,11 +2266,24 @@ impl NessaContext {
                             binary.push((id, tm, (a0, a0t), (a1, a1t), ret));
                         }
 
-                        _ => todo!()
+                        InterfaceHeader::NaryOpHeader(id, tm, (a0, mut a0t), mut args, mut ret) => {
+                            let u_tm = tm.clone();
+                            let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+
+                            a0t.compile_templates(&all_tm);
+
+                            args.iter_mut().for_each(|(_, tp)| {
+                                tp.compile_templates(&all_tm);
+                            });
+
+                            ret.compile_templates(&all_tm);
+
+                            nary.push((id, tm, (a0, a0t), args, ret));
+                        }
                     }
                 });
 
-                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary, binary)
+                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary, binary, nary)
             }
         )(input);
     }

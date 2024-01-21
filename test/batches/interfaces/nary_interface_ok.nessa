@@ -1,0 +1,5 @@
+interface Test {
+    op (a: Self)[idx: Int] -> Int;
+}
+
+implement Test for Array<Int>;

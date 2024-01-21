@@ -1,0 +1,6 @@
+// Unable to find the function overload for test(Int) needed by interface Test
+interface Test {
+    fn test(n: Self) -> Int;
+}
+
+implement Test for Int;

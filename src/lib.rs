@@ -32,6 +32,9 @@ pub mod graph;
 #[path = "structures/variable_map.rs"]
 pub mod variable_map;
 
+#[path = "structures/id_mapper.rs"]
+pub mod id_mapper;
+
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
 
@@ -248,6 +251,11 @@ mod integration {
     #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
+    }
+
+    #[test]
+    fn interfaces() {
+        integration_test_batch("test/batches/interfaces/*.nessa");
     }
 
     #[test]

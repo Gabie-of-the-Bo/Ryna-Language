@@ -8,6 +8,7 @@ use crate::interfaces::Interface;
 use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::InterfaceFunctionHeader;
 use crate::interfaces::InterfaceImpl;
+use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
 use crate::translation::load_optimized_opcodes;
@@ -95,14 +96,15 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
+    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>) -> Result<(), String> {
         for i in self.interfaces.iter_mut() {
             if i.name == representation {
                 *i = Interface {
                     id: i.id,
                     name: representation,
                     params,
-                    fns
+                    fns,
+                    uns
                 };
 
                 return Ok(());
@@ -112,7 +114,7 @@ impl NessaContext {
         Err(format!("Interface {} was not defined", representation))
     }
 
-    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
+    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>) -> Result<(), String> {
         for i in &self.interfaces {
             if i.name == representation {
                 return Err(format!("Interface \"{}\" is already defined", representation))
@@ -125,7 +127,8 @@ impl NessaContext {
             id: self.interfaces.len(),
             name: representation,
             params,
-            fns
+            fns,
+            uns
         });
 
         Ok(())

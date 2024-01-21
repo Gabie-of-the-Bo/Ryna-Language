@@ -375,7 +375,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(l, _, _, _) |
             NessaExpr::NaryOperatorDefinition(l, _, _, _) |
             NessaExpr::ClassDefinition(l, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(l, _, _, _) |
+            NessaExpr::InterfaceDefinition(l, _, _, _, _) |
             NessaExpr::InterfaceImplementation(l, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _) |

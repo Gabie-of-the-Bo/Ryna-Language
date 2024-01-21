@@ -1,0 +1,6 @@
+// Unable to find the unary operation overload overload for !(Int) needed by interface Test
+interface Test {
+    op !(n: Self) -> Bool;
+}
+
+implement Test for Int;

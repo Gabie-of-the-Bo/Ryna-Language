@@ -41,6 +41,14 @@ type BinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type)
 type NaryOpHeader = (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
 type FunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum InterfaceHeader {
+    UnaryOpHeader(usize, Vec<String>, String, Type, Type),
+    BinaryOpHeader(usize, Vec<String>, (String, Type), (String, Type), Type),
+    NaryOpHeader(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type),
+    FunctionHeader(String, Option<Vec<String>>, Vec<(String, Type)>, Type)
+}
+
 pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<VerboseError<Span<'a>>> {
     nom::Err::Error(VerboseError { 
         errors: vec!(
@@ -208,7 +216,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>),
+    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -2185,7 +2193,28 @@ impl NessaContext {
                         empty0,
                         delimited(
                             empty0, 
-                            |input| self.function_header_parser(input),
+                            alt((
+                                map(
+                                    |input| self.function_header_parser(input),
+                                    |(a, b, c, d)| InterfaceHeader::FunctionHeader(a, b, c, d)
+                                ),
+                                map(
+                                    |input| self.prefix_operation_header_definition_parser(input),
+                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                ),
+                                map(
+                                    |input| self.postfix_operation_header_definition_parser(input),
+                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                ),
+                                map(
+                                    |input| self.binary_operation_header_definition_parser(input),
+                                    |(a, b, c, d, e)| InterfaceHeader::BinaryOpHeader(a, b, c, d, e)
+                                ),
+                                map(
+                                    |input| self.nary_operation_header_definition_parser(input),
+                                    |(a, b, c, d, e)| InterfaceHeader::NaryOpHeader(a, b, c, d, e)
+                                )
+                            )),
                             context("Expected ';' at the end of interface function signature", cut(tag(";")))
                         )
                     ),
@@ -2193,21 +2222,42 @@ impl NessaContext {
                     tag("}")
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, mut p, _, _))| {
+            |(l, (_, _, n, _, t, _, _, p, _, _))| {
                 let u_t = t.unwrap_or_default();
 
-                p.iter_mut().for_each(|(_, tm, args, ret)| {
-                    let u_tm = tm.clone().unwrap_or_default();
-                    let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+                let mut fns: Vec<FunctionHeader> = vec!();
+                let mut unary: Vec<UnaryOpHeader> = vec!();
 
-                    args.iter_mut().for_each(|(_, tp)| {
-                        tp.compile_templates(&all_tm);
-                    });
+                p.into_iter().for_each(|h| {
+                    match h {
+                        InterfaceHeader::FunctionHeader(n, tm, mut args, mut ret) => {
+                            let u_tm = tm.clone().unwrap_or_default();
+                            let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+        
+                            args.iter_mut().for_each(|(_, tp)| {
+                                tp.compile_templates(&all_tm);
+                            });
+        
+                            ret.compile_templates(&all_tm);
 
-                    ret.compile_templates(&all_tm);
+                            fns.push((n, tm, args, ret));
+                        },
+
+                        InterfaceHeader::UnaryOpHeader(id, tm, a, mut at, mut ret) => {
+                            let u_tm = tm.clone();
+                            let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+
+                            at.compile_templates(&all_tm);
+                            ret.compile_templates(&all_tm);
+
+                            unary.push((id, tm, a, at, ret));
+                        }
+
+                        _ => todo!()
+                    }
                 });
 
-                NessaExpr::InterfaceDefinition(l, n, u_t, p)
+                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary)
             }
         )(input);
     }

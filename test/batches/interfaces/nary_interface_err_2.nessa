@@ -1,0 +1,6 @@
+// N-ary operation overload for Array<Int>[Int] needed by interface Test returns Int, which is not bindable to the required Float
+interface Test {
+    op (a: Self)[idx: Int] -> Float;
+}
+
+implement Test for Array<Int>;

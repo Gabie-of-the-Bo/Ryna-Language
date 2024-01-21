@@ -1,0 +1,6 @@
+// Unable to find the binary operation overload for (Bool)+(Bool) needed by interface Test
+interface Test {
+    op (a: Self) + (b: Self) -> Self;
+}
+
+implement Test for Bool;

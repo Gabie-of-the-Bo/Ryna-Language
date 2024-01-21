@@ -1,0 +1,5 @@
+interface Test {
+    op (a: Self) + (b: Self) -> Self;
+}
+
+implement Test for Int;

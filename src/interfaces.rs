@@ -5,6 +5,7 @@ use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaC
 
 pub type InterfaceFunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 pub type InterfaceUnaryOpHeader = (usize, Vec<String>, String, Type, Type);
+pub type InterfaceBinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type);
 
 #[derive(Clone)]
 pub struct Interface {
@@ -12,7 +13,8 @@ pub struct Interface {
     pub name: String,
     pub params: Vec<String>,
     pub fns: Vec<InterfaceFunctionHeader>,
-    pub uns: Vec<InterfaceUnaryOpHeader>
+    pub uns: Vec<InterfaceUnaryOpHeader>,
+    pub bin: Vec<InterfaceBinaryOpHeader>
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -88,11 +90,11 @@ pub fn standard_interfaces(ctx: &mut NessaContext) {
         ("iterator".into(), None, vec!(("".into(), Type::SelfType)), T_0),
         ("next".into(), None, vec!(("".into(), T_0.to_mut())), T_1),
         ("is_consumed".into(), None, vec!(("".into(), T_0.to_mut())), BOOL)        
-    ), vec!()).unwrap();
+    ), vec!(), vec!()).unwrap();
 
     ctx.define_interface("Printable".into(), vec!(), vec!(
         ("print".into(), None, vec!(("".into(), Type::SelfType)), Type::Empty)
-    ), vec!()).unwrap();
+    ), vec!(), vec!()).unwrap();
 
     // Implementations
     ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2), vec!(ARR_IT_OF!(T_2.to_mut()), T_2.to_mut())).unwrap();

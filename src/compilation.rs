@@ -1123,7 +1123,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::InterfaceDefinition(_, n, _, fns, uns) => {
+            NessaExpr::InterfaceDefinition(_, n, _, fns, uns, bin) => {
                 if let Some(t) = self.get_interface(n) {
                     for (f_n, _, a, r) in fns {
                         if let Some(f) = self.get_function(f_n) {
@@ -1157,6 +1157,34 @@ impl NessaContext{
                         }
     
                         for id in at.interface_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
+                        }
+
+                        for t_dep in r.type_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Class, t_dep), ());
+                        }
+    
+                        for id in r.interface_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
+                        }
+                    }
+
+                    for (op_id, _, (_, a0t), (_, a1t), r) in bin {
+                        deps.connect((ImportType::Interface, t.id), (ImportType::Fn, *op_id), ());
+
+                        for t_dep in a0t.type_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Class, t_dep), ());
+                        }
+    
+                        for id in a0t.interface_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
+                        }
+
+                        for t_dep in a1t.type_dependencies() {
+                            deps.connect((ImportType::Interface, t.id), (ImportType::Class, t_dep), ());
+                        }
+    
+                        for id in a1t.interface_dependencies() {
                             deps.connect((ImportType::Interface, t.id), (ImportType::Interface, id), ());
                         }
 
@@ -2799,7 +2827,7 @@ impl NessaContext{
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), NessaError> {
         if let Ok((_, i_names)) = self.nessa_interface_definition_names_parser(Span::new(code)) {
             for i_name in i_names {
-                self.define_interface(i_name, vec!(), vec!(), vec!()).unwrap();
+                self.define_interface(i_name, vec!(), vec!(), vec!(), vec!()).unwrap();
             }
 
             if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
@@ -2810,8 +2838,8 @@ impl NessaContext{
                 let interfaces = self.nessa_interface_definition_parser(Span::new(code))?;
 
                 for i in interfaces.1 {
-                    if let NessaExpr::InterfaceDefinition(_, n, t, v, u) = i {
-                        self.redefine_interface(n, t, v, u).unwrap();
+                    if let NessaExpr::InterfaceDefinition(_, n, t, v, u, b) = i {
+                        self.redefine_interface(n, t, v, u, b).unwrap();
                     }
                 }
 
@@ -2958,7 +2986,17 @@ impl NessaContext{
                     ))
                 }).collect::<Result<Vec<_>, _>>().unwrap();
 
-                self.define_interface(i_name.clone(), other_i.params.clone(), mapped_fns, mapped_uns)?;
+                let mapped_bin = other_i.bin.iter().map(|(id, tm, (a0, a0t), (a1, a1t), ret)| {
+                    Result::<_, NessaError>::Ok((
+                        self.map_nessa_binary_operator(other, *id, id_mapper, l)?,
+                        tm.clone(),
+                        (a0.clone(), a0t.map_type(self, other, id_mapper, l)),
+                        (a1.clone(), a1t.map_type(self, other, id_mapper, l)),
+                        ret.map_type(self, other, id_mapper, l)
+                    ))
+                }).collect::<Result<Vec<_>, _>>().unwrap();
+
+                self.define_interface(i_name.clone(), other_i.params.clone(), mapped_fns, mapped_uns, mapped_bin)?;
             }
 
             return Ok(interface_id);
@@ -3239,7 +3277,7 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::InterfaceDefinition(l, n, t, fns, uns) => {
+                NessaExpr::InterfaceDefinition(l, n, t, fns, uns, bin) => {
                     if needs_import(module, ImportType::Interface, n, imports, &mut self.cache.imports.interface_def, (n.clone(), t.clone())) {
                         self.map_nessa_interface(ctx, ctx.get_interface_id(n.clone()).unwrap(), &mut id_mapper, l).unwrap();
 
@@ -3262,7 +3300,17 @@ impl NessaContext{
                             ))
                         }).collect::<Result<Vec<_>, _>>()?;
 
-                        let mapped_expr = NessaExpr::InterfaceDefinition(l.clone(), n.clone(), t.clone(), mapped_fns, mapped_uns);
+                        let mapped_bin = bin.iter().map(|(id, tm, (a0, a0t), (a1, a1t), ret)| {
+                            Result::<_, NessaError>::Ok((
+                                self.map_nessa_binary_operator(ctx, *id, &mut id_mapper, l)?,
+                                tm.clone(),
+                                (a0.clone(), a0t.map_type(self, ctx, &mut id_mapper, l)),
+                                (a1.clone(), a1t.map_type(self, ctx, &mut id_mapper, l)),
+                                ret.map_type(self, ctx, &mut id_mapper, l)
+                            ))
+                        }).collect::<Result<Vec<_>, _>>().unwrap();
+
+                        let mapped_expr = NessaExpr::InterfaceDefinition(l.clone(), n.clone(), t.clone(), mapped_fns, mapped_uns, mapped_bin);
 
                         res.push(mapped_expr);
                         new_source.push(module.clone());

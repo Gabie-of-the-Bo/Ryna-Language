@@ -216,7 +216,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>),
+    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -2227,6 +2227,7 @@ impl NessaContext {
 
                 let mut fns: Vec<FunctionHeader> = vec!();
                 let mut unary: Vec<UnaryOpHeader> = vec!();
+                let mut binary: Vec<BinaryOpHeader> = vec!();
 
                 p.into_iter().for_each(|h| {
                     match h {
@@ -2251,13 +2252,24 @@ impl NessaContext {
                             ret.compile_templates(&all_tm);
 
                             unary.push((id, tm, a, at, ret));
+                        },
+
+                        InterfaceHeader::BinaryOpHeader(id, tm, (a0, mut a0t), (a1, mut a1t), mut ret) => {
+                            let u_tm = tm.clone();
+                            let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
+
+                            a0t.compile_templates(&all_tm);
+                            a1t.compile_templates(&all_tm);
+                            ret.compile_templates(&all_tm);
+
+                            binary.push((id, tm, (a0, a0t), (a1, a1t), ret));
                         }
 
                         _ => todo!()
                     }
                 });
 
-                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary)
+                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary, binary)
             }
         )(input);
     }

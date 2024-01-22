@@ -5,6 +5,11 @@ use nom::{sequence::{delimited, tuple, preceded}, character::complete::satisfy, 
 use crate::parser::{many_separated0, Span, PResult, identifier_parser, empty0, empty1};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum NessaMacroType {
+    Function, Expression, Block
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NessaMacro {
     Text(String),
     Var(String),

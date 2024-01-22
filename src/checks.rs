@@ -1356,7 +1356,7 @@ impl NessaContext {
 
     pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::Macro(l, n, p, b) => {
+            NessaExpr::Macro(l, n, _, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
                 

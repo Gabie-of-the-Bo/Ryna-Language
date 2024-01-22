@@ -1,0 +1,9 @@
+syntax test from Arg(1{d}, a) 'x' Arg(1{d}, b) {
+    {#let a =} {$a} {#;}
+    {#let b =} {$b} {#;}
+    {#return a * b;}
+}
+
+if 5x6 != 30 {
+    panic("This should not happen");
+}

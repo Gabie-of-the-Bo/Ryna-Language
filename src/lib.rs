@@ -259,6 +259,11 @@ mod integration {
     }
 
     #[test]
+    fn macros() {
+        integration_test_batch("test/batches/macros/*.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

@@ -977,6 +977,58 @@ impl NessaContext {
 
         return Err(verbose_error(input, "Unable to parse"))
     }
+
+    fn custom_syntax_block_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+        println!("Code: {:?}", self.macros);
+
+        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {
+            println!("Code: {p:?}");
+            
+            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+                input = new_input;
+
+                match m.expand(&args) {
+                    Ok(code) => {
+                        let parsed_code = cut(
+                            map(
+                                many_separated0(
+                                    empty0, 
+                                    |input| self.nessa_line_parser(input, &RefCell::default()) // Fresh cache for macro parsing
+                                ),
+                                |i| i.into_iter().flatten().collect()
+                            )
+                        )(Span::new(&code));
+
+                        match parsed_code {
+                            Ok((rest, lines)) if rest.trim().is_empty() => {
+                                return match mt {
+                                    NessaMacroType::Block => Ok((input, lines)),
+                                    _ => unreachable!(),
+                                }
+                            },
+
+                            Ok(_) |
+                            Err(nom::Err::Error(_)) |
+                            Err(nom::Err::Failure(_)) => {                                
+                                return Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                    input, 
+                                    VerboseErrorKind::Context("Error while parsing expanded code")
+                                )) }));
+                            }
+
+                            _ => unreachable!()
+                        }
+                    }
+
+                    Err(_) => {
+                        return Err(verbose_error(input, "Unable to parse"))
+                    }
+                }
+            }
+        }
+
+        return Err(verbose_error(input, "Unable to parse"))
+    }
     
     fn variable_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
@@ -2540,37 +2592,46 @@ impl NessaContext {
     }
 
     fn nessa_line_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        return map(
-            alt((
-                |input| self.variable_definition_parser(input, cache),
-                |input| self.variable_assignment_parser(input, cache),
-                |input| self.return_parser(input, cache),
-                |input| self.while_parser(input, cache),
-                |input| self.for_parser(input, cache),
-                |input| self.if_parser(input, cache),
-                |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
-            )),
-            |i| vec!(i)
-        )(input);
+        return alt((
+            |input| self.custom_syntax_block_parser(input, cache),
+            map(
+                alt((
+                    |input| self.variable_definition_parser(input, cache),
+                    |input| self.variable_assignment_parser(input, cache),
+                    |input| self.return_parser(input, cache),
+                    |input| self.while_parser(input, cache),
+                    |input| self.for_parser(input, cache),
+                    |input| self.if_parser(input, cache),
+                    |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+                )),
+                |i| vec!(i)
+            )
+        ))(input);
     }
 
-    fn nessa_global_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nessa_global_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return alt((
-            |input| self.variable_definition_parser(input, cache),
-            |input| self.variable_assignment_parser(input, cache),
-            |input| self.return_parser(input, cache),
-            |input| self.while_parser(input, cache),
-            |input| self.for_parser(input, cache),
-            |input| self.if_parser(input, cache),
-            |input| self.function_definition_parser(input, cache),
-            |input| self.operator_definition_parser(input),
-            |input| self.operation_definition_parser(input, cache),
-            |input| self.class_definition_parser(input),
-            |input| self.alias_definition_parser(input),
-            |input| self.interface_definition_parser(input),
-            |input| self.interface_implementation_parser(input),
-            |input| self.macro_parser(input), 
-            |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+            |input| self.custom_syntax_block_parser(input, cache),
+            map(
+                alt((
+                    |input| self.variable_definition_parser(input, cache),
+                    |input| self.variable_assignment_parser(input, cache),
+                    |input| self.return_parser(input, cache),
+                    |input| self.while_parser(input, cache),
+                    |input| self.for_parser(input, cache),
+                    |input| self.if_parser(input, cache),
+                    |input| self.function_definition_parser(input, cache),
+                    |input| self.operator_definition_parser(input),
+                    |input| self.operation_definition_parser(input, cache),
+                    |input| self.class_definition_parser(input),
+                    |input| self.alias_definition_parser(input),
+                    |input| self.interface_definition_parser(input),
+                    |input| self.interface_implementation_parser(input),
+                    |input| self.macro_parser(input), 
+                    |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+                )),
+                |i| vec!(i)
+            )
         ))(input);
     }
 
@@ -2733,10 +2794,13 @@ impl NessaContext {
 
         let cache = RefCell::default();
 
-        return delimited(
-            empty0,
-            many_separated0(empty0, |input| self.nessa_global_parser(input, &cache)),
-            tuple((empty0, eof))
+        return map(
+            delimited(
+                empty0,
+                many_separated0(empty0, |input| self.nessa_global_parser(input, &cache)),
+                tuple((empty0, eof))
+            ),
+            |i| i.into_iter().flatten().collect()
         )(input);
     }
 }

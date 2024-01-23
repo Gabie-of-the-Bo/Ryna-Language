@@ -896,7 +896,7 @@ impl NessaContext {
                                             empty0, 
                                             |input| self.nessa_line_parser(input, &RefCell::default()) // Fresh cache for macro parsing
                                         ),
-                                        |i| i.into_iter().flat_map(|i| i).collect()
+                                        |i| i.into_iter().flatten().collect()
                                     )
                                 )(Span::new(&code))
                             },
@@ -2033,7 +2033,7 @@ impl NessaContext {
                 many_separated0(empty0, |input| self.nessa_line_parser(input, cache)),
                 tuple((empty0, tag("}")))
             ),
-            |i| i.into_iter().flat_map(|i| i).collect()
+            |i| i.into_iter().flatten().collect()
         )(input);
     }
 

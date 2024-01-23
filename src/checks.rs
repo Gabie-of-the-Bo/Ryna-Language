@@ -1497,29 +1497,27 @@ impl NessaContext {
                                             }        
                                         }
                                     
-                                    } else {
-                                        if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
-                                            if *prefix {
-                                                return Err(NessaError::compiler_error(
-                                                    format!(
-                                                        "Unable to find the unary operation overload overload for {}({}) needed by interface {}", 
-                                                        representation, arg_sub.get_name(self),
-                                                        n.green()
-                                                    ), 
-                                                    l, vec!()
-                                                ));   
+                                    } else if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
+                                        if *prefix {
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unable to find the unary operation overload overload for {}({}) needed by interface {}", 
+                                                    representation, arg_sub.get_name(self),
+                                                    n.green()
+                                                ), 
+                                                l, vec!()
+                                            ));   
 
-                                            } else {
-                                                return Err(NessaError::compiler_error(
-                                                    format!(
-                                                        "Unable to find the unary operation overload overload for ({}){} needed by interface {}", 
-                                                        arg_sub.get_name(self), representation,
-                                                        n.green()
-                                                    ), 
-                                                    l, vec!()
-                                                ));   
-                                            }                                     
-                                        }
+                                        } else {
+                                            return Err(NessaError::compiler_error(
+                                                format!(
+                                                    "Unable to find the unary operation overload overload for ({}){} needed by interface {}", 
+                                                    arg_sub.get_name(self), representation,
+                                                    n.green()
+                                                ), 
+                                                l, vec!()
+                                            ));   
+                                        }                                     
                                     }
                                 },
                                 

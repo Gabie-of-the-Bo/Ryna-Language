@@ -168,6 +168,10 @@ pub fn many_separated0<
                     res.push(elem);
                     input = new_input;
                 },
+
+                Err(nom::Err::Failure(err)) => {
+                    return Err(nom::Err::Failure(err));
+                }
     
                 Err(_) => return Ok((input, res))
             }
@@ -979,11 +983,9 @@ impl NessaContext {
     }
 
     fn custom_syntax_block_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        println!("Code: {:?}", self.macros);
+        let prev_input = input.clone();
 
-        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {
-            println!("Code: {p:?}");
-            
+        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 input = new_input;
 
@@ -1011,7 +1013,7 @@ impl NessaContext {
                             Err(nom::Err::Error(_)) |
                             Err(nom::Err::Failure(_)) => {                                
                                 return Err(nom::Err::Failure(VerboseError { errors: vec!((
-                                    input, 
+                                    prev_input, 
                                     VerboseErrorKind::Context("Error while parsing expanded code")
                                 )) }));
                             }
@@ -1021,13 +1023,13 @@ impl NessaContext {
                     }
 
                     Err(_) => {
-                        return Err(verbose_error(input, "Unable to parse"))
+                        return Err(verbose_error(prev_input, "Unable to parse"))
                     }
                 }
             }
         }
 
-        return Err(verbose_error(input, "Unable to parse"))
+        return Err(verbose_error(prev_input, "Unable to parse"))
     }
     
     fn variable_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {

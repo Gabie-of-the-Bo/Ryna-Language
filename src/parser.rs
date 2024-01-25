@@ -22,7 +22,7 @@ use rustc_hash::FxHashSet;
 use crate::config::ImportMap;
 use crate::functions::Function;
 use crate::interfaces::{InterfaceConstraint, Interface};
-use crate::macros::{NessaMacro, parse_nessa_macro};
+use crate::macros::{parse_nessa_macro, NessaMacro, NessaMacroType};
 use crate::operations::Operator;
 use crate::object::{Object, TypeInstance};
 use crate::number::Integer;
@@ -168,6 +168,10 @@ pub fn many_separated0<
                     res.push(elem);
                     input = new_input;
                 },
+
+                Err(nom::Err::Failure(err)) => {
+                    return Err(nom::Err::Failure(err));
+                }
     
                 Err(_) => return Ok((input, res))
             }
@@ -196,7 +200,7 @@ pub enum NessaExpr {
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Macro
-    Macro(Location, String, Pattern, NessaMacro),
+    Macro(Location, String, NessaMacroType, Pattern, NessaMacro),
 
     // Uncompiled
     Literal(Location, Object),
@@ -228,6 +232,47 @@ pub enum NessaExpr {
     While(Location, Box<NessaExpr>, Vec<NessaExpr>),
     For(Location, String, Box<NessaExpr>, Vec<NessaExpr>),
     Return(Location, Box<NessaExpr>)
+}
+
+impl NessaExpr {
+    pub fn is_expr(&self) -> bool {
+        match self {
+            NessaExpr::FunctionName(_, _) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::VariableDefinition(_, _, _, _) |
+            NessaExpr::VariableAssignment(_, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::If(_, _, _, _, _) |
+            NessaExpr::While(_, _, _) |
+            NessaExpr::For(_, _, _, _) |
+            NessaExpr::Return(_, _) => false,
+
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::FunctionCall(_, _, _, _) |
+            NessaExpr::CompiledFor(_, _, _, _, _, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, _) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Tuple(_, _) |
+            NessaExpr::Lambda(_, _, _, _) |
+            NessaExpr::NameReference(_, _) |
+            NessaExpr::UnaryOperation(_, _, _, _) |
+            NessaExpr::BinaryOperation(_, _, _, _, _) |
+            NessaExpr::NaryOperation(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -838,7 +883,7 @@ impl NessaContext {
     }
     
     fn custom_syntax_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
-        for (_, p, m) in &self.macros {
+        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 != NessaMacroType::Block) {
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string());
@@ -847,24 +892,71 @@ impl NessaContext {
                 
                 match m.expand(&args) {
                     Ok(code) => {
-                        let parsed_code = cut(
-                            many_separated0(
-                                empty0, 
-                                |input| self.nessa_line_parser(input, &RefCell::default())) // Fresh cache for macro parsing
-                        )(Span::new(&code));
+                        let parsed_code = match mt {
+                            NessaMacroType::Function => {
+                                cut(
+                                    map(
+                                        many_separated0(
+                                            empty0, 
+                                            |input| self.nessa_line_parser(input, &RefCell::default()) // Fresh cache for macro parsing
+                                        ),
+                                        |i| i.into_iter().flatten().collect()
+                                    )
+                                )(Span::new(&code))
+                            },
+                            
+                            NessaMacroType::Expression => {
+                                cut(
+                                    map(
+                                        |input| self.nessa_expr_parser(input, &RefCell::default()),
+                                        |i| vec!(i)
+                                    )
+                                )(Span::new(&code))
+                            },
+                            
+                            NessaMacroType::Block => unreachable!(),
+                        };
                         
                         match parsed_code {
-                            Ok((rest, lines)) if rest.trim().is_empty() => {
-                                return Ok((
-                                    input, 
-                                    NessaExpr::NaryOperation(
-                                        loc.clone(), 
-                                        CALL_OP, 
-                                        vec!(), 
-                                        Box::new(NessaExpr::Lambda(loc, vec!(), Type::InferenceMarker, lines)),
-                                        vec!()
-                                    )
-                                ));
+                            Ok((rest, mut lines)) if rest.trim().is_empty() => {
+                                return match mt {
+                                    NessaMacroType::Function => {
+                                        Ok((
+                                            input, 
+                                            NessaExpr::NaryOperation(
+                                                loc.clone(), 
+                                                CALL_OP, 
+                                                vec!(), 
+                                                Box::new(NessaExpr::Lambda(loc, vec!(), Type::InferenceMarker, lines)),
+                                                vec!()
+                                            )
+                                        ))
+                                    },
+
+                                    NessaMacroType::Expression => {                                        
+                                        if lines.len() == 1 {
+                                            let expr = lines.pop().unwrap();
+
+                                            if expr.is_expr() {
+                                                Ok((input, expr))
+                                            
+                                            } else {
+                                                Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                                    input, 
+                                                    VerboseErrorKind::Context("Expression macro did not get an expression after expansion")
+                                                )) }))    
+                                            }
+                                        
+                                        } else {
+                                            Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                                input, 
+                                                VerboseErrorKind::Context("Expression macro got more than one expression")
+                                            )) }))
+                                        }
+                                    },
+
+                                    NessaMacroType::Block => unreachable!(),
+                                }
                             },
 
                             Ok(_) |
@@ -888,6 +980,56 @@ impl NessaContext {
         }
 
         return Err(verbose_error(input, "Unable to parse"))
+    }
+
+    fn custom_syntax_block_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+        let prev_input = input.clone();
+
+        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
+            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+                input = new_input;
+
+                match m.expand(&args) {
+                    Ok(code) => {
+                        let parsed_code = cut(
+                            map(
+                                many_separated0(
+                                    empty0, 
+                                    |input| self.nessa_line_parser(input, &RefCell::default()) // Fresh cache for macro parsing
+                                ),
+                                |i| i.into_iter().flatten().collect()
+                            )
+                        )(Span::new(&code));
+
+                        match parsed_code {
+                            Ok((rest, lines)) if rest.trim().is_empty() => {
+                                return match mt {
+                                    NessaMacroType::Block => Ok((input, lines)),
+                                    _ => unreachable!(),
+                                }
+                            },
+
+                            Ok(_) |
+                            Err(nom::Err::Error(_)) |
+                            Err(nom::Err::Failure(_)) => {                                
+                                return Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                    prev_input, 
+                                    VerboseErrorKind::Context("Error while parsing expanded code")
+                                )) }));
+                            }
+
+                            _ => unreachable!()
+                        }
+                    }
+
+                    Err(_) => {
+                        return Err(verbose_error(prev_input, "Unable to parse"))
+                    }
+                }
+            }
+        }
+
+        return Err(verbose_error(prev_input, "Unable to parse"))
     }
     
     fn variable_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
@@ -1148,11 +1290,16 @@ impl NessaContext {
         )(input);
     }
 
-    fn macro_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (String, Pattern)> {
+    fn macro_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (NessaMacroType, String, Pattern)> {
         map(
             tuple((
                 tag("syntax"),
                 empty1,
+                opt(alt((
+                    map(terminated(tag("fn"), empty1), |_| NessaMacroType::Function),
+                    map(terminated(tag("expr"), empty1), |_| NessaMacroType::Expression),
+                    map(terminated(tag("block"), empty1), |_| NessaMacroType::Block),
+                ))),
                 context("Expected identifier after 'syntax' in syntax definition", cut(identifier_parser)),
                 empty1,
                 context("Expected 'from' after identifier in syntax definition", cut(tag("from"))),
@@ -1160,7 +1307,7 @@ impl NessaContext {
                 cut(|input| parse_ndl_pattern(input, true, true)),
                 empty0
             )),
-            |(_, _,  n, _, _, _, p, _)| (n, p)
+            |(_, _, t, n, _, _, _, p, _)| (t.unwrap_or(NessaMacroType::Function), n, p)
         )(input)
     }
 
@@ -1208,7 +1355,7 @@ impl NessaContext {
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
-            |(l, ((n, p), _, m))| NessaExpr::Macro(l, n, p, m)
+            |(l, ((t, n, p), _, m))| NessaExpr::Macro(l, n, t, p, m)
         )(input);
     }
     
@@ -1934,10 +2081,13 @@ impl NessaContext {
     }
 
     fn code_block_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        return delimited(
-            tuple((tag("{"), empty0)),
-            many_separated0(empty0, |input| self.nessa_line_parser(input, cache)),
-            tuple((empty0, tag("}")))
+        return map(
+            delimited(
+                tuple((tag("{"), empty0)),
+                many_separated0(empty0, |input| self.nessa_line_parser(input, cache)),
+                tuple((empty0, tag("}")))
+            ),
+            |i| i.into_iter().flatten().collect()
         )(input);
     }
 
@@ -2443,35 +2593,47 @@ impl NessaContext {
         return self.nessa_expr_parser_wrapper(input, &mut FxHashSet::default(), cache);
     }
 
-    fn nessa_line_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nessa_line_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return alt((
-            |input| self.variable_definition_parser(input, cache),
-            |input| self.variable_assignment_parser(input, cache),
-            |input| self.return_parser(input, cache),
-            |input| self.while_parser(input, cache),
-            |input| self.for_parser(input, cache),
-            |input| self.if_parser(input, cache),
-            |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+            |input| self.custom_syntax_block_parser(input, cache),
+            map(
+                alt((
+                    |input| self.variable_definition_parser(input, cache),
+                    |input| self.variable_assignment_parser(input, cache),
+                    |input| self.return_parser(input, cache),
+                    |input| self.while_parser(input, cache),
+                    |input| self.for_parser(input, cache),
+                    |input| self.if_parser(input, cache),
+                    |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+                )),
+                |i| vec!(i)
+            )
         ))(input);
     }
 
-    fn nessa_global_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nessa_global_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return alt((
-            |input| self.variable_definition_parser(input, cache),
-            |input| self.variable_assignment_parser(input, cache),
-            |input| self.return_parser(input, cache),
-            |input| self.while_parser(input, cache),
-            |input| self.for_parser(input, cache),
-            |input| self.if_parser(input, cache),
-            |input| self.function_definition_parser(input, cache),
-            |input| self.operator_definition_parser(input),
-            |input| self.operation_definition_parser(input, cache),
-            |input| self.class_definition_parser(input),
-            |input| self.alias_definition_parser(input),
-            |input| self.interface_definition_parser(input),
-            |input| self.interface_implementation_parser(input),
-            |input| self.macro_parser(input), 
-            |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+            |input| self.custom_syntax_block_parser(input, cache),
+            map(
+                alt((
+                    |input| self.variable_definition_parser(input, cache),
+                    |input| self.variable_assignment_parser(input, cache),
+                    |input| self.return_parser(input, cache),
+                    |input| self.while_parser(input, cache),
+                    |input| self.for_parser(input, cache),
+                    |input| self.if_parser(input, cache),
+                    |input| self.function_definition_parser(input, cache),
+                    |input| self.operator_definition_parser(input),
+                    |input| self.operation_definition_parser(input, cache),
+                    |input| self.class_definition_parser(input),
+                    |input| self.alias_definition_parser(input),
+                    |input| self.interface_definition_parser(input),
+                    |input| self.interface_implementation_parser(input),
+                    |input| self.macro_parser(input), 
+                    |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
+                )),
+                |i| vec!(i)
+            )
         ))(input);
     }
 
@@ -2634,10 +2796,13 @@ impl NessaContext {
 
         let cache = RefCell::default();
 
-        return delimited(
-            empty0,
-            many_separated0(empty0, |input| self.nessa_global_parser(input, &cache)),
-            tuple((empty0, eof))
+        return map(
+            delimited(
+                empty0,
+                many_separated0(empty0, |input| self.nessa_global_parser(input, &cache)),
+                tuple((empty0, eof))
+            ),
+            |i| i.into_iter().flatten().collect()
         )(input);
     }
 }

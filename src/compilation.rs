@@ -2623,12 +2623,12 @@ impl NessaContext{
     }
 
     pub fn define_module_macro(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
-        if let NessaExpr::Macro(l, n, p, m) = definition {
+        if let NessaExpr::Macro(l, n, t, p, m) = definition {
             if self.macros.iter().any(|i| i.0 == n) {
                 return Err(NessaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
             }
 
-            self.macros.push((n, p, m));
+            self.macros.push((n, t, p, m));
         }
 
         Ok(())
@@ -3304,7 +3304,7 @@ impl NessaContext{
 
         for (line, module) in code.iter().zip(source) {
             match line {
-                NessaExpr::Macro(_, n, p, _) => {
+                NessaExpr::Macro(_, n, _, p, _) => {
                     if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
                         self.define_module_macro(line.clone())?
                     }

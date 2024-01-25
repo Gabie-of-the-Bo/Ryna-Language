@@ -13,6 +13,7 @@ use crate::interfaces::InterfaceNaryOpHeader;
 use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
+use crate::macros::NessaMacroType;
 use crate::translation::load_optimized_opcodes;
 use crate::types::*;
 use crate::operations::*;
@@ -39,7 +40,7 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<(String, Pattern, NessaMacro)>,
+    pub macros: Vec<(String, NessaMacroType, Pattern, NessaMacro)>,
 
     pub variables: Vec<Object>,
 

@@ -1,20 +1,25 @@
 The final feature that we will be taking a look at is one is arguably one of the most unique: **macros**.
 Be aware that a macro in Nessa is not the same as a macro in other languages such as C, C++ or even Rust, even though they are 
 close to Rust's. The main difference between Rust's macros and Nessa's is that there is no restriction on the syntax that you can match.
-Let's take a look at how they work.
+Let's take a look at how they work by diving into the first kind of macros Nessa has: **function macros**.
 
 ## Syntax
 
-A macro can be created in Nessa using this syntax:
+A function macro can be created in Nessa using this syntax:
 
 ```
 syntax macro_name from NDL_Pattern {
     [...]
 }
+
+// This is also allowed
+syntax fn macro_name from NDL_Pattern {
+    [...]
+}
 ```
 
-WHen you define a macro you can "invoke" it by using the syntax anywhere in your code where an expression is legal. Just be aware that 
-macros are internally compiled to lambda expressions:
+When you define a macro of any kind you can "invoke" it by using the syntax anywhere in your code where an expression is legal. Just be aware that 
+macros are internally compiled to a different representation. In the case of function macros, they are converted to lambda expressions:
 
 ```
 syntax macro_name from 'Macro' {
@@ -25,7 +30,7 @@ syntax macro_name from 'Macro' {
 print(Macro);
 
 // ... is compiled to this
-print((() { return 5; })())
+print((() { return 5; })());
 ```
 
 You may have noticed that the syntax inside a macro body is not the same as a function. This is because you can only write

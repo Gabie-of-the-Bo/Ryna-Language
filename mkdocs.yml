@@ -30,7 +30,9 @@ nav:
       - Extending the Syntax:
         - Nessa Definition Language: 'pages/tutorial/steps/ndl.md'
         - Literals: 'pages/tutorial/steps/literals.md'
-        - Macros: 'pages/tutorial/steps/macros.md'
+        - Function Macros: 'pages/tutorial/steps/fn_macros.md'
+        - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
+        - Block Macros: 'pages/tutorial/steps/block_macros.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'

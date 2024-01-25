@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', _ => {
         return {
             case_insensitive: false, // language is case-insensitive
             keywords: {
-                keyword: 'if else for in while fn op return syntax type class let unary binary nary prefix postfix right from to op interface implement import',
+                keyword: 'if else for in while fn op return syntax type class let unary binary nary prefix postfix right from to op interface implement import expr block',
                 literal: ['false', 'true'],
             },
             contains: [

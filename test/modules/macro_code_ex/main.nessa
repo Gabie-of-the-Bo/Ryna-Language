@@ -1,0 +1,22 @@
+syntax expr test from Arg(1{d}, a) 'x' Arg(1{d}, b) {
+    {|
+        import * from math;
+
+        fn double(n: Int) -> Int {
+            return n * 2;
+        }
+
+        let a = {$a};
+        let b = {$b};
+
+        emit(double(gcd(*a, *b)).to_string());
+    |}
+}
+
+if 15x10 != 10 {
+    panic("This should not happen");
+}
+
+if 450x100 != 100 {
+    panic("This should not happen");
+}

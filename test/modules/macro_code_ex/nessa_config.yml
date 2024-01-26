@@ -1,0 +1,10 @@
+---
+module_name: macro_code_ex
+version: 0.1.0
+hash: d444936134331eb403d4da4dcfc18249
+module_paths:
+  - test/lib
+modules:
+  math:
+    path: "test\\lib\\math"
+    version: 0.1.0

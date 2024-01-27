@@ -38,8 +38,6 @@ text-based macros with macros that generate a string from the `Arg` patterns fou
 
 ## Macro patterns
 
-> ***Note:*** This is subject to change. Once compile-time code execution is implemented this *might* become obsolete
-
 These are the patterns that you can use inside a macro's body:
 
 | Pattern  | Syntax               | Description                                                          |
@@ -48,6 +46,7 @@ These are the patterns that you can use inside a macro's body:
 | Variable | `{$Var}`             | Pastes the value of the `Arg` named `Var` into the macro result      |
 | If       | `{&Var}{Pat1}{Pat2}` | `Pat1` if `Var` has been read from the input, else `Pat2` (optional) |
 | Loop     | `{@I in $V}{Pat}`    | `Pat` creating a variable `I` for each element in the variable `V`   |
+| Code     | `{| ... |}`          | Execute code inside the braces and `emit` code to generate (more information later in its own section) |
 
 ## Example
 

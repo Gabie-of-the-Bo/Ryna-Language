@@ -33,11 +33,13 @@ nav:
         - Function Macros: 'pages/tutorial/steps/fn_macros.md'
         - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
+        - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'
       - Building a Ternary Operator: 'pages/tutorial/examples/ternary.md'
       - List Comprehension Syntax: 'pages/tutorial/examples/comprehension.md'
+      - Embedding a Language: 'pages/tutorial/examples/embedding.md'
   - Contribute: 'pages/contribute.md'
 
 theme: 

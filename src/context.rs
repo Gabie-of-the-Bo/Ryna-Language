@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -46,7 +47,10 @@ pub struct NessaContext {
 
     pub lambdas: usize,
 
-    pub cache: NessaCache
+    pub cache: NessaCache,
+
+    pub module_path: String,
+    pub captured_output: RefCell<String>
 }
 
 impl NessaContext {

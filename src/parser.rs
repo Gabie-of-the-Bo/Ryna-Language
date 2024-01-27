@@ -889,8 +889,8 @@ impl NessaContext {
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string());
 
                 input = new_input;
-                
-                match m.expand(&args) {
+
+                match m.expand(&args, self) {
                     Ok(code) => {
                         let parsed_code = match mt {
                             NessaMacroType::Function => {
@@ -983,13 +983,13 @@ impl NessaContext {
     }
 
     fn custom_syntax_block_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        let prev_input = input.clone();
+        let prev_input = input;
 
         for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 input = new_input;
 
-                match m.expand(&args) {
+                match m.expand(&args, self) {
                     Ok(code) => {
                         let parsed_code = cut(
                             map(

@@ -872,3 +872,16 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         });
     });
 }
+
+pub fn define_macro_emit_fn(ctx: &mut NessaContext, name: String) {
+    let idx = ctx.define_function(name).unwrap();
+
+    ctx.define_function_overload(idx, 0, &[STR], crate::types::Type::Empty, Some(|_, _, mut args, ctx| {
+        let obj = args.pop().unwrap();
+        let string = &*obj.get::<String>();
+
+        *ctx.captured_output.borrow_mut() += string;
+
+        Ok(Object::empty())
+    })).unwrap();
+}

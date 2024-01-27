@@ -23,6 +23,9 @@ pub mod serialization;
 
 pub mod config;
 
+#[path = "algorithms/regex_ext.rs"]
+pub mod regex_ext;
+
 #[path = "stdlib/math.rs"]
 pub mod math;
 
@@ -103,7 +106,7 @@ mod integration {
 
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
-        let (_, all_mods, files) = compute_project_hash(path_str).unwrap();
+        let (_, all_mods, files) = compute_project_hash(path_str, None).unwrap();
         let err = precompile_nessa_module_with_config(path_str, all_mods, files);
 
         if let Err(err) = &err {
@@ -321,5 +324,15 @@ mod integration {
     #[test]
     fn iterators_test() {
         module_test("test/modules/iterators_test");
+    }
+
+    #[test]
+    fn macro_code_ex() {
+        module_test("test/modules/macro_code_ex");
+    }
+
+    #[test]
+    fn bf_embed() {
+        module_test("test/modules/bf_embed");
     }
 }

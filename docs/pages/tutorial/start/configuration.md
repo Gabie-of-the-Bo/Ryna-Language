@@ -5,10 +5,11 @@ structure of each one. Let's take a look at them.
 
 In a Nessa project there can be multiple files created automatically:
 
-1. **nessa_config.yml**: contains everything the interpreter needs to execute a project. This includes the module's name,
+1. **main.nessa**: entrypoint of the interpeter. This is the file that `nessa run` will execute.
+2. **nessa_config.yml**: contains everything the interpreter needs to execute a project. This includes the module's name,
    verion and paths to look for modules.
-2. **nessa_cache/main.nessac**: contains a cached file that allows the execution of a module without recompiling.
-3. **nessa_cache/prof.json**: contains profiling information about the program.
+3. **nessa_cache/main.nessac**: contains a cached file that allows the execution of a module without recompiling.
+4. **nessa_cache/prof.json**: contains profiling information about the program.
 
 Let's take a look at each of them.
 

@@ -35,6 +35,7 @@ nav:
         - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
+      - Importing Modules: 'pages/tutorial/steps/imports.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'

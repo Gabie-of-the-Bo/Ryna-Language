@@ -252,6 +252,11 @@ mod integration {
     }
 
     #[test]
+    fn bitwise() {
+        integration_test("test/bitwise.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

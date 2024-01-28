@@ -1,0 +1,28 @@
+if 5 << 20 != 5242880 {
+    panic("This should not happen");
+}
+
+if 5242880 >> 20 != 5 {
+    panic("This should not happen");
+}
+
+if 23746523 & 3242342 != 2117954 {
+    panic("This should not happen");
+}
+
+if 23746523 | 3242342 != 24870911 {
+    panic("This should not happen");
+}
+
+if 23746523 ^ 3242342 != 22752957 {
+    panic("This should not happen");
+}
+
+if (true ^ true) || (false ^ false)  {
+    panic("This should not happen");
+}
+
+if 36893488147419103231.truncate() != 1 {
+    print(36893488147419103231.truncate());
+    panic("This should not happen");
+}

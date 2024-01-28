@@ -839,6 +839,13 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     }).unwrap();
 
+    let idx = ctx.define_function("truncate".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
+        let cp = &*v[0].get::<Integer>();
+        Ok(Object::new(Integer::from(*cp.limbs.last().unwrap())))
+    }).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

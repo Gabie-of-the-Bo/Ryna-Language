@@ -1,0 +1,52 @@
+import * from array_extensions;
+
+// Input is not allowed in this example
+syntax block embed_bf from 'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | '[' | ']'}, code) '}' {
+    {|        
+        // Memory array
+        emit("let mem = arr_with_capacity<Int>(1000);");
+        emit("mem.fill(0);");
+        
+        // Pointer
+        emit("let pt = 500;");
+
+        // Code
+        let code = "{$code}".ref().utf8_array();
+
+        // Execution
+        for i in code {
+            if i == 43 {
+                emit("mem[*pt] := mem[*pt] + 1;");
+            
+            } else if i == 45 {
+                emit("mem[*pt] := mem[*pt] - 1;");
+            
+            } else if i == 46 {
+                emit("out.push(*mem[*pt]);");
+            
+            } else if i == 60 {
+                emit("pt = pt - 1;");
+
+            } else if i == 62 {
+                emit("pt = pt + 1;");
+            
+            } else if i == 91 {
+                emit("while mem[*pt] != 0 {");
+            
+            } else if i == 93 {
+                emit("}");
+            }
+        }
+    |}
+}
+
+let out = arr<Int>();
+
+// Taken from https://en.wikipedia.org/wiki/Brainfuck
+BF {
+    ++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.
+}
+
+if utf8_to_str(out.demut()) != "Hello World!\n" {
+    panic("This should not happen");
+}

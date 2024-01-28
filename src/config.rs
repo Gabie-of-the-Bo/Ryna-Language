@@ -11,8 +11,10 @@ use serde_yaml::{from_str, to_string};
 
 use crate::compilation::NessaError;
 use crate::context::*;
+use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
 use crate::parser::*;
+use crate::regex_ext::replace_all_fallible;
 use crate::serialization::CompiledNessaModule;
 
 const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
@@ -23,6 +25,9 @@ pub const NESSA_MODULES_ENV_VAR: &str = "NESSA_MODULES_PATH";
 pub struct ModuleInfo {
     pub path: String,
     pub version: String,
+
+    #[serde(skip)]
+    pub is_local: bool,
 
     #[serde(skip)]
     pub dependencies: HashSet<(String, String)>
@@ -52,7 +57,7 @@ pub type ImportMap = HashMap<String, Imports>;
 pub type InnerDepGraph = DirectedGraph<(ImportType, usize), ()>;
 pub type VersionModCache = HashMap<(String, String), ModuleInfo>;
 
-type FileCache = HashMap<String, (NessaConfig, HashMap<String, HashMap<ImportType, HashSet<String>>>, String)>;
+type FileCache = HashMap<String, (NessaConfig, HashMap<String, HashMap<ImportType, HashSet<String>>>, String, bool)>;
 
 pub struct NessaModule {
     pub name: String,
@@ -125,11 +130,17 @@ impl NessaConfig {
 }
 
 fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache) -> Result<NessaModule, NessaError> {
-    let (config_yml, imports, main) = file_cache.get(path).unwrap();
+    let (config_yml, imports, main, is_macro) = file_cache.get(path).unwrap();
 
     // Refresh configuration and recompile if it is outdated
     if config_yml.is_outdated() {
         let mut ctx = standard_ctx();
+        ctx.module_path = path.clone();
+
+        if *is_macro {
+            define_macro_emit_fn(&mut ctx, "emit".into());
+        }
+
         let topological_order = config_yml.get_imports_topological_order(all_modules)?;
 
         // Forbid multiple versions of same module
@@ -173,7 +184,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
                                                    .map(|i| (i.0.clone(), i.1.clone()))
                                                    .map(|i| (i.0.clone(), already_compiled.get(&i).unwrap()))
                                                    .collect();
-    
+
         let (module, source) = ctx.parse_with_dependencies(&config_yml.module_name, main, &module_dependencies)?;
         let graph = ctx.get_inner_dep_graph(&module)?;
     
@@ -184,10 +195,10 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
     }
 }
 
-pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<String>, modules: &mut VersionModCache, file_cache: &mut FileCache) -> Result<(), NessaError> {
+pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String>, seen_paths: &mut HashSet<String>, modules: &mut VersionModCache, file_cache: &mut FileCache) -> Result<(), NessaError> {
     let main_path = module_path.join(Path::new("main.nessa"));
 
-    if !main_path.exists() {
+    if macro_code.is_none() && !main_path.exists() {
         return Err(NessaError::module_error(format!("Main file ({}) does not exist", main_path.to_str().unwrap())));
     }
 
@@ -198,18 +209,77 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
     }
 
     let config = fs::read_to_string(&config_path).expect("Error while reading config file");
-    let main = fs::read_to_string(&main_path).expect("Error while reading main file");
+
+    let main = match &macro_code {
+        Some(m_code) => m_code.clone(),
+        None => fs::read_to_string(&main_path).expect("Error while reading main file"),
+    };
 
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
     let imports = nessa_module_imports_parser(Span::new(&main)).unwrap().1;
-    let new_hash = format!("{:x}", compute(&main));
 
-    if config_yml.hash != new_hash {
-        config_yml.hash = new_hash;
-        fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
+    if macro_code.is_none() {
+        let new_hash = format!("{:x}", compute(&main));
+
+        if config_yml.hash != new_hash {
+            config_yml.hash = new_hash;
+            fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
+        }
     }
 
-    file_cache.insert(normalize_path(module_path)?, (config_yml.clone(), imports.clone(), main.clone()));
+    let norm_mod_path = normalize_path(module_path)?;
+
+    for local_file in glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str()).expect("Error while reading module path") {
+        let path = local_file.unwrap();
+        let full_import_path = normalize_path(&path)?;
+        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
+
+        if import_name != "/main" {
+            config_yml.modules.entry(import_name.clone()).or_insert(ModuleInfo {
+                path: full_import_path.clone(),
+                version: config_yml.version.clone(),
+                is_local: true,
+                dependencies: HashSet::new(),
+            });
+        }
+    }
+
+    let all_deps = config_yml.modules.iter().map(|i| (i.0.clone(), i.1.version.clone())).collect::<HashMap<_, _>>();
+    let mut local_imports = HashMap::new();
+
+    for (module_name, info) in config_yml.modules.iter_mut() {
+        if info.is_local {
+            let local_main = fs::read_to_string(&info.path).expect("Error while reading main file");
+            let local_file_imports = nessa_module_imports_parser(Span::new(&local_main)).unwrap().1;
+
+            local_imports.entry(module_name.clone()).or_insert((local_file_imports.clone(), local_main));
+
+            for module in local_file_imports.keys() {
+                if !all_deps.contains_key(module) {
+                    return Err(NessaError::module_error(format!("Module with name {} was not found", module.green())));
+                }
+            }
+
+            info.dependencies = local_file_imports.keys()
+                                                  .map(|i| (i.clone(), all_deps.get(i).unwrap().clone()))
+                                                  .collect();
+
+            modules.entry((module_name.clone(), config_yml.version.clone())).or_insert(info.clone());
+        }
+    }
+
+    for (module_name, info) in config_yml.modules.iter() {
+        if info.is_local {
+            let mut local_yml = config_yml.clone();
+            local_yml.module_name = module_name.clone();
+
+            let (local_imports, local_main) = local_imports.get(module_name).unwrap().clone();
+
+            file_cache.insert(info.path.clone(), (local_yml, local_imports, local_main, false));
+        }
+    }
+
+    file_cache.insert(normalize_path(module_path)?, (config_yml.clone(), imports.clone(), main.clone(), macro_code.is_some()));
 
     for module in imports.keys() {
         if !config_yml.modules.contains_key(module) {
@@ -220,6 +290,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
     modules.entry((config_yml.module_name, config_yml.version.clone())).or_insert(ModuleInfo { 
         path: normalize_path(module_path)?, 
         version: config_yml.version, 
+        is_local: false,
         dependencies: config_yml.modules.into_iter().map(|i| (i.0, i.1.version)).filter(|(i, _)| imports.contains_key(i)).collect()
     });
 
@@ -230,7 +301,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
             for file in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path") {
                 match file {
                     Ok(f) if f.is_file() => {
-                        get_all_modules_cascade_aux(f.parent().unwrap(), seen_paths, modules, file_cache)?;
+                        get_all_modules_cascade_aux(f.parent().unwrap(), None, seen_paths, modules, file_cache)?;
                     },
     
                     _ => {
@@ -244,11 +315,11 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, seen_paths: &mut HashSet<
     Ok(())
 }
 
-pub fn get_all_modules_cascade(module_path: &Path) -> Result<(VersionModCache, FileCache), NessaError> {
+pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -> Result<(VersionModCache, FileCache), NessaError> {
     let mut res = HashMap::new();
     let mut file_cache = HashMap::new();
 
-    get_all_modules_cascade_aux(module_path, &mut HashSet::new(), &mut res, &mut file_cache)?;
+    get_all_modules_cascade_aux(module_path, macro_code, &mut HashSet::new(), &mut res, &mut file_cache)?;
 
     Ok((res, file_cache))
 }
@@ -261,9 +332,9 @@ pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionMo
     Ok((module.ctx, module.code))
 }
 
-pub fn compute_project_hash(path: &String) -> Result<(String, VersionModCache, FileCache), NessaError> {
+pub fn compute_project_hash(path: &String, macro_code: Option<String>) -> Result<(String, VersionModCache, FileCache), NessaError> {
     let module_path = Path::new(path);
-    let (all_modules, file_cache) = get_all_modules_cascade(module_path)?;
+    let (all_modules, file_cache) = get_all_modules_cascade(module_path, macro_code)?;
 
     let config_yml = &file_cache.get(&normalize_path(module_path)?).unwrap().0;
 
@@ -311,24 +382,6 @@ pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Resul
     module.write_to_file(&code_path);
 
     Ok(())
-}
-
-// Taken from regex's docs
-fn replace_all_fallible<E>(
-    re: &Regex,
-    haystack: &str,
-    replacement: impl Fn(&Captures) -> Result<String, E>,
-) -> Result<String, E> {
-    let mut new = String::with_capacity(haystack.len());
-    let mut last_match = 0;
-    for caps in re.captures_iter(haystack) {
-        let m = caps.get(0).unwrap();
-        new.push_str(&haystack[last_match..m.start()]);
-        new.push_str(&replacement(&caps)?);
-        last_match = m.end();
-    }
-    new.push_str(&haystack[last_match..]);
-    Ok(new)
 }
 
 pub fn normalize_path(path: &Path) -> Result<String, NessaError> {

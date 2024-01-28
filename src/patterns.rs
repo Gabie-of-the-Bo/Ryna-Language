@@ -486,7 +486,7 @@ mod tests {
         
         assert!(ok_result(pattern.extract("Int".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("'Template".into(), &ctx, &RefCell::default())));
-        assert!(ok_result(pattern.extract("&&Bool".into(), &ctx, &RefCell::default())));
+        assert!(ok_result(pattern.extract("@Bool".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("(Bool, &String)".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("(Bool, Int) => String".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("Array<Int, 'T>".into(), &ctx, &RefCell::default())));

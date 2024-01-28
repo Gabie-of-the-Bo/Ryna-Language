@@ -1,0 +1,12 @@
+// Unary operation overload for (Int)? needed by interface Test returns Int, which is not bindable to the required Bool
+unary postfix op "?" (10000);
+
+interface Test {
+    op (n: Self)? -> Bool;
+}
+
+op (n: Int)? -> Int {
+    return 5;
+}
+
+implement Test for Int;

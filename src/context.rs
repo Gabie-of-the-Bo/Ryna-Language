@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -5,11 +6,15 @@ use colored::Colorize;
 
 use crate::cache::NessaCache;
 use crate::interfaces::Interface;
+use crate::interfaces::InterfaceBinaryOpHeader;
 use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::InterfaceFunctionHeader;
 use crate::interfaces::InterfaceImpl;
+use crate::interfaces::InterfaceNaryOpHeader;
+use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
+use crate::macros::NessaMacroType;
 use crate::translation::load_optimized_opcodes;
 use crate::types::*;
 use crate::operations::*;
@@ -36,13 +41,16 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<(String, Pattern, NessaMacro)>,
+    pub macros: Vec<(String, NessaMacroType, Pattern, NessaMacro)>,
 
     pub variables: Vec<Object>,
 
     pub lambdas: usize,
 
-    pub cache: NessaCache
+    pub cache: NessaCache,
+
+    pub module_path: String,
+    pub captured_output: RefCell<String>
 }
 
 impl NessaContext {
@@ -95,14 +103,17 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
+    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in self.interfaces.iter_mut() {
             if i.name == representation {
                 *i = Interface {
                     id: i.id,
                     name: representation,
                     params,
-                    fns
+                    fns,
+                    uns,
+                    bin,
+                    nary
                 };
 
                 return Ok(());
@@ -112,7 +123,7 @@ impl NessaContext {
         Err(format!("Interface {} was not defined", representation))
     }
 
-    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>) -> Result<(), String> {
+    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in &self.interfaces {
             if i.name == representation {
                 return Err(format!("Interface \"{}\" is already defined", representation))
@@ -125,7 +136,10 @@ impl NessaContext {
             id: self.interfaces.len(),
             name: representation,
             params,
-            fns
+            fns,
+            uns,
+            bin,
+            nary
         });
 
         Ok(())
@@ -308,7 +322,7 @@ impl NessaContext {
         vec!()
     }
 
-    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object, Object) -> Result<Object, String>) -> Result<usize, String> {
+    pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunctionInner) -> Result<usize, String> {
         self.define_binary_operation(id, templates, a, b, ret, Some(f))
     }
 
@@ -513,9 +527,9 @@ mod tests {
         assert!(def_2.is_err());
         assert!(def_3.is_err());
 
-        let def_1 = ctx.define_native_binary_operation(0, 0, INT, STR, STR, |_, _, a, _| { Ok(a.clone()) });
-        let def_2 = ctx.define_native_binary_operation(0, 0, STR, STR, STR, |_, _, a, _| { Ok(a.clone()) });
-        let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _| { Ok(a.clone()) });
+        let def_1 = ctx.define_native_binary_operation(0, 0, INT, STR, STR, |_, _, a, _, _| { Ok(a.clone()) });
+        let def_2 = ctx.define_native_binary_operation(0, 0, STR, STR, STR, |_, _, a, _, _| { Ok(a.clone()) });
+        let def_3 = ctx.define_native_binary_operation(0, 0, Type::Wildcard, Type::Wildcard, Type::Wildcard, |_, _, a, _, _| { Ok(a.clone()) });
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

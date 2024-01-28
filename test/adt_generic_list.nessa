@@ -7,16 +7,16 @@ class ListNode<T> {
 
 type List<T> = Nil | ListNode<'T>;
 
-fn<T> add(list: &&List<'T>, element: 'T) -> List<'T> {
+fn<T> add(list: @List<'T>, element: 'T) -> List<'T> {
     return ListNode<'T>(*element, *list);
 }
 
-fn<T> size(list: &&List<'T>) -> Int {
-    if list.is<&&Nil>() {
+fn<T> size(list: @List<'T>) -> Int {
+    if list.is<@Nil>() {
         return 0;
     }
 
-    return 1 + list.as<&&ListNode<'T>>().rest().size();
+    return 1 + list.as<@ListNode<'T>>().rest().size();
 }
 
 let list: List<Int> = Nil();

@@ -1,0 +1,10 @@
+---
+module_name: bf_embed
+version: 0.1.0
+hash: 837de0ca6c983ba3cb7f8ca64657d925
+module_paths:
+  - test/lib
+modules:
+  array_extensions:
+    path: "test\\lib\\array_extensions"
+    version: 0.1.0

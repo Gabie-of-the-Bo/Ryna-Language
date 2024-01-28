@@ -5,8 +5,10 @@ use colored::Colorize;
 use serde::{Serialize, Deserialize};
 
 use crate::context::NessaContext;
+use crate::id_mapper::IdMapper;
 use crate::interfaces::InterfaceConstraint;
 use crate::object::Object;
+use crate::parser::Location;
 use crate::patterns::Pattern;
 use crate::number::Integer;
 
@@ -136,7 +138,7 @@ impl Type {
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
             Type::Ref(t) => format!("{}{}", "&".magenta(), t.get_name(ctx)),
-            Type::MutRef(t) => format!("{}{}", "&&".magenta(), t.get_name(ctx)),
+            Type::MutRef(t) => format!("{}{}", "@".magenta(), t.get_name(ctx)),
             Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
 
@@ -180,7 +182,7 @@ impl Type {
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().to_string(),
             Type::Ref(t) => format!("{}{}", "&", t.get_name_plain(ctx)),
-            Type::MutRef(t) => format!("{}{}", "&&", t.get_name_plain(ctx)),
+            Type::MutRef(t) => format!("{}{}", "@", t.get_name_plain(ctx)),
             Type::Or(v) => v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name_plain(ctx)).collect::<Vec<_>>().join(", ")),
 
@@ -632,9 +634,9 @@ impl Type {
         };
     }
 
-    pub fn map_type(&self, ctx: &mut NessaContext, other_ctx: &NessaContext, classes: &mut HashMap<usize, usize>, interfaces: &mut HashMap<usize, usize>) -> Type {
-        self.map_basic_types(&mut |id| ctx.map_nessa_class(other_ctx, id, classes, interfaces))
-            .map_interfaces(&mut |id| ctx.map_nessa_interface(other_ctx, id, classes, interfaces))
+    pub fn map_type(&self, ctx: &mut NessaContext, other_ctx: &NessaContext, id_mapper: &mut IdMapper, l: &Location) -> Type {
+        self.map_basic_types(&mut |id| ctx.map_nessa_class(other_ctx, id, id_mapper, l))
+            .map_interfaces(&mut |id| ctx.map_nessa_interface(other_ctx, id, id_mapper, l))
     }
 
     pub fn map_basic_types(&self, mapping: &mut impl FnMut(usize) -> Result<usize, String>) -> Type {

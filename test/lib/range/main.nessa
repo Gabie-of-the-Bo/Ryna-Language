@@ -8,14 +8,14 @@ fn iterator(it: Range) -> Range {
     return *it;
 }
 
-fn next(it: &&Range) -> Int {
-    let curr: &&Int = it.current();
+fn next(it: @Range) -> Int {
+    let curr: @Int = it.current();
     curr.inc();
 
     return *curr - 1;
 }
 
-fn is_consumed(it: &&Range) -> Bool {
+fn is_consumed(it: @Range) -> Bool {
     return it.current() >= it.end();
 }
 

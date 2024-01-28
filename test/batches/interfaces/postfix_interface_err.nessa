@@ -1,0 +1,8 @@
+// Unable to find the unary operation overload overload for (Int)? needed by interface Test
+unary postfix op "?" (10000);
+
+interface Test {
+    op (n: Self)? -> Bool;
+}
+
+implement Test for Int;

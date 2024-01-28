@@ -1,0 +1,13 @@
+fn gcd(a: Int, b: Int) -> Int {
+    while b != 0 {
+        let r = a % b;
+        a := *b;
+        b := move(r);
+    }
+
+    return *a;
+}
+
+fn coprime(a: Int, b: Int) -> Bool {
+    return gcd(move(a), move(b)) == 1;
+}

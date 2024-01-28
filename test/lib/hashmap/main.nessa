@@ -6,7 +6,7 @@ class HashMap<V, K> {
     buckets: Array<Array<('V [Hashable], 'K)>>;
 }
 
-fn<K, V> init(map: &&HashMap<'K [Hashable], 'V>, size: Int) {
+fn<K, V> init(map: @HashMap<'K [Hashable], 'V>, size: Int) {
     let _buckets = map.buckets();
     _buckets.reserve(*size);
 
@@ -22,7 +22,7 @@ fn<K, V> hashmap() -> HashMap<'K [Hashable], 'V> {
     return move(res);
 }
 
-fn<K, V> rehash(map: &&HashMap<'K [Hashable], 'V>) {
+fn<K, V> rehash(map: @HashMap<'K [Hashable], 'V>) {
     let b = map.buckets();
     let size = b.len();
 
@@ -38,7 +38,7 @@ fn<K, V> rehash(map: &&HashMap<'K [Hashable], 'V>) {
     map.buckets() := move(aux.buckets());
 }
 
-fn<K, V> add(map: &&HashMap<'K [Hashable], 'V>, key: 'K, value: 'V) {
+fn<K, V> add(map: @HashMap<'K [Hashable], 'V>, key: 'K, value: 'V) {
     let b = map.buckets();
     let size = b.len();
     let pos = hash(*key) % size;
@@ -50,7 +50,7 @@ fn<K, V> add(map: &&HashMap<'K [Hashable], 'V>, key: 'K, value: 'V) {
     }
 }
 
-fn<K, V> get(map: &&HashMap<'K [Hashable], 'V>, key: &&'K) -> () | &&'V {
+fn<K, V> get(map: @HashMap<'K [Hashable], 'V>, key: @'K) -> () | @'V {
     let b = map.buckets();
     let size = b.len();
     let pos = hash(*key) % size;
@@ -64,7 +64,7 @@ fn<K, V> get(map: &&HashMap<'K [Hashable], 'V>, key: &&'K) -> () | &&'V {
     return ();
 }
 
-fn<K, V> contains(map: &&HashMap<'K [Hashable], 'V>, key: &&'K) -> Bool {
+fn<K, V> contains(map: @HashMap<'K [Hashable], 'V>, key: @'K) -> Bool {
     let b = map.buckets();
     let size = b.len();
     let pos = hash(*key) % size;

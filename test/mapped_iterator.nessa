@@ -1,16 +1,16 @@
 class DoubleIterator<T> {
-    iter: ArrayIterator<&&'T>;
+    iter: ArrayIterator<@'T>;
 }
 
 fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {
     return it.deref();
 }
 
-fn<T> next(it: &&DoubleIterator<'T>) -> Int {
+fn<T> next(it: @DoubleIterator<'T>) -> Int {
     return it.iter().next() * 2;
 }
 
-fn<T> is_consumed(it: &&DoubleIterator<'T>) -> Bool {
+fn<T> is_consumed(it: @DoubleIterator<'T>) -> Bool {
     return it.iter().is_consumed();
 }
 

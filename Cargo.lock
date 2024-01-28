@@ -523,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "nessa-language"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bit-set",
  "bitcode",
@@ -539,6 +539,7 @@ dependencies = [
  "nom_locate",
  "num-bigint",
  "num-traits",
+ "panic-message",
  "rand",
  "rayon",
  "regex",
@@ -630,6 +631,12 @@ checksum = "0efcf6ee55f8f7a24333bc8d1dd0e541a6cedf903dbc07ae6479d7f8ff32ed08"
 dependencies = [
  "itertools 0.4.19",
 ]
+
+[[package]]
+name = "panic-message"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "384e52fd8fbd4cbe3c317e8216260c21a0f9134de108cea8a4dd4e7e152c472d"
 
 [[package]]
 name = "parking_lot"

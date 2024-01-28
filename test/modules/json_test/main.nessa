@@ -7,7 +7,7 @@ class Test {
 
 implement Serializable<JSONSerializer> for Test;
 
-fn serialize(serializer: &&JSONSerializer, obj: Test) -> String {
+fn serialize(serializer: @JSONSerializer, obj: Test) -> String {
     let a = serializer.serialize_map_field("att_a", move(obj.att_a()));
     let b = serializer.serialize_map_field("att_b", move(obj.att_b()));
 

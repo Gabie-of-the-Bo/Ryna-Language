@@ -192,16 +192,17 @@ fn main() {
             }
             
             match res {
-                Ok(Some(ex)) => {
-                    let proj_path = Path::new(path);
-                    let prof_path = proj_path.join("nessa_cache/prof.json");
-
-                    let prof_file = serde_json::to_string(&ex).expect("Unable to serialize profiling information");
-
-                    fs::write(prof_path, prof_file).expect("Unable to write profiling information file");
+                Ok(ex) => {
+                    if ex.profiling_info.is_some() {
+                        let proj_path = Path::new(path);
+                        let prof_path = proj_path.join("nessa_cache/prof.json");
+    
+                        let prof_file = serde_json::to_string(&ex.profiling_info).expect("Unable to serialize profiling information");
+    
+                        fs::write(prof_path, prof_file).expect("Unable to write profiling information file");    
+                    }
                 },
 
-                Ok(None) => {}
                 Err(err) => err.emit(),
             }
         }
@@ -364,6 +365,7 @@ fn main() {
             config_yml.modules.insert(name.clone(), ModuleInfo {
                 path: paths.get(&(name, version.clone())).cloned().unwrap_or("".into()),
                 version,
+                is_local: false,
                 dependencies: HashSet::new(),
             });
 

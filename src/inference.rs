@@ -364,7 +364,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |
-            NessaExpr::Macro(l, _, _, _) |
+            NessaExpr::Macro(l, _, _, _, _) |
             NessaExpr::Lambda(l, _, _, _) |
             NessaExpr::NameReference(l, _) |
             NessaExpr::VariableDefinition(l, _, _, _) |
@@ -375,7 +375,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(l, _, _, _) |
             NessaExpr::NaryOperatorDefinition(l, _, _, _) |
             NessaExpr::ClassDefinition(l, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(l, _, _, _) |
+            NessaExpr::InterfaceDefinition(l, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(l, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _) |

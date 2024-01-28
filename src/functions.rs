@@ -131,19 +131,23 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("deref".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v, _| {
-        Ok(v[0].deref_obj())
+        Ok(v[0].deref_obj().deep_clone())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_ref()], T_0, |_, _, v, _| {
+        Ok(v[0].deref_obj().deep_clone())
     }).unwrap();
 
     let idx = ctx.define_function("ref".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), |_, _, v, _| {
-        Ok(v[0].get_ref())
+        Ok(v[0].get_ref_nostack())
     }).unwrap();
 
     let idx = ctx.define_function("mut".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
-        Ok(v[0].get_mut())
+        Ok(v[0].get_mut_nostack())
     }).unwrap();
 
     let idx = ctx.define_function("demut".into()).unwrap();
@@ -558,6 +562,29 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(v.pop().unwrap().move_contents())
     }).unwrap();
 
+    let idx = ctx.define_function("fwd".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[Type::Wildcard], T_0, |a, _, mut v, ctx| {
+        let type_arg = a.last().unwrap();
+        let param_arg = v.last().unwrap().get_type();
+
+        match (type_arg, &param_arg) {
+            (Type::Ref(a), Type::Ref(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::MutRef(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::Ref(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap().get_ref()),
+
+            (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().move_contents()),
+            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, b) if a == b => Ok(v.pop().unwrap().move_contents()),
+            
+            _ => Err(format!(
+                "Unable to forward value of type {} as type {}",
+                param_arg.get_name(ctx),
+                type_arg.get_name(ctx)
+            ))
+        }
+    }).unwrap();
+
     let idx = ctx.define_function("swap".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut(), T_0.to_mut()], Type::Empty, |_, _, mut v, _| {
@@ -844,4 +871,17 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             ).unwrap();
         });
     });
+}
+
+pub fn define_macro_emit_fn(ctx: &mut NessaContext, name: String) {
+    let idx = ctx.define_function(name).unwrap();
+
+    ctx.define_function_overload(idx, 0, &[STR], crate::types::Type::Empty, Some(|_, _, mut args, ctx| {
+        let obj = args.pop().unwrap();
+        let string = &*obj.get::<String>();
+
+        *ctx.captured_output.borrow_mut() += string;
+
+        Ok(Object::empty())
+    })).unwrap();
 }

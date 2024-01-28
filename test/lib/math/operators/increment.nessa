@@ -1,0 +1,6 @@
+unary postfix op "++" (5000);
+
+op (n: @Int) ++ -> @Int {
+    n.inc();
+    return n;
+}

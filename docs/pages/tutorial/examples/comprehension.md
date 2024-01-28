@@ -1,4 +1,4 @@
-To end this tutorial, let's create arguably one of the most useful constructs when working with iterable structures:
+Let's create arguably one of the most useful constructs when working with iterable structures:
 list comprehensions. This can be done thanks to Nessa's syntax definition features.
 
 ## What is *list comprehension*?

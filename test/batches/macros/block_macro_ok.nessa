@@ -1,0 +1,9 @@
+syntax block test from Arg(1{l}, a) '#' Arg(1{d}, b) {
+    {#let } {$a} {# = } {$b} {#;}
+}
+
+test#30
+
+if test != 30 {
+    panic("This should not happen");
+}

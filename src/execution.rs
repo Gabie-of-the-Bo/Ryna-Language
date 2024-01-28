@@ -21,7 +21,7 @@ use crate::compilation::{CompiledNessaExpr, NessaError};
 */
 
 impl NessaContext {
-    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<Option<ExecutionInfo>, NessaError> {
+    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<ExecutionInfo, NessaError> {
         let compiled_code = self.parse_and_compile(code)?;
 
         for (idx, i) in compiled_code.iter().enumerate() {
@@ -31,12 +31,14 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<Option<ExecutionInfo>, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
 
-        match compute_project_hash(&path) {
+        let no_macro = macro_code.is_none();
+
+        match compute_project_hash(&path, macro_code) {
             Ok((hash, all_mods, files)) => {
                 combined_hash = hash.clone();
                 all_modules = all_mods;
@@ -66,8 +68,10 @@ impl NessaContext {
                 Ok(instr) => {
                     let ser_module = ctx.get_serializable_module(combined_hash, &instr);
                     
-                    if let Err(err) = save_compiled_cache(&path, &ser_module) {
-                        err.emit();
+                    if no_macro {
+                        if let Err(err) = save_compiled_cache(&path, &ser_module) {
+                            err.emit();
+                        }
                     }
 
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
@@ -79,10 +83,14 @@ impl NessaContext {
             Err(err) => err.emit(),
         }
     }
+
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<ExecutionInfo, NessaError> {
+        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile)
+    }
 }
 
 #[derive(Serialize)]
-pub struct ExecutionInfo {
+pub struct ProfilingInfo {
     pub instr_count: HashMap<&'static str, usize>,
     pub instr_time: HashMap<&'static str, u128>,
     pub loc_count: HashMap<i32, usize>,
@@ -93,8 +101,13 @@ pub struct ExecutionInfo {
     pub total_time: u128
 }
 
+pub struct ExecutionInfo {
+    pub profiling_info: Option<ProfilingInfo>,
+    pub captured_output: String
+}
 
-impl ExecutionInfo {
+
+impl ProfilingInfo {
     pub fn process(&mut self) {
         self.total_time = self.loc_time.values().copied().sum();
 
@@ -107,7 +120,7 @@ impl ExecutionInfo {
 }
 
 impl NessaContext {
-    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr]) -> Result<Option<ExecutionInfo>, NessaError> {
+    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr]) -> Result<ExecutionInfo, NessaError> {
         use CompiledNessaExpr::*;
 
         let mut ip: i32 = 0;
@@ -367,7 +380,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        match ov.3.unwrap()(type_args, &ov.2, a, b) {
+                        match ov.3.unwrap()(type_args, &ov.2, a, b, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };
@@ -445,21 +458,25 @@ impl NessaContext {
             }
         }
 
-        if DEBUG {            
-            let mut ex = ExecutionInfo { 
-                instr_count, instr_time, loc_count, loc_time, fn_count,
-                ranges: self.cache.ranges.inner_clone(),
-                fn_time: HashMap::new(),
-                total_time: 0
-            };
+        Ok(ExecutionInfo {
+            profiling_info: if DEBUG {
+                let mut ex = ProfilingInfo { 
+                    instr_count, instr_time, loc_count, loc_time, fn_count,
+                    ranges: self.cache.ranges.inner_clone(),
+                    fn_time: HashMap::new(),
+                    total_time: 0
+                };
 
-            ex.process();
+                ex.process();
 
-            Ok(Some(ex))
+                Some(ex)
 
-        } else {
-            Ok(None)
-        }
+            } else {
+                None
+            },
+
+            captured_output: self.captured_output.borrow().clone()
+        })
     }
 }
 
@@ -545,10 +562,10 @@ mod tests {
             let array: Array<Int> = arr<Int>();
             array.push<Int>(5);
 
-            let iter: ArrayIterator<&&Int> = array.iterator<Int>();
+            let iter: ArrayIterator<@Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
-            let elem: &&Int = iter.next<Int>();
+            let elem: @Int = iter.next<Int>();
             let ended_2: Bool = iter.is_consumed();
 
             let array_2: Array<Int> = arr<Int>();
@@ -632,7 +649,7 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-            fn is_prime(n: &&Int) -> Bool {
+            fn is_prime(n: @Int) -> Bool {
                 if n <= 1 {
                     return false;
                 }
@@ -690,24 +707,24 @@ mod tests {
         let code_str = "
             unary prefix op \"~\" (201);
 
-            op ~(arg: &&Int) -> &&Int {
+            op ~(arg: @Int) -> @Int {
                 return arg;
             }
 
             unary postfix op \"¡\" (301);
 
-            op (arg: &&Int)¡ -> &&Int {
+            op (arg: @Int)¡ -> @Int {
                 return arg;
             }
 
             let a: Int = 3;
-            let b: &&Int = ~a¡;
+            let b: @Int = ~a¡;
 
             binary op \"·\" (401);
             binary op \"$\" (501);
             binary op \"@\" (601);
 
-            op (a: &&Int) · (b: &&Int) -> Int {
+            op (a: @Int) · (b: @Int) -> Int {
                 return a + b;
             }
 
@@ -715,7 +732,7 @@ mod tests {
 
             nary op from \"`\" to \"´\" (701);
 
-            op (a: &&Int)`b: &&Int, c: &&Int´ -> Int {
+            op (a: @Int)`b: @Int, c: @Int´ -> Int {
                 return a + b + ~c;
             }
 
@@ -734,13 +751,13 @@ mod tests {
                 return 5;
             }
         
-            fn test_2() -> &&Int {
+            fn test_2() -> @Int {
                 let res: Int = 0;
 
                 return res;
             }
         
-            fn test_3() -> &&String {
+            fn test_3() -> @String {
                 let res: String = \"\";
 
                 res = \"Hello\";
@@ -748,19 +765,19 @@ mod tests {
                 return res;
             }
         
-            fn test_4() -> &&Int {
+            fn test_4() -> @Int {
                 let res: Int = test_1() + test_1();
 
                 return res;
             }
         
-            fn test_5(a: Int, b: Int) -> &&Int {
+            fn test_5(a: Int, b: Int) -> @Int {
                 let res: Int = a + b;
 
                 return res;
             }
         
-            fn test_6(a: Int) -> Int | &&Int {
+            fn test_6(a: Int) -> Int | @Int {
                 if true {
                     return a;
 
@@ -930,12 +947,12 @@ mod tests {
             return it.deref<Int>();
         }
 
-        fn next(it: &&Int) -> Int {
+        fn next(it: @Int) -> Int {
             it.inc();
             return it.deref<Int>();
         }
 
-        fn is_consumed(it: &&Int) -> Bool {
+        fn is_consumed(it: @Int) -> Bool {
             return it >= 10;
         }
 
@@ -965,14 +982,14 @@ mod tests {
             return it.deref<Range>();
         }
 
-        fn next(it: &&Range) -> Int {
-            let curr: &&Int = it.current();
+        fn next(it: @Range) -> Int {
+            let curr: @Int = it.current();
             curr.inc();
 
             return curr.deref<Int>();
         }
 
-        fn is_consumed(it: &&Range) -> Bool {
+        fn is_consumed(it: @Range) -> Bool {
             return it.current() >= it.end();
         }
 
@@ -1087,10 +1104,10 @@ mod tests {
         let mut ctx = standard_ctx();
         
         let code_str = "
-        let apply: (Int, &&(Int => Int)) => Int = (n: Int, f: &&(Int => Int)) -> Int f<Int, Int>(*<Int>n);
+        let apply: (Int, @(Int => Int)) => Int = (n: Int, f: @(Int => Int)) -> Int f<Int, Int>(*<Int>n);
         let f: (Int) => Int = (n: Int) -> Int n * n;
 
-        let a = apply<Int, &&(Int => Int), Int>(5, f);
+        let a = apply<Int, @(Int => Int), Int>(5, f);
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

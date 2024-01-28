@@ -7,7 +7,7 @@ fn iterator(it: CodePointIterator) -> CodePointIterator {
     return move(it);
 }
 
-fn next(it: &&CodePointIterator) -> Int {
+fn next(it: @CodePointIterator) -> Int {
     let res = it.str().code_point_at(*it.pos());
 
     it.pos() := it.pos() + res.deref().code_point_length();
@@ -15,7 +15,7 @@ fn next(it: &&CodePointIterator) -> Int {
     return move(res);
 }
 
-fn is_consumed(it: &&CodePointIterator) -> Bool {
+fn is_consumed(it: @CodePointIterator) -> Bool {
     return it.pos() >= it.str().len();
 }
 

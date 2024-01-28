@@ -4,8 +4,8 @@ entirely based on **bounded template substitution**. In order to use this, we ne
 
 ## About interfaces
 
-An **interface** can be defined as a set of function signatures that may or may not be fulfilled by a target type 
-which is marked as `Self`. We say that a type `T` fulfills the interface if every function definition inside the
+An **interface** can be defined as a set of function and operation signatures that may or may not be fulfilled by a target type 
+which is marked as `Self`. We say that a type `T` fulfills the interface if every function and operation definition inside the
 interface exists when we substitute `Self` by `T`.
 
 Also, when a type fulfills an interface, you can **implement** it, which means that we mark thye type so that
@@ -21,14 +21,44 @@ We can define an interface using the following syntax:
 interface Example {
     fn example_1(v: Self);
     fn example_2(...) -> Type;
+
     [...]
+
+    op prefix_op (v: TypeV) -> Type;
+
+    [...]
+    
+    op (v: TypeV) postfix_op -> Type;
+
+    [...]
+    
+    op (a: TypeA) binary_op (b: TypeB) -> Type;
+
+    [...]
+    
+    op (a: TypeA) nary_open args nary_close -> Type;
 }
 
 // With generics
 interface Example<T> {
     fn example_1(v: Self, n : 'T);
     fn example_2(...) -> Type;
+
     [...]
+
+    op prefix_op (v: 'T) -> Type;
+
+    [...]
+    
+    op (v: 'T) postfix_op -> Type;
+
+    [...]
+    
+    op (a: TypeA) binary_op (b: 'T) -> Type;
+
+    [...]
+    
+    op (a: 'T) nary_open args nary_close -> Type;
 }
 ```
 

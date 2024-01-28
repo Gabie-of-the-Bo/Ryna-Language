@@ -1,0 +1,10 @@
+// Binary operation overload for (Bool)+(Bool) needed by interface Test returns Int, which is not bindable to the required Bool
+interface Test {
+    op (a: Self) + (b: Self) -> Self;
+}
+
+op (a: Bool) + (b: Bool) -> Int {
+    return 1;
+}
+
+implement Test for Bool;

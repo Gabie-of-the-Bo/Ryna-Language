@@ -1,4 +1,4 @@
-use std::{fs, collections::{HashMap, HashSet}, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
 use clap::{Arg, Command, ArgAction};
 use colored::Colorize;
@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{context::*, config::{NessaConfig, ModuleInfo, get_nessa_modules_var, NESSA_MODULES_ENV_VAR}, nessa_warning};
+use nessa::{context::*, config::{ModuleInfo, NessaConfig, CONFIG}, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -75,6 +75,7 @@ impl Autocomplete for OptionsAutocompleter {
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
 const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
+const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
 fn main() {
     /*
@@ -168,6 +169,10 @@ fn main() {
                 .short('v')
             )
         )
+        .subcommand(
+            Command::new("setup")
+            .about("Set up environment variables and install prelude")
+        )
         .get_matches();
 
     /*
@@ -240,17 +245,16 @@ fn main() {
                 modules.push(m.clone());
 
             } else {
-                if let Some(var) = get_nessa_modules_var() {
-                    let add_env = Confirm::new(&format!("{} was detected. Add it to module paths?", NESSA_MODULES_ENV_VAR)).prompt().unwrap();
+                if CONFIG.read().unwrap().modules_path != "" {
+                    let add_env = Confirm::new(&format!("Default modules path was detected. Add it to module paths?")).prompt().unwrap();
 
                     if add_env {
-                        modules.push(var);
+                        modules.push(CONFIG.read().unwrap().modules_path.clone());
                     }
                 
                 } else {
                     nessa_warning!(
-                        "{} env variable was not found. Skipping this dependency folder...",
-                        NESSA_MODULES_ENV_VAR
+                        "Default modules path was not found. Skipping this dependency folder...{}", ""
                     );    
                 }
 
@@ -264,7 +268,7 @@ fn main() {
                     modules.push(
                         Text::new("Modules path:")
                         .with_default("libs")
-                        .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
+                        .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
                         .with_placeholder("path/to/modules")
                         .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
                         .prompt().unwrap().trim().to_string()
@@ -313,7 +317,7 @@ fn main() {
             let mut paths = HashMap::new();
 
             for path in &config_yml.module_paths {
-                for f in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                for f in glob(format!("{}/**/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
                     let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
                     let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
                     module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
@@ -370,6 +374,18 @@ fn main() {
             });
 
             fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
+        }
+
+        Some(("setup", _)) => {
+            let value = Text::new("Libraries path:")
+                .with_default("libs")
+                .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
+                .with_placeholder("path/to/modules")
+                .with_help_message("The interpreter will install modules in this folder by default")
+                .prompt().unwrap();
+
+            CONFIG.write().unwrap().modules_path = value;
+            CONFIG.write().unwrap().save().unwrap();            
         }
 
         _ => unreachable!()

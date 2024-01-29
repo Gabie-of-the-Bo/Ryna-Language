@@ -1,6 +1,9 @@
 #[macro_use] extern crate impl_ops;
 extern crate nom;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod number;
 pub mod cache;
 pub mod patterns;

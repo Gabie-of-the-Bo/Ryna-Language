@@ -1,6 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::fs;
 use std::path::Path;
+use std::sync::RwLock;
 
 use colored::Colorize;
 use glob::glob;
@@ -8,6 +9,7 @@ use md5::compute;
 use regex::{Regex, Captures};
 use serde::{Serialize, Deserialize};
 use serde_yaml::{from_str, to_string};
+use directories::ProjectDirs;
 
 use crate::compilation::NessaError;
 use crate::context::*;
@@ -18,8 +20,6 @@ use crate::regex_ext::replace_all_fallible;
 use crate::serialization::CompiledNessaModule;
 
 const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
-
-pub const NESSA_MODULES_ENV_VAR: &str = "NESSA_MODULES_PATH"; 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
@@ -50,6 +50,14 @@ pub struct NessaConfig {
 
 fn default_version() -> String {
     "0.1.0".into()
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NessaGlobalConfig {
+    #[serde(skip)]
+    file_path: String,
+
+    pub modules_path: String
 }
 
 pub type Imports = HashMap<ImportType, HashSet<String>>;
@@ -404,22 +412,54 @@ pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, NessaError> {
     let replacement = |caps: &Captures| {
         let cap = caps.get(1).unwrap().as_str();
         
-        if let Ok(var) = std::env::var(cap) {
-            Ok(var)
+        if let Some(var) = CONFIG.read().unwrap().get(cap) {
+            Ok(var.into())
  
         } else {
-            Err(NessaError::module_error(format!("Unable to find {} environment variable", cap)))
+            Err(NessaError::module_error(format!("Unable to find config variable {}", cap)))
         }
     };
     
     return replace_all_fallible(&env_var_regex, res.as_str(), replacement);
 }
 
-pub fn get_nessa_modules_var() -> Option<String> {
-    if let Ok(var) = std::env::var(NESSA_MODULES_ENV_VAR) {
-        Some(var)
+impl NessaGlobalConfig {
+    pub fn load() -> NessaGlobalConfig {
+        if let Some(proj_dirs) = ProjectDirs::from("", "",  "nessa-language") {
+            let config_path = proj_dirs.config_dir();
+            let config_file_path = config_path.join("config.yml");
+    
+            if !config_file_path.exists() {
+                std::fs::create_dir_all(&config_path).unwrap();
+                std::fs::write(&config_file_path, "modules_path: \"\"").unwrap();
+            }
 
-    } else {
-        None
+            let config_file = std::fs::read_to_string(&config_file_path).unwrap();
+            let mut config: NessaGlobalConfig = serde_yaml::from_str(&config_file).unwrap();
+
+            config.file_path = config_file_path.to_str().unwrap().to_string();
+
+            return config;
+        }
+    
+        panic!("Unable to read config file");
     }
+
+    pub fn save(&self) -> Result<(), String> {
+        let yml = serde_yaml::to_string(self).unwrap();
+
+        std::fs::write(&self.file_path, yml)
+            .map_err(|_| format!("Unable to save configuration file"))
+    }
+
+    pub fn get(&self, name: &str) -> Option<&str> {
+        match name {
+            "MODULES_PATH" => Some(&self.modules_path),
+            _ => None
+        }
+    }
+}
+
+lazy_static! {
+    pub static ref CONFIG: RwLock<NessaGlobalConfig> = RwLock::new(NessaGlobalConfig::load());
 }

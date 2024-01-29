@@ -12,7 +12,7 @@ use serde_yaml::{from_str, to_string};
 use directories::ProjectDirs;
 
 use crate::compilation::NessaError;
-use crate::context::*;
+use crate::{context::*, nessa_error};
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
 use crate::parser::*;
@@ -442,7 +442,7 @@ impl NessaGlobalConfig {
             return config;
         }
     
-        panic!("Unable to read config file");
+        nessa_error!("Unable to read config file");
     }
 
     pub fn save(&self) -> Result<(), String> {

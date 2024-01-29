@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_warning};
+use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -280,7 +280,7 @@ fn main() {
                 
                 } else {
                     nessa_warning!(
-                        "Default modules path was not found. Skipping this dependency folder...{}", ""
+                        "Default modules path was not found. Skipping this dependency folder..."
                     );    
                 }
 
@@ -305,7 +305,7 @@ fn main() {
             let module_path = Path::new(&name);
 
             if module_path.exists() {
-                panic!("Project folder already exists!");
+                nessa_error!("Project folder already exists!");
             }
 
             fs::create_dir(&name).expect("Unable to create project directory");
@@ -329,11 +329,11 @@ fn main() {
             let main_path = module_path.join(Path::new("main.nessa"));
 
             if !config_path.exists() {
-                panic!("No project config file!");
+                nessa_error!("No project config file!");
             }
 
             if !main_path.exists() {
-                panic!("No main nessa file!");
+                nessa_error!("No main nessa file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
@@ -419,7 +419,7 @@ fn main() {
 
             match install_prelude() {
                 Ok(_) => {},
-                Err(err) => panic!("{}", err),
+                Err(err) => nessa_error!("{}", err),
             }
         }
 
@@ -429,7 +429,7 @@ fn main() {
 
             match install_repo(repo_url, pack_name) {
                 Ok(_) => {},
-                Err(err) => panic!("{}", err),
+                Err(err) => nessa_error!("{}", err),
             }
         }
 
@@ -438,7 +438,7 @@ fn main() {
 
             match uninstall_repo(pack_name) {
                 Ok(_) => {},
-                Err(err) => panic!("{}", err),
+                Err(err) => nessa_error!("{}", err),
             }
         }
 

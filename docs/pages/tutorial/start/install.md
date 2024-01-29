@@ -26,3 +26,15 @@ cargo build --release
 ```
 
 Then, copy the corresponding binaries in the */target* folder to some location inside your *PATH* env variable.
+
+## Configuring the interpreter [**Important**]
+
+It is extremely recommended that you run this command just after you install it:
+
+```
+nessa setup
+```
+
+This will ask you for a default modules location **where every library will be installed** by default and create a global
+configuration file. Also, it will download the *prelude* libraries for you, which are some common functionalities that 
+you might need to use eventually, such as sets, math functions or special iterators.  

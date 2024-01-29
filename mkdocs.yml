@@ -9,6 +9,7 @@ nav:
       - Installation: 'pages/tutorial/start/install.md'
       - Creating a Project: 'pages/tutorial/start/create.md'
       - Executing and Profiling: 'pages/tutorial/start/run.md'
+      - Installing Libraries: 'pages/tutorial/start/libs.md'
       - Project Files: 'pages/tutorial/start/configuration.md'
     - Step by step:
       - Introduction: 'pages/tutorial/steps/first.md'

@@ -131,7 +131,7 @@ impl NessaError {
             );
         }
         
-        panic!();
+        std::process::exit(1);
     }
 }
 
@@ -173,12 +173,29 @@ impl<'a> From<nom::Err<VerboseError<Span<'a>>>> for NessaError {
 
 #[macro_export]
 macro_rules! nessa_warning {
-    ($pat: expr, $first: expr $( , $more: expr)*) => {
+    ($pat: expr $( , $more: expr)*) => {
         println!(
-            "{} {}",
-            "[Warning]".yellow(),
-            format!($pat, $first, $($more,)*)
+            "[{}] {}",
+            "Warning".yellow(),
+            format!($pat, $($more,)*)
         );
+    };
+}
+
+#[macro_export]
+macro_rules! nessa_error {
+    ($pat: expr $( , $more: expr)*) => {
+        {
+            use colored::Colorize;
+
+            eprintln!(
+                "[{}] {}",
+                "Error".red(),
+                format!($pat, $($more,)*)
+            );
+    
+            std::process::exit(1);
+        }
     };
 }
 

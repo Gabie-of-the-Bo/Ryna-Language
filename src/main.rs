@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{context::*, config::{ModuleInfo, NessaConfig, CONFIG}, nessa_warning};
+use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -171,7 +171,33 @@ fn main() {
         )
         .subcommand(
             Command::new("setup")
-            .about("Set up environment variables and install prelude")
+            .about("Set up global configuration and install prelude")
+        )
+        .subcommand(
+            Command::new("install")
+            .about("Install a library pack from a git repository")
+            .arg(
+                Arg::new("REPOSITORY")
+                .help("Specifies the file you want to execute")
+                .required(true)
+                .index(1)
+            )
+            .arg(
+                Arg::new("NAME")
+                .help("Name of the library reprository that you want to install")
+                .required(true)
+                .index(2)
+            )
+        )
+        .subcommand(
+            Command::new("uninstall")
+            .about("Uninstall a library pack")
+            .arg(
+                Arg::new("NAME")
+                .help("Name of the library reprository that you want to install")
+                .required(true)
+                .index(1)
+            )
         )
         .get_matches();
 
@@ -254,7 +280,7 @@ fn main() {
                 
                 } else {
                     nessa_warning!(
-                        "Default modules path was not found. Skipping this dependency folder...{}", ""
+                        "Default modules path was not found. Skipping this dependency folder..."
                     );    
                 }
 
@@ -279,7 +305,7 @@ fn main() {
             let module_path = Path::new(&name);
 
             if module_path.exists() {
-                panic!("Project folder already exists!");
+                nessa_error!("Project folder already exists!");
             }
 
             fs::create_dir(&name).expect("Unable to create project directory");
@@ -303,11 +329,11 @@ fn main() {
             let main_path = module_path.join(Path::new("main.nessa"));
 
             if !config_path.exists() {
-                panic!("No project config file!");
+                nessa_error!("No project config file!");
             }
 
             if !main_path.exists() {
-                panic!("No main nessa file!");
+                nessa_error!("No main nessa file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
@@ -384,8 +410,36 @@ fn main() {
                 .with_help_message("The interpreter will install modules in this folder by default")
                 .prompt().unwrap();
 
+            println!("Updating global configuration...");
+
             CONFIG.write().unwrap().modules_path = value;
-            CONFIG.write().unwrap().save().unwrap();            
+            CONFIG.write().unwrap().save().unwrap();
+
+            println!("Installing prelude...");
+
+            match install_prelude() {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
+        }
+
+        Some(("install", run_args)) => {
+            let repo_url = run_args.get_one::<String>("REPOSITORY").expect("No repository URL was provided");
+            let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+
+            match install_repo(repo_url, pack_name) {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
+        }
+
+        Some(("uninstall", run_args)) => {
+            let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+
+            match uninstall_repo(pack_name) {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
         }
 
         _ => unreachable!()

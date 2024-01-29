@@ -29,6 +29,9 @@ pub mod config;
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
 
+#[path = "algorithms/git.rs"]
+pub mod git;
+
 #[path = "stdlib/math.rs"]
 pub mod math;
 

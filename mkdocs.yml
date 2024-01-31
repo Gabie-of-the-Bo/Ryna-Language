@@ -43,6 +43,23 @@ nav:
       - Building a Ternary Operator: 'pages/tutorial/examples/ternary.md'
       - List Comprehension Syntax: 'pages/tutorial/examples/comprehension.md'
       - Embedding a Language: 'pages/tutorial/examples/embedding.md'
+  - Reference:
+    - Funtions:
+      - Memory: 'pages/reference/functions/memory.md'
+      - Math: 'pages/reference/functions/math.md'
+      - Arrays: 'pages/reference/functions/arrays.md'
+      - Strings: 'pages/reference/functions/strings.md'
+      - I/O: 'pages/reference/functions/io.md'
+      - Miscellaneous: 'pages/reference/functions/misc.md'
+    - Operators and Operations:
+      - Internal: 'pages/reference/operators/internal.md'
+      - Math: 'pages/reference/operators/math.md'
+      - Logical: 'pages/reference/operators/logical.md'
+      - Bitwise: 'pages/reference/operators/bitwise.md'
+      - Arrays: 'pages/reference/operators/arrays.md'
+    - Interfaces:
+      - Iterable: 'pages/reference/interfaces/iterable.md'
+      - Printable: 'pages/reference/interfaces/printable.md'
   - Contribute: 'pages/contribute.md'
 
 theme: 
@@ -113,6 +130,7 @@ plugins:
   - mermaid2
 
 markdown_extensions:
+  - pymdownx.extra
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid

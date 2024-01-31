@@ -52,11 +52,11 @@ nav:
       - I/O: 'pages/reference/functions/io.md'
       - Miscellaneous: 'pages/reference/functions/misc.md'
     - Operators and Operations:
-      - Internal: 'pages/reference/functions/internal.md'
-      - Math: 'pages/reference/functions/math.md'
-      - Logical: 'pages/reference/functions/logical.md'
-      - Bitwise: 'pages/reference/functions/bitwise.md'
-      - Arrays: 'pages/reference/functions/arrays.md'
+      - Internal: 'pages/reference/operators/internal.md'
+      - Math: 'pages/reference/operators/math.md'
+      - Logical: 'pages/reference/operators/logical.md'
+      - Bitwise: 'pages/reference/operators/bitwise.md'
+      - Arrays: 'pages/reference/operators/arrays.md'
     - Interfaces:
       - Iterable: 'pages/reference/functions/iterable.md'
       - Printable: 'pages/reference/functions/printable.md'

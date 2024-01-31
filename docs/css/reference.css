@@ -5,3 +5,10 @@ h3 {
     padding-left: 0.5em;
     font-style: italic;
 }
+
+h3 > .precedence {
+    font-size: 0.75em;
+    float: right;
+    padding-right: 0.5em;
+    line-height: 2em;
+}

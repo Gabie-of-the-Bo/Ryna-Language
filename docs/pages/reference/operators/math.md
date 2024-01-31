@@ -87,6 +87,9 @@
                 </blockquote>
                 <code>(a: String) + (b: String) -> String</code> 
             </td>
+            <td rowspan="1">
+                Concatenates <code>a</code> and <code>b</code>
+            </td>
         </tr>
     </tbody>
 </table>

@@ -58,8 +58,8 @@ nav:
       - Bitwise: 'pages/reference/operators/bitwise.md'
       - Arrays: 'pages/reference/operators/arrays.md'
     - Interfaces:
-      - Iterable: 'pages/reference/functions/iterable.md'
-      - Printable: 'pages/reference/functions/printable.md'
+      - Iterable: 'pages/reference/interfaces/iterable.md'
+      - Printable: 'pages/reference/interfaces/printable.md'
   - Contribute: 'pages/contribute.md'
 
 theme: 

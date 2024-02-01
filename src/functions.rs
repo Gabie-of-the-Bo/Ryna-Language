@@ -585,6 +585,29 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     }).unwrap();
 
+    let idx = ctx.define_function("cfwd".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[Type::Wildcard], T_0, |a, _, mut v, ctx| {
+        let type_arg = a.last().unwrap();
+        let param_arg = v.last().unwrap().get_type();
+
+        match (type_arg, &param_arg) {
+            (Type::Ref(a), Type::Ref(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::MutRef(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::Ref(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap().get_ref()),
+
+            (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, b) if a == b => Ok(v.pop().unwrap().deep_clone()),
+            
+            _ => Err(format!(
+                "Unable to forward value of type {} as type {}",
+                param_arg.get_name(ctx),
+                type_arg.get_name(ctx)
+            ))
+        }
+    }).unwrap();
+
     let idx = ctx.define_function("swap".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut(), T_0.to_mut()], Type::Empty, |_, _, mut v, _| {

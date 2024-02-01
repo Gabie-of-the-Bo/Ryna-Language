@@ -866,7 +866,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
         let cp = &*v[0].get::<Integer>();
-        Ok(Object::new(Integer::from(*cp.limbs.last().unwrap())))
+        Ok(Object::new(Integer::from(*cp.limbs.first().unwrap())))
     }).unwrap();
 
     let idx = ctx.define_function("input".into()).unwrap();

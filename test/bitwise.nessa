@@ -22,7 +22,6 @@ if (true ^ true) || (false ^ false)  {
     panic("This should not happen");
 }
 
-if 36893488147419103231.truncate() != 1 {
-    print(36893488147419103231.truncate());
+if 18446744073709551619.truncate() != 3 {
     panic("This should not happen");
 }

@@ -846,6 +846,35 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(Object::new(Integer::from(*cp.limbs.last().unwrap())))
     }).unwrap();
 
+    let idx = ctx.define_function("input".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[], STR, |_, _, _, _| {
+        let mut buffer = String::new();
+        
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut buffer).unwrap();
+    
+        Ok(Object::new(buffer))
+    }).unwrap();
+
+    let idx = ctx.define_function("num_args".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[], INT, |_, _, _, ctx| {
+        Ok(Object::new(Integer::from(ctx.program_input.len() as u64)))
+    }).unwrap();
+
+    let idx = ctx.define_function("get_arg".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, v, ctx| {
+        let idx = &*v[0].get::<Integer>();
+
+        if !idx.is_valid_index() {
+            return Err(format!("{} is not a valid index", idx));
+        }
+
+        Ok(Object::new(ctx.program_input[idx.limbs[0] as usize].clone()))
+    }).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

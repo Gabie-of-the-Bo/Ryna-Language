@@ -31,7 +31,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, program_input: &Vec<String>) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -54,7 +54,7 @@ impl NessaContext {
                                 );
                             }
 
-                            return code.execute::<DEBUG>(); 
+                            return code.execute::<DEBUG>(program_input); 
                         }    
                     }
                 }
@@ -65,14 +65,16 @@ impl NessaContext {
 
         match precompile_nessa_module_with_config(&path, all_modules, file_cache) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
-                Ok(instr) => {
-                    let ser_module = ctx.get_serializable_module(combined_hash, &instr);
-                    
+                Ok(instr) => {                    
                     if no_macro {
+                        let ser_module = ctx.get_serializable_module(combined_hash, &instr);
+
                         if let Err(err) = save_compiled_cache(&path, &ser_module) {
                             err.emit();
                         }
                     }
+
+                    ctx.program_input = program_input.clone();
 
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
@@ -84,8 +86,8 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool) -> Result<ExecutionInfo, NessaError> {
-        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile)
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, program_input: &Vec<String>) -> Result<ExecutionInfo, NessaError> {
+        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, program_input)
     }
 }
 

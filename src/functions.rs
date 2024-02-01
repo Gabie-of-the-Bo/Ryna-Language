@@ -760,23 +760,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     // String functions
     let idx = ctx.define_function("code_point_at".into()).unwrap();
     
-    ctx.define_native_function_overload(idx, 0, &[STR.to_ref(), INT], INT, |_, _, v, _| {
-        let string = &*v[0].deref::<String>();
-        let idx = &*v[1].get::<Integer>();
-
-        if !idx.is_valid_index() {
-            return Err(format!("{} is not a valid index", idx));
-        }
-
-        if let Some(character) = string[idx.as_usize()..].chars().next() {
-            Ok(ObjectBlock::Int(Integer::from(character as u64)).to_obj())
-
-        } else {
-            Err(format!("Invalid character start at position {}", idx))
-        }
-    }).unwrap();
-    
-    ctx.define_native_function_overload(idx, 0, &[STR.to_mut(), INT], INT, |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut()), INT], INT, |_, _, v, _| {
         let string = &*v[0].deref::<String>();
         let idx = &*v[1].get::<Integer>();
 
@@ -828,7 +812,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("utf8_array".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[STR.to_ref()], ARR_OF!(INT), |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut())], ARR_OF!(INT), |_, _, v, _| {
         let string = &*v[0].deref::<String>();
         let arr = string.bytes()
                         .map(|i| ObjectBlock::Int(Integer::from(i as u64)).to_obj())
@@ -839,7 +823,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("utf8_to_str".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref()], STR, |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref().or(ARR_OF!(INT).to_mut())], STR, |_, _, v, _| {
         let arr = &*v[0].deref::<NessaArray>();
         let mut bytes = vec!();
         bytes.reserve_exact(arr.elements.len());

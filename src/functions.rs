@@ -882,6 +882,84 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(Object::new(ctx.program_input[idx.limbs[0] as usize].clone()))
     }).unwrap();
 
+    let idx = ctx.define_function("set".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), T_0, INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[2].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements[idx.limbs[0] as usize] = v[1].clone();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("insert".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), T_0, INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[2].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements.insert(idx.limbs[0] as usize, v[1].clone());
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("remove".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[1].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements.remove(idx.limbs[0] as usize);
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("pop".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut()], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            array.elements.pop();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

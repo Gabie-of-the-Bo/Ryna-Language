@@ -505,8 +505,8 @@ mod tests {
                     return test(a - 1) + a;
                 }
 
-                println(*a);
-                println(0 < a);
+                print(*a);
+                print(0 < a);
 
                 return 0;
             }

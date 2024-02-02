@@ -517,38 +517,6 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    let idx = ctx.define_function("println".into()).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _, _| { 
-        println!();
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[INT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<Integer>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[FLOAT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<f64>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[BOOL], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<bool>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<String>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
     let idx = ctx.define_function("drop".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 

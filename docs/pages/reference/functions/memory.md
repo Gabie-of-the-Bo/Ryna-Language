@@ -203,3 +203,22 @@
         </tr>
     </tbody>
 </table>
+
+### cfwd
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>cfwd&lt;T>(obj: *) -> 'T</code> </td>
+            <td rowspan="1">
+                The same as <code>fwd</code>, but clones objects instead of moving them
+            </td>
+        </tr>
+    </tbody>
+</table>

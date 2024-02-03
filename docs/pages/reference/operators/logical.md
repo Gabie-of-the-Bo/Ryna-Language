@@ -14,7 +14,7 @@
     <tbody>
         <tr>
             <td>
-                <code>- (v: Bool) -> Bool</code> 
+                <code>! (v: Bool) -> Bool</code> 
             </td>
             <td rowspan="3">
                 Negates <code>v</code>
@@ -22,12 +22,12 @@
         </tr>
         <tr>
             <td>
-                <code>- (v: &Bool) -> Bool</code> 
+                <code>! (v: &Bool) -> Bool</code> 
             </td>
         </tr>
         <tr>
             <td>
-                <code>- (v: @Bool) -> Bool</code> 
+                <code>! (v: @Bool) -> Bool</code> 
             </td>
         </tr>
 </table>
@@ -332,7 +332,7 @@
                 <blockquote>
                     <p>All reference combinations are defined</p>
                 </blockquote>
-                <code>(a: Int) == (b: Float) -> Bool</code> 
+                <code>(a: Bool) == (b: Bool) -> Bool</code> 
             </td>
         </tr>
         <tr>
@@ -340,7 +340,7 @@
                 <blockquote>
                     <p>All reference combinations are defined</p>
                 </blockquote>
-                <code>(a: Float) == (b: Int) -> Bool</code> 
+                <code>(a: String) == (b: String) -> Bool</code> 
             </td>
         </tr>
     </tbody>

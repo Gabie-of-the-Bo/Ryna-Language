@@ -1,5 +1,37 @@
 <link rel="stylesheet" href="../../../../css/reference.css">
 
+## Prefix
+
+### ! <span class="precedence">[ Precedence 250 ]</span>
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+                <code>! (n: Int) -> Int</code> 
+            </td>
+            <td rowspan="3">
+                Negates the bits of <code>n</code>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <code>! (n &Int) -> Int</code> 
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <code>! (n @Int) -> Int</code> 
+            </td>
+        </tr>
+</table>
+
 ## Binary
 
 ### & <span class="precedence">[ Precedence 370 ]</span>

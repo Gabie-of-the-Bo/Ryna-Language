@@ -57,6 +57,25 @@
     </tbody>
 </table>
 
+### capacity
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>capacity&lt;T>(arr: @Array<'T>) -> Int</code> </td>
+            <td rowspan="1">
+                Returns the allocated size inside of <code>arr</code>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
 ### push
 
 <table>
@@ -76,7 +95,7 @@
     </tbody>
 </table>
 
-### capacity
+### pop
 
 <table>
     <thead>
@@ -87,9 +106,66 @@
     </thead>
     <tbody>
         <tr>
-            <td rowspan="1"> <code>capacity&lt;T>(arr: @Array<'T>) -> Int</code> </td>
+            <td rowspan="1"> <code>pop&lt;T>(arr: @Array<'T>) -> ()</code> </td>
             <td rowspan="1">
-                Returns the allocated size inside of <code>arr</code>
+                Remove the last element of <code>arr</code> if it exists
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### insert
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>insert&lt;T>(arr: @Array<'T>, elem: 'T, pos: Int) -> ()</code> </td>
+            <td rowspan="1">
+                Inserts <code>elem</code> into <code>arr</code> at the position <code>pos</code>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### remove
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>remove&lt;T>(arr: @Array<'T>, pos: Int) -> ()</code> </td>
+            <td rowspan="1">
+                Remove <code>pos</code>'th element of <code>arr</code>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### set
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>set&lt;T>(arr: @Array<'T>, elem: 'T, pos: Int) -> ()</code> </td>
+            <td rowspan="1">
+                Sets the <code>pos</code>'th element of <code>arr</code> to <code>elem</code>
             </td>
         </tr>
     </tbody>

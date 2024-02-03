@@ -159,9 +159,66 @@
     </thead>
     <tbody>
         <tr>
-            <td rowspan="1"> <code>write_str(file: @File, bytes: &Array&lt;Int>) -> Bool</code> </td>
-            <td rowspan="1" style="width: 45%;">
+            <td rowspan="1"> <code>write_bytes(file: @File, bytes: &Array&lt;Int>) -> Bool</code> </td>
+            <td rowspan="1" style="width: 40%;">
                 Write the contents of <code>bytes</code> to <code>file</code> and return <code>true</code> if it succeeded
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### input
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>input() -> String</code> </td>
+            <td rowspan="1">
+                Asks for user input on console and returns it
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### num_args
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>num_args() -> Int</code> </td>
+            <td rowspan="1">
+                Returns the number of arguments received from stdin
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### get_arg
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>get_arg(i: Int) -> String</code> </td>
+            <td rowspan="1">
+                Returns the <code>i</code>'th argument received from stdin
             </td>
         </tr>
     </tbody>

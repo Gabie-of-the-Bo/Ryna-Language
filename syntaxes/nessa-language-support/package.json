@@ -1,0 +1,25 @@
+{
+    "name": "nessa-language-support",
+    "displayName": "Nessa Language Support",
+    "description": "Basic support for the Nessa Programming Language",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.62.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "nessa",
+            "aliases": ["Nessa", "nessa"],
+            "extensions": [".nessa"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "nessa",
+            "scopeName": "source.nessa",
+            "path": "./syntaxes/nessa.tmLanguage.json"
+        }]
+    }
+}

@@ -1,0 +1,655 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Nessa",
+	"patterns": [
+		{ "include": "#comments" },
+		{ "include": "#literals" },
+		{ "include": "#variable-definition" },
+		{ "include": "#function-definition" },
+		{ "include": "#operator-definition" },
+		{ "include": "#imports" },
+		{ "include": "#nary-definition" },
+		{ "include": "#binary-definition" },
+		{ "include": "#prefix-definition" },
+		{ "include": "#postfix-definition" },
+		{ "include": "#class-definition" },
+		{ "include": "#interface-definition" },
+		{ "include": "#interface-implementation" },
+		{ "include": "#type-definition" },
+		{ "include": "#implicit-syntax-definition" },
+		{ "include": "#attribute-definition" },
+		{ "include": "#function-call" },
+		{ "include": "#keywords" },
+		{ "include": "#variable-ref" }
+	],
+	"repository": {
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.double-slash",
+					"begin": "//",
+					"end": "\n|$"
+				},
+				
+				{
+					"name": "comment.block",
+					"begin": "/\\*",
+					"end": "\\*/"
+				}
+			]
+		},
+		
+		"literals": {
+			"patterns": [
+				{
+					"name": "constant.language",
+					"match": "\\b(true|false)\\b"
+				},
+				{
+					"name": "constant.numeric",
+					"match": "\\b([0-9]+(\\.[0-9]+)?)\\b"
+				},
+				{
+					"name": "string.quoted.double.nessa",
+					"begin": "\"",
+					"end": "\"",
+					"patterns": [
+						{
+							"name": "constant.character.escape.nessa",
+							"match": "\\\\."
+						}
+					]
+				},
+				{
+					"name": "constant.character.nessa",
+					"match": "'\\?.'"
+				}
+			]
+		},
+
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.nessa",
+				"match": "\\b(class|syntax|let|fn|in|op|unary|binary|nary|prefix|postfix|from|to|if|while|for|return)\\b"
+			}]
+		},
+
+		"variable-definition": {
+			"patterns": [
+				{
+					"match": "(let)\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)(\\s*:\\s*(.+))\\s*=",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "variable.other"
+						},
+						"4": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"imports": {
+			"patterns": [
+				{
+					"match": "(import)\\s*(prefix|postfix|binary|nary)?\\s*(class|fn|interface|syntax|op)?\\s*(.*)\\s*(from)\\s*(.*);",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"name": "keyword.control.nessa"
+						},
+						"4": {
+							"patterns": [
+								{
+									"match": "[a-zA-Z_]*[a-zA-Z0-9_]+",
+									"name": "entity.name.function"
+								},
+								{
+									"name": "string.quoted.double.nessa",
+									"begin": "\"",
+									"end": "\"",
+									"patterns": [
+										{
+											"name": "constant.character.escape.nessa",
+											"match": "\\\\."
+										}
+									]
+								}
+							]
+						},
+						"5": {
+							"name": "keyword.control.nessa"
+						},
+						"6": {
+							"name": "string.unquoted"
+						}
+					}
+				}
+			]
+		},
+
+		"operator-definition": {
+			"patterns": [
+				{
+					"match": "(unary|binary|nary)\\s*(prefix|postfix|right)?\\s*(op)\\s*(\".*?\").*\\((\\s*[0-9]*\\s*)\\);",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"name": "keyword.control.nessa"
+						},
+						"4": {
+							"name": "string.quoted.double"
+						},
+						"5": {
+							"name": "constant.numeric"
+						}
+					}
+				}
+			]
+		},
+
+		"function-definition": {
+			"patterns": [
+				{
+					"match": "(fn)\\s*(<(.+)>)?\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*\\((.*)\\)(\\s*->\\s*(.+)\\s*)?",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"name": "entity.name.function.nessa"
+						},
+						"5": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"7": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"prefix-definition": {
+			"patterns": [
+				{
+					"match": "(op)\\s*(<(.+)>)?\\s+(.+?)\\s*\\((.*)\\)(\\s*->\\s*(.+)\\s*)?",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"name": "keyword.operator"
+						},
+						"5": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"7": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"postfix-definition": {
+			"patterns": [
+				{
+					"match": "(op)\\s*(<(.+)>)?\\s+\\((.*)\\)\\s*([^ ]+)(\\s*->\\s*(.+)\\s*)?",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"6": {
+							"name": "keyword.operator"
+						},
+						"7": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"binary-definition": {
+			"patterns": [
+				{
+					"match": "(op)\\s*(<(.+)>)?\\s+\\((.*?:[^:]+)\\)\\s*([^ ]+)\\s*\\((.*?:[^:]+)\\)(\\s*->\\s*(.+)\\s*)?",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"5": {
+							"name": "keyword.operator"
+						},
+						"6": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"8": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"nary-definition": {
+			"patterns": [
+				{
+					"match": "(op)\\s*(<(.+)>)?\\s+\\((.*?:[^:]+)\\)(.*?)\\s*(;|\\{)",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						},
+						"5": {
+							"patterns": [
+								{
+									"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)(?=\\s*:)",
+									"name": "variable.other"
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+?)(?=\\s*,\\s*[a-zA-Z_]*[a-zA-Z0-9_]+\\s*:)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								},
+								{
+									"match": "(?<=:)\\s*([^:]+)",
+									"captures": {
+										"1": {
+											"patterns": [{ "include": "#type" }]
+										}
+									}
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+
+		"class-definition": {
+			"patterns": [
+				{
+					"match": "(class)\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*(<(.+)>)?\\s*\\{",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "entity.name.class"
+						},
+						"4": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"interface-definition": {
+			"patterns": [
+				{
+					"match": "(interface)\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*(<(.+)>)?\\s*\\{",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "entity.name.class"
+						},
+						"4": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"interface-implementation": {
+			"patterns": [
+				{
+					"match": "(implement)\\s*(<(.+?)>)?\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*(<(.+)>)?\\s*(for)\\s+(.*?);",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"4": {
+							"name": "entity.name.class"
+						},
+						"6": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"7": {
+							"name": "keyword.control.nessa"
+						},
+						"8": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"type-definition": {
+			"patterns": [
+				{
+					"match": "(type)\\s+([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*(<(.+)>)?\\s*=\\s*(.+)\\s*",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "entity.name.class"
+						},
+						"4": {
+							"patterns": [{ "include": "#type" }]
+						},
+						"5": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"ndl": {
+			"patterns": [
+				{
+					"name": "string.quoted.single.nessa",
+					"begin": "'",
+					"end": "'"
+				},
+				{
+					"match": "[0-9]+",
+					"name": "constant.numeric"
+				},
+				{
+					"match": "(Arg)\\s*\\(",
+					"captures": {
+						"1": {
+							"name": "entity.name.function"
+						}
+					}
+				},
+				{
+					"match": ",\\s*([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*\\)",
+					"captures": {
+						"1": {
+							"name": "variable.parameter"
+						}
+					}
+				},
+				{
+					"match": "[dlLaAsq]",
+					"name": "support.type"
+				}
+
+			]
+		},
+
+		"implicit-syntax-definition": {
+			"patterns": [
+				{
+					"match": "(syntax)\\s+(from)\\s+(.+);",
+					"captures": {
+						"1": {
+							"name": "keyword.control.nessa"
+						},
+						"2": {
+							"name": "keyword.control.nessa"
+						},
+						"3": {
+							"patterns": [
+								{ "include": "#ndl" }
+							]
+						}
+					}
+				}
+			]
+		},
+
+		"attribute-definition": {
+			"patterns": [
+				{
+					"match": "(?<!\\()([a-zA-Z_]*[a-zA-Z0-9_]+)(\\s*:\\s*(.+))\\s*;",
+					"captures": {
+						"1": {
+							"name": "variable.other"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"function-call": {
+			"patterns": [
+				{
+					"match": "([a-zA-Z_]*[a-zA-Z0-9_]+)\\s*(<([^:]+?)>)?\\s*\\(",
+					"captures": {
+						"1": {
+							"name": "entity.name.function"
+						},
+						"3": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		},
+
+		"variable-ref": {
+			"patterns": [
+				{
+					"match": "[a-zA-Z_]*[a-zA-Z0-9_]+",
+					"name": "variable.other"
+				}
+			]
+		},
+
+		"type": {
+			"patterns": [
+				{
+					"match": "(&|@)?('[a-zA-Z_]*[a-zA-Z0-9_]+)",
+					"captures": {
+						"1":{
+							"name": "keyword.operator"
+						},
+						"2":{
+							"name": "meta.preprocessor"
+						}
+					}
+				},
+
+				{
+					"match": "(&|@)?('?[a-zA-Z_]*[a-zA-Z0-9_]+)(\\s*<([^:]+)>)?",
+					"captures": {
+						"1": {
+							"name": "keyword.operator"
+						},
+						"2": {
+							"name": "entity.name.type"
+						},
+						"4": {
+							"patterns": [{ "include": "#type" }]
+						}
+					}
+				}
+			]
+		}
+	},
+
+	"scopeName": "source.nessa"
+}

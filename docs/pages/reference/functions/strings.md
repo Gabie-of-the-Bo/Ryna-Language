@@ -91,9 +91,12 @@
     <tbody>
         <tr>
             <td rowspan="1"> <code>utf8_array(str: &String) -> Array&lt;Int></code> </td>
-            <td rowspan="1">
+            <td rowspan="2">
                 Returns <code>str</code> encoded in UTF-8
             </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>utf8_array(str: @String) -> Array&lt;Int></code> </td>
         </tr>
     </tbody>
 </table>
@@ -110,9 +113,12 @@
     <tbody>
         <tr>
             <td rowspan="1"> <code>utf8_to_str(arr: &Array&lt;Int>) -> String</code> </td>
-            <td rowspan="1">
+            <td rowspan="2">
                 Returns <code>arr</code> as a <code>String</code>, assuming it is encoded in UTF-8
             </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>utf8_to_str(arr: @Array&lt;Int>) -> String</code> </td>
         </tr>
     </tbody>
 </table>

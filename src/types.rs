@@ -124,6 +124,10 @@ impl Type {
         Type::MutRef(Box::new(self))
     }
 
+    pub fn or(self, other: Type) -> Type {
+        Type::Or(vec!(self, other))
+    }
+
     pub fn deref_type(&self) -> &Type {
         match self {
             Type::Ref(t) | Type::MutRef(t) => t,

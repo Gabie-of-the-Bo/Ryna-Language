@@ -50,7 +50,8 @@ pub struct NessaContext {
     pub cache: NessaCache,
 
     pub module_path: String,
-    pub captured_output: RefCell<String>
+    pub captured_output: RefCell<String>,
+    pub program_input: Vec<String>
 }
 
 impl NessaContext {

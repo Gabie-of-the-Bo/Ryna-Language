@@ -85,7 +85,7 @@ fn main() {
     */
 
     let args = Command::new("Nessa Interpreter")
-        .version("0.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
         .subcommand(
@@ -97,6 +97,13 @@ fn main() {
                     .required(false)
                     .default_value(".")
                     .index(1)
+                )
+                .arg(
+                    Arg::new("PROGRAM_INPUT")
+                    .help("Program input")
+                    .required(false)
+                    .index(2)
+                    .num_args(0..)
                 )
                 .arg(
                     Arg::new("recompile")
@@ -213,13 +220,18 @@ fn main() {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
 
+            let program_input = match run_args.get_many::<String>("PROGRAM_INPUT") {
+                Some(i) => i.cloned().collect::<Vec<_>>(),
+                None => vec!(),
+            };
+
             let res;
 
             if let Some(("profile", _)) = args.subcommand() {
-                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile, &program_input);
 
             } else {
-                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile, &program_input);
             }
             
             match res {

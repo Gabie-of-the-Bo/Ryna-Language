@@ -768,6 +768,32 @@ impl NessaContext {
         ))(input)
     }
 
+    fn char_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+        map(
+            delimited(
+                tag("'"),
+                alt((
+                    satisfy(|i| i != '\'' && i != '\\'), 
+                    map_res(
+                        preceded(
+                            tag("\\"),
+                            satisfy(|i| i != '\'' && i != '\\'), 
+                        ),
+                        |i| match i {
+                            'n'=> Ok('\n'),
+                            't'=> Ok('\t'),
+                            '\"'=> Ok('\"'),
+                            '\\'=> Ok('\\'),        
+                            _ => Err(())
+                        }
+                    ), 
+                )),
+                tag("'")
+            ),
+            |c| Integer::from(c as u64)
+        )(input)
+    }
+
     fn integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
         return map(
             tuple((
@@ -875,6 +901,7 @@ impl NessaContext {
                     map(|input| self.binary_integer_parser(input), Object::new),
                     map(|input| self.hex_integer_parser(input), Object::new),
                     map(|input| self.integer_parser(input), Object::new),
+                    map(|input| self.char_parser(input), Object::new),
                     map(string_parser, Object::new),
                 ))
             ),

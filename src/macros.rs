@@ -256,7 +256,7 @@ impl NessaMacro {
             NessaMacro::Code(code) => {
                 let sub_code = sub_vars(code, args)?;
 
-                let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(ctx.module_path.clone(), Some(sub_code), true).unwrap();
+                let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(ctx.module_path.clone(), Some(sub_code), true, &vec!()).unwrap();
 
                 Ok(ex.captured_output)
             }

@@ -17,14 +17,16 @@ fn arg_and_2() -> Bool {
 }
 
 if arg_or_1() || arg_or_2() {
-    println("OK!");
+    print("OK!");
+    print("\n");
     
 } else {
     panic("This should not happen");
 }
 
 if false || arg_or_1() || arg_or_2() {
-    println("OK!");
+    print("OK!");
+    print("\n");
     
 } else {
     panic("This should not happen");
@@ -34,12 +36,14 @@ if arg_and_1() && arg_and_2() {
     panic("This should not happen");
     
 } else {
-    println("OK!");
+    print("OK!");
+    print("\n");
 }
 
 if true && arg_and_1() && arg_and_2() {
     panic("This should not happen");
     
 } else {
-    println("OK!");
+    print("OK!");
+    print("\n");
 }

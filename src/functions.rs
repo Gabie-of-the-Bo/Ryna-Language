@@ -517,38 +517,6 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
-    let idx = ctx.define_function("println".into()).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[], Type::Empty, |_, _, _, _| { 
-        println!();
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[INT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<Integer>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[FLOAT], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<f64>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[BOOL], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<bool>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
-        println!("{}", v[0].get::<String>());
-
-        Ok(Object::empty())
-    }).unwrap();
-
     let idx = ctx.define_function("drop".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 
@@ -576,6 +544,29 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().move_contents()),
             (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
             (a, b) if a == b => Ok(v.pop().unwrap().move_contents()),
+            
+            _ => Err(format!(
+                "Unable to forward value of type {} as type {}",
+                param_arg.get_name(ctx),
+                type_arg.get_name(ctx)
+            ))
+        }
+    }).unwrap();
+
+    let idx = ctx.define_function("cfwd".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 1, &[Type::Wildcard], T_0, |a, _, mut v, ctx| {
+        let type_arg = a.last().unwrap();
+        let param_arg = v.last().unwrap().get_type();
+
+        match (type_arg, &param_arg) {
+            (Type::Ref(a), Type::Ref(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::MutRef(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap()),
+            (Type::Ref(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap().get_ref()),
+
+            (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, b) if a == b => Ok(v.pop().unwrap().deep_clone()),
             
             _ => Err(format!(
                 "Unable to forward value of type {} as type {}",
@@ -737,23 +728,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     // String functions
     let idx = ctx.define_function("code_point_at".into()).unwrap();
     
-    ctx.define_native_function_overload(idx, 0, &[STR.to_ref(), INT], INT, |_, _, v, _| {
-        let string = &*v[0].deref::<String>();
-        let idx = &*v[1].get::<Integer>();
-
-        if !idx.is_valid_index() {
-            return Err(format!("{} is not a valid index", idx));
-        }
-
-        if let Some(character) = string[idx.as_usize()..].chars().next() {
-            Ok(ObjectBlock::Int(Integer::from(character as u64)).to_obj())
-
-        } else {
-            Err(format!("Invalid character start at position {}", idx))
-        }
-    }).unwrap();
-    
-    ctx.define_native_function_overload(idx, 0, &[STR.to_mut(), INT], INT, |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut()), INT], INT, |_, _, v, _| {
         let string = &*v[0].deref::<String>();
         let idx = &*v[1].get::<Integer>();
 
@@ -805,7 +780,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("utf8_array".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[STR.to_ref()], ARR_OF!(INT), |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut())], ARR_OF!(INT), |_, _, v, _| {
         let string = &*v[0].deref::<String>();
         let arr = string.bytes()
                         .map(|i| ObjectBlock::Int(Integer::from(i as u64)).to_obj())
@@ -816,7 +791,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("utf8_to_str".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref()], STR, |_, _, v, _| {
+    ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref().or(ARR_OF!(INT).to_mut())], STR, |_, _, v, _| {
         let arr = &*v[0].deref::<NessaArray>();
         let mut bytes = vec!();
         bytes.reserve_exact(arr.elements.len());
@@ -843,8 +818,115 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
         let cp = &*v[0].get::<Integer>();
-        Ok(Object::new(Integer::from(*cp.limbs.last().unwrap())))
+        Ok(Object::new(Integer::from(*cp.limbs.first().unwrap())))
     }).unwrap();
+
+    let idx = ctx.define_function("input".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[], STR, |_, _, _, _| {
+        let mut buffer = String::new();
+        
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut buffer).unwrap();
+    
+        Ok(Object::new(buffer))
+    }).unwrap();
+
+    let idx = ctx.define_function("num_args".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[], INT, |_, _, _, ctx| {
+        Ok(Object::new(Integer::from(ctx.program_input.len() as u64)))
+    }).unwrap();
+
+    let idx = ctx.define_function("get_arg".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, v, ctx| {
+        let idx = &*v[0].get::<Integer>();
+
+        if !idx.is_valid_index() {
+            return Err(format!("{} is not a valid index", idx));
+        }
+
+        Ok(Object::new(ctx.program_input[idx.limbs[0] as usize].clone()))
+    }).unwrap();
+
+    let idx = ctx.define_function("set".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), T_0, INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[2].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements[idx.limbs[0] as usize] = v[1].clone();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("insert".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), T_0, INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[2].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements.insert(idx.limbs[0] as usize, v[1].clone());
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("remove".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut(), INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            let idx = &*v[1].get::<Integer>();
+
+            if !idx.is_valid_index() {
+                return Err(format!("{} is not a valid index", idx));
+            }
+            
+            array.elements.remove(idx.limbs[0] as usize);
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("pop".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[ARR_OF!(T_0).to_mut()], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let mut array = v[0].deref::<NessaArray>();
+            array.elements.pop();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {

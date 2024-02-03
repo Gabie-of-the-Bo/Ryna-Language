@@ -132,6 +132,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("!".into(), true, 250).unwrap();
 
     define_unary_native_op_combinations!(ctx, 1, BOOL, BOOL, bool, arg, !arg);
+    define_unary_native_op_combinations!(ctx, 1, INT, INT, Integer, arg, !arg);
 
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 

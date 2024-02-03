@@ -40,6 +40,19 @@ document.addEventListener('DOMContentLoaded', _ => {
                     ],
                 },
 
+                {
+                    className: 'literal',
+                    begin: '\'',
+                    end: '\'',
+                    contains: [
+                        {
+                            className: 'escape',
+                            begin: '\\\\.',
+                            relevance: 0
+                        }
+                    ],
+                },
+
                 hljs.COMMENT(
                     '/\\*', // begin
                     '\\*/', // end

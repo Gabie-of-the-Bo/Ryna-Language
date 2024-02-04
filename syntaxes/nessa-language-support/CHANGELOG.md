@@ -1,3 +1,0 @@
-## Initial release
-
-- Basic highlighting

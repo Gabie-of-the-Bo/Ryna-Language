@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 use crate::context::NessaContext;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::InterfaceConstraint;
+use crate::nessa_error;
 use crate::object::Object;
 use crate::parser::Location;
 use crate::patterns::Pattern;
@@ -121,6 +122,10 @@ impl Type {
 
     pub fn to_mut(self) -> Type {
         Type::MutRef(Box::new(self))
+    }
+
+    pub fn or(self, other: Type) -> Type {
+        Type::Or(vec!(self, other))
     }
 
     pub fn deref_type(&self) -> &Type {
@@ -607,7 +612,7 @@ impl Type {
                     res.sub_templates_rec(args, rec - 1)
                     
                 } else {
-                    panic!("Exceeded type recursion limit (100)"); // TODO: return a compiler error
+                    nessa_error!("Exceeded type recursion limit (100)"); // TODO: return a compiler error
                 }
             },
             Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates_rec(args, rec)).collect()),

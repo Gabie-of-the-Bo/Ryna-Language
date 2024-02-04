@@ -56,6 +56,16 @@ strings"
 
 All these values are compiled to `String` values.
 
+### Characters
+
+Characters do not exist in Nessa as a class, but they can be used as `Int` code points:
+
+```
+'w' // This is equal to 119
+```
+
+This can be used when iterating over code points.
+
 ## Variables
 
 In contrast to functional languages, Nessa does have support for variables and they are used as much as in any other

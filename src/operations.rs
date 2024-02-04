@@ -132,6 +132,7 @@ pub fn standard_unary_operations(ctx: &mut NessaContext) {
     ctx.define_unary_operator("!".into(), true, 250).unwrap();
 
     define_unary_native_op_combinations!(ctx, 1, BOOL, BOOL, bool, arg, !arg);
+    define_unary_native_op_combinations!(ctx, 1, INT, INT, Integer, arg, !arg);
 
     ctx.define_unary_operator("*".into(), true, 155).unwrap();
 
@@ -359,6 +360,57 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
             Ok(Object::empty())
         }
     )).unwrap();
+
+    ctx.define_binary_operator(">>".into(), false, 350).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 15, INT, INT, Integer, arg_1, arg_2, {
+        if !arg_2.is_valid_index() {
+            return Err(format!("{} is not a valid shift", arg_2));
+        }
+
+        arg_1 >> arg_2.limbs[0]
+    });
+
+    ctx.define_binary_operator("<<".into(), false, 360).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 16, INT, INT, Integer, arg_1, arg_2, {
+        if !arg_2.is_valid_index() {
+            return Err(format!("{} is not a valid shift", arg_2));
+        }
+
+        arg_1 << arg_2.limbs[0]
+    });
+
+    ctx.define_binary_operator("&".into(), false, 370).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 17, INT, INT, Integer, arg_1, arg_2, {
+        if arg_1.negative || arg_2.negative  {
+            return Err(format!("invalid bitwise operands ({} & {})", arg_1, arg_2));
+        }
+
+        arg_1 & arg_2
+    });
+
+    ctx.define_binary_operator("|".into(), false, 380).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 18, INT, INT, Integer, arg_1, arg_2, {
+        if arg_1.negative || arg_2.negative  {
+            return Err(format!("invalid bitwise operands ({} | {})", arg_1, arg_2));
+        }
+
+        arg_1 | arg_2
+    });
+
+    ctx.define_binary_operator("^".into(), false, 390).unwrap();
+
+    define_binary_native_op_combinations!(ctx, 19, BOOL, BOOL, bool, arg_1, arg_2, *arg_1 ^ *arg_2);
+    define_binary_native_op_combinations!(ctx, 19, INT, INT, Integer, arg_1, arg_2, {
+        if arg_1.negative || arg_2.negative  {
+            return Err(format!("invalid bitwise operands ({} ^ {})", arg_1, arg_2));
+        }
+
+        arg_1 ^ arg_2
+    });
 }
 
 macro_rules! idx_op_definition {

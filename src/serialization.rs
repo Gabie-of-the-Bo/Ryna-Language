@@ -42,11 +42,13 @@ impl CompiledNessaModule {
         fs::write(path, self.serialize()).expect("Unable to write serialized code to file");
     }
 
-    pub fn execute<const DEBUG: bool>(&mut self) -> Result<ExecutionInfo, NessaError> {
+    pub fn execute<const DEBUG: bool>(&mut self, program_input: &Vec<String>) -> Result<ExecutionInfo, NessaError> {
         let mut ctx = standard_ctx();
 
         ctx.type_templates.append(&mut self.type_templates);
         ctx.interface_impls.append(&mut self.interface_impls);
+
+        ctx.program_input = program_input.clone();
 
         ctx.execute_compiled_code::<DEBUG>(&self.instructions)
     }

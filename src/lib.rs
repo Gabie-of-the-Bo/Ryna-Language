@@ -1,6 +1,9 @@
 #[macro_use] extern crate impl_ops;
 extern crate nom;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod number;
 pub mod cache;
 pub mod patterns;
@@ -25,6 +28,9 @@ pub mod config;
 
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
+
+#[path = "algorithms/git.rs"]
+pub mod git;
 
 #[path = "stdlib/math.rs"]
 pub mod math;
@@ -249,6 +255,11 @@ mod integration {
     #[test]
     fn adt_assignment() {
         integration_test("test/adt_assignment.nessa");
+    }
+
+    #[test]
+    fn bitwise() {
+        integration_test("test/bitwise.nessa");
     }
 
     #[test]

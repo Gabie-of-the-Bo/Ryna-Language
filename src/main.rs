@@ -1,4 +1,4 @@
-use std::{fs, collections::{HashMap, HashSet}, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::Path};
 
 use clap::{Arg, Command, ArgAction};
 use colored::Colorize;
@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{context::*, config::{NessaConfig, ModuleInfo, get_nessa_modules_var, NESSA_MODULES_ENV_VAR}, nessa_warning};
+use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -75,6 +75,7 @@ impl Autocomplete for OptionsAutocompleter {
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
 const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
+const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
 fn main() {
     /*
@@ -84,7 +85,7 @@ fn main() {
     */
 
     let args = Command::new("Nessa Interpreter")
-        .version("0.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
         .subcommand(
@@ -96,6 +97,13 @@ fn main() {
                     .required(false)
                     .default_value(".")
                     .index(1)
+                )
+                .arg(
+                    Arg::new("PROGRAM_INPUT")
+                    .help("Program input")
+                    .required(false)
+                    .index(2)
+                    .num_args(0..)
                 )
                 .arg(
                     Arg::new("recompile")
@@ -168,6 +176,36 @@ fn main() {
                 .short('v')
             )
         )
+        .subcommand(
+            Command::new("setup")
+            .about("Set up global configuration and install prelude")
+        )
+        .subcommand(
+            Command::new("install")
+            .about("Install a library pack from a git repository")
+            .arg(
+                Arg::new("REPOSITORY")
+                .help("Specifies the file you want to execute")
+                .required(true)
+                .index(1)
+            )
+            .arg(
+                Arg::new("NAME")
+                .help("Name of the library reprository that you want to install")
+                .required(true)
+                .index(2)
+            )
+        )
+        .subcommand(
+            Command::new("uninstall")
+            .about("Uninstall a library pack")
+            .arg(
+                Arg::new("NAME")
+                .help("Name of the library reprository that you want to install")
+                .required(true)
+                .index(1)
+            )
+        )
         .get_matches();
 
     /*
@@ -182,13 +220,18 @@ fn main() {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
 
+            let program_input = match run_args.get_many::<String>("PROGRAM_INPUT") {
+                Some(i) => i.cloned().collect::<Vec<_>>(),
+                None => vec!(),
+            };
+
             let res;
 
             if let Some(("profile", _)) = args.subcommand() {
-                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile, &program_input);
 
             } else {
-                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile);
+                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile, &program_input);
             }
             
             match res {
@@ -240,17 +283,16 @@ fn main() {
                 modules.push(m.clone());
 
             } else {
-                if let Some(var) = get_nessa_modules_var() {
-                    let add_env = Confirm::new(&format!("{} was detected. Add it to module paths?", NESSA_MODULES_ENV_VAR)).prompt().unwrap();
+                if CONFIG.read().unwrap().modules_path != "" {
+                    let add_env = Confirm::new(&format!("Default modules path was detected. Add it to module paths?")).prompt().unwrap();
 
                     if add_env {
-                        modules.push(var);
+                        modules.push(CONFIG.read().unwrap().modules_path.clone());
                     }
                 
                 } else {
                     nessa_warning!(
-                        "{} env variable was not found. Skipping this dependency folder...",
-                        NESSA_MODULES_ENV_VAR
+                        "Default modules path was not found. Skipping this dependency folder..."
                     );    
                 }
 
@@ -264,7 +306,7 @@ fn main() {
                     modules.push(
                         Text::new("Modules path:")
                         .with_default("libs")
-                        .with_validator(RegexValidator::new("^((([a-zA-Z0-9_ ]+)|(\\.\\.))/?)+$", "Modules path contains invalid characters"))
+                        .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
                         .with_placeholder("path/to/modules")
                         .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
                         .prompt().unwrap().trim().to_string()
@@ -275,7 +317,7 @@ fn main() {
             let module_path = Path::new(&name);
 
             if module_path.exists() {
-                panic!("Project folder already exists!");
+                nessa_error!("Project folder already exists!");
             }
 
             fs::create_dir(&name).expect("Unable to create project directory");
@@ -299,11 +341,11 @@ fn main() {
             let main_path = module_path.join(Path::new("main.nessa"));
 
             if !config_path.exists() {
-                panic!("No project config file!");
+                nessa_error!("No project config file!");
             }
 
             if !main_path.exists() {
-                panic!("No main nessa file!");
+                nessa_error!("No main nessa file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
@@ -313,7 +355,7 @@ fn main() {
             let mut paths = HashMap::new();
 
             for path in &config_yml.module_paths {
-                for f in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                for f in glob(format!("{}/**/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
                     let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
                     let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
                     module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
@@ -370,6 +412,46 @@ fn main() {
             });
 
             fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
+        }
+
+        Some(("setup", _)) => {
+            let value = Text::new("Libraries path:")
+                .with_default("libs")
+                .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
+                .with_placeholder("path/to/modules")
+                .with_help_message("The interpreter will install modules in this folder by default")
+                .prompt().unwrap();
+
+            println!("Updating global configuration...");
+
+            CONFIG.write().unwrap().modules_path = value;
+            CONFIG.write().unwrap().save().unwrap();
+
+            println!("Installing prelude...");
+
+            match install_prelude() {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
+        }
+
+        Some(("install", run_args)) => {
+            let repo_url = run_args.get_one::<String>("REPOSITORY").expect("No repository URL was provided");
+            let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+
+            match install_repo(repo_url, pack_name) {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
+        }
+
+        Some(("uninstall", run_args)) => {
+            let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+
+            match uninstall_repo(pack_name) {
+                Ok(_) => {},
+                Err(err) => nessa_error!("{}", err),
+            }
         }
 
         _ => unreachable!()

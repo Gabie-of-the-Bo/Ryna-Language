@@ -54,3 +54,7 @@ code.hljs {
     border-right: 1px solid hsla(var(--md-hue), 18%, 86%, 0.82) !important;
     vertical-align: top;
 }
+
+td[rowspan] {
+    vertical-align: middle !important;
+}

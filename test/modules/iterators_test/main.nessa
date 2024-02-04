@@ -8,11 +8,13 @@ let map_rng = range(0, 10).map((i: Int) i * i).map((i: Int) i - 1);
 let cpy = *map_rng;
 
 for i in *map_arr {
-    println(*i);
+    print(*i);
+    print("\n");
 }
 
 for i in *map_rng {
-    println(*i);
+    print(*i);
+    print("\n");
 }
 
 let a = next(cpy);
@@ -31,7 +33,8 @@ let even = range(0, 10).filter((i: Int) i % 2 == 0);
 let cpy2 = *even;
 
 for i in *even {
-    println(*i);
+    print(*i);
+    print("\n");
 }
 
 let f = next(cpy2);
@@ -53,7 +56,8 @@ let big_odd_sqrs = range(0, 10)
 let cpy3 = *big_odd_sqrs;
 
 for i in *big_odd_sqrs {
-    println(*i);
+    print(*i);
+    print("\n");
 }
 
 let j = next(cpy3);

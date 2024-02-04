@@ -4,7 +4,7 @@ description = "An extensible programming language with a strong type system"
 documentation = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 homepage = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 repository = "https://github.com/Gabie-of-the-Bo/Nessa-Language"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -37,6 +37,9 @@ rustc-hash = "1.1.0"
 bitcode = { version = "0.4.0", features = ["serde"] }
 inquire = "0.6.2"
 regex = "1.10.0"
+directories = "5.0.1"
+lazy_static = "1.4.0"
+git2 = "0.18.1"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

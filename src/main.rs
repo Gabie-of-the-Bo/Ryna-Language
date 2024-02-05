@@ -84,7 +84,7 @@ fn main() {
         ╘══════════════════════════╛
     */
 
-    let args = Command::new("Nessa Interpreter")
+    let mut cli = Command::new("nessa")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
         .about("Executes Nessa code")
@@ -205,8 +205,9 @@ fn main() {
                 .required(true)
                 .index(1)
             )
-        )
-        .get_matches();
+        );
+        
+    let args = cli.clone().get_matches();
 
     /*
         ╒═══════════════════╕
@@ -454,6 +455,8 @@ fn main() {
             }
         }
 
-        _ => unreachable!()
+        _ => {
+            cli.print_long_help().unwrap();
+        }
     };
 }

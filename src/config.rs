@@ -283,7 +283,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
 
             let (local_imports, local_main) = local_imports.get(module_name).unwrap().clone();
 
-            file_cache.insert(info.path.clone(), (local_yml, local_imports, local_main, false));
+            file_cache.insert(normalize_path(Path::new(&info.path))?, (local_yml, local_imports, local_main, false));
         }
     }
 
@@ -303,10 +303,12 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     });
 
     for path in config_yml.module_paths {
-        if !seen_paths.contains(&path) {
-            seen_paths.insert(path.clone());
+        let n_path = normalize_path(Path::new(&path))?;
 
-            for file in glob(format!("{}/*/nessa_config.yml", path).as_str()).expect("Error while reading module path") {
+        if !seen_paths.contains(&n_path) {
+            seen_paths.insert(n_path.clone());
+
+            for file in glob(format!("{}/**/nessa_config.yml", n_path).as_str()).expect("Error while reading module path") {
                 match file {
                     Ok(f) if f.is_file() => {
                         get_all_modules_cascade_aux(f.parent().unwrap(), None, seen_paths, modules, file_cache)?;
@@ -397,7 +399,7 @@ pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     let sub_path = parse_env_vars_and_normalize(&path_slashes)?;
     
     return match Path::new(&sub_path).canonicalize() {
-        Ok(p) => Ok(p.to_str().unwrap().into()),
+        Ok(p) => Ok(p.to_str().unwrap().replace("\\", "/")),
         Err(_) => Err(NessaError::module_error(format!(
             "Unable to normalize path: {} (does it exist?)",
             path_slashes.green()

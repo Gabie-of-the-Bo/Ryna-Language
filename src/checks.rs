@@ -75,8 +75,8 @@ impl NessaContext {
             (NessaExpr::InterfaceImplementation(..), _) |
             (NessaExpr::ClassDefinition(..), _) => Ok(()),
 
-            (NessaExpr::CompiledVariableDefinition(_, _, _, _, e), ret) |
-            (NessaExpr::CompiledVariableAssignment(_, _, _, _, e), ret) => self.return_check(e, ret),
+            (NessaExpr::CompiledVariableDefinition(_, _, _, _, e), _) |
+            (NessaExpr::CompiledVariableAssignment(_, _, _, _, e), _) => self.return_check(e, &None),
 
             (NessaExpr::Return(l, _), None) => {
                 Err(NessaError::compiler_error(

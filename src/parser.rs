@@ -501,6 +501,16 @@ impl NessaExpr {
                     eb_inner.iter_mut().for_each(|i| i.compile_types(templates));
                 }
             }
+
+            NessaExpr::Lambda(_, a, r, b) => {
+                a.iter_mut().for_each(|(_, t)| {
+                    t.compile_templates(templates);
+                });
+
+                r.compile_templates(templates);
+
+                b.iter_mut().for_each(|i| i.compile_types(templates));
+            }
             
             NessaExpr::While(_, c, b) |
             NessaExpr::For(_, _, c, b) => {

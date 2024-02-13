@@ -1485,6 +1485,18 @@ impl NessaContext{
 
             NessaExpr::Variable(_, _, _, t) => *t = t.sub_templates(templates),
 
+            NessaExpr::Lambda(_, args, r, lines) => {
+                for (_, tp) in args {
+                    *tp = tp.sub_templates(templates);
+                }
+                
+                if *r != Type::InferenceMarker {
+                    *r = r.sub_templates(templates);
+                }
+
+                lines.iter_mut().for_each(|i| NessaContext::subtitute_type_params_expr(i, templates));
+            },
+
             NessaExpr::VariableAssignment(_, _, e) |
             NessaExpr::Return(_, e) => NessaContext::subtitute_type_params_expr(e, templates),
 
@@ -1913,11 +1925,15 @@ impl NessaContext{
 
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
+                                    self.compile_lambda(b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(b, &lambda_positions)?);                                
                                 
                                 } else {
                                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect();
                                     let sub_b = self.cache.templates.functions.get_checked(&(*id, ov.clone(), arg_types)).unwrap();                                
+
+                                    self.compile_lambda(&sub_b, program_size, &mut lambdas, &mut lambda_positions)?;
 
                                     res.extend(self.compiled_form_body(&sub_b, &lambda_positions)?);                                
                                 }
@@ -1951,10 +1967,15 @@ impl NessaContext{
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
+                                    self.compile_lambda(b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(b, &lambda_positions)?);                                
                                 
                                 } else {
                                     let sub_b = self.cache.templates.unary.get_checked(&(*id, ov.clone(), vec!(tp.clone()))).unwrap();
+
+                                    self.compile_lambda(&sub_b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(&sub_b, &lambda_positions)?);                                
                                 }
                             }
@@ -1982,10 +2003,15 @@ impl NessaContext{
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
+                                    self.compile_lambda(b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(b, &lambda_positions)?);                                
                                 
                                 } else {
                                     let sub_b = self.cache.templates.binary.get_checked(&(*id, ov.clone(), vec!(t1.clone(), t2.clone()))).unwrap();
+
+                                    self.compile_lambda(&sub_b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(&sub_b, &lambda_positions)?);                                
                                 }
                             }
@@ -2031,10 +2057,15 @@ impl NessaContext{
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
+                                    self.compile_lambda(b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(b, &lambda_positions)?);                                
                                 
                                 } else {
                                     let sub_b = self.cache.templates.nary.get_checked(&(*id, ov.clone(), arg_types.clone())).unwrap();
+
+                                    self.compile_lambda(&sub_b, program_size, &mut lambdas, &mut lambda_positions)?;
+
                                     res.extend(self.compiled_form_body(&sub_b, &lambda_positions)?);                                
                                 }
                             }
@@ -2045,6 +2076,9 @@ impl NessaContext{
                 _ => {}
             }
         }
+
+        // Update first jump
+        res[0] = NessaInstruction::from(CompiledNessaExpr::Jump(program_size + lambdas.len()));
 
         res.extend(lambdas);
 

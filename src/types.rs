@@ -263,7 +263,7 @@ impl Type {
 
             Type::Function(a, b) => a.has_self() || b.has_self(),
 
-            _ => unimplemented!()
+            e => unimplemented!("{e:?}")
         };
     }
 

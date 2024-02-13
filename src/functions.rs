@@ -542,7 +542,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             (Type::Ref(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap().get_ref()),
 
             (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().move_contents()),
-            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
             (a, b) if a == b => Ok(v.pop().unwrap().move_contents()),
             
             _ => Err(format!(
@@ -564,8 +564,8 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             (Type::MutRef(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap()),
             (Type::Ref(a), Type::MutRef(b)) if a == b => Ok(v.pop().unwrap().get_ref()),
 
-            (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
-            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deep_clone()),
+            (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
+            (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
             (a, b) if a == b => Ok(v.pop().unwrap().deep_clone()),
             
             _ => Err(format!(

@@ -399,7 +399,7 @@ pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     let sub_path = parse_env_vars_and_normalize(&path_slashes)?;
     
     return match Path::new(&sub_path).canonicalize() {
-        Ok(p) => Ok(p.to_str().unwrap().replace("\\", "/")),
+        Ok(p) => Ok(p.to_str().unwrap().replace('\\', "/")),
         Err(_) => Err(NessaError::module_error(format!(
             "Unable to normalize path: {} (does it exist?)",
             path_slashes.green()
@@ -432,7 +432,7 @@ impl NessaGlobalConfig {
             let config_file_path = config_path.join("config.yml");
     
             if !config_file_path.exists() {
-                std::fs::create_dir_all(&config_path).unwrap();
+                std::fs::create_dir_all(config_path).unwrap();
                 std::fs::write(&config_file_path, "modules_path: \"\"").unwrap();
             }
 
@@ -451,7 +451,7 @@ impl NessaGlobalConfig {
         let yml = serde_yaml::to_string(self).unwrap();
 
         std::fs::write(&self.file_path, yml)
-            .map_err(|_| format!("Unable to save configuration file"))
+            .map_err(|_| "Unable to save configuration file".to_string())
     }
 
     pub fn get(&self, name: &str) -> Option<&str> {

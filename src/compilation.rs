@@ -2152,10 +2152,12 @@ impl NessaContext{
             Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
             
             If(_, ih, ib, ei, e) => {
-                let mut res = self.compiled_form_size(ih, false, root_counter)? + self.compiled_form_body_size(ib, true)? + 2;
+                let needs_deref = self.infer_type(ih).unwrap().is_ref();
+                let mut res = self.compiled_form_size(ih, false, root_counter)? + self.compiled_form_body_size(ib, true)? + 2 + needs_deref as usize;
 
                 for (h, b) in ei {
-                    res += self.compiled_form_size(h, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2;
+                    let needs_deref = self.infer_type(h).unwrap().is_ref();
+                    res += self.compiled_form_size(h, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2 + needs_deref as usize;
                 }
 
                 if let Some(b) = e {
@@ -2167,7 +2169,11 @@ impl NessaContext{
 
             CompiledFor(_, _, _, _, c, b) => Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 9),
 
-            While(_, c, b) => Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2),
+            While(_, c, b) => {
+                let needs_deref = self.infer_type(c).unwrap().is_ref();
+
+                Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2 + needs_deref as usize)
+            },
 
             Tuple(_, b) => {            
                 *root_counter += root as usize; // Add drop instruction
@@ -2495,6 +2501,10 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(ih, lambda_positions, false)?;
                 let if_body = self.compiled_form_body(ib, lambda_positions)?;
 
+                if self.infer_type(ih).unwrap().is_ref() {
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                }
+
                 res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 2, false)));
                 res.extend(if_body);
 
@@ -2505,10 +2515,11 @@ impl NessaContext{
                 for (h, b) in ei {
                     let cond = self.compiled_form_expr(h, lambda_positions, false)?;
                     let body = self.compiled_form_body(b, lambda_positions)?;
+                    let needs_deref = self.infer_type(h).unwrap().is_ref();
                     
-                    complete_size += cond.len() + body.len() + 2;
+                    complete_size += cond.len() + body.len() + 2 + needs_deref as usize;
 
-                    elif.push((cond, body));
+                    elif.push((cond, body, needs_deref));
                 }
 
                 if let Some(b) = e {
@@ -2518,10 +2529,15 @@ impl NessaContext{
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJump(complete_size as i32)));
 
-                for (cond, body) in elif {
+                for (cond, body, needs_deref) in elif {
                     complete_size -= cond.len() + body.len() + 2;
 
                     res.extend(cond);
+                    
+                    if needs_deref {
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                    }
+
                     res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(body.len() + 2, false)));
                     res.extend(body);
                     res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJump(complete_size as i32)));
@@ -2537,6 +2553,10 @@ impl NessaContext{
                 let mut res = self.compiled_form_expr(c, lambda_positions, false)?;
                 let while_body = self.compiled_form_body(b, lambda_positions)?;
 
+                if self.infer_type(c).unwrap().is_ref() {
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                }
+                
                 // Add while body
                 let beginning_jmp = CompiledNessaExpr::RelativeJump(-(while_body.len() as i32 + res.len() as i32 + 1));
 

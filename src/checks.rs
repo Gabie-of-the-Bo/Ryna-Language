@@ -204,7 +204,7 @@ impl NessaContext {
             NessaExpr::FunctionCall(l, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.ambiguity_check(arg)?;
 
                     let t = self.infer_type(arg)?;
@@ -307,7 +307,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.ambiguity_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -845,7 +845,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.type_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -959,7 +959,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.type_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -1326,7 +1326,7 @@ impl NessaContext {
     }
 
     #[allow(clippy::never_loop)] // This seems like an bug in clippy
-    pub fn implicit_syntax_check(&self, name: &String, templates: &Vec<String>, attributes: &[(String, Type)], syntaxes: &Vec<Pattern>) -> Result<(), String> {
+    pub fn implicit_syntax_check(&self, name: &String, templates: &[String], attributes: &[(String, Type)], syntaxes: &Vec<Pattern>) -> Result<(), String> {
         if !syntaxes.is_empty() && !templates.is_empty() {
             return Err("Implicit syntaxes are not allowed when classes have type parameters".to_string())
         }

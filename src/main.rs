@@ -284,8 +284,8 @@ fn main() {
                 modules.push(m.clone());
 
             } else {
-                if CONFIG.read().unwrap().modules_path != "" {
-                    let add_env = Confirm::new(&format!("Default modules path was detected. Add it to module paths?")).prompt().unwrap();
+                if !CONFIG.read().unwrap().modules_path.is_empty() {
+                    let add_env = Confirm::new("Default modules path was detected. Add it to module paths?").prompt().unwrap();
 
                     if add_env {
                         modules.push(CONFIG.read().unwrap().modules_path.clone());

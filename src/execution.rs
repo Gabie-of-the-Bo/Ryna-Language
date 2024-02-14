@@ -31,7 +31,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, program_input: &Vec<String>) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -74,7 +74,7 @@ impl NessaContext {
                         }
                     }
 
-                    ctx.program_input = program_input.clone();
+                    ctx.program_input = program_input.to_vec();
 
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
@@ -86,7 +86,7 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, program_input: &Vec<String>) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
         Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, program_input)
     }
 }

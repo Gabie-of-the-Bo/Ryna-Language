@@ -689,6 +689,58 @@ impl Type {
 }
 
 /*
+                                                  ╒══════════════════╕
+    ============================================= │  STANDARD TYPES  │ =============================================
+                                                  ╘══════════════════╛
+*/
+
+// Constants for common types
+pub const INT_ID: usize = 0;
+pub const FLOAT_ID: usize = 1;
+pub const STR_ID: usize = 2;
+pub const BOOL_ID: usize = 3;
+pub const ARR_ID: usize = 4;
+pub const ARR_IT_ID: usize = 5;
+pub const FILE_ID: usize = 6;
+
+pub const INT: Type = Type::Basic(INT_ID);
+pub const FLOAT: Type = Type::Basic(FLOAT_ID);
+pub const STR: Type = Type::Basic(STR_ID);
+pub const BOOL: Type = Type::Basic(BOOL_ID);
+pub const FILE: Type = Type::Basic(FILE_ID);
+
+#[macro_export]
+macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
+
+#[macro_export]
+macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t)) }; }
+
+pub const T_0: Type = Type::TemplateParam(0, vec!());
+pub const T_1: Type = Type::TemplateParam(1, vec!());
+pub const T_2: Type = Type::TemplateParam(2, vec!());
+
+// Standard context
+pub fn standard_types(ctx: &mut NessaContext) {
+    ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
+    ctx.define_type("Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
+    ctx.define_type("String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+
+    ctx.define_type("Bool".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| 
+        if s == "true" || s == "false" {
+            Ok(Object::new(s.starts_with('t')))
+
+        } else {
+            Err(format!("Unable to parse bool from {}", s))
+        }
+    )).unwrap();
+
+    ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+
+    ctx.define_type("File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+}
+
+/*
                                                   ╒═════════╕
     ============================================= │  TESTS  │ =============================================
                                                   ╘═════════╛
@@ -1021,56 +1073,4 @@ mod tests {
         assert!(!tuple_6.bindable_to(&list, &ctx));
         assert!(!tuple_7.bindable_to(&list, &ctx));
     }
-}
-
-/*
-                                                  ╒══════════════════╕
-    ============================================= │  STANDARD TYPES  │ =============================================
-                                                  ╘══════════════════╛
-*/
-
-// Constants for common types
-pub const INT_ID: usize = 0;
-pub const FLOAT_ID: usize = 1;
-pub const STR_ID: usize = 2;
-pub const BOOL_ID: usize = 3;
-pub const ARR_ID: usize = 4;
-pub const ARR_IT_ID: usize = 5;
-pub const FILE_ID: usize = 6;
-
-pub const INT: Type = Type::Basic(INT_ID);
-pub const FLOAT: Type = Type::Basic(FLOAT_ID);
-pub const STR: Type = Type::Basic(STR_ID);
-pub const BOOL: Type = Type::Basic(BOOL_ID);
-pub const FILE: Type = Type::Basic(FILE_ID);
-
-#[macro_export]
-macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
-
-#[macro_export]
-macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t)) }; }
-
-pub const T_0: Type = Type::TemplateParam(0, vec!());
-pub const T_1: Type = Type::TemplateParam(1, vec!());
-pub const T_2: Type = Type::TemplateParam(2, vec!());
-
-// Standard context
-pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
-    ctx.define_type("Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
-    ctx.define_type("String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
-
-    ctx.define_type("Bool".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| 
-        if s == "true" || s == "false" {
-            Ok(Object::new(s.starts_with('t')))
-
-        } else {
-            Err(format!("Unable to parse bool from {}", s))
-        }
-    )).unwrap();
-
-    ctx.define_type("Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-    ctx.define_type("ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-
-    ctx.define_type("File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 } 

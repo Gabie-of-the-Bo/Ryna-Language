@@ -347,13 +347,8 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(l, ih, ib, ei, eb) => {
+            NessaExpr::If(_, ih, ib, ei, eb) => {
                 self.ambiguity_check(ih)?;
-                let t = self.infer_type(ih)?;
-
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                }
 
                 for line in ib {
                     self.ambiguity_check(line)?;
@@ -361,11 +356,6 @@ impl NessaContext {
 
                 for (ei_h, ei_b) in ei {
                     self.ambiguity_check(ei_h)?;
-                    let t = self.infer_type(ei_h)?;
-
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                    }
 
                     for line in ei_b {
                         self.ambiguity_check(line)?;
@@ -381,13 +371,8 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::While(l, cond, body) => {
+            NessaExpr::While(_, cond, body) => {
                 self.ambiguity_check(cond)?;
-                let t = self.infer_type(cond)?;
-
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                }
 
                 for line in body {
                     self.ambiguity_check(line)?;
@@ -998,8 +983,8 @@ impl NessaContext {
 
                 let t = self.infer_type(ih)?;
 
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                if *t.deref_type() != BOOL {
+                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in ib {
@@ -1010,8 +995,8 @@ impl NessaContext {
                     self.type_check(ei_h)?;
                     let t = self.infer_type(ei_h)?;
 
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                    if *t.deref_type() != BOOL {
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -1042,8 +1027,8 @@ impl NessaContext {
                 self.type_check(cond)?;
                 let t = self.infer_type(cond)?;
 
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                if *t.deref_type() != BOOL {
+                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in body {

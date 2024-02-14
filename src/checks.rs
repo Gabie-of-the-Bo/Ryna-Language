@@ -727,8 +727,18 @@ impl NessaContext {
             Type::Or(v) |
             Type::And(v) => v.iter().try_for_each(|i| self.check_type_well_formed(i, l)),
 
-            Type::TemplateParam(_, cs) |
-            Type::TemplateParamStr(_, cs) => {
+            Type::TemplateParamStr(n, _) => {
+                Err(NessaError::compiler_error(
+                    format!(
+                        "Template {} is not defined", 
+                        format!("'{}", n).green(),
+                    ), 
+                    l, 
+                    vec!()
+                ))
+            }
+
+            Type::TemplateParam(_, cs) => {
                 for c in cs {
                     let interface = &self.interfaces[c.id];
                     let interface_args = interface.params.len();

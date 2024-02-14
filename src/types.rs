@@ -259,6 +259,7 @@ impl Type {
             Type::Or(a) |
             Type::And(a) => a.iter().any(Type::has_self),
 
+            Type::TemplateParamStr(_, c) |
             Type::TemplateParam(_, c) => c.iter().flat_map(|i| &i.args).any(Type::has_self),
 
             Type::Function(a, b) => a.has_self() || b.has_self(),
@@ -518,7 +519,9 @@ impl Type {
                     i.args.iter_mut().for_each(|j| j.compile_templates(templates));
                 });
                 
-                *self = Type::TemplateParam(templates.iter().position(|i| i == name).unwrap(), v.clone());
+                if let Some(idx) = templates.iter().position(|i| i == name) {
+                    *self = Type::TemplateParam(idx, v.clone());
+                }
             },
             
             Type::Template(_, v) => v.iter_mut().for_each(|i| i.compile_templates(templates)),

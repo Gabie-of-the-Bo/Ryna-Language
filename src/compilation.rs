@@ -419,8 +419,14 @@ impl NessaContext {
             }
 
             NessaExpr::Tuple(_, args) => {
-                for i in args {
-                    self.compile_expr_variables(i, registers, var_map)?;                    
+                if args.len() == 1 {
+                    *expr = args.pop().unwrap();
+                    self.compile_expr_variables(expr, registers, var_map)?;                    
+                    
+                } else {
+                    for i in args {
+                        self.compile_expr_variables(i, registers, var_map)?;                    
+                    }
                 }
             }
 

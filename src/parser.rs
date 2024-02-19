@@ -2547,12 +2547,9 @@ impl NessaContext {
                     tag(")")
                 ))
             ),
-            |(l, (_, _, mut e, _, _))| {
+            |(l, (_, _, e, _, _))| {
                 if e.is_empty() {
                     NessaExpr::Literal(l, Object::empty())
-
-                } else if e.len() == 1 {
-                    e.pop().unwrap()
 
                 } else {
                     NessaExpr::Tuple(l, e)
@@ -3236,13 +3233,13 @@ mod tests {
         assert_eq!(two_bin_grp, 
             NessaExpr::BinaryOperation(
                 Location::none(), 1, vec!(), 
-                Box::new(
+                Box::new(NessaExpr::Tuple(Location::none(), vec!(
                     NessaExpr::BinaryOperation(
                         Location::none(), 0, vec!(), 
                         Box::new(NessaExpr::NameReference(Location::none(), "a".into())),
                         Box::new(NessaExpr::NameReference(Location::none(), "b".into()))
                     )
-                ),
+                ))),
                 Box::new(NessaExpr::NameReference(Location::none(), "c".into())),
             )
         );
@@ -3360,12 +3357,14 @@ mod tests {
             NessaExpr::BinaryOperation(Location::none(), 
                 2, 
                 vec!(), 
-                Box::new(NessaExpr::BinaryOperation(Location::none(), 
-                    0, 
-                    vec!(), 
-                    Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))),
-                    Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2))))
-                )),
+                Box::new(NessaExpr::Tuple(Location::none(), vec!(
+                    NessaExpr::BinaryOperation(Location::none(), 
+                        0, 
+                        vec!(), 
+                        Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1)))),
+                        Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(2))))
+                    )
+                ))),
                 Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(3))))
             )
         );

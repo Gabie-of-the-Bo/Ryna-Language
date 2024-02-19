@@ -1,5 +1,7 @@
 use std::io::Read;
 use std::io::Write;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use seq_macro::seq;
 
@@ -925,6 +927,35 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             array.elements.pop();
 
             Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("time".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0,
+        &[], 
+        INT, 
+        |_, _, _, _| {
+            let time = SystemTime::now().duration_since(UNIX_EPOCH);
+
+            match time {
+                Ok(d) => {
+                    let duration = d.as_nanos();
+
+                    if duration <= u64::MAX as u128 {
+                        Ok(Object::new(Integer::from(duration as u64)))
+
+                    } else {
+                        let low = duration as u64;
+                        let high = (duration >> 64) as u64;
+
+                        Ok(Object::new(Integer::new(false, vec!(low, high))))
+                    }
+                },
+                Err(_) => Err("Unable to get current time".into()),
+            }
         }
     ).unwrap();
 

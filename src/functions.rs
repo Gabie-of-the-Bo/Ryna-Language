@@ -194,7 +194,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let size = v[1].get::<Integer>();
 
-            if size.limbs.len() == 1 && size.limbs[0] < usize::MAX as u64 && array.elements.try_reserve_exact(size.limbs[0] as usize).is_ok() {
+            if size.is_valid_index() && array.elements.try_reserve_exact(size.as_usize()).is_ok() {
                 Ok(Object::empty())
     
             } else {
@@ -662,11 +662,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let file = v[0].deref::<NessaFile>();
         let num_bytes = v[1].get::<Integer>();
 
-        if num_bytes.negative || num_bytes.is_zero() || num_bytes.limbs.len() > 1 || num_bytes.limbs[0] > usize::MAX as u64 {
+        if !num_bytes.is_valid_index() || num_bytes.is_zero() {
             return Err(format!("Unable to read {} bytes from file", num_bytes));
         }
 
-        let mut buf = vec!(0; num_bytes.limbs[0] as usize);
+        let mut buf = vec!(0; num_bytes.as_usize());
         let res = file.file.borrow_mut().read_exact(&mut buf);
 
         match res {
@@ -736,6 +736,9 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
         if !idx.is_valid_index() {
             return Err(format!("{} is not a valid index", idx));
+        
+        } else if string.len() <= idx.as_usize() {
+            return Err(format!("{} is higher than the length of the string ({})", idx, string.len()));
         }
 
         if let Some(character) = string[idx.as_usize()..].chars().next() {
@@ -847,9 +850,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
         if !idx.is_valid_index() {
             return Err(format!("{} is not a valid index", idx));
+        
+        } else if ctx.program_input.len() <= idx.as_usize() {
+            return Err(format!("{} is higher than the number of input arguments ({})", idx, ctx.program_input.len()));
         }
 
-        Ok(Object::new(ctx.program_input[idx.limbs[0] as usize].clone()))
+        Ok(Object::new(ctx.program_input[idx.as_usize()].clone()))
     }).unwrap();
 
     let idx = ctx.define_function("set".into()).unwrap();
@@ -865,9 +871,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             if !idx.is_valid_index() {
                 return Err(format!("{} is not a valid index", idx));
+            
+            } else if array.elements.len() <= idx.as_usize() {
+                return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements[idx.limbs[0] as usize] = v[1].clone();
+            array.elements[idx.as_usize()] = v[1].clone();
 
             Ok(Object::empty())
         }
@@ -886,9 +895,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             if !idx.is_valid_index() {
                 return Err(format!("{} is not a valid index", idx));
+            
+            } else if array.elements.len() <= idx.as_usize() {
+                return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements.insert(idx.limbs[0] as usize, v[1].clone());
+            array.elements.insert(idx.as_usize(), v[1].clone());
 
             Ok(Object::empty())
         }
@@ -907,9 +919,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             if !idx.is_valid_index() {
                 return Err(format!("{} is not a valid index", idx));
+            
+            } else if array.elements.len() <= idx.as_usize() {
+                return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements.remove(idx.limbs[0] as usize);
+            array.elements.remove(idx.as_usize());
 
             Ok(Object::empty())
         }

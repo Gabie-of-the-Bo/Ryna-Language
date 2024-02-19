@@ -424,9 +424,18 @@ macro_rules! idx_op_definition {
                 let arr = &*arr.$deref_arr::<NessaArray>();
                 let idx = &*first.$deref_idx::<Integer>();
 
+                if !idx.is_valid_index() {
+                    return Err(format!("{} is not a valid index", idx));
+                
+                } else if arr.elements.len() <= idx.limbs[0] as usize {
+                    return Err(format!("{} is higher than the length of the array ({})", idx, arr.elements.len()));
+
+                } else {
+                    s.push(arr.elements[idx.limbs[0] as usize].$ref_method());
+                }
+
                 *ip += 1;
     
-                s.push(arr.elements[idx.limbs[0] as usize].$ref_method());
                 return Ok(());
             }
         ).unwrap();

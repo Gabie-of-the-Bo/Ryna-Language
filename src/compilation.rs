@@ -131,7 +131,7 @@ impl NessaError {
             );
         }
         
-        std::process::exit(1);
+        exit_process();
     }
 }
 
@@ -171,6 +171,24 @@ impl<'a> From<nom::Err<VerboseError<Span<'a>>>> for NessaError {
     ╘═════════════════════════════════╛
 */
 
+pub fn exit_process() -> ! {
+    if cfg!(test) {
+        panic!();
+
+    } else {
+        std::process::exit(1);
+    }
+}
+
+pub fn message_and_exit(msg: String) -> ! {
+    if cfg!(test) {
+        panic!("{}", msg);
+
+    } else {
+        NessaError::execution_error(msg).emit();
+    }
+}
+
 #[macro_export]
 macro_rules! nessa_warning {
     ($pat: expr $( , $more: expr)*) => {
@@ -187,6 +205,7 @@ macro_rules! nessa_error {
     ($pat: expr $( , $more: expr)*) => {
         {
             use colored::Colorize;
+            use $crate::compilation::exit_process;
 
             eprintln!(
                 "[{}] {}",
@@ -194,7 +213,7 @@ macro_rules! nessa_error {
                 format!($pat, $($more,)*)
             );
     
-            std::process::exit(1);
+            exit_process();
         }
     };
 }

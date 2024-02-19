@@ -1,6 +1,6 @@
 use std::{cell::{RefCell, Ref, RefMut}, rc::Rc, fs::File};
 
-use crate::{number::Integer, types::{Type, INT_ID, FLOAT_ID, STR_ID, BOOL_ID, ARR_IT_ID, INT, FLOAT, STR, BOOL, ARR_ID, FILE_ID, FILE}, ARR_OF, ARR_IT_OF, context::NessaContext};
+use crate::{compilation::message_and_exit, context::NessaContext, number::Integer, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 
 type DataBlock = Rc<RefCell<ObjectBlock>>;
 
@@ -90,7 +90,7 @@ impl ObjectBlock {
 
     pub fn get_type_id(&self) -> usize {
         match self {
-            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
+            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
             ObjectBlock::Empty => 0,
             ObjectBlock::Int(_) => INT_ID,
             ObjectBlock::Float(_) => FLOAT_ID,
@@ -109,7 +109,7 @@ impl ObjectBlock {
 
     pub fn get_type(&self) -> Type {
         return match self {
-            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
+            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
             ObjectBlock::Empty => Type::Empty,
             ObjectBlock::Int(_) => INT,
             ObjectBlock::Float(_) => FLOAT,
@@ -310,7 +310,7 @@ impl Object {
 
     pub fn deep_clone(&self) -> Object {
         return match &*self.inner.borrow() {
-            ObjectBlock::NoValue => unreachable!("Accessing moved object"),
+            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
 
             ObjectBlock::Empty => ObjectBlock::Empty.to_obj(),
             ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()).to_obj(),

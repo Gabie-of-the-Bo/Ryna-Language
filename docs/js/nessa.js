@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'title',
-                    begin: '(?<=let\\s*)[a-zA-Z_][a-zA-Z_0-9]*'
+                    begin: '(?<=\\blet\\s*)[a-zA-Z_][a-zA-Z_0-9]*'
                 },
 
                 {

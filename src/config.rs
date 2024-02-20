@@ -226,8 +226,32 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
     let imports = nessa_module_imports_parser(Span::new(&main)).unwrap().1;
 
+    let mut local_files = glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str())
+        .expect("Error while reading module path")
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+
+    local_files.sort();
+
+    for i in &local_files {
+        println!("{:?}", i);
+    }
+
     if macro_code.is_none() {
-        let new_hash = format!("{:x}", compute(&main));
+        let combined_hashes = local_files.iter()
+            .map(std::fs::read_to_string)
+            .map(Result::unwrap)
+            .map(compute)
+            .map(|i| format!("{:x}", i))
+            .collect::<Vec<_>>()
+            .join("");
+
+        let new_hash = if combined_hashes.len() == 32 {
+            combined_hashes
+
+        } else {
+            format!("{:x}", compute(combined_hashes))
+        };
 
         if config_yml.hash != new_hash {
             config_yml.hash = new_hash;
@@ -237,8 +261,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
 
     let norm_mod_path = normalize_path(module_path)?;
 
-    for local_file in glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str()).expect("Error while reading module path") {
-        let path = local_file.unwrap();
+    for path in local_files {
         let full_import_path = normalize_path(&path)?;
         let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
 

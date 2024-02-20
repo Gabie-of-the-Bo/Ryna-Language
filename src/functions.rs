@@ -589,44 +589,51 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         Ok(Object::empty())
     }).unwrap();
 
-    let idx = ctx.define_function("create_file".into()).unwrap();
+    let idx = ctx.define_function("get_file".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[STR], FILE, |_, _, v, _| {
         let path = &*v[0].get::<String>();
-        let file = std::fs::File::create(std::path::Path::new(path));
+        let pathbuf = std::path::Path::new(path);
 
-        match file {
-            Ok(inner) => Ok(Object::file(inner)),
-            Err(_) => Err(format!("Unable to create file file at {}", path)),
-        }
+        Ok(Object::file(pathbuf.into()))
     }).unwrap();
 
-    let idx = ctx.define_function("open_file".into()).unwrap();
+    let idx = ctx.define_function("open".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[STR, BOOL, BOOL, BOOL], FILE, |_, _, v, _| {
-        let path = &*v[0].get::<String>();
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), BOOL, BOOL, BOOL], Type::Empty, |_, _, v, _| {
+        let file = &mut *v[0].deref::<NessaFile>();
         let read = *v[1].get::<bool>();
         let write = *v[2].get::<bool>();
         let append = *v[3].get::<bool>();
 
-        let file = std::fs::OpenOptions::new()
-            .read(read)
-            .write(write)
-            .append(append)
-            .open(path);
-
-        match file {
-            Ok(inner) => Ok(Object::file(inner)),
-            Err(_) => Err(format!("Unable to open file file at {}", path))
-        }    
+        file.open(read, write, append)?;
+        
+        Ok(Object::empty())
     }).unwrap();
 
-    let idx = ctx.define_function("remove_file".into()).unwrap();
+    let idx = ctx.define_function("close".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[STR], BOOL, |_, _, v, _| {
-        let path = &*v[0].get::<String>();
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], Type::Empty, |_, _, v, _| {
+        let file = &mut *v[0].deref::<NessaFile>();
+        file.close()?;
 
-        Ok(ObjectBlock::Bool(std::fs::remove_file(std::path::Path::new(path)).is_ok()).to_obj())
+        Ok(Object::empty())
+    }).unwrap();
+
+    let idx = ctx.define_function("exists".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], BOOL, |_, _, v, _| {
+        let file = &*v[0].deref::<NessaFile>();
+
+        Ok(ObjectBlock::Bool(file.exists()?).to_obj())
+    }).unwrap();
+
+    let idx = ctx.define_function("delete".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], BOOL, |_, _, v, _| {
+        let file = &mut *v[0].deref::<NessaFile>();
+
+        Ok(ObjectBlock::Bool(file.delete()?).to_obj())
     }).unwrap();
 
     let idx = ctx.define_function("read_str".into()).unwrap();
@@ -634,7 +641,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], STR, |_, _, v, _| {
         let file = v[0].deref::<NessaFile>();
         let mut buf = String::new();
-        let res = file.file.borrow_mut().read_to_string(&mut buf);
+
+        if !file.is_open() {
+            return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
+        }
+
+        let res = file.file.as_ref().unwrap().borrow_mut().read_to_string(&mut buf);
 
         match res {
             Ok(_) => Ok(ObjectBlock::Str(buf).to_obj()),
@@ -647,7 +659,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], ARR_OF!(INT), |_, _, v, _| {
         let file = v[0].deref::<NessaFile>();
         let mut buf = vec!();
-        let res = file.file.borrow_mut().read_to_end(&mut buf);
+
+        if !file.is_open() {
+            return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
+        }
+
+        let res = file.file.as_ref().unwrap().borrow_mut().read_to_end(&mut buf);
 
         match res {
             Ok(_) => {
@@ -666,8 +683,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             return Err(format!("Unable to read {} bytes from file", num_bytes));
         }
 
+        if !file.is_open() {
+            return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
+        }
+
         let mut buf = vec!(0; num_bytes.as_usize());
-        let res = file.file.borrow_mut().read_exact(&mut buf);
+        let res = file.file.as_ref().unwrap().borrow_mut().read_exact(&mut buf);
 
         match res {
             Ok(_) => {
@@ -684,7 +705,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let file = v[0].deref::<NessaFile>();
         let content = &*v[1].deref::<String>();
 
-        let ok = file.file.borrow_mut().write_all(content.as_bytes()).is_ok();
+        if !file.is_open() {
+            return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
+        }
+
+        let ok = file.file.as_ref().unwrap().borrow_mut().write_all(content.as_bytes()).is_ok();
 
         Ok(ObjectBlock::Bool(ok).to_obj())
     }).unwrap();
@@ -694,6 +719,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), ARR_OF!(INT).to_ref()], BOOL, |_, _, v, _| {
         let file = v[0].deref::<NessaFile>();
         let content = &*v[1].deref::<NessaArray>();
+
+        if !file.is_open() {
+            return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
+        }
+
         let mut bytes = vec!();
         bytes.reserve_exact(content.elements.len());
 
@@ -708,7 +738,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             }
         }
 
-        let ok = file.file.borrow_mut().write_all(&bytes).is_ok();
+        let ok = file.file.as_ref().unwrap().borrow_mut().write_all(&bytes).is_ok();
 
         Ok(ObjectBlock::Bool(ok).to_obj())
     }).unwrap();

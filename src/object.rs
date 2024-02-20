@@ -1,4 +1,4 @@
-use std::{cell::{RefCell, Ref, RefMut}, rc::Rc, fs::File};
+use std::{cell::{Ref, RefCell, RefMut}, fs::File, path::PathBuf, rc::Rc};
 
 use crate::{compilation::message_and_exit, context::NessaContext, number::Integer, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 
@@ -38,12 +38,74 @@ pub struct NessaLambda {
 
 #[derive(Clone, Debug)]
 pub struct NessaFile {
-    pub file: Rc<RefCell<File>>
+    pub path: PathBuf,
+    pub file: Option<Rc<RefCell<File>>>
 }
 
 impl PartialEq for NessaFile {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.file, &other.file)
+        match (&self.file, &other.file) {
+            (None, None) => self.path == other.path,
+            (Some(a), Some(b)) => self.path == other.path && Rc::ptr_eq(a, b),
+
+            _ => false
+        }
+    }
+}
+
+impl NessaFile {
+    pub fn is_open(&self) -> bool {
+        return self.file.is_some();
+    }
+
+    pub fn close(&mut self) -> Result<(), String> {
+        if !self.is_open() {
+            return Err(format!("File at {} is already closed", self.path.to_str().unwrap()));
+        }
+
+        self.file = None;
+
+        Ok(())
+    }
+
+    pub fn open(&mut self, read: bool, write: bool, append: bool) -> Result<(), String> {
+        if self.is_open() {
+            return Err(format!("File at {} is already open", self.path.to_str().unwrap()));
+        }
+
+        let file = std::fs::OpenOptions::new()
+            .create(write || append)
+            .read(read)
+            .write(write)
+            .append(append)
+            .open(&self.path);
+
+        match file {
+            Ok(inner) => {
+                self.file = Some(Rc::new(RefCell::new(inner)));
+                Ok(())
+            },
+
+            Err(_) => Err(format!("Unable to open file file at {}", self.path.to_str().unwrap()))
+        }    
+    }
+
+    pub fn exists(&self) -> Result<bool, String> {
+        Ok(self.path.is_file())
+    }
+
+    pub fn delete(&mut self) -> Result<bool, String> {
+        if !self.is_open() {
+            return Err(format!("File at {} is closed", self.path.to_str().unwrap()));
+        }
+
+        if std::fs::remove_file(&self.path).is_ok() {
+            self.file = None;
+            Ok(true)
+        
+        } else {
+            Ok(false)
+        }
     }
 }
 
@@ -201,8 +263,8 @@ impl Object {
         ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
     }
 
-    pub fn file(file: File) -> Self {
-        ObjectBlock::File(NessaFile { file: Rc::new(RefCell::new(file)) }).to_obj()
+    pub fn file(path: PathBuf) -> Self {
+        ObjectBlock::File(NessaFile { path, file: None }).to_obj()
     }
 
     pub fn instance(attributes: Vec<Object>, params: Vec<Type>, id: usize) -> Self {

@@ -1,5 +1,24 @@
 <link rel="stylesheet" href="../../../../css/reference.css">
 
+### time
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td> <code>time() -> Int</code> </td>
+            <td rowspan="1">
+                Returns the current time (starting from the UNIX epoch) in nanoseconds
+            </td>
+        </tr>
+    </tbody>
+</table>
+
 ### truncate
 
 <table>

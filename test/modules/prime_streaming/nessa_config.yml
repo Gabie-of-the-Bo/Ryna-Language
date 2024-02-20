@@ -1,13 +1,13 @@
 ---
 module_name: prime_streaming
-version: "0.1.0"
+version: 0.1.0
 hash: 230bfee1bee6ea3c1e67c7af9ed0e814
 module_paths:
   - test/lib
 modules:
-  range:
-    path: "test\\lib\\range"
-    version: "0.1.0"
   primes:
     path: "test\\lib\\primes"
-    version: "0.1.0"
+    version: 0.1.0
+  range:
+    path: "test\\lib\\range"
+    version: 0.1.0

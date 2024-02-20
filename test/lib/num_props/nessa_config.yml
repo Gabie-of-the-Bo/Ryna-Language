@@ -1,6 +1,6 @@
 ---
 module_name: num_props
-version: "0.1.0"
+version: 0.1.0
 hash: 11fc388c10f764a2adbcd8364f5b7a59
 module_paths:
   - test/lib

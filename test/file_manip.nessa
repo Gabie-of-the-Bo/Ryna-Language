@@ -1,7 +1,8 @@
-let file = create_file("test.json");
+let file = get_file("test.json");
 file.drop();
 
-let file2 = open_file("test.json", false, true, false);
+let file2 = get_file("test.json");
+file2.open(false, true, false);
 
 file2.write_str("This is content".ref());
 
@@ -11,7 +12,9 @@ file2.write_bytes(bytes.demut());
 
 file2.drop();
 
-let file3 = open_file("test.json", true, false, false);
+let file3 = get_file("test.json");
+file3.open(true, false, false);
+
 let contents = file3.read_str();
 
 if contents != "This is content." {
@@ -20,15 +23,15 @@ if contents != "This is content." {
 
 file3.drop();
 
-let file4 = open_file("test.json", true, false, false);
+let file4 = get_file("test.json");
+file4.open(true, false, false);
+
 let contents_b = file4.read_bytes(5);
 
 if contents_b.len() != 5 {
     panic("Invalid contents_b");
 }
 
-file4.drop();
-
-if !remove_file("test.json") {
+if !file4.delete() {
     panic("Unable to remove file");
 }

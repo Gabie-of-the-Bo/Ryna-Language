@@ -74,6 +74,7 @@ impl Autocomplete for OptionsAutocompleter {
 }
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
+const DEFAULT_GITIGNORE: &str = "nessa_cache\nnessa_config.yml";
 const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
 const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
@@ -156,6 +157,14 @@ fn main() {
                 .required(false)
                 .long("modules")
                 .short('m')
+            )
+            .arg(
+                Arg::new("no-gitignore")
+                .help("Do not create a .gitignore file")
+                .long("no-gitignore")
+                .short('g')
+                .action(ArgAction::SetTrue)
+                .default_value("false")
             )
         )
         .subcommand(
@@ -348,6 +357,12 @@ fn main() {
 
             fs::write(module_path.join(Path::new("nessa_config.yml")), serde_yaml::to_string(&config).unwrap()).expect("Unable to write configuration file");
             fs::write(module_path.join(Path::new("main.nessa")), DEFAULT_CODE).expect("Unable to write main file");
+
+            let gitignore = !run_args.get_one::<bool>("no-gitignore").expect("Invalid no-gitignore flag");
+
+            if gitignore {
+                fs::write(module_path.join(Path::new(".gitignore")), DEFAULT_GITIGNORE).expect("Unable to write .gitignore");
+            }
         }
 
         Some(("add", run_args)) => {

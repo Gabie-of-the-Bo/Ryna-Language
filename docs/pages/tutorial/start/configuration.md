@@ -7,7 +7,9 @@ In a Nessa project there can be multiple files created automatically:
 
 1. **main.nessa**: entrypoint of the interpeter. This is the file that `nessa run` will execute.
 2. **nessa_config.yml**: contains everything the interpreter needs to execute a project. This includes the module's name,
-   verion and paths to look for modules.
+  version and paths to look for modules. This file should not be shared publicly.
+2. **nessa_deps.yml**: contains the name, dependencies and versions of the project. This file can be shared publicly and
+  a full **nessa_config.yml** file can be reconstructed from it if the required libraries are available.
 3. **nessa_cache/main.nessac**: contains a cached file that allows the execution of a module without recompiling.
 4. **nessa_cache/prof.json**: contains profiling information about the program.
 
@@ -18,7 +20,7 @@ Let's take a look at each of them.
 The **nessa_config.yml** file contains the following values:
 
 * **module_name**: the module's name.
-* **version**: the current moddule's version.
+* **version**: the current module's version.
 * **hash**: an **automatically calculated** value that summarizes the contents of a module in order to check if recompilation is necessary.
 * **module_paths**: a list of strings that contains every path where the interpreter should look for modules when executing this project. They can contain
   environment variables by using the format `${variable_name}`.

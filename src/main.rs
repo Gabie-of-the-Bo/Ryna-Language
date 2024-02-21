@@ -74,6 +74,7 @@ impl Autocomplete for OptionsAutocompleter {
 }
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
+const DEFAULT_GITIGNORE: &str = "nessa_cache\nnessa_config.yml";
 const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
 const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
@@ -157,6 +158,14 @@ fn main() {
                 .long("modules")
                 .short('m')
             )
+            .arg(
+                Arg::new("no-gitignore")
+                .help("Do not create a .gitignore file")
+                .long("no-gitignore")
+                .short('g')
+                .action(ArgAction::SetTrue)
+                .default_value("false")
+            )
         )
         .subcommand(
             Command::new("add")
@@ -204,6 +213,21 @@ fn main() {
                 .help("Name of the library reprository that you want to install")
                 .required(true)
                 .index(1)
+            )
+        )
+        .subcommand(
+            Command::new("save-deps")
+            .about("Create project requirements file")
+        )
+        .subcommand(
+            Command::new("load-deps")
+            .about("Create project requirements file")
+            .arg(
+                Arg::new("modules")
+                .help("Modules path")
+                .required(false)
+                .long("modules")
+                .short('m')
             )
         );
         
@@ -333,6 +357,12 @@ fn main() {
 
             fs::write(module_path.join(Path::new("nessa_config.yml")), serde_yaml::to_string(&config).unwrap()).expect("Unable to write configuration file");
             fs::write(module_path.join(Path::new("main.nessa")), DEFAULT_CODE).expect("Unable to write main file");
+
+            let gitignore = !run_args.get_one::<bool>("no-gitignore").expect("Invalid no-gitignore flag");
+
+            if gitignore {
+                fs::write(module_path.join(Path::new(".gitignore")), DEFAULT_GITIGNORE).expect("Unable to write .gitignore");
+            }
         }
 
         Some(("add", run_args)) => {
@@ -453,6 +483,80 @@ fn main() {
                 Ok(_) => {},
                 Err(err) => nessa_error!("{}", err),
             }
+        }
+
+        Some(("save-deps", _)) => {
+            let module_path = Path::new(".");
+
+            let config_path = module_path.join(Path::new("nessa_config.yml"));
+
+            if !config_path.exists() {
+                nessa_error!("No project config file!");
+            }
+
+            let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+            let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse config file");
+
+            // Anonymize
+            config_yml.hash.clear();
+            config_yml.module_paths.clear();
+            config_yml.modules.iter_mut().for_each(|m| {
+                m.1.dependencies.clear();
+                m.1.path.clear();
+            });
+
+            fs::write(module_path.join(Path::new("nessa_deps.yml")), serde_yaml::to_string(&config_yml).unwrap()).expect("Unable to write configuration file");
+        }
+
+        Some(("load-deps", run_args)) => {
+            let module_path = Path::new(".");
+
+            let deps_path = module_path.join(Path::new("nessa_deps.yml"));
+
+            if !deps_path.exists() {
+                nessa_error!("No project requirements file!");
+            }
+
+            let deps = fs::read_to_string(&deps_path).expect("Unable to read requirements file");
+            let mut deps_yml: NessaConfig = from_str(&deps).expect("Unable to parse requirements file");
+
+            if !CONFIG.read().unwrap().modules_path.is_empty() {
+                deps_yml.module_paths.push(CONFIG.read().unwrap().modules_path.clone());
+            
+            } else {
+                nessa_error!("Default modules path was not found! Try executing nessa setup");    
+            }
+
+            if let Some(m) = run_args.get_one::<String>("modules") {
+                deps_yml.module_paths.push(m.clone());
+            }
+
+            let mut module_versions = HashMap::<String, HashSet<_>>::new();
+            let mut paths = HashMap::new();
+
+            for path in &deps_yml.module_paths {
+                for f in glob(format!("{}/**/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                    let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
+                    let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
+                    module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
+
+                    paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
+                }    
+            }
+
+            for module in deps_yml.modules.iter_mut() {
+                if !module_versions.contains_key(module.0) {
+                    nessa_error!("Module {} not found!", module.0.green());    
+                }
+                
+                if !module_versions.get(module.0).unwrap().contains(&module.1.version) {
+                    nessa_error!("Version {} for module {} not found!", format!("v{}", module.1.version).cyan(), module.0.green());    
+                }
+
+                module.1.path = paths.get(&(module.0.clone(), module.1.version.clone())).unwrap().clone();
+            }
+
+            fs::write(module_path.join(Path::new("nessa_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
         }
 
         _ => {

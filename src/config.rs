@@ -23,7 +23,10 @@ const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub path: String,
+    
     pub version: String,
 
     #[serde(skip)]
@@ -44,7 +47,10 @@ pub struct NessaConfig {
     #[serde(default)]
     pub hash: String,
 
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub module_paths: Vec<String>,
+
     pub modules: HashMap<String, ModuleInfo>
 }
 
@@ -232,10 +238,6 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
         .collect::<Vec<_>>();
 
     local_files.sort();
-
-    for i in &local_files {
-        println!("{:?}", i);
-    }
 
     if macro_code.is_none() {
         let combined_hashes = local_files.iter()

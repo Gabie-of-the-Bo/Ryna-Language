@@ -277,7 +277,7 @@ impl NessaExpr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImportType {
-    Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Outer, All
+    Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Line(usize), All
 }
 
 pub fn get_op_chain(expr: NessaExpr, id: usize) -> (Vec<NessaExpr>, Vec<Vec<Type>>) {

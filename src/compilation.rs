@@ -8,6 +8,7 @@ use seq_macro::seq;
 use serde::{Serialize, Deserialize};
 
 use crate::cache::needs_import;
+use crate::cache::needs_line_import;
 use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::NessaModule;
@@ -850,7 +851,9 @@ impl NessaContext{
 
         self.compile(&mut compiled, &vec!())?; // TODO: this seems costly...
 
-        self.get_inner_dep_graph_body(&compiled, &(ImportType::Outer, 0), &mut res);
+        for (line_idx, e) in compiled.iter().enumerate() {
+            self.get_inner_dep_graph_expr(e, &(ImportType::Line(line_idx), 0), &mut res);
+        }
 
         Ok(res)
     }
@@ -3289,7 +3292,11 @@ impl NessaContext{
     ) -> Result<(), NessaError> {
         match expr {
             NessaExpr::Literal(..) |
-            NessaExpr::NameReference(..) => {}
+            NessaExpr::NameReference(..) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) => {}
 
             NessaExpr::VariableDefinition(l, _, t, e) => {
                 *t = t.map_type(self, ctx, id_mapper, l);
@@ -3381,7 +3388,19 @@ impl NessaContext{
                 self.map_nessa_expression(e, ctx, id_mapper)?;
             }
 
-            _ => unimplemented!("{:?}", expr)
+            NessaExpr::Lambda(l, a, ret, lines) => {
+                for (_, t) in a {
+                    *t = t.map_type(self, ctx, id_mapper, l)
+                }
+
+                *ret = ret.map_type(self, ctx, id_mapper, l);
+
+                for line in lines {
+                    self.map_nessa_expression(line, ctx, id_mapper)?;
+                }
+            },
+
+            e => unreachable!("{:?}", e)
         }
 
         Ok(())
@@ -3398,7 +3417,7 @@ impl NessaContext{
         let mut new_source = vec!();
         let mut id_mapper = IdMapper::default();
 
-        for (line, module) in code.iter().zip(source) {
+        for (line_idx, (line, module)) in code.iter().zip(source).enumerate() {
             match line {
                 NessaExpr::Macro(_, n, _, p, _) => {
                     if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
@@ -3610,7 +3629,15 @@ impl NessaContext{
                     }
                 },
 
-                _ => {}
+                expr => {
+                    if needs_line_import(module, line_idx, &mut self.cache.imports.lines) {
+                        let mut mapped_expr = expr.clone();
+                        self.map_nessa_expression(&mut mapped_expr, ctx, &mut id_mapper)?;
+    
+                        res.push(mapped_expr);
+                        new_source.push(module.clone());    
+                    }
+                }
             }
         }
 

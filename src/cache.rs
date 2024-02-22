@@ -83,7 +83,9 @@ pub struct NessaImportCache {
     pub interface_def: ImportCache<(String, Vec<String>)>,
     pub interface_impl: ImportCache<(Vec<String>, Type, String, Vec<Type>)>,
 
-    pub macros: ImportCache<(String, Pattern)>
+    pub macros: ImportCache<(String, Pattern)>,
+
+    pub lines: ImportCache<usize>
 }
 
 #[derive(Default, Clone)]
@@ -106,6 +108,10 @@ pub struct NessaCache {
     pub opcodes: NessaDividedCache<OpcodeCache>,
     pub imports: NessaImportCache,
     pub ranges: StringCache<(usize, usize)>
+}
+
+pub fn needs_line_import(module: &str, line: usize, cache: &mut ImportCache<usize>) -> bool {    
+    cache.insert((module.to_owned(), line))
 }
 
 pub fn needs_import<T: Hash + PartialEq + Eq>(module: &str, import_type: ImportType, name: &String, imports: &Imports, cache: &mut ImportCache<T>, obj: T) -> bool {    

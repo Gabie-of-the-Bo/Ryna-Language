@@ -22,7 +22,8 @@ use crate::compilation::{CompiledNessaExpr, NessaError};
 
 impl NessaContext {
     pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<ExecutionInfo, NessaError> {
-        let compiled_code = self.parse_and_compile(code)?;
+        let mut compiled_code = self.parse_and_compile(code)?;
+        self.peephole_optimization(&mut compiled_code);
 
         for (idx, i) in compiled_code.iter().enumerate() {
             println!("{:<3} {}", idx, i.to_string(self));
@@ -65,7 +66,7 @@ impl NessaContext {
 
         match precompile_nessa_module_with_config(&path, all_modules, file_cache) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
-                Ok(instr) => {                    
+                Ok(mut instr) => {                    
                     if no_macro {
                         let ser_module = ctx.get_serializable_module(combined_hash, &instr);
 
@@ -76,6 +77,7 @@ impl NessaContext {
 
                     ctx.program_input = program_input.to_vec();
 
+                    ctx.peephole_optimization(&mut instr);
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
 

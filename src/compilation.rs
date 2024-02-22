@@ -653,7 +653,7 @@ impl NessaContext {
     ╘═══════════════════════╛
 */
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CompiledNessaExpr {
     Empty,
     Bool(bool),
@@ -814,7 +814,7 @@ impl CompiledNessaExpr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
     pub comment: String

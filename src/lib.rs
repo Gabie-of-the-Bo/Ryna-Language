@@ -20,6 +20,7 @@ pub mod macros;
 pub mod inference;
 pub mod checks;
 pub mod compilation;
+pub mod peephole_optimizer;
 pub mod execution;
 pub mod translation;
 pub mod serialization;
@@ -125,7 +126,9 @@ mod integration {
         let (mut ctx, lines) = err.unwrap();
 
         match ctx.compiled_form(&lines) {
-            Ok(code) => {
+            Ok(mut code) => {
+                ctx.peephole_optimization(&mut code);
+
                 if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>()) {
                     err.emit();
                 }

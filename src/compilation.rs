@@ -667,11 +667,18 @@ pub enum CompiledNessaExpr {
     Attribute(usize),
     AttributeRef(usize),
     AttributeMut(usize),
+    AttributeCopy(usize),
+    AttributeDeref(usize),
 
     Tuple(usize),
 
     StoreVariable(usize),
     GetVariable(usize),
+    RefVariable(usize),
+    DerefVariable(usize),
+    CopyVariable(usize),
+    MoveVariable(usize),
+    Assign,
     Drop,
 
     Jump(usize),
@@ -686,8 +693,12 @@ pub enum CompiledNessaExpr {
     BinaryOperatorCall(usize, usize, Vec<Type>),
     NaryOperatorCall(usize, usize, Vec<Type>),
 
+    NativeFunctionCallNoRet(usize, usize, Vec<Type>), // No return variants
+    UnaryOperatorCallNoRet(usize, usize, Vec<Type>),
+    BinaryOperatorCallNoRet(usize, usize, Vec<Type>),
+
     // Conversions
-    Copy, Deref, ToFloat,
+    Ref, Mut, Copy, Deref, Demut, Move, ToFloat,
 
     // Arithmetic opcodes
     Addi, Addf,
@@ -706,7 +717,9 @@ pub enum CompiledNessaExpr {
     Neqi, Neqf,
 
     // Logical opcodes
-    Not, Or, And,
+    Not, Or, And, Xor,
+    
+    Nand, Nor, // Only via peephole optimization
 
     Halt
 }
@@ -732,7 +745,7 @@ impl CompiledNessaExpr {
             Ltf | Gtf | Lteqf | Gteqf | Eqf | Neqf | Negf |
             Addi | Subi | Muli | Divi | Modi |
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
-            Not | Or | And
+            Not | Or | And | Xor
         )
     }
 
@@ -762,6 +775,9 @@ impl CompiledNessaExpr {
 
             StoreVariable(to) => format!("{}({})", "StoreVariable".green(), to.to_string().blue()),
             GetVariable(to) => format!("{}({})", "GetVariable".green(), to.to_string().blue()),
+            CopyVariable(to) => format!("{}({})", "CopyVariable".green(), to.to_string().blue()),
+            DerefVariable(to) => format!("{}({})", "DerefVariable".green(), to.to_string().blue()),
+            MoveVariable(to) => format!("{}({})", "MoveVariable".green(), to.to_string().blue()),
 
             Call(to) => format!("{}({})", "Call".green(), to.to_string().blue()),
 
@@ -780,9 +796,18 @@ impl CompiledNessaExpr {
             Attribute(to) => format!("{}({})", "Attribute".green(), to.to_string().blue()),
             AttributeRef(to) => format!("{}({})", "AttributeRef".green(), to.to_string().blue()),
             AttributeMut(to) => format!("{}({})", "AttributeMut".green(), to.to_string().blue()),
+            AttributeCopy(to) => format!("{}({})", "AttributeCopy".green(), to.to_string().blue()),
+            AttributeDeref(to) => format!("{}({})", "AttributeDeref".green(), to.to_string().blue()),
 
             NativeFunctionCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "FunctionCall".green(), 
+                ctx.functions[*id].name.magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            NativeFunctionCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "FunctionCallNoRet".green(), 
                 ctx.functions[*id].name.magenta(), 
                 ov.to_string().blue(), 
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
@@ -795,8 +820,22 @@ impl CompiledNessaExpr {
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
             ),
 
+            UnaryOperatorCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "UnOpCallNoRet".green(), 
+                ctx.unary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
             BinaryOperatorCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "BinOpCall".green(), 
+                ctx.binary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            BinaryOperatorCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "BinOpCallNoRet".green(), 
                 ctx.binary_ops[*id].get_repr().magenta(), 
                 ov.to_string().blue(), 
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
@@ -822,7 +861,7 @@ pub struct NessaInstruction {
 
 impl NessaInstruction {
     pub fn to_string(&self, ctx: &NessaContext) -> String {
-        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { "# " }, self.comment)
+        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { " # " }, self.comment)
     }
 }
 
@@ -2162,10 +2201,14 @@ impl NessaContext{
                 let b_t = self.infer_type(b)?;
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
-                let mut offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+                let (opcode, mut offset) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).unwrap_or((CompiledNessaExpr::Halt, 0));
 
                 if (*id == AND_BINOP_ID || *id == OR_BINOP_ID) && *a_t.deref_type() == BOOL && *b_t.deref_type() == BOOL {
                     offset += 1;
+                }
+
+                if root && opcode == CompiledNessaExpr::Assign {
+                    *root_counter -= 1; // No drop for Assign
                 }
 
                 Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1 + offset)
@@ -2426,6 +2469,7 @@ impl NessaContext{
                 // Short circuit
                 let mut short_circuit = false;
                 let mut short_circuit_on = true;
+                let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())) {
                     res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos));
@@ -2437,6 +2481,8 @@ impl NessaContext{
                     }
 
                     if let Some((opcode, _)) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)) {
+                        translated_opcode = opcode.clone();
+
                         // Deref if necessary
                         if opcode.needs_deref() {
                             if a_t.is_ref() {
@@ -2487,7 +2533,7 @@ impl NessaContext{
 
                 res.push(res_op);    
 
-                if root { // Drop if the return value is unused
+                if root && translated_opcode != CompiledNessaExpr::Assign { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 

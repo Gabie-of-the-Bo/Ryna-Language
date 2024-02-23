@@ -260,6 +260,18 @@ impl NessaContext {
                     ip += 1;
                 }),
 
+                AttributeCopy(idx) => nessa_instruction!("AttributeCopy", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].deref_deep_clone());
+                    ip += 1;
+                }),
+
+                AttributeDeref(idx) => nessa_instruction!("AttributeDeref", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<TypeInstance>().attributes[*idx].deref_if_ref());
+                    ip += 1;
+                }),
+
                 Tuple(length) => nessa_instruction!("Tuple", {     
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect::<Vec<_>>();
@@ -281,6 +293,37 @@ impl NessaContext {
 
                 GetVariable(id) => nessa_instruction!("GetVariable", {
                     stack.push(self.variables[*id + offset].get_mut());
+                    ip += 1;
+                }),
+
+                RefVariable(id) => nessa_instruction!("RefVariable", {
+                    stack.push(self.variables[*id + offset].get_ref());
+                    ip += 1;
+                }),
+
+                DerefVariable(id) => nessa_instruction!("DerefVariable", {
+                    stack.push(self.variables[*id + offset].deref_if_ref());
+                    ip += 1;
+                }),
+
+                CopyVariable(id) => nessa_instruction!("CopyVariable", {
+                    stack.push(self.variables[*id + offset].deref_deep_clone());
+                    ip += 1;
+                }),
+
+                MoveVariable(id) => nessa_instruction!("MoveVariable", {
+                    stack.push(self.variables[*id + offset].move_contents_if_ref());
+                    ip += 1;
+                }),
+
+                Assign => nessa_instruction!("Assign", {
+                    let a = stack.pop().unwrap();
+                    let b = stack.pop().unwrap();
+
+                    if let Err(msg) = a.assign(b, self) {
+                        return Err(NessaError::execution_error(msg));
+                    }
+
                     ip += 1;
                 }),
 
@@ -359,6 +402,25 @@ impl NessaContext {
                     }
                 }),
 
+                NativeFunctionCallNoRet(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCallNoRet", {
+                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                        let mut args = Vec::with_capacity(v.len());
+
+                        for _ in v {
+                            args.push(stack.pop().unwrap());
+                        }
+
+                        if let Err(msg) = f(type_args, r, args, self) {
+                            return Err(NessaError::execution_error(msg));
+                        };
+
+                        ip += 1;
+                    
+                    } else {
+                        unreachable!();
+                    }
+                }),
+
                 UnaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("UnaryOperatorCall", {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = stack.pop().unwrap();
@@ -368,6 +430,23 @@ impl NessaContext {
                         match ov.3.unwrap()(type_args, &ov.2, obj) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
+                        };
+
+                        ip += 1;
+                    
+                    } else {
+                        unreachable!();
+                    }
+                }),
+
+                UnaryOperatorCallNoRet(op_id, ov_id, type_args) => nessa_instruction!("UnaryOperatorCallNoRet", {
+                    if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
+                        let obj = stack.pop().unwrap();
+
+                        let ov = &operations[*ov_id];
+
+                        if let Err(msg) = ov.3.unwrap()(type_args, &ov.2, obj) {
+                            return Err(NessaError::execution_error(msg));
                         };
 
                         ip += 1;
@@ -387,6 +466,24 @@ impl NessaContext {
                         match ov.3.unwrap()(type_args, &ov.2, a, b, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
+                        };
+                        
+                        ip += 1;
+                    
+                    } else {
+                        unreachable!();
+                    }
+                }),
+
+                BinaryOperatorCallNoRet(op_id, ov_id, type_args) => nessa_instruction!("BinaryOperatorCallNoRet", {
+                    if let Operator::Binary{operations, ..} = &self.binary_ops[*op_id] {
+                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap();
+
+                        let ov = &operations[*ov_id];
+
+                        if let Err(msg) = ov.3.unwrap()(type_args, &ov.2, a, b, self) {
+                            return Err(NessaError::execution_error(msg));
                         };
                         
                         ip += 1;
@@ -416,6 +513,18 @@ impl NessaContext {
 
                 ToFloat => unary_op!("ToFloat", a, get, Integer, a.to_f64()),
 
+                Ref => nessa_instruction!("Ref", {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.get_ref_nostack());
+                    ip += 1;
+                }),
+
+                Mut => nessa_instruction!("Mut", {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.get_mut_nostack());
+                    ip += 1;
+                }),
+
                 Copy => nessa_instruction!("Copy", {
                     let a = stack.pop().unwrap();
                     stack.push(a.deref_obj().deep_clone());
@@ -425,6 +534,18 @@ impl NessaContext {
                 Deref => nessa_instruction!("Deref", {
                     let a = stack.pop().unwrap();
                     stack.push(a.deref_obj());
+                    ip += 1;
+                }),
+
+                Demut => nessa_instruction!("Demut", {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.get_ref());
+                    ip += 1;
+                }),
+
+                Move => nessa_instruction!("Move", {
+                    let a = stack.pop().unwrap();
+                    stack.push(a.move_contents());
                     ip += 1;
                 }),
 
@@ -457,6 +578,9 @@ impl NessaContext {
                 Not => unary_op!("Not", a, get, bool, !a),
                 Or => bin_op!("Or", a, b, get, get, bool, *a || *b),
                 And => bin_op!("And", a, b, get, get, bool, *a && *b),
+                Xor => bin_op!("Xor", a, b, get, get, bool, *a ^ *b),
+                Nor => bin_op!("Nor", a, b, get, get, bool, !(*a || *b)),
+                Nand => bin_op!("Nand", a, b, get, get, bool, !(*a && *b)),
 
                 Halt => break,
             }

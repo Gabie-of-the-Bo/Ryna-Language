@@ -232,6 +232,9 @@ pub const NEQ_BINOP_ID: usize = 11;
 
 pub const OR_BINOP_ID: usize = 12;
 pub const AND_BINOP_ID: usize = 13;
+pub const XOR_BINOP_ID: usize = 19;
+
+pub const ASSIGN_BINOP_ID: usize = 14;
 
 pub const LT_BINOP_PREC: usize = 900;
 

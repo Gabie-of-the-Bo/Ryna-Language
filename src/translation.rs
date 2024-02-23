@@ -1,4 +1,4 @@
-use crate::{context::NessaContext, operations::{Operator, ADD_BINOP_ID, SUB_BINOP_ID, MUL_BINOP_ID, DIV_BINOP_ID, MOD_BINOP_ID, LT_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, GTEQ_BINOP_ID, EQ_BINOP_ID, NEQ_BINOP_ID, OR_BINOP_ID, AND_BINOP_ID, DEREF_UNOP_ID, NEG_UNOP_ID, NOT_UNOP_ID}, types::{Type, INT_ID, FLOAT_ID, INT, BOOL_ID}, compilation::CompiledNessaExpr};
+use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, OR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID}};
 
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
@@ -62,8 +62,9 @@ pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
         });
     }
 
-    let ids = [OR_BINOP_ID, AND_BINOP_ID];
-    let opcodes = [Or, And];
+    // Logical
+    let ids = [OR_BINOP_ID, AND_BINOP_ID, XOR_BINOP_ID];
+    let opcodes = [Or, And, Xor];
 
     for (id, opcode) in ids.iter().zip(opcodes) {
         load_binop_opcodes(ctx, *id, |a, b| {
@@ -73,6 +74,9 @@ pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
             }
         });
     }
+
+    // Other
+    ctx.cache.opcodes.binary.insert((ASSIGN_BINOP_ID, 0), (Assign, 0));
 }
 
 pub fn load_optimized_unop_opcodes(ctx: &mut NessaContext) {
@@ -113,6 +117,18 @@ pub fn load_optimized_fn_opcodes(ctx: &mut NessaContext) {
     let deref_id = ctx.get_function_id("deref".into()).unwrap();
     ctx.cache.opcodes.functions.insert((deref_id, 0), (Copy, 0));
     ctx.cache.opcodes.functions.insert((deref_id, 1), (Copy, 0));
+    
+    let demut_id = ctx.get_function_id("demut".into()).unwrap();
+    ctx.cache.opcodes.functions.insert((demut_id, 0), (Demut, 0));
+
+    let move_id = ctx.get_function_id("move".into()).unwrap();
+    ctx.cache.opcodes.functions.insert((move_id, 0), (Move, 0));
+
+    let ref_id = ctx.get_function_id("ref".into()).unwrap();
+    ctx.cache.opcodes.functions.insert((ref_id, 0), (Ref, 0));
+
+    let mut_id = ctx.get_function_id("mut".into()).unwrap();
+    ctx.cache.opcodes.functions.insert((mut_id, 0), (Mut, 0));
 }
 
 pub fn load_optimized_opcodes(ctx: &mut NessaContext) {

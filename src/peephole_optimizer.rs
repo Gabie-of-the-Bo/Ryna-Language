@@ -20,40 +20,121 @@ impl NessaContext {
         use CompiledNessaExpr::*;
 
         let mut jumps = JumpMap::from_code(&program);
-
         let mut changed = true;
+
+        macro_rules! remove_instruction {
+            ($idx: expr) => {
+                program.remove($idx);
+
+                for change in jumps.remove_line($idx) {
+                    apply_jump_change(change, program);
+                }
+            };
+        }
+
+        while changed {
+            changed = false;
+
+            // Delete size 1 jumps
+            for i in 0..program.len() {
+                if let RelativeJump(1) = &program[i].instruction {
+                    remove_instruction!(i);
+
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        changed = true;
 
         while changed {
             changed = false;
 
             // Look for optimizations
             for i in 0..(program.len() - 1) {
+                macro_rules! change_first {
+                    ($new_expr: expr) => {
+                        program[i].instruction = $new_expr;
+                        remove_instruction!(i + 1);
+
+                        changed = true;
+                        break;
+                    };
+                }
+
+                macro_rules! change_second {
+                    ($new_expr: expr) => {
+                        program[i + 1].instruction = $new_expr;
+                        remove_instruction!(i);
+
+                        changed = true;
+                        break;
+                    };
+                }
+
+                macro_rules! remove_both {
+                    () => {
+                        remove_instruction!(i);
+                        remove_instruction!(i);
+
+                        changed = true;
+                        break;
+                    };
+                }
+                
                 // Size 2
                 match [&program[i].instruction, &program[i + 1].instruction] {
-                    [Not, RelativeJumpIfFalse(offset, false)] => {
-                        program[i + 1].instruction = RelativeJumpIfTrue(*offset, false);
-                        program.remove(i);
+                    [Not, RelativeJumpIfFalse(offset, false)] => { change_second!(RelativeJumpIfTrue(*offset, false)); }
+                    [Not, RelativeJumpIfTrue(offset, false)] => { change_second!(RelativeJumpIfFalse(*offset, false)); }
 
-                        for change in jumps.remove_line(i) {
-                            apply_jump_change(change, program);
-                        }
-
-                        changed = true;
-                        break;
+                    [NativeFunctionCall(func_id, ov_id, type_args), Drop] => {
+                        change_first!(NativeFunctionCallNoRet(*func_id, *ov_id, type_args.clone()));
                     }
-    
-                    [Not, RelativeJumpIfTrue(offset, false)] => {
-                        program[i + 1].instruction = RelativeJumpIfFalse(*offset, false);
-                        program.remove(i);
 
-                        for change in jumps.remove_line(i) {
-                            apply_jump_change(change, program);
-                        }
-
-                        changed = true;
-                        break;
+                    [UnaryOperatorCall(op_id, ov_id, type_args), Drop] => {
+                        change_first!(UnaryOperatorCallNoRet(*op_id, *ov_id, type_args.clone()));
                     }
-    
+
+                    [BinaryOperatorCall(op_id, ov_id, type_args), Drop] => {
+                        change_first!(BinaryOperatorCallNoRet(*op_id, *ov_id, type_args.clone()));
+                    }
+
+                    [GetVariable(id), Demut] => { change_first!(RefVariable(*id)); },
+                    [GetVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
+                    [RefVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
+                    [GetVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
+                    [RefVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
+                    [GetVariable(id), Move] => { change_first!(MoveVariable(*id)); },
+                    [AttributeMut(id), Demut] => { change_first!(AttributeRef(*id)); },
+                    [AttributeMut(id), Copy] => { change_first!(AttributeCopy(*id)); },
+                    [AttributeRef(id), Copy] => { change_first!(AttributeCopy(*id)); },
+                    [AttributeMut(id), Deref] => { change_first!(AttributeDeref(*id)); },
+                    [AttributeRef(id), Deref] => { change_first!(AttributeDeref(*id)); },
+
+                    [Not, Not] |
+                    [Negi, Negi] |
+                    [Negf, Negf] => { remove_both!(); }
+                    
+                    [Ref, Deref] |
+                    [Mut, Deref] => { remove_both!(); }
+
+                    [Eqi, Not] => { change_first!(Neqi); },
+                    [Eqf, Not] => { change_first!(Neqf); },
+                    [Neqi, Not] => { change_first!(Eqi); },
+                    [Neqf, Not] => { change_first!(Eqf); },
+                    [Lti, Not] => { change_first!(Gteqi); },
+                    [Ltf, Not] => { change_first!(Gteqf); },
+                    [Gti, Not] => { change_first!(Lteqi); },
+                    [Gtf, Not] => { change_first!(Lteqf); },
+                    [Lteqi, Not] => { change_first!(Gti); },
+                    [Lteqf, Not] => { change_first!(Gtf); },
+                    [Gteqi, Not] => { change_first!(Lti); },
+                    [Gteqf, Not] => { change_first!(Ltf); },
+
+                    [Or, And] => { change_first!(Nand); },
+                    [Or, Not] => { change_first!(Nor); },
+
                     _ => {}
                 }
             }

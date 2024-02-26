@@ -856,7 +856,8 @@ impl CompiledNessaExpr {
 #[derive(Debug, PartialEq)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
-    pub comment: String
+    pub comment: String,
+    pub var_type: Option<Type>
 }
 
 impl NessaInstruction {
@@ -869,7 +870,8 @@ impl From<CompiledNessaExpr> for NessaInstruction {
     fn from(obj: CompiledNessaExpr) -> NessaInstruction {
         NessaInstruction {
             instruction: obj,
-            comment: String::new()
+            comment: String::new(),
+            var_type: None
         }
     }
 }
@@ -878,7 +880,16 @@ impl NessaInstruction {
     pub fn new(instruction: CompiledNessaExpr, comment: String) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment
+            comment,
+            var_type: None
+        }
+    }
+
+    pub fn new_with_type(instruction: CompiledNessaExpr, comment: String, var_type: Type) -> NessaInstruction {
+        NessaInstruction {
+            instruction,
+            comment,
+            var_type: Some(var_type)
         }
     }
 }
@@ -1651,10 +1662,18 @@ impl NessaContext{
 
                 for i in 0..a.len() {
                     if i == 0 {
-                        lambdas.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), "Lambda expression start".into()));
+                        lambdas.push(NessaInstruction::new_with_type(
+                            CompiledNessaExpr::StoreVariable(i), 
+                            "Lambda expression start".into(),
+                            a[i].1.clone()
+                        ));
 
                     } else {
-                        lambdas.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                        lambdas.push(NessaInstruction::new_with_type(
+                            CompiledNessaExpr::StoreVariable(i), 
+                            String::new(),
+                            a[i].1.clone()
+                        ));
                     }
                 }
 
@@ -1983,10 +2002,18 @@ impl NessaContext{
                                             r.get_name(self)
                                         );
 
-                                        res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i), 
+                                            comment,
+                                            args[i].clone()
+                                        ));
 
                                     } else {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i),
+                                            String::new(),
+                                            args[i].clone()
+                                        ));
                                     }
                                 }
 
@@ -2030,7 +2057,11 @@ impl NessaContext{
                                     format!("op ({}){} -> {}", tp.get_name(self), rep, r.get_name(self))
                                 };
                                 
-                                res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(0), 
+                                    comment,
+                                    args[0].clone()
+                                ));
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
@@ -2065,8 +2096,17 @@ impl NessaContext{
 
                                 let comment = format!("op ({}) {} ({}) -> {}", t1.get_name(self), rep, t2.get_name(self), r.get_name(self));
 
-                                res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
-                                res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(1)));
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(0), 
+                                    comment,
+                                    args[0].clone()
+                                ));
+
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(1),
+                                    String::new(),
+                                    args[1].clone()
+                                ));
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
@@ -2115,10 +2155,18 @@ impl NessaContext{
                                             r.get_name(self)
                                         );
     
-                                        res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i), 
+                                            comment,
+                                            args[0].clone()
+                                        ));
     
                                     } else {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i),
+                                            String::new(),
+                                            args[i].clone()
+                                        ));
                                     }
                                 }
     
@@ -2412,9 +2460,13 @@ impl NessaContext{
                 Ok(res)
             }, 
 
-            NessaExpr::CompiledVariableDefinition(_, id, _, _, e) | NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, id, _, t, e) | NessaExpr::CompiledVariableAssignment(_, id, _, t, e) => {
                 let mut res = self.compiled_form_expr(e, lambda_positions, false)?;
-                res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
+                res.push(NessaInstruction::new_with_type(
+                    CompiledNessaExpr::StoreVariable(*id),
+                    String::new(),
+                    t.clone()
+                ));
 
                 Ok(res)
             },

@@ -82,6 +82,17 @@ impl NessaContext {
                         break;
                     };
                 }
+
+                macro_rules! is_not_ref {
+                    ($idx: expr) => {
+                        {
+                            let instr_t = &program[$idx].var_type;
+
+                            instr_t.is_some() &&
+                            !instr_t.as_ref().unwrap().is_ref()    
+                        }
+                    };
+                }
                 
                 // Size 2
                 match [&program[i].instruction, &program[i + 1].instruction] {
@@ -134,6 +145,9 @@ impl NessaContext {
 
                     [Or, And] => { change_first!(Nand); },
                     [Or, Not] => { change_first!(Nor); },
+
+                    // Flow optimizations
+                    [StoreVariable(id_1), MoveVariable(id_2)] if id_1 == id_2 && is_not_ref!(i) => { remove_both!(); },
 
                     _ => {}
                 }

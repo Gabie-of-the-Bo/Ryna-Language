@@ -20,7 +20,7 @@ pub mod macros;
 pub mod inference;
 pub mod checks;
 pub mod compilation;
-pub mod peephole_optimizer;
+pub mod optimization;
 pub mod execution;
 pub mod translation;
 pub mod serialization;

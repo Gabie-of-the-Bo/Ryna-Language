@@ -127,7 +127,7 @@ mod integration {
 
         match ctx.compiled_form(&lines) {
             Ok(mut code) => {
-                ctx.peephole_optimization(&mut code);
+                ctx.optimize_instructions(&mut code);
 
                 for (idx, i) in code.iter().enumerate() {
                     println!("{:<3} {}", idx, i.to_string(&ctx));

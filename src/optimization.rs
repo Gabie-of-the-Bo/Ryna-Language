@@ -233,7 +233,7 @@ fn apply_jump_change(change: (usize, usize), program: &mut Vec<NessaInstruction>
 }
 
 impl NessaContext {
-    pub fn peephole_optimization(&self, program: &mut Vec<NessaInstruction>) {
+    fn peephole_optimization(&self, program: &mut Vec<NessaInstruction>) {
         use CompiledNessaExpr::*;
 
         let mut jumps = JumpMap::from_code(&program);
@@ -243,7 +243,7 @@ impl NessaContext {
             ($idx: expr) => {
                 program.remove($idx);
 
-                for change in jumps.remove_line($idx) {
+                for (_, change) in jumps.remove_line($idx) {
                     apply_jump_change(change, program);
                 }
             };
@@ -399,6 +399,18 @@ impl NessaContext {
                 }
             }
         }
+    }
+}
+
+/*
+    ╒══════════════════════╕
+    │ Optimization routine │
+    ╘══════════════════════╛
+*/
+
+impl NessaContext {
+    pub fn optimize_instructions(&self, program: &mut Vec<NessaInstruction>) {
+        self.peephole_optimization(program);
     }
 }
 

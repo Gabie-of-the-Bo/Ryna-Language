@@ -19,6 +19,25 @@
     </tbody>
 </table>
 
+### dec
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td> <code>dec(n: @Int) -> ()</code> </td>
+            <td rowspan="6">
+                Decrement <code>n</code> by one
+            </td>
+        </tr>
+    </tbody>
+</table>
+
 ### sin
 
 <table>

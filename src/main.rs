@@ -114,6 +114,14 @@ fn main() {
                     .action(ArgAction::SetTrue)
                     .default_value("false")
                 )
+                .arg(
+                    Arg::new("optimize")
+                    .help("Optimize code")
+                    .long("optimize")
+                    .short('o')
+                    .action(ArgAction::SetTrue)
+                    .default_value("false")
+                )
         )
         .subcommand(
             Command::new("profile")
@@ -244,6 +252,7 @@ fn main() {
         Some(("run", run_args)) => {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
+            let optimize = *run_args.get_one::<bool>("optimize").unwrap_or(&false);
 
             let program_input = match run_args.get_many::<String>("PROGRAM_INPUT") {
                 Some(i) => i.cloned().collect::<Vec<_>>(),
@@ -253,10 +262,10 @@ fn main() {
             let res;
 
             if let Some(("profile", _)) = args.subcommand() {
-                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile, &program_input);
+                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile, false, &program_input);
 
             } else {
-                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile, &program_input);
+                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile, optimize, &program_input);
             }
             
             match res {

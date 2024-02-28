@@ -143,12 +143,14 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache) -> Result<NessaModule, NessaError> {
+fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache, optimize: bool) -> Result<NessaModule, NessaError> {
     let (config_yml, imports, main, is_macro) = file_cache.get(path).unwrap();
 
     // Refresh configuration and recompile if it is outdated
     if config_yml.is_outdated() {
         let mut ctx = standard_ctx();
+        
+        ctx.optimize = optimize;
         ctx.module_path = path.clone();
 
         if *is_macro {
@@ -185,7 +187,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
         for dep in &topological_order {
             if *dep.0 != config_yml.module_name && !already_compiled.contains_key(dep) {
                 let module = all_modules.get(dep).unwrap();
-                let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache)?;
+                let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache, optimize)?;
 
                 already_compiled.entry(dep.clone()).or_insert(compiled_module);
             }
@@ -359,8 +361,8 @@ pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -
     Ok((res, file_cache))
 }
 
-pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
-    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache)?;
+pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
+    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache, optimize)?;
 
     module.ctx.precompile_module(&mut module.code)?;
 

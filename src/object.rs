@@ -231,6 +231,44 @@ impl ObjectBlock {
 
         Ok(())
     }
+
+    pub fn deep_clone(&self) -> Self {
+        return match self {
+            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
+
+            ObjectBlock::Empty => ObjectBlock::Empty,
+            ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()),
+            ObjectBlock::Float(n) => ObjectBlock::Float(*n),
+            ObjectBlock::Str(s) => ObjectBlock::Str(s.clone()),
+            ObjectBlock::Bool(b) => ObjectBlock::Bool(*b),
+            ObjectBlock::Tuple(t) => ObjectBlock::Tuple(NessaTuple { 
+                elements: t.elements.iter().map(Object::deep_clone).collect(), 
+                elem_types: t.elem_types.clone()
+            }),
+            ObjectBlock::Array(a) => ObjectBlock::Array(NessaArray { 
+                elements: a.elements.iter().map(Object::deep_clone).collect(), 
+                elem_type: a.elem_type.clone()
+            }),
+            ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(NessaArrayIt { 
+                pos: i.pos, 
+                block: i.block.clone(), 
+                it_type: i.it_type.clone() 
+            }),
+            ObjectBlock::Lambda(l) => ObjectBlock::Lambda(NessaLambda { 
+                loc: l.loc, 
+                args_type: l.args_type.clone(), 
+                ret_type: l.ret_type.clone() 
+            }),
+            ObjectBlock::File(f) => ObjectBlock::File(f.clone()),
+            ObjectBlock::Instance(i) => ObjectBlock::Instance(TypeInstance {
+                id: i.id, 
+                params: i.params.clone(), 
+                attributes: i.attributes.iter().map(Object::deep_clone).collect()
+            }),
+            ObjectBlock::Ref(r) => ObjectBlock::Ref(r.clone()),
+            ObjectBlock::Mut(r) => ObjectBlock::Mut(r.clone()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -309,6 +347,17 @@ impl Object {
 
         res
     }
+    
+    pub fn move_contents_if_ref(&self) -> Object {
+        let res = ObjectBlock::default().to_obj();
+
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) => std::mem::swap(&mut *i.borrow_mut(), &mut *res.inner.borrow_mut()),
+            i => std::mem::swap(i, &mut *res.inner.borrow_mut())
+        };
+
+        res
+    }
 
     pub fn swap_contents(&self, other: &Object) {
         match (&mut *self.inner.borrow_mut(), &mut *other.inner.borrow_mut()) {
@@ -370,42 +419,26 @@ impl Object {
         format!("{:?}", self.inner.borrow())
     }
 
-    pub fn deep_clone(&self) -> Object {
+    pub fn deref_if_ref(&self) -> Object {
         return match &*self.inner.borrow() {
-            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
+            ObjectBlock::Ref(i) |
+            ObjectBlock::Mut(i) => Object::from_inner(i.clone()),
 
-            ObjectBlock::Empty => ObjectBlock::Empty.to_obj(),
-            ObjectBlock::Int(n) => ObjectBlock::Int(n.clone()).to_obj(),
-            ObjectBlock::Float(n) => ObjectBlock::Float(*n).to_obj(),
-            ObjectBlock::Str(s) => ObjectBlock::Str(s.clone()).to_obj(),
-            ObjectBlock::Bool(b) => ObjectBlock::Bool(*b).to_obj(),
-            ObjectBlock::Tuple(t) => ObjectBlock::Tuple(NessaTuple { 
-                elements: t.elements.iter().map(Object::deep_clone).collect(), 
-                elem_types: t.elem_types.clone()
-            }).to_obj(),
-            ObjectBlock::Array(a) => ObjectBlock::Array(NessaArray { 
-                elements: a.elements.iter().map(Object::deep_clone).collect(), 
-                elem_type: a.elem_type.clone()
-            }).to_obj(),
-            ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(NessaArrayIt { 
-                pos: i.pos, 
-                block: i.block.clone(), 
-                it_type: i.it_type.clone() 
-            }).to_obj(),
-            ObjectBlock::Lambda(l) => ObjectBlock::Lambda(NessaLambda { 
-                loc: l.loc, 
-                args_type: l.args_type.clone(), 
-                ret_type: l.ret_type.clone() 
-            }).to_obj(),
-            ObjectBlock::File(f) => ObjectBlock::File(f.clone()).to_obj(),
-            ObjectBlock::Instance(i) => ObjectBlock::Instance(TypeInstance {
-                id: i.id, 
-                params: i.params.clone(), 
-                attributes: i.attributes.iter().map(Object::deep_clone).collect()
-            }).to_obj(),
-            ObjectBlock::Ref(r) => ObjectBlock::Ref(r.clone()).to_obj(),
-            ObjectBlock::Mut(r) => ObjectBlock::Mut(r.clone()).to_obj(),
+            _ => self.clone()
         }
+    }
+
+    pub fn deref_deep_clone(&self) -> Object {
+        return match &*self.inner.borrow() {
+            ObjectBlock::Ref(i) |
+            ObjectBlock::Mut(i) => i.borrow().deep_clone().to_obj(),
+
+            obj => obj.deep_clone().to_obj()
+        }
+    }
+
+    pub fn deep_clone(&self) -> Object {
+        self.inner.borrow().deep_clone().to_obj()
     }
 
     pub fn get_type_id(&self) -> usize {

@@ -643,6 +643,10 @@ impl NessaContext {
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_vars_and_infer(body, args)?;
 
+        if self.optimize {
+            self.optimize(body);
+        }
+
         Ok(())
     }
 }
@@ -653,7 +657,7 @@ impl NessaContext {
     ╘═══════════════════════╛
 */
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CompiledNessaExpr {
     Empty,
     Bool(bool),
@@ -667,11 +671,18 @@ pub enum CompiledNessaExpr {
     Attribute(usize),
     AttributeRef(usize),
     AttributeMut(usize),
+    AttributeCopy(usize),
+    AttributeDeref(usize),
 
     Tuple(usize),
 
     StoreVariable(usize),
     GetVariable(usize),
+    RefVariable(usize),
+    DerefVariable(usize),
+    CopyVariable(usize),
+    MoveVariable(usize),
+    Assign,
     Drop,
 
     Jump(usize),
@@ -686,16 +697,24 @@ pub enum CompiledNessaExpr {
     BinaryOperatorCall(usize, usize, Vec<Type>),
     NaryOperatorCall(usize, usize, Vec<Type>),
 
+    NativeFunctionCallNoRet(usize, usize, Vec<Type>), // No return variants
+    UnaryOperatorCallNoRet(usize, usize, Vec<Type>),
+    BinaryOperatorCallNoRet(usize, usize, Vec<Type>),
+
     // Conversions
-    Copy, Deref, ToFloat,
+    Ref, Mut, Copy, Deref, Demut, Move, ToFloat,
 
     // Arithmetic opcodes
+    Inc, Dec,
     Addi, Addf,
     Subi, Subf,
     Muli, Mulf,
     Divi, Divf,
     Modi, Modf,
     Negi, Negf,
+
+    // Bitwise opcodes
+    NotB, AndB, OrB, XorB, Shr, Shl,
 
     // Comparison opcodes
     Lti, Ltf,
@@ -706,7 +725,9 @@ pub enum CompiledNessaExpr {
     Neqi, Neqf,
 
     // Logical opcodes
-    Not, Or, And,
+    Not, Or, And, Xor,
+    
+    Nand, Nor, // Only via peephole optimization
 
     Halt
 }
@@ -732,7 +753,18 @@ impl CompiledNessaExpr {
             Ltf | Gtf | Lteqf | Gteqf | Eqf | Neqf | Negf |
             Addi | Subi | Muli | Divi | Modi |
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
-            Not | Or | And
+            Not | Or | And | Xor |
+            NotB | AndB | OrB | XorB | Shr | Shl
+        )
+    }
+
+    pub fn needs_no_drop(&self) -> bool {
+        use CompiledNessaExpr::*;
+
+        matches!(
+            self, 
+            Assign |
+            Inc | Dec
         )
     }
 
@@ -762,6 +794,9 @@ impl CompiledNessaExpr {
 
             StoreVariable(to) => format!("{}({})", "StoreVariable".green(), to.to_string().blue()),
             GetVariable(to) => format!("{}({})", "GetVariable".green(), to.to_string().blue()),
+            CopyVariable(to) => format!("{}({})", "CopyVariable".green(), to.to_string().blue()),
+            DerefVariable(to) => format!("{}({})", "DerefVariable".green(), to.to_string().blue()),
+            MoveVariable(to) => format!("{}({})", "MoveVariable".green(), to.to_string().blue()),
 
             Call(to) => format!("{}({})", "Call".green(), to.to_string().blue()),
 
@@ -780,9 +815,18 @@ impl CompiledNessaExpr {
             Attribute(to) => format!("{}({})", "Attribute".green(), to.to_string().blue()),
             AttributeRef(to) => format!("{}({})", "AttributeRef".green(), to.to_string().blue()),
             AttributeMut(to) => format!("{}({})", "AttributeMut".green(), to.to_string().blue()),
+            AttributeCopy(to) => format!("{}({})", "AttributeCopy".green(), to.to_string().blue()),
+            AttributeDeref(to) => format!("{}({})", "AttributeDeref".green(), to.to_string().blue()),
 
             NativeFunctionCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "FunctionCall".green(), 
+                ctx.functions[*id].name.magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            NativeFunctionCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "FunctionCallNoRet".green(), 
                 ctx.functions[*id].name.magenta(), 
                 ov.to_string().blue(), 
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
@@ -795,8 +839,22 @@ impl CompiledNessaExpr {
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
             ),
 
+            UnaryOperatorCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "UnOpCallNoRet".green(), 
+                ctx.unary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
             BinaryOperatorCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "BinOpCall".green(), 
+                ctx.binary_ops[*id].get_repr().magenta(), 
+                ov.to_string().blue(), 
+                args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
+            ),
+
+            BinaryOperatorCallNoRet(id, ov, args) => format!(
+                "{}({}, {}, {{{}}})", "BinOpCallNoRet".green(), 
                 ctx.binary_ops[*id].get_repr().magenta(), 
                 ov.to_string().blue(), 
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
@@ -814,15 +872,16 @@ impl CompiledNessaExpr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
-    pub comment: String
+    pub comment: String,
+    pub var_type: Option<Type>
 }
 
 impl NessaInstruction {
     pub fn to_string(&self, ctx: &NessaContext) -> String {
-        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { "# " }, self.comment)
+        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { " # " }, self.comment)
     }
 }
 
@@ -830,7 +889,8 @@ impl From<CompiledNessaExpr> for NessaInstruction {
     fn from(obj: CompiledNessaExpr) -> NessaInstruction {
         NessaInstruction {
             instruction: obj,
-            comment: String::new()
+            comment: String::new(),
+            var_type: None
         }
     }
 }
@@ -839,7 +899,16 @@ impl NessaInstruction {
     pub fn new(instruction: CompiledNessaExpr, comment: String) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment
+            comment,
+            var_type: None
+        }
+    }
+
+    pub fn new_with_type(instruction: CompiledNessaExpr, comment: String, var_type: Type) -> NessaInstruction {
+        NessaInstruction {
+            instruction,
+            comment,
+            var_type: Some(var_type)
         }
     }
 }
@@ -1612,10 +1681,18 @@ impl NessaContext{
 
                 for i in 0..a.len() {
                     if i == 0 {
-                        lambdas.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), "Lambda expression start".into()));
+                        lambdas.push(NessaInstruction::new_with_type(
+                            CompiledNessaExpr::StoreVariable(i), 
+                            "Lambda expression start".into(),
+                            a[i].1.clone()
+                        ));
 
                     } else {
-                        lambdas.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                        lambdas.push(NessaInstruction::new_with_type(
+                            CompiledNessaExpr::StoreVariable(i), 
+                            String::new(),
+                            a[i].1.clone()
+                        ));
                     }
                 }
 
@@ -1944,10 +2021,18 @@ impl NessaContext{
                                             r.get_name(self)
                                         );
 
-                                        res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i), 
+                                            comment,
+                                            args[i].clone()
+                                        ));
 
                                     } else {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i),
+                                            String::new(),
+                                            args[i].clone()
+                                        ));
                                     }
                                 }
 
@@ -1991,7 +2076,11 @@ impl NessaContext{
                                     format!("op ({}){} -> {}", tp.get_name(self), rep, r.get_name(self))
                                 };
                                 
-                                res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(0), 
+                                    comment,
+                                    args[0].clone()
+                                ));
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
@@ -2026,8 +2115,17 @@ impl NessaContext{
 
                                 let comment = format!("op ({}) {} ({}) -> {}", t1.get_name(self), rep, t2.get_name(self), r.get_name(self));
 
-                                res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(0), comment));
-                                res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(1)));
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(0), 
+                                    comment,
+                                    args[0].clone()
+                                ));
+
+                                res.push(NessaInstruction::new_with_type(
+                                    CompiledNessaExpr::StoreVariable(1),
+                                    String::new(),
+                                    args[1].clone()
+                                ));
     
                                 // Substitute type parameters if it is necessary
                                 if ov.is_empty() {
@@ -2076,10 +2174,18 @@ impl NessaContext{
                                             r.get_name(self)
                                         );
     
-                                        res.push(NessaInstruction::new(CompiledNessaExpr::StoreVariable(i), comment));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i), 
+                                            comment,
+                                            args[0].clone()
+                                        ));
     
                                     } else {
-                                        res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(i)));
+                                        res.push(NessaInstruction::new_with_type(
+                                            CompiledNessaExpr::StoreVariable(i),
+                                            String::new(),
+                                            args[i].clone()
+                                        ));
                                     }
                                 }
     
@@ -2162,10 +2268,14 @@ impl NessaContext{
                 let b_t = self.infer_type(b)?;
 
                 let ov_id = self.cache.overloads.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())).unwrap();
-                let mut offset = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+                let (opcode, mut offset) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)).unwrap_or((CompiledNessaExpr::Halt, 0));
 
                 if (*id == AND_BINOP_ID || *id == OR_BINOP_ID) && *a_t.deref_type() == BOOL && *b_t.deref_type() == BOOL {
                     offset += 1;
+                }
+
+                if root && opcode.needs_no_drop() {
+                    *root_counter -= 1; // No drop for Assign
                 }
 
                 Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1 + offset)
@@ -2215,7 +2325,11 @@ impl NessaContext{
                 let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
-                let offset = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+                let (opcode, offset) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).unwrap_or((CompiledNessaExpr::Halt, 0));
+
+                if root && opcode.needs_no_drop() {
+                    *root_counter -= 1; // No drop for Inc
+                }
 
                 Ok(self.compiled_form_body_size(a, false)? + 1 + offset)
             }, 
@@ -2369,9 +2483,13 @@ impl NessaContext{
                 Ok(res)
             }, 
 
-            NessaExpr::CompiledVariableDefinition(_, id, _, _, e) | NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
+            NessaExpr::CompiledVariableDefinition(_, id, _, t, e) | NessaExpr::CompiledVariableAssignment(_, id, _, t, e) => {
                 let mut res = self.compiled_form_expr(e, lambda_positions, false)?;
-                res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*id)));
+                res.push(NessaInstruction::new_with_type(
+                    CompiledNessaExpr::StoreVariable(*id),
+                    String::new(),
+                    t.clone()
+                ));
 
                 Ok(res)
             },
@@ -2426,6 +2544,7 @@ impl NessaContext{
                 // Short circuit
                 let mut short_circuit = false;
                 let mut short_circuit_on = true;
+                let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())) {
                     res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos));
@@ -2437,6 +2556,8 @@ impl NessaContext{
                     }
 
                     if let Some((opcode, _)) = self.cache.opcodes.binary.get_checked(&(*id, ov_id)) {
+                        translated_opcode = opcode.clone();
+
                         // Deref if necessary
                         if opcode.needs_deref() {
                             if a_t.is_ref() {
@@ -2487,7 +2608,7 @@ impl NessaContext{
 
                 res.push(res_op);    
 
-                if root { // Drop if the return value is unused
+                if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 
@@ -2685,6 +2806,7 @@ impl NessaContext{
                 let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
+                let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
@@ -2697,13 +2819,15 @@ impl NessaContext{
                         _ => opcode
                     };
 
+                    translated_opcode = opcode.clone();
+
                     res.push(NessaInstruction::from(opcode));
 
                 } else {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
                 }
 
-                if root { // Drop if the return value is unused
+                if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 

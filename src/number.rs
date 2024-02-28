@@ -39,6 +39,11 @@ static BITS_PER_LIMB: u64 = 64;
     ╚════════════════════════════╝
 */
 
+lazy_static! {
+    pub static ref ZERO: Integer = Integer::from(0);
+    pub static ref ONE: Integer = Integer::from(1);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Integer{
     pub negative: bool,
@@ -1084,6 +1089,14 @@ impl Integer {
             negative,
             limbs
         }
+    }
+
+    pub fn is_positive_power_of_two(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0].is_power_of_two()
+    }
+
+    pub fn bit_idx(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0].is_power_of_two()
     }
 
     pub fn is_valid_index(&self) -> bool {

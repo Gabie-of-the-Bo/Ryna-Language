@@ -552,7 +552,12 @@ impl NessaContext {
                 Inc => nessa_instruction!("Inc", {
                     let a = stack.pop().unwrap();
                     *a.deref::<Integer>() += &*ONE;
+                    ip += 1;
+                }),
 
+                Dec => nessa_instruction!("Dec", {
+                    let a = stack.pop().unwrap();
+                    *a.deref::<Integer>() -= &*ONE;
                     ip += 1;
                 }),
 

@@ -702,7 +702,7 @@ pub enum CompiledNessaExpr {
     Ref, Mut, Copy, Deref, Demut, Move, ToFloat,
 
     // Arithmetic opcodes
-    Inc,
+    Inc, Dec,
     Addi, Addf,
     Subi, Subf,
     Muli, Mulf,
@@ -752,6 +752,16 @@ impl CompiledNessaExpr {
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
             Not | Or | And | Xor |
             NotB | AndB | OrB | XorB | Shr | Shl
+        )
+    }
+
+    pub fn needs_no_drop(&self) -> bool {
+        use CompiledNessaExpr::*;
+
+        matches!(
+            self, 
+            Assign |
+            Inc | Dec
         )
     }
 
@@ -2261,7 +2271,7 @@ impl NessaContext{
                     offset += 1;
                 }
 
-                if root && opcode == CompiledNessaExpr::Assign {
+                if root && opcode.needs_no_drop() {
                     *root_counter -= 1; // No drop for Assign
                 }
 
@@ -2314,7 +2324,7 @@ impl NessaContext{
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
                 let (opcode, offset) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).unwrap_or((CompiledNessaExpr::Halt, 0));
 
-                if root && opcode == CompiledNessaExpr::Inc {
+                if root && opcode.needs_no_drop() {
                     *root_counter -= 1; // No drop for Inc
                 }
 
@@ -2595,7 +2605,7 @@ impl NessaContext{
 
                 res.push(res_op);    
 
-                if root && translated_opcode != CompiledNessaExpr::Assign { // Drop if the return value is unused
+                if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 
@@ -2814,7 +2824,7 @@ impl NessaContext{
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
                 }
 
-                if root && translated_opcode != CompiledNessaExpr::Inc { // Drop if the return value is unused
+                if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 

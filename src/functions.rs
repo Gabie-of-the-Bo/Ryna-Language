@@ -1005,6 +1005,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         }
     ).unwrap();
 
+    let idx = ctx.define_function("dec".into()).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
+        *v[0].deref::<Integer>() -= &*ONE;
+
+        Ok(Object::empty())
+    }).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

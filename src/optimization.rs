@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID}, parser::NessaExpr, types::INT};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::NessaExpr, types::INT};
 
 /*
     ╒═══════════════════════════╕
@@ -238,7 +238,7 @@ impl NessaContext {
                 let t_a = self.infer_type(a).unwrap();
                 let t_b = self.infer_type(b).unwrap();
 
-                // Introduce increments
+                // Introduce increments and decrements
                 if *id == ASSIGN_BINOP_ID && t_a == INT.to_mut() && t_b == INT {
                     if let NessaExpr::BinaryOperation(_, ADD_BINOP_ID, _, a_inner, b_inner) = &**b {
                         if a_inner == a {
@@ -247,6 +247,23 @@ impl NessaContext {
                                     *expr = NessaExpr::FunctionCall(
                                         l.clone(), 
                                         self.get_function_id("inc".into()).unwrap(), 
+                                        vec!(), 
+                                        vec!(*a.clone())
+                                    );
+
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
+                    if let NessaExpr::BinaryOperation(_, SUB_BINOP_ID, _, a_inner, b_inner) = &**b {
+                        if a_inner == a {
+                            if let NessaExpr::Literal(_, obj) = &**b_inner {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
+                                    *expr = NessaExpr::FunctionCall(
+                                        l.clone(), 
+                                        self.get_function_id("dec".into()).unwrap(), 
                                         vec!(), 
                                         vec!(*a.clone())
                                     );

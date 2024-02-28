@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use seq_macro::seq;
 
+use crate::number::ONE;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
 use crate::math::rand_f64;
@@ -99,7 +100,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
-        *v[0].deref::<Integer>() += Integer::from(1);
+        *v[0].deref::<Integer>() += &*ONE;
 
         Ok(Object::empty())
     }).unwrap();

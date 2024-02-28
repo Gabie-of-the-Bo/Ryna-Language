@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::nessa_warning;
-use crate::number::Integer;
+use crate::number::{Integer, ONE};
 use crate::types::Type;
 use crate::object::{Object, TypeInstance};
 use crate::context::NessaContext;
@@ -546,6 +546,13 @@ impl NessaContext {
                 Move => nessa_instruction!("Move", {
                     let a = stack.pop().unwrap();
                     stack.push(a.move_contents());
+                    ip += 1;
+                }),
+
+                Inc => nessa_instruction!("Inc", {
+                    let a = stack.pop().unwrap();
+                    *a.deref::<Integer>() += &*ONE;
+
                     ip += 1;
                 }),
 

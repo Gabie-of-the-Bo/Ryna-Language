@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, operations::DEREF_UNOP_ID, parser::NessaExpr};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID}, parser::NessaExpr, types::INT};
 
 /*
     ╒═══════════════════════════╕
@@ -206,8 +206,145 @@ impl NessaContext {
         }
     }
 
+    pub fn strength_reduction_expr(&self, expr: &mut NessaExpr) {
+        match expr {
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
+
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.strength_reduction_expr(e);
+                }
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) |
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.strength_reduction_expr(c);
+
+                for e in exprs {
+                    self.strength_reduction_expr(e);
+                }
+            },
+
+            NessaExpr::BinaryOperation(l, id, _, a, b) => {
+                self.strength_reduction_expr(a);
+                self.strength_reduction_expr(b);
+
+                let t_a = self.infer_type(a).unwrap();
+                let t_b = self.infer_type(b).unwrap();
+
+                // Introduce increments
+                if *id == ASSIGN_BINOP_ID && t_a == INT.to_mut() && t_b == INT {
+                    if let NessaExpr::BinaryOperation(_, ADD_BINOP_ID, _, a_inner, b_inner) = &**b {
+                        if a_inner == a {
+                            if let NessaExpr::Literal(_, obj) = &**b_inner {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
+                                    *expr = NessaExpr::FunctionCall(
+                                        l.clone(), 
+                                        self.get_function_id("inc".into()).unwrap(), 
+                                        vec!(), 
+                                        vec!(*a.clone())
+                                    );
+
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Change multiplications for shifts when applicable
+                if *id == MUL_BINOP_ID && *t_a.deref_type() == INT && *t_b.deref_type() == INT {
+                    if let NessaExpr::Literal(_, obj) = &**a {
+                        if obj.get_type() == INT && obj.get::<Integer>().is_positive_power_of_two() {
+                            let shift = u64::BITS - obj.get::<Integer>().limbs[0].leading_zeros();
+
+                            *expr = NessaExpr::BinaryOperation(
+                                l.clone(),
+                                SHL_BINOP_ID, 
+                                vec!(), 
+                                b.clone(), 
+                                Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
+                            );
+
+                            return;
+                        }
+                    }
+                    
+                    if let NessaExpr::Literal(_, obj) = &**b {
+                        if obj.get_type() == INT && obj.get::<Integer>().is_positive_power_of_two() {
+                            let shift = u64::BITS - obj.get::<Integer>().limbs[0].leading_zeros();
+
+                            *expr = NessaExpr::BinaryOperation(
+                                l.clone(),
+                                SHL_BINOP_ID, 
+                                vec!(), 
+                                a.clone(), 
+                                Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
+                            );
+
+                            return;
+                        }
+                    }
+                }
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.strength_reduction_expr(ic);
+                
+                for e in ib {
+                    self.strength_reduction_expr(e);
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.strength_reduction_expr(ei_h);
+                    
+                    for e in ei_b {
+                        self.strength_reduction_expr(e);
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.strength_reduction_expr(e);
+                    }
+                }
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    pub fn strength_reduction(&self, body: &mut Vec<NessaExpr>) {
+        for i in body {
+            self.strength_reduction_expr(i);
+        } 
+    }
+
     pub fn optimize(&self, body: &mut Vec<NessaExpr>) {
         self.insert_moves(body);
+        self.strength_reduction(body);
     }
 }
 

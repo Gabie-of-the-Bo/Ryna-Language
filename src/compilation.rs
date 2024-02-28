@@ -702,6 +702,7 @@ pub enum CompiledNessaExpr {
     Ref, Mut, Copy, Deref, Demut, Move, ToFloat,
 
     // Arithmetic opcodes
+    Inc,
     Addi, Addf,
     Subi, Subf,
     Muli, Mulf,
@@ -2311,7 +2312,11 @@ impl NessaContext{
                 let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
-                let offset = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).map(|i| i.1).unwrap_or(0);
+                let (opcode, offset) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)).unwrap_or((CompiledNessaExpr::Halt, 0));
+
+                if root && opcode == CompiledNessaExpr::Inc {
+                    *root_counter -= 1; // No drop for Inc
+                }
 
                 Ok(self.compiled_form_body_size(a, false)? + 1 + offset)
             }, 
@@ -2788,6 +2793,7 @@ impl NessaContext{
                 let args_types = a.iter().map(|i| self.infer_type(i)).collect::<Result<Vec<_>, _>>()?;
                 
                 let ov_id = self.cache.overloads.functions.get_checked(&(*id, args_types.clone(), t.clone())).unwrap();
+                let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
@@ -2800,13 +2806,15 @@ impl NessaContext{
                         _ => opcode
                     };
 
+                    translated_opcode = opcode.clone();
+
                     res.push(NessaInstruction::from(opcode));
 
                 } else {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
                 }
 
-                if root { // Drop if the return value is unused
+                if root && translated_opcode != CompiledNessaExpr::Inc { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 

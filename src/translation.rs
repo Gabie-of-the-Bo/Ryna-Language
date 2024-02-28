@@ -131,6 +131,9 @@ pub fn load_optimized_fn_opcodes(ctx: &mut NessaContext) {
 
     let mut_id = ctx.get_function_id("mut".into()).unwrap();
     ctx.cache.opcodes.functions.insert((mut_id, 0), (Mut, 0));
+
+    let inc_id = ctx.get_function_id("inc".into()).unwrap();
+    ctx.cache.opcodes.functions.insert((inc_id, 0), (Inc, 0));
 }
 
 pub fn load_optimized_opcodes(ctx: &mut NessaContext) {

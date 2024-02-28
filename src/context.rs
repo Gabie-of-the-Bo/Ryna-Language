@@ -49,6 +49,8 @@ pub struct NessaContext {
 
     pub cache: NessaCache,
 
+    pub optimize: bool,
+    
     pub module_path: String,
     pub captured_output: RefCell<String>,
     pub program_input: Vec<String>

@@ -642,7 +642,10 @@ impl NessaContext {
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_vars_and_infer(body, args)?;
-        self.optimize(body);
+
+        if self.optimize {
+            self.optimize(body);
+        }
 
         Ok(())
     }

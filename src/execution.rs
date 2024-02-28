@@ -23,7 +23,10 @@ use crate::compilation::{CompiledNessaExpr, NessaError};
 impl NessaContext {
     pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<ExecutionInfo, NessaError> {
         let mut compiled_code = self.parse_and_compile(code)?;
-        self.optimize_instructions(&mut compiled_code);
+
+        if self.optimize {
+            self.optimize_instructions(&mut compiled_code);
+        }
 
         for (idx, i) in compiled_code.iter().enumerate() {
             println!("{:<3} {}", idx, i.to_string(self));
@@ -32,7 +35,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -64,7 +67,7 @@ impl NessaContext {
             Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path, all_modules, file_cache) {
+        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
                 Ok(mut instr) => {                    
                     if no_macro {
@@ -77,7 +80,10 @@ impl NessaContext {
 
                     ctx.program_input = program_input.to_vec();
 
-                    ctx.optimize_instructions(&mut instr);
+                    if optimize {
+                        ctx.optimize_instructions(&mut instr);
+                    }
+
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
 
@@ -88,8 +94,8 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
-        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, program_input)
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, program_input)
     }
 }
 

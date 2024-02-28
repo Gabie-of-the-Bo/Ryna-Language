@@ -1,4 +1,4 @@
-use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, OR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID}};
+use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, ANDB_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, ORB_BINOP_ID, OR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID}};
 
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
@@ -41,15 +41,17 @@ fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledNessaExpr>>(ctx: &mu
 pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
     use CompiledNessaExpr::*;
 
-    // Arithmetic
+    // Arithmetic and Bitwise
     let ids = [
         ADD_BINOP_ID, SUB_BINOP_ID, MUL_BINOP_ID, DIV_BINOP_ID, MOD_BINOP_ID,
-        LT_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, GTEQ_BINOP_ID, EQ_BINOP_ID, NEQ_BINOP_ID
+        LT_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, GTEQ_BINOP_ID, EQ_BINOP_ID, NEQ_BINOP_ID,
+        ANDB_BINOP_ID, ORB_BINOP_ID, XOR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID
     ];
 
     let opcodes = [
         (Addi, Addf), (Subi, Subf), (Muli, Mulf), (Divi, Divf), (Modi, Modf),
-        (Lti, Ltf), (Gti, Gtf), (Lteqi, Lteqf), (Gteqi, Gteqf), (Eqi, Eqf), (Neqi, Neqf)
+        (Lti, Ltf), (Gti, Gtf), (Lteqi, Lteqf), (Gteqi, Gteqf), (Eqi, Eqf), (Neqi, Neqf),
+        (AndB, Halt), (OrB, Halt), (XorB, Halt), (Shl, Halt), (Shr, Halt)
     ];
 
     for (id, (i_opcode, f_opcode)) in ids.iter().zip(opcodes) {
@@ -85,8 +87,8 @@ pub fn load_optimized_unop_opcodes(ctx: &mut NessaContext) {
     ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 0), (Copy, 0));
     ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 1), (Copy, 0));
 
-    let ids = [NEG_UNOP_ID];
-    let opcodes = [(Negi, Negf)];
+    let ids = [NEG_UNOP_ID, NOT_UNOP_ID];
+    let opcodes = [(Negi, Negf), (NotB, Halt)];
 
     for (id, (i_opcode, f_opcode)) in ids.iter().zip(opcodes) {
         load_unop_opcodes(ctx, *id, |a| {

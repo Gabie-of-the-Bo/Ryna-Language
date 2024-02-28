@@ -709,6 +709,9 @@ pub enum CompiledNessaExpr {
     Modi, Modf,
     Negi, Negf,
 
+    // Bitwise opcodes
+    NotB, AndB, OrB, XorB, Shr, Shl,
+
     // Comparison opcodes
     Lti, Ltf,
     Gti, Gtf,
@@ -746,7 +749,8 @@ impl CompiledNessaExpr {
             Ltf | Gtf | Lteqf | Gteqf | Eqf | Neqf | Negf |
             Addi | Subi | Muli | Divi | Modi |
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
-            Not | Or | And | Xor
+            Not | Or | And | Xor |
+            NotB | AndB | OrB | XorB | Shr | Shl
         )
     }
 

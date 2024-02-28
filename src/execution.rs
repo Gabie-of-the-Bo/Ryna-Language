@@ -562,6 +562,13 @@ impl NessaContext {
                 Modf => bin_op!("Modf", a, b, get, get, f64, a % b),
                 Negf => unary_op!("Negf", a, get, f64, -a),
 
+                NotB => unary_op!("NotB", a, get, Integer, !a),
+                AndB => bin_op!("AndB", a, b, get, get, Integer, a & b),
+                OrB => bin_op!("OrB", a, b, get, get, Integer, a | b),
+                XorB => bin_op!("XorB", a, b, get, get, Integer, a ^ b),
+                Shl => bin_op!("Shl", a, b, get, get, Integer, if b.negative { a >> b.limbs[0] } else { a << b.limbs[0] }),
+                Shr => bin_op!("Shr", a, b, get, get, Integer, if b.negative { a << b.limbs[0] } else { a >> b.limbs[0] }),
+
                 Lti => bin_op!("Lti", a, b, get, get, Integer, a < b),
                 Gti => bin_op!("Gti", a, b, get, get, Integer, a > b),
                 Lteqi => bin_op!("Lteqi", a, b, get, get, Integer, a <= b),

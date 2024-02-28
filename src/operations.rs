@@ -234,6 +234,11 @@ pub const OR_BINOP_ID: usize = 12;
 pub const AND_BINOP_ID: usize = 13;
 pub const XOR_BINOP_ID: usize = 19;
 
+pub const SHR_BINOP_ID: usize = 15;
+pub const SHL_BINOP_ID: usize = 16;
+pub const ANDB_BINOP_ID: usize = 17;
+pub const ORB_BINOP_ID: usize = 18;
+
 pub const ASSIGN_BINOP_ID: usize = 14;
 
 pub const LT_BINOP_PREC: usize = 900;
@@ -367,53 +372,37 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     ctx.define_binary_operator(">>".into(), false, 350).unwrap();
 
     define_binary_native_op_combinations!(ctx, 15, INT, INT, Integer, arg_1, arg_2, {
-        if !arg_2.is_valid_index() {
-            return Err(format!("{} is not a valid shift", arg_2));
-        }
+        if arg_2.negative {
+            arg_1 << arg_2.limbs[0]
 
-        arg_1 >> arg_2.limbs[0]
+        } else {
+            arg_1 >> arg_2.limbs[0]
+        }
     });
 
     ctx.define_binary_operator("<<".into(), false, 360).unwrap();
 
     define_binary_native_op_combinations!(ctx, 16, INT, INT, Integer, arg_1, arg_2, {
-        if !arg_2.is_valid_index() {
-            return Err(format!("{} is not a valid shift", arg_2));
+        if arg_2.negative {
+            arg_1 >> arg_2.limbs[0]
+            
+        } else {
+            arg_1 << arg_2.limbs[0]
         }
-
-        arg_1 << arg_2.limbs[0]
     });
 
     ctx.define_binary_operator("&".into(), false, 370).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 17, INT, INT, Integer, arg_1, arg_2, {
-        if arg_1.negative || arg_2.negative  {
-            return Err(format!("invalid bitwise operands ({} & {})", arg_1, arg_2));
-        }
-
-        arg_1 & arg_2
-    });
+    define_binary_native_op_combinations!(ctx, 17, INT, INT, Integer, arg_1, arg_2, arg_1 & arg_2);
 
     ctx.define_binary_operator("|".into(), false, 380).unwrap();
 
-    define_binary_native_op_combinations!(ctx, 18, INT, INT, Integer, arg_1, arg_2, {
-        if arg_1.negative || arg_2.negative  {
-            return Err(format!("invalid bitwise operands ({} | {})", arg_1, arg_2));
-        }
-
-        arg_1 | arg_2
-    });
+    define_binary_native_op_combinations!(ctx, 18, INT, INT, Integer, arg_1, arg_2, arg_1 | arg_2);
 
     ctx.define_binary_operator("^".into(), false, 390).unwrap();
 
     define_binary_native_op_combinations!(ctx, 19, BOOL, BOOL, bool, arg_1, arg_2, *arg_1 ^ *arg_2);
-    define_binary_native_op_combinations!(ctx, 19, INT, INT, Integer, arg_1, arg_2, {
-        if arg_1.negative || arg_2.negative  {
-            return Err(format!("invalid bitwise operands ({} ^ {})", arg_1, arg_2));
-        }
-
-        arg_1 ^ arg_2
-    });
+    define_binary_native_op_combinations!(ctx, 19, INT, INT, Integer, arg_1, arg_2, arg_1 ^ arg_2);
 }
 
 macro_rules! idx_op_definition {

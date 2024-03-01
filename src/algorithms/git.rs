@@ -11,7 +11,7 @@ pub fn install_repo(repo_url: &str, pack_name: &str) -> Result<(), String> {
     let name_regex = Regex::new(NAME_REGEX).unwrap();
 
     if !name_regex.is_match(pack_name) {
-        return Err(format!("Pack name contains invalid characters"));
+        return Err("Pack name contains invalid characters".to_string());
     }
 
     let path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
@@ -20,7 +20,7 @@ pub fn install_repo(repo_url: &str, pack_name: &str) -> Result<(), String> {
         return Err(format!("pack name \"{}\" is already taken", pack_name));
     }
 
-    match RepoBuilder::new().clone(&repo_url, &path) {
+    match RepoBuilder::new().clone(repo_url, &path) {
         Ok(_) => Ok(()),
         Err(_) => {
             Err(format!("Unable to download library pack from {}", repo_url))
@@ -32,7 +32,7 @@ pub fn uninstall_repo(pack_name: &str) -> Result<(), String> {
     let name_regex = Regex::new(NAME_REGEX).unwrap();
 
     if !name_regex.is_match(pack_name) {
-        return Err(format!("Pack name contains invalid characters"));
+        return Err("Pack name contains invalid characters".to_string());
     }
 
     let path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);

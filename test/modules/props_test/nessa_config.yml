@@ -1,10 +1,10 @@
 ---
 module_name: props_test
-version: "0.1.0"
+version: 0.1.0
 hash: 3cc98be0790fd4f5e93762df098bf0de
 module_paths:
   - test/lib
 modules:
   num_props:
     path: "test\\lib\\num_props"
-    version: "0.1.0"
+    version: 0.1.0

@@ -7,7 +7,7 @@ fn hash(n: Int) -> Int {
 }
 
 fn hash(n: Bool) -> Int {
-    if *n {
+    if n {
         return 1;
     }
 

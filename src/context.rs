@@ -49,6 +49,8 @@ pub struct NessaContext {
 
     pub cache: NessaCache,
 
+    pub optimize: bool,
+    
     pub module_path: String,
     pub captured_output: RefCell<String>,
     pub program_input: Vec<String>
@@ -506,6 +508,34 @@ impl NessaContext {
 }
 
 /*
+                                                  ╒════════════════╕
+    ============================================= │  STANDARD CTX  │ =============================================
+                                                  ╘════════════════╛
+*/
+
+pub const NUM_STD_TYPES: usize = 6;
+pub const NUM_STD_INT_IMPL: usize = 8;
+
+pub fn standard_ctx() -> NessaContext {
+    let mut ctx = NessaContext::default();
+
+    standard_types(&mut ctx);
+    standard_interfaces(&mut ctx);
+
+    standard_unary_operations(&mut ctx);
+    standard_binary_operations(&mut ctx);
+    standard_nary_operations(&mut ctx);
+
+    standard_functions(&mut ctx);
+
+    load_optimized_opcodes(&mut ctx);
+
+    ctx.variables = vec!(Object::no_value(); 1000); // 1000 variables by default
+
+    ctx
+}
+
+/*
                                                   ╒═════════╕
     ============================================= │  TESTS  │ =============================================
                                                   ╘═════════╛
@@ -608,32 +638,4 @@ mod tests {
         assert!(def_1.is_ok());
         assert!(def_2.is_err());
     }
-}
-
-/*
-                                                  ╒════════════════╕
-    ============================================= │  STANDARD CTX  │ =============================================
-                                                  ╘════════════════╛
-*/
-
-pub const NUM_STD_TYPES: usize = 6;
-pub const NUM_STD_INT_IMPL: usize = 8;
-
-pub fn standard_ctx() -> NessaContext {
-    let mut ctx = NessaContext::default();
-
-    standard_types(&mut ctx);
-    standard_interfaces(&mut ctx);
-
-    standard_unary_operations(&mut ctx);
-    standard_binary_operations(&mut ctx);
-    standard_nary_operations(&mut ctx);
-
-    standard_functions(&mut ctx);
-
-    load_optimized_opcodes(&mut ctx);
-
-    ctx.variables = vec!(Object::no_value(); 1000); // 1000 variables by default
-
-    ctx
 }

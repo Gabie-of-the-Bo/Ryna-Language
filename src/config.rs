@@ -23,7 +23,10 @@ const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModuleInfo {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub path: String,
+    
     pub version: String,
 
     #[serde(skip)]
@@ -44,7 +47,10 @@ pub struct NessaConfig {
     #[serde(default)]
     pub hash: String,
 
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub module_paths: Vec<String>,
+
     pub modules: HashMap<String, ModuleInfo>
 }
 
@@ -137,12 +143,14 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache) -> Result<NessaModule, NessaError> {
+fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache, optimize: bool) -> Result<NessaModule, NessaError> {
     let (config_yml, imports, main, is_macro) = file_cache.get(path).unwrap();
 
     // Refresh configuration and recompile if it is outdated
     if config_yml.is_outdated() {
         let mut ctx = standard_ctx();
+        
+        ctx.optimize = optimize;
         ctx.module_path = path.clone();
 
         if *is_macro {
@@ -179,7 +187,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
         for dep in &topological_order {
             if *dep.0 != config_yml.module_name && !already_compiled.contains_key(dep) {
                 let module = all_modules.get(dep).unwrap();
-                let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache)?;
+                let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache, optimize)?;
 
                 already_compiled.entry(dep.clone()).or_insert(compiled_module);
             }
@@ -226,8 +234,28 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
     let imports = nessa_module_imports_parser(Span::new(&main)).unwrap().1;
 
+    let mut local_files = glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str())
+        .expect("Error while reading module path")
+        .map(Result::unwrap)
+        .collect::<Vec<_>>();
+
+    local_files.sort();
+
     if macro_code.is_none() {
-        let new_hash = format!("{:x}", compute(&main));
+        let combined_hashes = local_files.iter()
+            .map(std::fs::read_to_string)
+            .map(Result::unwrap)
+            .map(compute)
+            .map(|i| format!("{:x}", i))
+            .collect::<Vec<_>>()
+            .join("");
+
+        let new_hash = if combined_hashes.len() == 32 {
+            combined_hashes
+
+        } else {
+            format!("{:x}", compute(combined_hashes))
+        };
 
         if config_yml.hash != new_hash {
             config_yml.hash = new_hash;
@@ -237,8 +265,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
 
     let norm_mod_path = normalize_path(module_path)?;
 
-    for local_file in glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str()).expect("Error while reading module path") {
-        let path = local_file.unwrap();
+    for path in local_files {
         let full_import_path = normalize_path(&path)?;
         let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
 
@@ -334,8 +361,8 @@ pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -
     Ok((res, file_cache))
 }
 
-pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
-    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache)?;
+pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
+    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache, optimize)?;
 
     module.ctx.precompile_module(&mut module.code)?;
 
@@ -399,7 +426,7 @@ pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
     let sub_path = parse_env_vars_and_normalize(&path_slashes)?;
     
     return match Path::new(&sub_path).canonicalize() {
-        Ok(p) => Ok(p.to_str().unwrap().replace("\\", "/")),
+        Ok(p) => Ok(p.to_str().unwrap().replace('\\', "/")),
         Err(_) => Err(NessaError::module_error(format!(
             "Unable to normalize path: {} (does it exist?)",
             path_slashes.green()
@@ -432,7 +459,7 @@ impl NessaGlobalConfig {
             let config_file_path = config_path.join("config.yml");
     
             if !config_file_path.exists() {
-                std::fs::create_dir_all(&config_path).unwrap();
+                std::fs::create_dir_all(config_path).unwrap();
                 std::fs::write(&config_file_path, "modules_path: \"\"").unwrap();
             }
 
@@ -451,7 +478,7 @@ impl NessaGlobalConfig {
         let yml = serde_yaml::to_string(self).unwrap();
 
         std::fs::write(&self.file_path, yml)
-            .map_err(|_| format!("Unable to save configuration file"))
+            .map_err(|_| "Unable to save configuration file".to_string())
     }
 
     pub fn get(&self, name: &str) -> Option<&str> {

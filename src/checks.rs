@@ -204,7 +204,7 @@ impl NessaContext {
             NessaExpr::FunctionCall(l, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.ambiguity_check(arg)?;
 
                     let t = self.infer_type(arg)?;
@@ -307,7 +307,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.ambiguity_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -347,13 +347,8 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(l, ih, ib, ei, eb) => {
+            NessaExpr::If(_, ih, ib, ei, eb) => {
                 self.ambiguity_check(ih)?;
-                let t = self.infer_type(ih)?;
-
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
-                }
 
                 for line in ib {
                     self.ambiguity_check(line)?;
@@ -361,11 +356,6 @@ impl NessaContext {
 
                 for (ei_h, ei_b) in ei {
                     self.ambiguity_check(ei_h)?;
-                    let t = self.infer_type(ei_h)?;
-
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                    }
 
                     for line in ei_b {
                         self.ambiguity_check(line)?;
@@ -381,13 +371,8 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::While(l, cond, body) => {
+            NessaExpr::While(_, cond, body) => {
                 self.ambiguity_check(cond)?;
-                let t = self.infer_type(cond)?;
-
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));                            
-                }
 
                 for line in body {
                     self.ambiguity_check(line)?;
@@ -727,8 +712,18 @@ impl NessaContext {
             Type::Or(v) |
             Type::And(v) => v.iter().try_for_each(|i| self.check_type_well_formed(i, l)),
 
-            Type::TemplateParam(_, cs) |
-            Type::TemplateParamStr(_, cs) => {
+            Type::TemplateParamStr(n, _) => {
+                Err(NessaError::compiler_error(
+                    format!(
+                        "Template {} is not defined", 
+                        format!("'{}", n).green(),
+                    ), 
+                    l, 
+                    vec!()
+                ))
+            }
+
+            Type::TemplateParam(_, cs) => {
                 for c in cs {
                     let interface = &self.interfaces[c.id];
                     let interface_args = interface.params.len();
@@ -835,7 +830,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.type_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -949,7 +944,7 @@ impl NessaContext {
 
                 let mut arg_types = Vec::with_capacity(args.len());
 
-                for (_, arg) in args.iter().enumerate() {
+                for arg in args.iter() {
                     self.type_check(arg)?;
                     arg_types.push(self.infer_type(arg)?);
                 }
@@ -988,8 +983,8 @@ impl NessaContext {
 
                 let t = self.infer_type(ih)?;
 
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                if *t.deref_type() != BOOL {
+                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in ib {
@@ -1000,8 +995,8 @@ impl NessaContext {
                     self.type_check(ei_h)?;
                     let t = self.infer_type(ei_h)?;
 
-                    if t != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                    if *t.deref_type() != BOOL {
+                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -1032,8 +1027,8 @@ impl NessaContext {
                 self.type_check(cond)?;
                 let t = self.infer_type(cond)?;
 
-                if t != BOOL {
-                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool)", t.get_name(self)), l, vec!()));
+                if *t.deref_type() != BOOL {
+                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in body {
@@ -1316,7 +1311,7 @@ impl NessaContext {
     }
 
     #[allow(clippy::never_loop)] // This seems like an bug in clippy
-    pub fn implicit_syntax_check(&self, name: &String, templates: &Vec<String>, attributes: &[(String, Type)], syntaxes: &Vec<Pattern>) -> Result<(), String> {
+    pub fn implicit_syntax_check(&self, name: &String, templates: &[String], attributes: &[(String, Type)], syntaxes: &Vec<Pattern>) -> Result<(), String> {
         if !syntaxes.is_empty() && !templates.is_empty() {
             return Err("Implicit syntaxes are not allowed when classes have type parameters".to_string())
         }

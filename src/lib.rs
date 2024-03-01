@@ -20,6 +20,7 @@ pub mod macros;
 pub mod inference;
 pub mod checks;
 pub mod compilation;
+pub mod optimization;
 pub mod execution;
 pub mod translation;
 pub mod serialization;
@@ -47,6 +48,9 @@ pub mod id_mapper;
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
 
+#[path = "structures/jump_map.rs"]
+pub mod jump_map;
+
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
@@ -58,6 +62,7 @@ mod integration {
     fn integration_test(file_path: &str) {
         let file = read_to_string(file_path).expect("Unable to locate file");
         let mut ctx = standard_ctx();
+        ctx.optimize = true;
 
         if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
             err.emit();
@@ -74,6 +79,8 @@ mod integration {
 
                 let result = std::panic::catch_unwind(|| {
                     let mut ctx = standard_ctx();
+                    ctx.optimize = true;
+
                     ctx.parse_and_execute_nessa_module(&file)
         
                 }).unwrap_or_else(|err| {
@@ -113,7 +120,7 @@ mod integration {
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
         let (_, all_mods, files) = compute_project_hash(path_str, None).unwrap();
-        let err = precompile_nessa_module_with_config(path_str, all_mods, files);
+        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true);
 
         if let Err(err) = &err {
             err.emit();
@@ -122,7 +129,13 @@ mod integration {
         let (mut ctx, lines) = err.unwrap();
 
         match ctx.compiled_form(&lines) {
-            Ok(code) => {
+            Ok(mut code) => {
+                ctx.optimize_instructions(&mut code);
+
+                for (idx, i) in code.iter().enumerate() {
+                    println!("{:<3} {}", idx, i.to_string(&ctx));
+                }
+
                 if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>()) {
                     err.emit();
                 }

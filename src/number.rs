@@ -39,6 +39,11 @@ static BITS_PER_LIMB: u64 = 64;
     ╚════════════════════════════╝
 */
 
+lazy_static! {
+    pub static ref ZERO: Integer = Integer::from(0);
+    pub static ref ONE: Integer = Integer::from(1);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Integer{
     pub negative: bool,
@@ -232,7 +237,7 @@ impl std::fmt::Display for Integer{
 */
 
 #[inline]
-pub fn comp_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Ordering{
+pub fn comp_limbs(a: &[u64], b: &[u64]) -> Ordering{
     match a.len().cmp(&b.len()) {
         Ordering::Less => return Ordering::Less,
         Ordering::Equal => {},
@@ -428,7 +433,7 @@ fn add_limbs(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 }
 
 #[inline]
-fn add_limbs_offset(a: &mut Vec<u64>, b: &Vec<u64>, offset: usize){
+fn add_limbs_offset(a: &mut Vec<u64>, b: &[u64], offset: usize){
     if a.len() < b.len() + offset{
         a.extend(std::iter::repeat(&0).take((b.len() + offset) - a.len()));
     }
@@ -526,7 +531,7 @@ pub fn mul_limbs(a: &[u64], b: &[u64]) -> Vec<u64>{
 }
 
 #[inline]
-pub fn karatsuba_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+pub fn karatsuba_mul(a: &[u64], b: &[u64]) -> Vec<u64>{
     let shift = a.len().min(b.len()) / 2;
 
     let x0 = a[..shift].to_vec();
@@ -551,7 +556,7 @@ pub fn karatsuba_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 }
 
 #[inline]
-pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+pub fn toom_3_mul(a: &[u64], b: &[u64]) -> Vec<u64>{
     let shift = a.len().min(b.len()) / 3 - 1;
 
     let m0 = a[..shift].to_vec();
@@ -638,10 +643,10 @@ pub fn toom_3_mul(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
     ╘═════════════════════════════════╛
 */
 
-pub fn div_limbs_long(a: &Vec<u64>, b: &Vec<u64>, rem: Option<&mut Vec<u64>>) -> Vec<u64>{
+pub fn div_limbs_long(a: &[u64], b: &[u64], rem: Option<&mut Vec<u64>>) -> Vec<u64>{
     if a.len() < b.len() {
         if let Some(rem_inner) = rem {
-            *rem_inner = a.clone();
+            *rem_inner = a.to_owned();
         }
 
         vec!(0)
@@ -650,7 +655,7 @@ pub fn div_limbs_long(a: &Vec<u64>, b: &Vec<u64>, rem: Option<&mut Vec<u64>>) ->
         match comp_limbs(a, b) {
             Ordering::Less => {
                 if let Some(rem_inner) = rem {
-                    *rem_inner = a.clone();
+                    *rem_inner = a.to_owned();
                 }
 
                 vec!(0)
@@ -665,8 +670,8 @@ pub fn div_limbs_long(a: &Vec<u64>, b: &Vec<u64>, rem: Option<&mut Vec<u64>>) ->
             },
 
             Ordering::Greater => {
-                let mut a_cpy = a.clone();
-                let mut b_cpy = b.clone();
+                let mut a_cpy = a.to_owned();
+                let mut b_cpy = b.to_owned();
 
                 div_limbs_knuthd(&mut a_cpy, &mut b_cpy, rem)
             }
@@ -790,7 +795,7 @@ pub fn div_limbs_digit(a: &[u64], b: &[u64]) -> Vec<u64>{
 */
 
 #[inline]
-fn select_algorithm_and_multiply(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+fn select_algorithm_and_multiply(a: &[u64], b: &[u64]) -> Vec<u64>{
     let min_size = a.len().min(b.len());
 
     if min_size < 50 {
@@ -805,7 +810,7 @@ fn select_algorithm_and_multiply(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 }
 
 #[inline]
-fn select_algorithm_and_divide(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+fn select_algorithm_and_divide(a: &[u64], b: &[u64]) -> Vec<u64>{
     if a.len() == 1 && b.len() == 1 {
         vec!(a[0] / b[0])
 
@@ -821,7 +826,7 @@ fn select_algorithm_and_divide(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
 }
 
 #[inline]
-fn select_algorithm_and_mod(a: &Vec<u64>, b: &Vec<u64>) -> Vec<u64>{
+fn select_algorithm_and_mod(a: &[u64], b: &[u64]) -> Vec<u64>{
     if a.len() == 1 && b.len() == 1 {
         vec!(a[0] % b[0])
 
@@ -1084,6 +1089,14 @@ impl Integer {
             negative,
             limbs
         }
+    }
+
+    pub fn is_positive_power_of_two(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0].is_power_of_two()
+    }
+
+    pub fn bit_idx(&self) -> bool {
+        self.limbs.len() == 1 && !self.negative && self.limbs[0].is_power_of_two()
     }
 
     pub fn is_valid_index(&self) -> bool {

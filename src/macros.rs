@@ -171,7 +171,7 @@ fn sub_vars(code: &str, args: &HashMap<String, Vec<&str>>) -> Result<String, Str
         }
     };
     
-    return replace_all_fallible(&env_var_regex, code, replacement);
+    replace_all_fallible(&env_var_regex, code, replacement)
 }
 
 fn get_var_refs(code: &str) -> Vec<String> {
@@ -256,7 +256,13 @@ impl NessaMacro {
             NessaMacro::Code(code) => {
                 let sub_code = sub_vars(code, args)?;
 
-                let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(ctx.module_path.clone(), Some(sub_code), true, &vec!()).unwrap();
+                let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(
+                    ctx.module_path.clone(), 
+                    Some(sub_code), 
+                    true, 
+                    ctx.optimize,
+                    &[]
+                ).unwrap();
 
                 Ok(ex.captured_output)
             }

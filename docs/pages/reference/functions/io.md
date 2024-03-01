@@ -28,7 +28,7 @@
     </tbody>
 </table>
 
-### create_file
+### get_file
 
 <table>
     <thead>
@@ -39,15 +39,15 @@
     </thead>
     <tbody>
         <tr>
-            <td rowspan="1"> <code>create_file(path: String) -> File</code> </td>
+            <td rowspan="1"> <code>get_file(path: String) -> File</code> </td>
             <td rowspan="1">
-                Create file at <code>path</code> and return it
+                Gets handle for the file located at <code>path</code>
             </td>
         </tr>
     </tbody>
 </table>
 
-### open_file
+### open
 
 <table>
     <thead>
@@ -58,15 +58,15 @@
     </thead>
     <tbody>
         <tr>
-            <td rowspan="1"> <code>open_file(path: String, r: Bool, w: Bool, a: Bool) -> File</code> </td>
+            <td rowspan="1"> <code>open(file: @File, r: Bool, w: Bool, a: Bool) -> ()</code> </td>
             <td rowspan="1" style="width: 33%;">
-                Open file at <code>path</code> with permissions to read (<code>r</code>), write (<code>w</code>) and append (<code>a</code>) and return it
+                Opens <code>file</code> with permissions to read (<code>r</code>), write (<code>w</code>) and append (<code>a</code>)
             </td>
         </tr>
     </tbody>
 </table>
 
-### remove_file
+### close
 
 <table>
     <thead>
@@ -77,9 +77,47 @@
     </thead>
     <tbody>
         <tr>
-            <td rowspan="1"> <code>remove_file(path: String) -> Bool</code> </td>
+            <td rowspan="1"> <code>close(file: @File) -> ()</code> </td>
+            <td rowspan="1" style="width: 65%;">
+                Closes the handle of the file. You can reuse the handle by using the <code>open</code> function
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### exists
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>exists(file: @File) -> Bool</code> </td>
             <td rowspan="1">
-                Remove file at <code>path</code> and return <code>true</code> if it succeeded
+                returns <code>true</code> if the file exists in the file system
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### delete
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>delete(file: @File) -> Bool</code> </td>
+            <td rowspan="1">
+                Remove <code>file</code> and return <code>true</code> if it succeeded. You can reuse the handle by using the <code>open</code> function
             </td>
         </tr>
     </tbody>

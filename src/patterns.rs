@@ -65,7 +65,8 @@ impl Pattern{
             Pattern::Symbol('L') => value(HashMap::new(), satisfy(|c| c.is_uppercase()))(text),
             Pattern::Symbol('a') => value(HashMap::new(), satisfy(|c| c.is_alphabetic()))(text),
             Pattern::Symbol('A') => value(HashMap::new(), satisfy(|c| c.is_alphanumeric()))(text),
-            Pattern::Symbol('s') => value(HashMap::new(), satisfy(|c| c.is_whitespace()))(text),
+            Pattern::Symbol('s') => value(HashMap::new(), empty0)(text),
+            Pattern::Symbol('S') => value(HashMap::new(), empty1)(text),
             Pattern::Symbol('q') => value(HashMap::new(), satisfy(|c| c == '\''))(text),
             Pattern::Symbol(_) => unreachable!(),
 

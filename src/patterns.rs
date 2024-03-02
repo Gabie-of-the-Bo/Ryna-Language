@@ -26,7 +26,7 @@ pub enum Pattern{
     // Tail patterns
     Str(String),
     Range(char, char),
-    Symbol(char), // Digit (d), Letter (l/L), Alphabetic (a), Alphanumeric (A), Space (s), quote (q)
+    Symbol(char), // Digit (d), Letter (l/L), Alphabetic (a), Alphanumeric (A), Space (s)
 
     // High level patterns
     Identifier,
@@ -66,7 +66,6 @@ impl Pattern{
             Pattern::Symbol('a') => value(HashMap::new(), satisfy(|c| c.is_alphabetic()))(text),
             Pattern::Symbol('A') => value(HashMap::new(), satisfy(|c| c.is_alphanumeric()))(text),
             Pattern::Symbol('s') => value(HashMap::new(), empty1)(text),
-            Pattern::Symbol('q') => value(HashMap::new(), satisfy(|c| c == '\''))(text),
             Pattern::Symbol(_) => unreachable!(),
 
             Pattern::Range(a, b) => value(HashMap::new(), satisfy(|c| c >= *a && c <= *b))(text),

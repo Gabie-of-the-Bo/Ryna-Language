@@ -20,15 +20,14 @@ The following patterns are defined in the current version on *NDL*:
 
 | Name             | Syntax              | Description                                       |
 | ---------------- | ------------------- | ------------------------------------------------- |
-| Text             | `'Text'`            | Matches the text in quotes                        |
+| Text             | `"Text"`            | Matches the text in double quotes                 |
 | Digit            | `d`                 | Matches a digit                                   |
 | Lowercase letter | `l`                 | Matches a lowercase letter                        |
 | Uppercase letter | `L`                 | Matches an uppercase letter                       |
 | Alphabetic       | `a`                 | Matches an alphabetic character                   |
 | Alphanumeric     | `A`                 | Matches an alphanumeric character                 |
-| Space            | `s`                 | Matches a space-like character                    |
-| Quote            | `q`                 | Matches a single quote                            |
-| Range            | `[a-b]`             | Matches a character that is between the two given |
+| Space            | `s`                 | Matches one or more spacing sequences of characters. These include **comments** |
+| Range            | `[a-b]`             | Matches a character that is between the two given characters |
 | Optional         | `[pattern]`         | Matches `pattern` if possible, succeeds anyways   |
 | Or               | `pattern1 | pattern2` | Matches `pattern1` if possible, else matches `pattern2` |
 | And              | `pattern1 pattern2` | Matches `pattern1`, then matches `pattern2`       |
@@ -51,8 +50,8 @@ Here are some examples that may help you to visualize how *NDL* works:
 1{d}
 
 // Simple float syntax
-['-'] 1{d} ['.' 1{d}]
+["-"] 1{d} ["." 1{d}]
 
 // Variable definition
-'let' 1{s} <ident> {s} ':' {s} <type> {s} '=' {s} <expr> {s} ';'
+"let" s <ident> [s] ":" [s] <type> [s] "=" [s] <expr> [s] ";"
 ```

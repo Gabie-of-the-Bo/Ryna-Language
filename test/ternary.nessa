@@ -1,4 +1,4 @@
-syntax ternary_operator from '{' {s} Arg(<expr>, condition) {s} '?' {s} Arg(<expr>, if_true) {s} ':' {s} Arg(<expr>, if_false) {s} '}' {
+syntax ternary_operator from "{" [s] Arg(<expr>, condition) [s] "?" [s] Arg(<expr>, if_true) [s] ":" [s] Arg(<expr>, if_false) [s] "}" {
     {#if } {$condition} {#\{}
         {#return } {$if_true} {#;}
     {#\}}

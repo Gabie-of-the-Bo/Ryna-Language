@@ -31,7 +31,7 @@ Finally, the instructions do the following when executed:
 Since the language is so simple, the NDL pattern that matches a program is the following:
 
 ```
-1{'+' | '-' | '<' | '>' | '[' | ']' | '.' | ','}
+1{"+" | "-" | "<" | ">" | "[" | "]" | "." | ","}
 ```
 
 In this case, we will let the `,` operation as an exercise to the reader, but output will be programmed.
@@ -48,7 +48,7 @@ BF {
 For this, we have to use the following NDL pattern:
 
 ```
-'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | '[' | ']'}, code) '}'
+"BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | "[" | "]"}, code) "}"
 ```
 
 ## Creating the macro
@@ -82,7 +82,7 @@ mem.fill(0);
 Given this, we can begin our macro code pattern like this:
 
 ```
-syntax block embed_bf from 'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | '[' | ']'}, code) '}' {
+syntax block embed_bf from "BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | "[" | "]"}, code) "}" {
     {|        
         // Memory array
         emit("let mem = arr_with_capacity<Int>(1000);");
@@ -184,7 +184,7 @@ fn<T> fill(array: @Array<'T>, value: 'T) -> @Array<'T> {
 }
 
 // Input is not allowed in this example
-syntax block embed_bf from 'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | '[' | ']'}, code) '}' {
+syntax block embed_bf from "BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | "[" | "]"}, code) "}" {
     {|        
         // Memory array
         emit("let mem = arr_with_capacity<Int>(1000);");
@@ -216,7 +216,7 @@ syntax block embed_bf from 'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | 
             } else if i == '[' {
                 emit("while mem[*pt] != 0 {");     // [
             
-            } else if i == ']' {                    // ]
+            } else if i == ']' {                   // ]
                 emit("}");
             }
         }

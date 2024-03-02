@@ -1,6 +1,6 @@
 // Construction syntax
 
-syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
+syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
     {#let res = arr<} {$type} {#>(} {#);\n}
     {@i in $elems} {
         {#res.push(} {$i} {#);\n}
@@ -8,7 +8,7 @@ syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems)
     {#return *res;}
 }
 
-syntax list_comprehension from '[' {' '} Arg(<expr>, map) {' '} 'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '} 'in' {' '} Arg(<expr>, container) {' '} ']' {
+syntax list_comprehension from "[" [s] Arg(<expr>, map) s "for" s Arg(<ident>, it) [s] ":" [s] Arg(<type>, type) s "in" s Arg(<expr>, container) [s] "]" {
     {#let res = arr<} {$type} {#>();\n}
     {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
     {#for _it_ in }{$container}{# \{\n}

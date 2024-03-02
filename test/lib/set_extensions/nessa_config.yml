@@ -1,7 +1,7 @@
 ---
 module_name: set_extensions
 version: 0.1.0
-hash: 740aa5bd8ed2b30017870f8aafee6940
+hash: 16589184f0a6be50d2d390c3cd7654ca
 module_paths:
   - test/lib
 modules:

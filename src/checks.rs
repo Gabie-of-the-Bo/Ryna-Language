@@ -2233,7 +2233,7 @@ mod tests {
         
         let code_str = "
             class Test {
-                syntax from Arg(1{d}, att_1) Arg('true' | 'false', att_2);
+                syntax from Arg(1{d}, att_1) Arg(\"true\" | \"false\", att_2);
 
                 att_1: Int;
                 att_2: Bool;

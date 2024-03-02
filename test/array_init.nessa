@@ -1,8 +1,6 @@
-syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
-    // Initialize an array
+syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
     {#let res = arr<} {$type} {#>(} {#);\n}
     {@i in $elems} {
-        // Create a "push" for each element
         {#res.push(} {$i} {#);\n}
     }
     {#return *res;}

@@ -1,7 +1,7 @@
 ---
 module_name: bf_embed
 version: 0.1.0
-hash: a87f7e758db6dd4f28df9b5a923f4893
+hash: d4c6832bb39e00bf5e04ca0649717313
 module_paths:
   - test/lib
 modules:

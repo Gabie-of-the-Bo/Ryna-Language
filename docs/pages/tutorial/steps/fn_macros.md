@@ -22,7 +22,7 @@ When you define a macro of any kind you can "invoke" it by using the syntax anyw
 macros are internally compiled to a different representation. In the case of function macros, they are converted to lambda expressions:
 
 ```
-syntax macro_name from 'Macro' {
+syntax macro_name from "Macro" {
     {#return 5;}
 }
 
@@ -53,8 +53,8 @@ These are the patterns that you can use inside a macro's body:
 Let's see an example where we try to create a macro to initialize an `Array` statically:
 
 ```
-syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} 
-                                 Arg(<expr>, elems)] ']' {
+syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} 
+                                 Arg(<expr>, elems)] "]" {
     {#let res = arr<} {$type} {#>(} {#);\n}
     {@i in $elems} {
         {#res.push(} {$i} {#);\n}

@@ -330,7 +330,7 @@ pub fn identifier_parser(input: Span<'_>) -> PResult<'_, String> {
     )(input)
 }
 
-fn string_parser(input: Span<'_>) -> PResult<'_, String> {
+pub fn string_parser(input: Span<'_>) -> PResult<'_, String> {
     delimited(
         tag("\""), 
         alt((
@@ -3963,9 +3963,9 @@ mod tests {
         }";
 
         let sync_lists_str = "class SyncLists<K, V> {
-            syntax from 'test';
+            syntax from \"test\";
             syntax from [[a-h] | d];
-            syntax from Arg(['-'], Sign) Arg(1{d}, Int) ['.' Arg(1{d}, Dec)];
+            syntax from Arg([\"-\"], Sign) Arg(1{d}, Int) [\".\" Arg(1{d}, Dec)];
 
             from: Array<'K>;
             to: Array<'V>;

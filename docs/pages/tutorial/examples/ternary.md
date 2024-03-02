@@ -20,11 +20,11 @@ sometimes. This can easily be fixed by using delimiters:
 We can represent this syntax using the following *NDL* pattern:
 
 ```
-'{' 
-    {s} Arg(<expr>, condition) {s} '?' 
-    {s} Arg(<expr>, if_true) {s} ':' 
+"{" 
+    {s} Arg(<expr>, condition) {s} "?" 
+    {s} Arg(<expr>, if_true) {s} ":" 
     {s} Arg(<expr>, if_false) {s} 
-'}'
+"}"
 ```
 
 ## Creating the macro

@@ -1,4 +1,4 @@
-syntax expr test from Arg(1{d}, a) 'x' Arg(1{d}, b) {
+syntax expr test from Arg(1{d}, a) "x" Arg(1{d}, b) {
     {|
         import * from math;
 

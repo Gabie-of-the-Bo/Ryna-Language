@@ -17,7 +17,7 @@ Code such as `1 + <some_block_macro>` is not valid Nessa. You need to use expres
 An example of a block macro that creates an early return would be the following:
 
 ```
-syntax block early_return from 'ret#' Arg(1{l}, name) ';' {
+syntax block early_return from "ret#" Arg(1{l}, name) ";" {
     {#if } {$name} {# < 5 \{}
         {#return false;}
     {#\}}

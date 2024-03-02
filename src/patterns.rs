@@ -1,16 +1,11 @@
-use std::collections::{ HashMap, HashSet };
+use std::{cell::RefCell, collections::{ HashMap, HashSet }};
 
 use nom::{
-    combinator::{map, opt, value},
-    bytes::complete::{take_while1, tag},
-    sequence::{tuple, delimited, separated_pair},
-    character::complete::{one_of, satisfy},
-    branch::alt,
-    multi::separated_list1
+    branch::alt, bytes::complete::{tag, take_while1}, character::complete::{one_of, satisfy}, combinator::{cut, map, opt, value}, error::{VerboseError, VerboseErrorKind}, multi::separated_list1, sequence::{delimited, separated_pair, tuple}
 };
 use serde::{Serialize, Deserialize};
 
-use crate::{context::NessaContext, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
+use crate::{context::NessaContext, macros::NessaMacroType, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
 
 /*
                                                   ╒══════════════════╕
@@ -41,7 +36,7 @@ pub enum Pattern{
     Repeat(Box<Pattern>, Option<usize>, Option<usize>)
 }
 
-impl Pattern{
+impl Pattern {
     pub fn get_markers(&self) -> HashSet<String> {
         return match self {
             Pattern::Arg(_, n) => vec!(n.clone()).into_iter().collect(),
@@ -74,7 +69,7 @@ impl Pattern{
             Pattern::Identifier => value(HashMap::new(), identifier_parser)(text),
             Pattern::Type => value(HashMap::new(), |input| ctx.type_parser(input))(text),
             Pattern::Expr => value(HashMap::new(), |input| ctx.nessa_expr_parser(input, cache))(text),
-            Pattern::Ndl => value(HashMap::new(), |input| parse_ndl_pattern(input, true, true))(text),
+            Pattern::Ndl => value(HashMap::new(), |input| parse_ndl_pattern(input, true, true, ctx))(text),
 
             Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
 
@@ -156,10 +151,10 @@ impl Pattern{
     }
 }
 
-fn parse_and(text: Span<'_>, and: bool) -> PResult<'_, Pattern> {
+fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
     return if and {
         map(
-            separated_list1(empty1, |i| parse_ndl_pattern(i, false, false)), 
+            separated_list1(empty1, |i| parse_ndl_pattern(i, false, false, ctx)), 
             |v| if v.len() > 1 { Pattern::And(v) } else { v[0].clone() }
         )(text)
         
@@ -168,10 +163,10 @@ fn parse_and(text: Span<'_>, and: bool) -> PResult<'_, Pattern> {
     }
 }
 
-fn parse_or(text: Span<'_>, or: bool) -> PResult<'_, Pattern> {
+fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
     return if or {
         return map(
-            separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true)), 
+            separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true, ctx)), 
             |v| if v.len() > 1 { Pattern::Or(v) } else { v[0].clone() }
         )(text)
         
@@ -180,38 +175,75 @@ fn parse_or(text: Span<'_>, or: bool) -> PResult<'_, Pattern> {
     }
 }
 
-pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a, Pattern> {
+fn custom_ndl_pattern_parser<'a>(ctx: &NessaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
+    let prev_input = input;
+
+    for (_, mt, p, m) in ctx.macros.iter().filter(|i| i.1 == NessaMacroType::Ndl) {            
+        if let Ok((new_input, args)) = p.extract(input, ctx, cache) {
+            input = new_input;
+
+            match m.expand(&args, ctx) {
+                Ok(code) => {                    
+                    let parsed_code = cut(
+                        |input| parse_ndl_pattern(input, true, true, ctx)
+                    )(Span::new(&code));
+
+                    match parsed_code {
+                        Ok((rest, pattern)) if rest.trim().is_empty() => {
+                            return match mt {
+                                NessaMacroType::Ndl => Ok((input, pattern)),
+                                _ => unreachable!(),
+                            }
+                        },
+
+                        Ok(_) |
+                        Err(nom::Err::Error(_)) |
+                        Err(nom::Err::Failure(_)) => {                                
+                            return Err(nom::Err::Failure(VerboseError { errors: vec!((
+                                prev_input, 
+                                VerboseErrorKind::Context("Error while parsing expanded code")
+                            )) }));
+                        }
+
+                        _ => unreachable!()
+                    }
+                }
+
+                Err(_) => {
+                    return Err(verbose_error(prev_input, "Unable to parse"))
+                }
+            }
+        }
+    }
+
+    return Err(verbose_error(prev_input, "Unable to parse"))
+}
+
+pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
     return alt((
-        |i| parse_or(i, or),
-        |i| parse_and(i, and),
+        |input| custom_ndl_pattern_parser(ctx, input, &RefCell::default()),
+        |i| parse_or(i, or, ctx),
+        |i| parse_and(i, and, ctx),
         map(delimited(tag("["), separated_pair(satisfy(|c| c != '\"'), tag("-"), satisfy(|c| c != '\"')), tag("]")), |(a, b)| Pattern::Range(a, b)),
         map(string_parser, |s: String| Pattern::Str(s.to_string())),
         map(delimited(
             tuple((tag("Arg("), empty0)),
-            separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
+            separated_pair(|i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
             tuple((empty0, tag(")")))
         ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
         map(tuple((
             opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap())),
-            delimited(tuple((tag("{"), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("}")))),
+            delimited(tuple((tag("{"), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag("}")))),
             opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap()))
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
-        map(delimited(tuple((tag("["), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
-        delimited(tuple((tag("("), empty0)), |i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(")")))),
+        map(delimited(tuple((tag("["), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
+        delimited(tuple((tag("("), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag(")")))),
         map(one_of("dlLaAsq"), Pattern::Symbol),
         value(Pattern::Identifier, tag("<ident>")),
         value(Pattern::Type, tag("<type>")),
         value(Pattern::Expr, tag("<expr>")),
-        value(Pattern::Ndl, tag("<NDL>"))
+        value(Pattern::Ndl, tag("<ndl>"))
     ))(text);
-}
-
-impl std::str::FromStr for Pattern{
-    type Err = String;
-
-    fn from_str(string: &str) -> Result<Pattern, Self::Err>{
-        return Ok(parse_ndl_pattern(Span::new(string), true, true).unwrap().1);
-    }
 }
 
 /*
@@ -226,12 +258,18 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::FromIterator;
     
-    use crate::context::standard_ctx;
+    use crate::context::{standard_ctx, NessaContext};
     use crate::parser::{Span, PResult};
     use crate::patterns::Pattern;
 
+    use super::parse_ndl_pattern;
+
     fn ok_result<T>(res: PResult<'_, T>) -> bool {
         res.is_ok() && res.unwrap().0.is_empty()
+    }
+
+    fn parse_pattern(str: &str, ctx: &NessaContext) -> Result<Pattern, ()> {
+        parse_ndl_pattern(Span::new(str), true, true, ctx).map(|i| i.1).map_err(|_| ())
     }
 
     #[test]
@@ -374,28 +412,30 @@ mod tests {
     }
 
     #[test]
-    fn basic_parsing(){
-        let pattern: Pattern = "\"hello\"".parse().expect("Error while parsing pattern");
+    fn basic_parsing() {
+        let ctx = standard_ctx();
+
+        let pattern: Pattern = parse_pattern("\"hello\"", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Str("hello".into()));
 
-        let pattern: Pattern = "[a-z]".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("[a-z]", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Range('a', 'z'));
 
-        let pattern: Pattern = "[\"Test\"]".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("[\"Test\"]", &ctx).expect("Error while parsing pattern");
 
         assert_eq!(pattern, Pattern::Optional(Box::new(Pattern::Str("Test".into()))));
 
-        let pattern: Pattern = "[a-z] | [0-9]".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("[a-z] | [0-9]", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Or(vec!(Pattern::Range('a', 'z'), Pattern::Range('0', '9'))));
 
-        let pattern: Pattern = "[a-z] [0-9]".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("[a-z] [0-9]", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::And(vec!(Pattern::Range('a', 'z'), Pattern::Range('0', '9'))));
 
-        let pattern: Pattern = "Arg([a-z], l)".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("Arg([a-z], l)", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Arg(Box::new(Pattern::Range('a', 'z')), "l".into()));
     }
@@ -460,19 +500,21 @@ mod tests {
 
     #[test]
     fn high_level_pattern_parsing() {
-        let pattern: Pattern = "<ident>".parse().expect("Error while parsing pattern");
+        let ctx = standard_ctx();
+
+        let pattern: Pattern = parse_pattern("<ident>", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Identifier);
 
-        let pattern: Pattern = "<type>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<type>", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Type);
 
-        let pattern: Pattern = "<expr>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<expr>", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Expr);
 
-        let pattern: Pattern = "<NDL>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<ndl>", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Ndl);
     }
@@ -481,14 +523,14 @@ mod tests {
     fn high_level_patterns() {
         let ctx = standard_ctx();
 
-        let pattern: Pattern = "<ident>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<ident>", &ctx).expect("Error while parsing pattern");
         
         assert!(ok_result(pattern.extract("test".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("test2".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("test_3".into(), &ctx, &RefCell::default())));
         assert!(pattern.extract("3test".into(), &ctx, &RefCell::default()).is_err());
 
-        let pattern: Pattern = "<type>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<type>", &ctx).expect("Error while parsing pattern");
         
         assert!(ok_result(pattern.extract("Int".into(), &ctx, &RefCell::default())));
         assert!(ok_result(pattern.extract("'Template".into(), &ctx, &RefCell::default())));
@@ -499,7 +541,7 @@ mod tests {
         assert!(pattern.extract("Test".into(), &ctx, &RefCell::default()).is_err());
         assert!(pattern.extract("+++".into(), &ctx, &RefCell::default()).is_err());
 
-        let pattern: Pattern = "<expr>".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<expr>", &ctx).expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Expr);
 
@@ -516,7 +558,7 @@ mod tests {
     fn number_pattern() {
         let ctx = standard_ctx();
 
-        let str_pattern = "Arg([\"-\"], Sign) Arg(1{d}, Int) [\".\" Arg(1{d}, Dec)]".parse::<Pattern>().unwrap();
+        let str_pattern = parse_pattern("Arg([\"-\"], Sign) Arg(1{d}, Int) [\".\" Arg(1{d}, Dec)]", &ctx).unwrap();
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Arg(
@@ -561,10 +603,41 @@ mod tests {
     }
 
     #[test]
+    fn nested_patterns() {
+        let ctx = standard_ctx();
+
+        let pattern_nonest = Pattern::And(vec!(
+            Pattern::Str("[".into()),
+            Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None),
+            Pattern::Repeat(Box::new(Pattern::And(vec!(
+                Pattern::Str(", ".into()),
+                Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)
+            ))), None, None),
+            Pattern::Str("]".into())
+        ));
+
+        assert!(ok_result(pattern_nonest.extract("[1, 2, 3]".into(), &ctx, &RefCell::default())));
+
+        let pattern_nested = Pattern::And(vec!(
+            Pattern::Str("[".into()),
+            Pattern::And(vec!(
+                Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None),
+                Pattern::Repeat(Box::new(Pattern::And(vec!(
+                    Pattern::Str(", ".into()),
+                    Pattern::Repeat(Box::new(Pattern::Symbol('d')), Some(1), None)
+                ))), None, None)    
+            )),
+            Pattern::Str("]".into())
+        ));
+
+        assert!(ok_result(pattern_nested.extract("[1, 2, 3]".into(), &ctx, &RefCell::default())));
+    }
+
+    #[test]
     fn pattern_grouping() {
         let ctx = standard_ctx();
 
-        let str_pattern = "(l d) | (d d)".parse::<Pattern>().unwrap();
+        let str_pattern = parse_pattern("(l d) | (d d)", &ctx).unwrap();
 
         let u_pattern = Pattern::Or(vec!(
             Pattern::And(vec!(

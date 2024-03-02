@@ -3891,11 +3891,11 @@ impl NessaContext{
     }
 
     pub fn parse_without_precompiling(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
+        self.define_module_macros(code)?;
         self.define_module_operators(code)?;
         self.define_module_classes(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;
-        self.define_module_macros(code)?;
 
         let lines = self.parse_nessa_module(code)?;
 

@@ -1,5 +1,5 @@
 // Invalid if condition
-syntax expr test from Arg(1{d}, a) 'x' Arg(1{d}, b) {
+syntax expr test from Arg(1{d}, a) "x" Arg(1{d}, b) {
     {#let a =} {$a} {#;}
     {#let b =} {$b} {#;}
     {#return a * b;}

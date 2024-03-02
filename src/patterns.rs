@@ -2,7 +2,7 @@ use std::collections::{ HashMap, HashSet };
 
 use nom::{
     combinator::{map, opt, value},
-    bytes::complete::{take_while, take_while1, tag},
+    bytes::complete::{take_while1, tag},
     sequence::{tuple, delimited, separated_pair},
     character::complete::{one_of, satisfy},
     branch::alt,
@@ -10,7 +10,7 @@ use nom::{
 };
 use serde::{Serialize, Deserialize};
 
-use crate::{parser::{Span, verbose_error, PResult, identifier_parser, empty1, empty0, PCache}, context::NessaContext};
+use crate::{context::NessaContext, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
 
 /*
                                                   ╒══════════════════╕
@@ -65,8 +65,7 @@ impl Pattern{
             Pattern::Symbol('L') => value(HashMap::new(), satisfy(|c| c.is_uppercase()))(text),
             Pattern::Symbol('a') => value(HashMap::new(), satisfy(|c| c.is_alphabetic()))(text),
             Pattern::Symbol('A') => value(HashMap::new(), satisfy(|c| c.is_alphanumeric()))(text),
-            Pattern::Symbol('s') => value(HashMap::new(), empty0)(text),
-            Pattern::Symbol('S') => value(HashMap::new(), empty1)(text),
+            Pattern::Symbol('s') => value(HashMap::new(), empty1)(text),
             Pattern::Symbol('q') => value(HashMap::new(), satisfy(|c| c == '\''))(text),
             Pattern::Symbol(_) => unreachable!(),
 
@@ -184,8 +183,8 @@ pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a,
     return alt((
         |i| parse_or(i, or),
         |i| parse_and(i, and),
-        map(delimited(tag("["), separated_pair(satisfy(|c| c != '\''), tag("-"), satisfy(|c| c != '\'')), tag("]")), |(a, b)| Pattern::Range(a, b)),
-        map(delimited(tag("'"), take_while(|c| c != '\''), tag("'")), |s: Span<'a>| Pattern::Str(s.to_string())),
+        map(delimited(tag("["), separated_pair(satisfy(|c| c != '\"'), tag("-"), satisfy(|c| c != '\"')), tag("]")), |(a, b)| Pattern::Range(a, b)),
+        map(string_parser, |s: String| Pattern::Str(s.to_string())),
         map(delimited(
             tuple((tag("Arg("), empty0)),
             separated_pair(|i| parse_ndl_pattern(i, true, true), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
@@ -374,7 +373,7 @@ mod tests {
 
     #[test]
     fn basic_parsing(){
-        let pattern: Pattern = "'hello'".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = "\"hello\"".parse().expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Str("hello".into()));
 
@@ -382,7 +381,7 @@ mod tests {
         
         assert_eq!(pattern, Pattern::Range('a', 'z'));
 
-        let pattern: Pattern = "['Test']".parse().expect("Error while parsing pattern");
+        let pattern: Pattern = "[\"Test\"]".parse().expect("Error while parsing pattern");
 
         assert_eq!(pattern, Pattern::Optional(Box::new(Pattern::Str("Test".into()))));
 
@@ -511,7 +510,7 @@ mod tests {
     fn number_pattern() {
         let ctx = standard_ctx();
 
-        let str_pattern = "Arg(['-'], Sign) Arg(1{d}, Int) ['.' Arg(1{d}, Dec)]".parse::<Pattern>().unwrap();
+        let str_pattern = "Arg([\"-\"], Sign) Arg(1{d}, Int) [\".\" Arg(1{d}, Dec)]".parse::<Pattern>().unwrap();
 
         let u_pattern = Pattern::And(vec!(
             Pattern::Arg(

@@ -32,6 +32,7 @@ pub enum Pattern{
     Identifier,
     Type,
     Expr,
+    Ndl,
 
     // Combination patterns
     Or(Vec<Pattern>),
@@ -73,6 +74,7 @@ impl Pattern{
             Pattern::Identifier => value(HashMap::new(), identifier_parser)(text),
             Pattern::Type => value(HashMap::new(), |input| ctx.type_parser(input))(text),
             Pattern::Expr => value(HashMap::new(), |input| ctx.nessa_expr_parser(input, cache))(text),
+            Pattern::Ndl => value(HashMap::new(), |input| parse_ndl_pattern(input, true, true))(text),
 
             Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
 
@@ -199,7 +201,8 @@ pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool) -> PResult<'a,
         map(one_of("dlLaAsq"), Pattern::Symbol),
         value(Pattern::Identifier, tag("<ident>")),
         value(Pattern::Type, tag("<type>")),
-        value(Pattern::Expr, tag("<expr>"))
+        value(Pattern::Expr, tag("<expr>")),
+        value(Pattern::Ndl, tag("<NDL>"))
     ))(text);
 }
 
@@ -468,6 +471,10 @@ mod tests {
         let pattern: Pattern = "<expr>".parse().expect("Error while parsing pattern");
         
         assert_eq!(pattern, Pattern::Expr);
+
+        let pattern: Pattern = "<NDL>".parse().expect("Error while parsing pattern");
+        
+        assert_eq!(pattern, Pattern::Ndl);
     }
 
     #[test]

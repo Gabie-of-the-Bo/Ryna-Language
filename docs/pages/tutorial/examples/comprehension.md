@@ -24,11 +24,11 @@ This is problematic for us because Nessa is a strongly typed language. We will h
 This can be expressed in *NDL* like this:
 
 ```
-'[' 
-    {' '} Arg(<expr>, map) {' '}                                            // Map expression
-    'for' {' '} Arg(<ident>, it) {' '} ':' {' '} Arg(<type>, type) {' '}    // Element
-    'in' {' '} Arg(<expr>, container) {' '}                                 // Container
-']'
+"[" 
+    [s] Arg(<expr>, map) [s]                                        // Map expression
+    "for" [s] Arg(<ident>, it) [s] ":" [s] Arg(<type>, type) [s]    // Element
+    "in" [s] Arg(<expr>, container) [s]                             // Container
+"]"
 ```
 
 Note that you need `Arg`s to mark the variables that we will use inside the body.

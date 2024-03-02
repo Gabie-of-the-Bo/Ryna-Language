@@ -27,7 +27,7 @@ Lets see a basic example that creates the expression `1 + 1`. In order to do thi
 illustrate how they work. You could use the following:
 
 ```
-syntax expr one_plus_one from 'Example' {
+syntax expr one_plus_one from "Example" {
     {| emit("1 + 1") |}
 }
 
@@ -42,7 +42,7 @@ Of course, this is not very interesting because this macro has no interaction wi
 substitution**. You can substutute the text extracted from a variable in the NDL pattern by using `{$variable_name}` inside the code:
 
 ```
-syntax expr n_plus_m from Arg(1{d}, a) 'plus' Arg(1{d}, a) {
+syntax expr n_plus_m from Arg(1{d}, a) "plus" Arg(1{d}, a) {
     {|
         let a = "{$a}";
         let b = "{$b}";

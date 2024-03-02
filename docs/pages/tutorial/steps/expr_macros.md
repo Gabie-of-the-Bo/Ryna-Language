@@ -1,5 +1,5 @@
 Sometimes you want to use macros to create small code transformations that result in an expression (ie. not an **if-else**, **for**, **while** or definition). 
-For this purpose, you can use the second type of macro that Nessa has: **expression macros**. Let's see how they work.
+For this purpose, you can use the second type of macro that Nessa has: **expression macros**. Let"s see how they work.
 
 ## Syntax
 
@@ -15,7 +15,7 @@ You can see that the syntax is almost the same, but contains the `expr` keyword.
 internally:
 
 ```
-syntax expr double_integer from 'Dbl' Arg(1{d}, n) {
+syntax expr double_integer from "Dbl" Arg(1{d}, n) {
     {$n} {# + } {$n}
 }
 

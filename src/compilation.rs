@@ -530,6 +530,15 @@ impl NessaContext {
                 self.compile_expr_variables(e, registers, var_map)?;
             }
 
+            NessaExpr::DoBlock(_, b, r) => {
+                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!())?;
+
+                // Infer further
+                if *r == Type::InferenceMarker {
+                    *r = self.infer_lambda_return_type(b)?.unwrap_or(Type::Empty);
+                }
+            }
+
             NessaExpr::Lambda(l, a, r, b) => {
                 self.compile(b, a)?;
 
@@ -548,7 +557,7 @@ impl NessaContext {
                 }
                     
                 if let Type::Empty = r {
-                    if NessaContext::ensured_return_check_body(b, l).is_err() {
+                    if NessaContext::ensured_return_check_body(b, l, "Function").is_err() {
                         b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
                     }
                 }
@@ -560,7 +569,7 @@ impl NessaContext {
                 }
                 
                 if let Type::Empty = r {
-                    if NessaContext::ensured_return_check_body(b, l).is_err() {
+                    if NessaContext::ensured_return_check_body(b, l, "Operation").is_err() {
                         b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
                     }
                 }
@@ -572,7 +581,7 @@ impl NessaContext {
                 }
 
                 if let Type::Empty = r {
-                    if NessaContext::ensured_return_check_body(b, l).is_err() {
+                    if NessaContext::ensured_return_check_body(b, l, "Operation").is_err() {
                         b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
                     }
                 }
@@ -584,7 +593,7 @@ impl NessaContext {
                 }
 
                 if let Type::Empty = r {
-                    if NessaContext::ensured_return_check_body(b, l).is_err() {
+                    if NessaContext::ensured_return_check_body(b, l, "Operation").is_err() {
                         b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
                     }
                 }
@@ -599,7 +608,7 @@ impl NessaContext {
                 }
 
                 if let Type::Empty = r {
-                    if NessaContext::ensured_return_check_body(b, l).is_err() {
+                    if NessaContext::ensured_return_check_body(b, l, "Operation").is_err() {
                         b.push(NessaExpr::Return(l.clone(), Box::new(NessaExpr::Literal(l.clone(), Object::empty()))));
                     }
                 }
@@ -1739,6 +1748,7 @@ impl NessaContext{
                 Ok(())
             }
 
+            NessaExpr::DoBlock(_, args, _) |
             NessaExpr::Tuple(_, args) |
             NessaExpr::FunctionCall(_, _, _, args) => self.compile_lambda(args, current_size, lambdas, lambda_positions),
 
@@ -2314,6 +2324,7 @@ impl NessaContext{
                 Ok(self.compiled_form_size(c, false, root_counter)? + self.compiled_form_body_size(b, true)? + 2 + needs_deref as usize)
             },
 
+            DoBlock(_, b, _) |
             Tuple(_, b) => {            
                 *root_counter += root as usize; // Add drop instruction
 
@@ -2457,6 +2468,20 @@ impl NessaContext{
 
                 Ok(res)
             },
+
+            NessaExpr::DoBlock(_, lines, _) => {
+                let mut res = self.compiled_form_body(lines, lambda_positions)?;
+                let length = res.len();
+
+                // Transform returns into relative jumps
+                for (idx, i) in res.iter_mut().enumerate() {
+                    if let CompiledNessaExpr::Return = i.instruction {
+                        i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                    }
+                }
+
+                Ok(res)
+            }
 
             NessaExpr::Tuple(_, e) => {
                 let mut res = vec!();

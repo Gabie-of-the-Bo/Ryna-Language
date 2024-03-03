@@ -281,6 +281,11 @@ mod integration {
     }
 
     #[test]
+    fn do_blocks() {
+        integration_test("test/do_blocks.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

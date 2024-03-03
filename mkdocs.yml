@@ -26,6 +26,8 @@ nav:
       - Functions: 
         - Defining Functions: 'pages/tutorial/steps/def_functions.md'
         - Special Functions: 'pages/tutorial/steps/esp_functions.md'
+        - Lambda Expressions: 'pages/tutorial/steps/lambdas.md'
+        - Do Blocks: 'pages/tutorial/steps/do_blocks.md'
       - Defining Operators: 'pages/tutorial/steps/operators.md'
       - Defining Classes: 'pages/tutorial/steps/classes.md'
       - Defining Interfaces: 'pages/tutorial/steps/interfaces.md'

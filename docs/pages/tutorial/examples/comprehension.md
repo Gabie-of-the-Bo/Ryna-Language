@@ -60,7 +60,7 @@ let array = [i * 2 for i: Int in <Int>[1, 2, 3, 4, 5]]; // [2, 4, 6, 8, 10]
 This would compile to:
 
 ```
-let array = (() = {
+let array = do {
     let res = arr<Int>();
     let func = (i: Int) { i * 2 };
 
@@ -69,7 +69,7 @@ let array = (() = {
     }
 
     return *res;
-})();
+};
 ```
 
 In this example `<Int>[1, 2, 3, 4, 5]` would also be recursively compiled into a new expression based on a lambda expression, but

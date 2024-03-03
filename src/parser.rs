@@ -2,14 +2,14 @@ use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
 use nom::AsChar;
-use nom::bytes::complete::{take_until, take_till};
+use nom::bytes::complete::{tag, take_till, take_until};
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::sequence::preceded;
 use nom::{
     IResult,
     combinator::{map, map_res, opt, eof, value, recognize},
-    bytes::complete::{take_while, take_while1, tag, escaped_transform},
+    bytes::complete::{take_while, take_while1, escaped_transform},
     sequence::{tuple, delimited, terminated},
     branch::alt,
     character::complete::{multispace1, satisfy},
@@ -197,6 +197,7 @@ pub enum NessaExpr {
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
+    Break(Location),
 
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -257,6 +258,7 @@ impl NessaExpr {
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
+            NessaExpr::Break(_) |
             NessaExpr::For(_, _, _, _) |
             NessaExpr::Return(_, _) => false,
 
@@ -1428,6 +1430,20 @@ impl NessaContext {
                 ))
             ),
             |(l, (ih, _, ib, ei, e))| NessaExpr::If(l, Box::new(ih), ib, ei, e)
+        )(input);
+    }
+
+    fn break_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(delimited(
+                empty0, 
+                tag("break"), 
+                tuple((
+                    empty0,
+                    context("Expected ';' at the end of break statement", cut(tag(";")))
+                ))
+            )),
+            |(l, _)| NessaExpr::Break(l)
         )(input);
     }
     
@@ -2648,6 +2664,7 @@ impl NessaContext {
                     |input| self.while_parser(input, cache),
                     |input| self.for_parser(input, cache),
                     |input| self.if_parser(input, cache),
+                    |input| self.break_parser(input),
                     |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
                 )),
                 |i| vec!(i)

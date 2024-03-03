@@ -384,6 +384,7 @@ impl NessaContext {
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
+            NessaExpr::Break(l) |
             NessaExpr::While(l, _, _) |
             NessaExpr::For(l, _, _, _) |
             NessaExpr::Return(l, _) => Err(NessaError::compiler_error(

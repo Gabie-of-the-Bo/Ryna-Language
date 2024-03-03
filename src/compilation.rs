@@ -1674,6 +1674,7 @@ impl NessaContext{
         lambda_positions: &mut HashMap<usize, usize>
     ) -> Result<(), NessaError> {
         return match line {
+            NessaExpr::Break(..) |
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::ClassDefinition(..) |
@@ -2440,6 +2441,12 @@ impl NessaContext{
         root: bool
     ) -> Result<Vec<NessaInstruction>, NessaError> {
         return match expr {
+            NessaExpr::Break(_) => {
+                Ok(vec!(
+                    NessaInstruction::from(CompiledNessaExpr::Halt) // Placeholder
+                ))
+            }
+
             NessaExpr::Literal(_, obj) => {
                 let mut res = NessaContext::compile_literal(obj);
                 
@@ -2741,6 +2748,15 @@ impl NessaContext{
                 // Jump to the beginning of the loop
                 res.push(NessaInstruction::from(beginning_jmp));
 
+                // Transform breaks into relative jumps
+                let length = res.len();
+
+                for (idx, i) in res.iter_mut().enumerate() {
+                    if let CompiledNessaExpr::Halt = i.instruction {
+                        i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                    }
+                }
+
                 Ok(res)
             },
 
@@ -2807,6 +2823,15 @@ impl NessaContext{
 
                     // Jump to the beginning of the loop
                     res.push(NessaInstruction::from(beginning_jmp));
+
+                    // Transform breaks into relative jumps
+                    let length = res.len();
+
+                    for (idx, i) in res.iter_mut().enumerate() {
+                        if let CompiledNessaExpr::Halt = i.instruction {
+                            i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                        }
+                    }
 
                     Ok(res)
 

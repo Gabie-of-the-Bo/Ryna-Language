@@ -64,6 +64,7 @@ impl NessaContext {
 
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), NessaError> {
         match (expr, ret_type) {
+            (NessaExpr::Break(..), _) |
             (NessaExpr::Literal(..), _) |
             (NessaExpr::Tuple(..), _) |
             (NessaExpr::Variable(..), _) |
@@ -185,6 +186,7 @@ impl NessaContext {
 
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
+            NessaExpr::Break(..) |
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -438,6 +440,170 @@ impl NessaContext {
         }
     }
 
+    pub fn break_check(&self, expr: &NessaExpr, allowed: bool) -> Result<(), NessaError> {
+        return match expr {
+            NessaExpr::ClassDefinition(..) |
+            NessaExpr::InterfaceImplementation(..) |
+            NessaExpr::PrefixOperatorDefinition(..) |
+            NessaExpr::PostfixOperatorDefinition(..) |
+            NessaExpr::BinaryOperatorDefinition(..) |
+            NessaExpr::NaryOperatorDefinition(..) |
+            NessaExpr::InterfaceDefinition(..) |
+            NessaExpr::Macro(..) |
+            NessaExpr::Variable(..) |
+            NessaExpr::Literal(..) => Ok(()),
+
+            NessaExpr::Break(..) if allowed => Ok(()),
+            NessaExpr::Break(l) if !allowed => {
+                Err(NessaError::compiler_error("Break statement is not allowed in this context".into(), l, vec!()))
+            }
+
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) => {
+                self.break_check(e, allowed)
+            }
+
+            NessaExpr::Tuple(_, args) => args.iter().try_for_each(|i| self.break_check(i, allowed)),
+            
+            NessaExpr::If(_, i, ib, ei, eb) => {
+                self.break_check(i, allowed)?;
+
+                for i in ib {
+                    self.break_check(i, allowed)?;
+                }
+                
+                for (ei_h, ei_b) in ei {
+                    self.break_check(ei_h, allowed)?;
+
+                    for i in ei_b {
+                        self.break_check(i, allowed)?;
+                    }
+                }
+
+                if let Some(eb_inner) = eb {
+                    for i in eb_inner {
+                        self.break_check(i, allowed)?;
+                    }    
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::DoBlock(_, b, _) => {
+                for i in b {
+                    self.break_check(i, allowed)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::CompiledFor(_, _, _, _, c, b) |
+            NessaExpr::While(_, c, b) => {
+                self.break_check(c, true)?;
+
+                for i in b {
+                    self.break_check(i, true)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::UnaryOperation(_, _, _, e) => {
+                self.break_check(e, allowed)?;
+
+                Ok(())
+            }
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.break_check(a, allowed)?;
+                self.break_check(b, allowed)?;
+
+                Ok(())
+            },
+
+            NessaExpr::NaryOperation(_, _, _, a, args) => {
+                self.break_check(a, allowed)?;
+                
+                for i in args {
+                    self.break_check(i, allowed)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::FunctionCall(_, _, _, args) => {
+                for i in args {
+                    self.break_check(i, allowed)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::Return(_, e) => self.break_check(e, allowed),
+
+            NessaExpr::CompiledLambda(_, _, _, _, b) => {
+                for i in b {
+                    self.break_check(i, false)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::PrefixOperationDefinition(_, _, tm, _, _, _, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.break_check(i, false)?;
+                    }
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::PostfixOperationDefinition(_, _, tm, _, _, _, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.break_check(i, false)?;    
+                    }
+                }
+                
+                Ok(())
+            },
+
+            NessaExpr::BinaryOperationDefinition(_, _, tm, (_, _), (_, _), _, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.break_check(i, false)?;    
+                    }          
+                }
+                
+                Ok(())
+            },
+
+            NessaExpr::NaryOperationDefinition(_, _, tm, (_, _), _, _, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.break_check(i, false)?;    
+                    }
+                }
+                
+                Ok(())
+            },
+
+
+            NessaExpr::FunctionDefinition(_, _, tm, _, _, b) => {
+                if tm.is_empty() {
+                    for i in b {
+                        self.break_check(i, false)?;    
+                    }
+                }
+                
+                Ok(())
+            },
+
+            e => unreachable!("{:?}", e)
+        };
+    }
+
     pub fn invalid_type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -446,6 +612,7 @@ impl NessaContext {
             NessaExpr::NaryOperatorDefinition(..) |
             NessaExpr::InterfaceDefinition(..) |
             NessaExpr::Macro(..) |
+            NessaExpr::Break(..) |
             NessaExpr::Variable(..) |
             NessaExpr::Literal(..) => Ok(()),
 
@@ -825,6 +992,7 @@ impl NessaContext {
 
     pub fn type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
+            NessaExpr::Break(..) |
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
@@ -1968,6 +2136,7 @@ impl NessaContext {
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
+        self.break_check(expr, false)?;
         self.class_check(expr)?;
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;

@@ -52,5 +52,6 @@ let var = do {
 };
 ```
 
-the syntax is self-explanatory and the semantics are the same as a function body, but without calls to any methods. These are the blocks
-that are used to compile **function macros**, but we will take a look at that in a later section. 
+the syntax is self-explanatory and the semantics are the same as a function body, but without calls to any methods. Also, they allow you to access
+the **context above it** (unlike lambdas or regular functions). 
+These are the blocks that are used to compile **function macros**, but we will take a look at that in a later section. 

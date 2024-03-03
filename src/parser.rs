@@ -963,13 +963,7 @@ impl NessaContext {
                                     NessaMacroType::Function => {
                                         Ok((
                                             input, 
-                                            NessaExpr::NaryOperation(
-                                                loc.clone(), 
-                                                CALL_OP, 
-                                                vec!(), 
-                                                Box::new(NessaExpr::Lambda(loc, vec!(), Type::InferenceMarker, lines)),
-                                                vec!()
-                                            )
+                                            NessaExpr::DoBlock(loc.clone(), lines, Type::InferenceMarker)
                                         ))
                                     },
 

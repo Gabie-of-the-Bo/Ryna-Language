@@ -40,6 +40,7 @@ Also, *NDL* has support for some *high level patterns* that make use of complex 
 | Identifier | `<ident>` | Matches an identifier |
 | Type       | `<type>`  | Matches a type        |
 | Expression | `<expr>`  | Matches an expression |
+| NDL        | `<ndl>`   | Matches a NDL pattern |
 
 ## Examples
 

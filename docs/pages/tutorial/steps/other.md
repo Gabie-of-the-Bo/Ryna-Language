@@ -1,4 +1,4 @@
-We have seen the most important building blocks for types in the previous sections, but there aare **three** 
+We have seen the most important building blocks for types in the previous sections, but there are **three** 
 other types that we have to take into account. These might not come out so often, but are relevant nonetheless.
 
 ## Empty type

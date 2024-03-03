@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use colored::Colorize;
 use levenshtein::levenshtein;
 use nom::error::{VerboseErrorKind, VerboseError};
+use rustc_hash::FxHashSet;
 use seq_macro::seq;
 use serde::{Serialize, Deserialize};
 
@@ -2845,16 +2846,21 @@ impl NessaContext{
         return Ok(lines.iter().map(|i| self.compiled_form_expr(i, lambda_positions, true)).flat_map(|i| i.unwrap()).collect());
     }
 
-    pub fn define_module_macro(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
+    pub fn define_module_macro(&mut self, definition: NessaExpr, defined_macros: &mut FxHashSet<Location>) -> Result<bool, NessaError> {
         if let NessaExpr::Macro(l, n, t, p, m) = definition {
-            if self.macros.iter().any(|i| i.0 == n) {
-                return Err(NessaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
-            }
+            if !defined_macros.contains(&l) {
+                if self.macros.iter().any(|i| i.0 == n) {
+                    return Err(NessaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
+                }
+    
+                self.macros.push((n, t, p, m));
+                defined_macros.insert(l.clone());
 
-            self.macros.push((n, t, p, m));
+                return Ok(true);
+            }
         }
 
-        Ok(())
+        Ok(false)
     }
 
     pub fn define_module_class(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
@@ -3071,14 +3077,21 @@ impl NessaContext{
     }
 
     pub fn define_module_macros(&mut self, code: &String) -> Result<(), NessaError> {
-        let ops = self.nessa_macros_parser(Span::new(code));
+        let mut defined_macros = FxHashSet::default();
+        let mut changed = true;
+
+        while changed {
+            changed = false;
+
+            let ops = self.nessa_macros_parser(Span::new(code));
         
-        if let Err(err) = ops {
-            return Err(NessaError::from(err));
-        }
-        
-        for i in ops.unwrap().1 {
-            self.define_module_macro(i)?;
+            if let Err(err) = ops {
+                return Err(NessaError::from(err));
+            }
+            
+            for i in ops.unwrap().1 {
+                changed |= self.define_module_macro(i, &mut defined_macros)?;
+            }
         }
 
         Ok(())
@@ -3545,7 +3558,7 @@ impl NessaContext{
             match line {
                 NessaExpr::Macro(_, n, _, p, _) => {
                     if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
-                        self.define_module_macro(line.clone())?
+                        self.define_module_macro(line.clone(), &mut FxHashSet::default()).map(|_| ())?;
                     }
                 }
 
@@ -3891,11 +3904,11 @@ impl NessaContext{
     }
 
     pub fn parse_without_precompiling(&mut self, code: &String) -> Result<Vec<NessaExpr>, NessaError> {
+        self.define_module_macros(code)?;
         self.define_module_operators(code)?;
         self.define_module_classes(code)?;
         self.define_module_functions(code)?;
         self.define_module_operations(code)?;
-        self.define_module_macros(code)?;
 
         let lines = self.parse_nessa_module(code)?;
 

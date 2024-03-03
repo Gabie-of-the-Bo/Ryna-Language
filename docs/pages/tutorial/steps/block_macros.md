@@ -1,4 +1,4 @@
-The last case we need to show is when your desired macro functionality needs to interact with the current context or when
+Another case we need to show is when your desired macro functionality needs to interact with the current context or when
 you want to encapsulate multiple lines of code inside a single statement. For this purpose, you can use **block macros**.
 
 ## Syntax

@@ -35,6 +35,7 @@ nav:
         - Function Macros: 'pages/tutorial/steps/fn_macros.md'
         - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
+        - NDL Macros: 'pages/tutorial/steps/ndl_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
       - Importing Modules: 'pages/tutorial/steps/imports.md'
     - Learn by example:

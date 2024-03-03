@@ -276,6 +276,11 @@ mod integration {
     }
 
     #[test]
+    fn ndl_macros() {
+        integration_test("test/ndl_macros.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

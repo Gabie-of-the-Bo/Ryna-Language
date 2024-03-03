@@ -57,7 +57,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -951,6 +951,7 @@ impl NessaContext {
                                 )(Span::new(&code))
                             },
                             
+                            NessaMacroType::Ndl |
                             NessaMacroType::Block => unreachable!(),
                         };
                         
@@ -992,6 +993,7 @@ impl NessaContext {
                                         }
                                     },
 
+                                    NessaMacroType::Ndl |
                                     NessaMacroType::Block => unreachable!(),
                                 }
                             },
@@ -1336,12 +1338,13 @@ impl NessaContext {
                     map(terminated(tag("fn"), empty1), |_| NessaMacroType::Function),
                     map(terminated(tag("expr"), empty1), |_| NessaMacroType::Expression),
                     map(terminated(tag("block"), empty1), |_| NessaMacroType::Block),
+                    map(terminated(tag("ndl"), empty1), |_| NessaMacroType::Ndl),
                 ))),
                 context("Expected identifier after 'syntax' in syntax definition", cut(identifier_parser)),
                 empty1,
                 context("Expected 'from' after identifier in syntax definition", cut(tag("from"))),
                 empty1,
-                cut(|input| parse_ndl_pattern(input, true, true)),
+                cut(|input| parse_ndl_pattern(input, true, true, self)),
                 empty0
             )),
             |(_, _, t, n, _, _, _, p, _)| (t.unwrap_or(NessaMacroType::Function), n, p)
@@ -2143,7 +2146,7 @@ impl NessaContext {
                 empty1,
                 context("Expected 'from' after 'syntax' in class syntax definition", cut(tag("from"))),
                 empty1,
-                cut(|input| parse_ndl_pattern(input, true, true)),
+                cut(|input| parse_ndl_pattern(input, true, true, self)),
                 empty0,
                 context("Expected ';' at the end of class syntax definition", cut(tag(";")))
             )),

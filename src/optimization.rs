@@ -20,6 +20,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.count_usages_expr(e, var_usages, offset),
 
+            NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
@@ -97,6 +98,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.insert_moves_expr(e, var_usages),
 
+            NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -213,6 +215,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
 
+            NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {

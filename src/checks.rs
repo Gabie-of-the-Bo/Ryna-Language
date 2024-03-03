@@ -18,28 +18,32 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::CompiledLambda(l, _, _, _, body) |
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l),
+            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
+
+            NessaExpr::CompiledLambda(l, _, _, _, body) |
+            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
+
+            NessaExpr::DoBlock(l, body, _) => NessaContext::ensured_return_check_body(body, l, "Do block"),
 
             _ => Ok(())
         }
     }
 
-    pub fn ensured_return_check_body(lines: &Vec<NessaExpr>, l: &Location) -> Result<(), NessaError> {
+    pub fn ensured_return_check_body(lines: &Vec<NessaExpr>, l: &Location, instance: &str) -> Result<(), NessaError> {
         for line in lines {
             match line {
                 NessaExpr::Return(_, _) => return Ok(()),
 
                 NessaExpr::If(_, _, ib, ei, Some(eb_inner)) => {
-                    let mut returns = NessaContext::ensured_return_check_body(ib, l).is_ok() && NessaContext::ensured_return_check_body(eb_inner, l).is_ok();
+                    let mut returns = NessaContext::ensured_return_check_body(ib, l, instance).is_ok() && 
+                                      NessaContext::ensured_return_check_body(eb_inner, l, instance).is_ok();
 
                     if returns { // Check every branch
                         for (_, ei_b) in ei {
-                            if NessaContext::ensured_return_check_body(ei_b, l).is_err() {
+                            if NessaContext::ensured_return_check_body(ei_b, l, instance).is_err() {
                                 returns = false;
                                 break;
                             }
@@ -55,7 +59,7 @@ impl NessaContext {
             }
         }
         
-        Err(NessaError::compiler_error("Function may not always return a value".into(), l, vec!()))
+        Err(NessaError::compiler_error(format!("{instance} may not always return a value"), l, vec!()))
     }
 
     pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), NessaError> {
@@ -128,6 +132,16 @@ impl NessaContext {
                 NessaContext::ensured_return_check(expr)
             }
 
+            (NessaExpr::DoBlock(_, body, ret), _) => {
+                let expected_ret = Some(ret.clone());
+
+                for line in body {
+                    self.return_check(line, &expected_ret)?;
+                }
+
+                NessaContext::ensured_return_check(expr)
+            }
+
             (NessaExpr::While(_, cond, body), ret) |
             (NessaExpr::CompiledFor(_, _, _, _, cond, body), ret) => {
                 self.return_check(cond, ret)?;
@@ -172,8 +186,6 @@ impl NessaContext {
     pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
             NessaExpr::Literal(..) |
-            NessaExpr::CompiledLambda(..) |
-            NessaExpr::Tuple(..) |
             NessaExpr::Variable(..) |
             NessaExpr::PrefixOperatorDefinition(..) |
             NessaExpr::PostfixOperatorDefinition(..) |
@@ -182,6 +194,16 @@ impl NessaContext {
             NessaExpr::InterfaceDefinition(..) |
             NessaExpr::InterfaceImplementation(..) |
             NessaExpr::ClassDefinition(..) => Ok(()),
+
+            NessaExpr::DoBlock(_, body, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, body) |
+            NessaExpr::Tuple(_, body) => {
+                for line in body {
+                    self.ambiguity_check(line)?;
+                }
+
+                Ok(())
+            }
 
             NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
             NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
@@ -464,6 +486,21 @@ impl NessaContext {
 
                 Ok(())
             },
+
+            NessaExpr::DoBlock(l, b, t) => {
+                if t.has_self() {
+                    return Err(NessaError::compiler_error(
+                        format!("{} type found outside an interface", Type::SelfType.get_name(self)),
+                        l, vec!()
+                    ));
+                }
+
+                for i in b {
+                    self.invalid_type_check(i)?;
+                }
+
+                Ok(())
+            }
 
             NessaExpr::CompiledFor(_, _, _, _, c, b) |
             NessaExpr::While(_, c, b) => {
@@ -795,6 +832,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(..) |
             NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
+            NessaExpr::DoBlock(_, args, _) |
             NessaExpr::Tuple(_, args) => {
                 for arg in args {
                     self.type_check(arg)?;

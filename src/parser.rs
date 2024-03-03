@@ -196,6 +196,7 @@ pub enum NessaExpr {
     CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
+    DoBlock(Location, Vec<NessaExpr>, Type),
 
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -259,6 +260,7 @@ impl NessaExpr {
             NessaExpr::For(_, _, _, _) |
             NessaExpr::Return(_, _) => false,
 
+            NessaExpr::DoBlock(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -2561,6 +2563,16 @@ impl NessaContext {
         )(input);
     }
 
+    fn do_block_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+        map(
+            located(preceded(
+                terminated(tag("do"), empty0),
+                |input| self.code_block_parser(input, cache)
+            )),
+            |(l, c)| NessaExpr::DoBlock(l, c, Type::InferenceMarker)
+        )(input)
+    }
+
     fn lambda_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
             located(
@@ -2619,6 +2631,7 @@ impl NessaContext {
         return alt((
             |input| self.operation_parser(input, checked_precs, cache),
             |input| self.custom_syntax_parser(input, cache),
+            |input| self.do_block_parser(input, cache),
             |input| self.lambda_parser(input, cache),
             |input| self.tuple_parser(input, cache),
             |input| self.literal_parser(input, cache),

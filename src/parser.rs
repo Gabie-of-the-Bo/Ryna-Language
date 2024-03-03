@@ -57,7 +57,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,
     pub column: usize,

@@ -230,16 +230,31 @@ impl NessaContext {
                     self.strength_reduction_expr(e);
                 }
 
+                // Compile as
+                let as_id = self.get_function_id("as".into()).unwrap();
+
+                if *id == as_id && exprs.len() == 1 && t.len() == 1 {
+                    let expected_type = &t[0];
+                    let given_type = self.infer_type(&exprs[0]).unwrap();
+
+                    // Assume that the function will succeed
+                    if given_type == *expected_type {
+                        *expr = exprs[0].clone();
+                        return;
+                    }
+                }
+
                 // Compile fwd
                 let fwd_id = self.get_function_id("fwd".into()).unwrap();
                 let cfwd_id = self.get_function_id("cfwd".into()).unwrap();
-                let move_id = self.get_function_id("move".into()).unwrap();
-                let deref_id = self.get_function_id("deref".into()).unwrap();
-                let demut_id = self.get_function_id("demut".into()).unwrap();
-                let ref_id = self.get_function_id("ref".into()).unwrap();
-                let mut_id = self.get_function_id("mut".into()).unwrap();
 
                 if (*id == fwd_id || *id == cfwd_id) && exprs.len() == 1 && t.len() == 1 {
+                    let move_id = self.get_function_id("move".into()).unwrap();
+                    let deref_id = self.get_function_id("deref".into()).unwrap();
+                    let demut_id = self.get_function_id("demut".into()).unwrap();
+                    let ref_id = self.get_function_id("ref".into()).unwrap();
+                    let mut_id = self.get_function_id("mut".into()).unwrap();
+    
                     let expected_type = &t[0];
                     let given_type = self.infer_type(&exprs[0]).unwrap();
 

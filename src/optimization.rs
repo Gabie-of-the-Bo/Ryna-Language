@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::NessaExpr, types::INT};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::NessaExpr, types::{Type, INT}};
 
 /*
     ╒═══════════════════════════╕
@@ -218,13 +218,94 @@ impl NessaContext {
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
                     self.strength_reduction_expr(e);
                 }
             },
+
+            NessaExpr::FunctionCall(_, id, t, exprs) => {
+                for e in exprs.iter_mut() {
+                    self.strength_reduction_expr(e);
+                }
+
+                // Compile as
+                let as_id = self.get_function_id("as".into()).unwrap();
+
+                if *id == as_id && exprs.len() == 1 && t.len() == 1 {
+                    let expected_type = &t[0];
+                    let given_type = self.infer_type(&exprs[0]).unwrap();
+
+                    // Assume that the function will succeed
+                    if given_type == *expected_type {
+                        *expr = exprs[0].clone();
+                        return;
+                    }
+                }
+
+                // Compile fwd
+                let fwd_id = self.get_function_id("fwd".into()).unwrap();
+                let cfwd_id = self.get_function_id("cfwd".into()).unwrap();
+
+                if (*id == fwd_id || *id == cfwd_id) && exprs.len() == 1 && t.len() == 1 {
+                    let move_id = self.get_function_id("move".into()).unwrap();
+                    let deref_id = self.get_function_id("deref".into()).unwrap();
+                    let demut_id = self.get_function_id("demut".into()).unwrap();
+                    let ref_id = self.get_function_id("ref".into()).unwrap();
+                    let mut_id = self.get_function_id("mut".into()).unwrap();
+    
+                    let expected_type = &t[0];
+                    let given_type = self.infer_type(&exprs[0]).unwrap();
+
+                    // Identity
+                    if given_type == *expected_type {
+                        *expr = exprs[0].clone();
+                        return;
+                    }
+
+                    // Move / Deref
+                    if given_type == expected_type.clone().to_mut() {
+                        *id = if *id == fwd_id { move_id } else { deref_id };
+                        return;
+                    }
+
+                    // Deref
+                    if given_type == expected_type.clone().to_ref() {
+                        *id = deref_id;
+                        return;
+                    }
+
+                    // Ref
+                    if given_type.clone().to_ref() == *expected_type {
+                        if let Type::Ref(inner) = expected_type {
+                            t[0] = *inner.clone();
+                            *id = ref_id;
+                            return;                            
+                        }
+                    }
+
+                    // Mut
+                    if given_type.clone().to_mut() == *expected_type {
+                        if let Type::MutRef(inner) = expected_type {
+                            t[0] = *inner.clone();
+                            *id = mut_id;
+                            return;                            
+                        }
+                    }
+
+                    // Demut
+                    if let Type::MutRef(inner_1) = &given_type {
+                        if let Type::Ref(inner_2) = expected_type {
+                            if inner_1 == inner_2 {
+                                t[0] = *inner_2.clone();
+                                *id = demut_id;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
 
             NessaExpr::NaryOperation(_, _, _, c, exprs) |
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
@@ -494,11 +575,18 @@ impl NessaContext {
                     [GetVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
                     [RefVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
                     [GetVariable(id), Move] => { change_first!(MoveVariable(*id)); },
+                    
                     [AttributeMut(id), Demut] => { change_first!(AttributeRef(*id)); },
                     [AttributeMut(id), Copy] => { change_first!(AttributeCopy(*id)); },
                     [AttributeRef(id), Copy] => { change_first!(AttributeCopy(*id)); },
                     [AttributeMut(id), Deref] => { change_first!(AttributeDeref(*id)); },
                     [AttributeRef(id), Deref] => { change_first!(AttributeDeref(*id)); },
+                    
+                    [TupleElemMut(id), Demut] => { change_first!(TupleElemRef(*id)); },
+                    [TupleElemMut(id), Copy] => { change_first!(TupleElemCopy(*id)); },
+                    [TupleElemRef(id), Copy] => { change_first!(TupleElemCopy(*id)); },
+                    [TupleElemMut(id), Deref] => { change_first!(TupleElemDeref(*id)); },
+                    [TupleElemRef(id), Deref] => { change_first!(TupleElemDeref(*id)); },
 
                     [Not, Not] |
                     [Negi, Negi] |

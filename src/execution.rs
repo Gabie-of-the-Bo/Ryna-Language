@@ -9,7 +9,7 @@ use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, sa
 use crate::nessa_warning;
 use crate::number::{Integer, ONE};
 use crate::types::Type;
-use crate::object::{Object, TypeInstance};
+use crate::object::{NessaTuple, Object, TypeInstance};
 use crate::context::NessaContext;
 use crate::operations::Operator;
 use crate::compilation::{CompiledNessaExpr, NessaError};
@@ -248,9 +248,9 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                Attribute(idx) => nessa_instruction!("Attribute", {
+                AttributeMove(idx) => nessa_instruction!("AttributeMove", {
                     let elem = stack.pop().unwrap();
-                    stack.push(elem.get::<TypeInstance>().attributes[*idx].clone());
+                    stack.push(elem.get::<TypeInstance>().attributes[*idx].move_contents_if_ref());
                     ip += 1;
                 }),
 
@@ -285,6 +285,36 @@ impl NessaContext {
 
                     stack.push(Object::tuple(args, types));
 
+                    ip += 1;
+                }),
+
+                TupleElemMove(idx) => nessa_instruction!("TupleElemMove", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.get::<NessaTuple>().elements[*idx].move_contents_if_ref());
+                    ip += 1;
+                }),
+
+                TupleElemRef(idx) => nessa_instruction!("TupleElemRef", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<NessaTuple>().elements[*idx].get_ref());
+                    ip += 1;
+                }),
+
+                TupleElemMut(idx) => nessa_instruction!("TupleElemMut", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<NessaTuple>().elements[*idx].get_mut());
+                    ip += 1;
+                }),
+
+                TupleElemCopy(idx) => nessa_instruction!("TupleElemCopy", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<NessaTuple>().elements[*idx].deref_deep_clone());
+                    ip += 1;
+                }),
+
+                TupleElemDeref(idx) => nessa_instruction!("TupleElemDeref", {
+                    let elem = stack.pop().unwrap();
+                    stack.push(elem.deref::<NessaTuple>().elements[*idx].deref_if_ref());
                     ip += 1;
                 }),
 

@@ -130,6 +130,30 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
         Ok(Object::empty())
     }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT.to_ref().or(INT.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<Integer>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FLOAT.to_ref().or(FLOAT.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<f64>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[BOOL.to_ref().or(BOOL.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<bool>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<String>());
+
+        Ok(Object::empty())
+    }).unwrap();
     
     let idx = ctx.define_function("deref".into()).unwrap();
 

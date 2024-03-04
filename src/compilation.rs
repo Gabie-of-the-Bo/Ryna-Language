@@ -678,13 +678,18 @@ pub enum CompiledNessaExpr {
     Lambda(usize, Type, Type),
 
     Construct(usize, usize, Vec<Type>),
-    Attribute(usize),
+    AttributeMove(usize),
     AttributeRef(usize),
     AttributeMut(usize),
     AttributeCopy(usize),
     AttributeDeref(usize),
 
     Tuple(usize),
+    TupleElemMove(usize),
+    TupleElemRef(usize),
+    TupleElemMut(usize),
+    TupleElemCopy(usize),
+    TupleElemDeref(usize),
 
     StoreVariable(usize),
     GetVariable(usize),
@@ -822,11 +827,17 @@ impl CompiledNessaExpr {
                 args.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")
             ),
 
-            Attribute(to) => format!("{}({})", "Attribute".green(), to.to_string().blue()),
+            AttributeMove(to) => format!("{}({})", "Attribute".green(), to.to_string().blue()),
             AttributeRef(to) => format!("{}({})", "AttributeRef".green(), to.to_string().blue()),
             AttributeMut(to) => format!("{}({})", "AttributeMut".green(), to.to_string().blue()),
             AttributeCopy(to) => format!("{}({})", "AttributeCopy".green(), to.to_string().blue()),
             AttributeDeref(to) => format!("{}({})", "AttributeDeref".green(), to.to_string().blue()),
+
+            TupleElemMove(to) => format!("{}({})", "TupleElem".green(), to.to_string().blue()),
+            TupleElemRef(to) => format!("{}({})", "TupleElemRef".green(), to.to_string().blue()),
+            TupleElemMut(to) => format!("{}({})", "TupleElemMut".green(), to.to_string().blue()),
+            TupleElemCopy(to) => format!("{}({})", "TupleElemCopy".green(), to.to_string().blue()),
+            TupleElemDeref(to) => format!("{}({})", "TupleElemDeref".green(), to.to_string().blue()),
 
             NativeFunctionCall(id, ov, args) => format!(
                 "{}({}, {}, {{{}}})", "FunctionCall".green(), 
@@ -3003,7 +3014,7 @@ impl NessaContext{
                                 return Err(NessaError::compiler_error(msg, &l, vec!()));
                             
                             } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::Attribute(i), 0));
+                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMove(i), 0));
                             }
                         });
 
@@ -3085,7 +3096,7 @@ impl NessaContext{
                                 return Err(NessaError::compiler_error(msg, &l, vec!()));
 
                             } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::Attribute(i), 0));
+                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMove(i), 0));
                             }
                         });
 

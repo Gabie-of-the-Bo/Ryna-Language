@@ -575,11 +575,18 @@ impl NessaContext {
                     [GetVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
                     [RefVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
                     [GetVariable(id), Move] => { change_first!(MoveVariable(*id)); },
+                    
                     [AttributeMut(id), Demut] => { change_first!(AttributeRef(*id)); },
                     [AttributeMut(id), Copy] => { change_first!(AttributeCopy(*id)); },
                     [AttributeRef(id), Copy] => { change_first!(AttributeCopy(*id)); },
                     [AttributeMut(id), Deref] => { change_first!(AttributeDeref(*id)); },
                     [AttributeRef(id), Deref] => { change_first!(AttributeDeref(*id)); },
+                    
+                    [TupleElemMut(id), Demut] => { change_first!(TupleElemRef(*id)); },
+                    [TupleElemMut(id), Copy] => { change_first!(TupleElemCopy(*id)); },
+                    [TupleElemRef(id), Copy] => { change_first!(TupleElemCopy(*id)); },
+                    [TupleElemMut(id), Deref] => { change_first!(TupleElemDeref(*id)); },
+                    [TupleElemRef(id), Deref] => { change_first!(TupleElemDeref(*id)); },
 
                     [Not, Not] |
                     [Negi, Negi] |

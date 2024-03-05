@@ -111,16 +111,19 @@ impl NessaContext {
                 let move_id = self.get_function_id("move".into()).unwrap();
                 let deref_id = self.get_function_id("deref".into()).unwrap();
 
+                for e in exprs.iter_mut() {
+                    self.insert_moves_expr(e, var_usages);
+                }
+
                 if *id == deref_id && exprs.len() == 1 {
                     if let NessaExpr::Variable(_, var_id, _, var_type) = &exprs[0] {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *id = move_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
                         }
                     }
-                }
-
-                for e in exprs {
-                    self.insert_moves_expr(e, var_usages);
                 }
             },
 
@@ -133,6 +136,9 @@ impl NessaContext {
                     if let NessaExpr::Variable(_, var_id, _, var_type) = &**e {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *expr = NessaExpr::FunctionCall(l.clone(), move_id, tm.clone(), vec!((**e).clone()));
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
                         }
                     }
                 }
@@ -267,12 +273,20 @@ impl NessaContext {
                     // Move / Deref
                     if given_type == expected_type.clone().to_mut() {
                         *id = if *id == fwd_id { move_id } else { deref_id };
+
+                        // Sanity check and overload registration
+                        self.static_check(expr).unwrap();
+
                         return;
                     }
 
                     // Deref
                     if given_type == expected_type.clone().to_ref() {
                         *id = deref_id;
+
+                        // Sanity check and overload registration
+                        self.static_check(expr).unwrap();
+                        
                         return;
                     }
 
@@ -281,6 +295,10 @@ impl NessaContext {
                         if let Type::Ref(inner) = expected_type {
                             t[0] = *inner.clone();
                             *id = ref_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+                            
                             return;                            
                         }
                     }
@@ -290,6 +308,10 @@ impl NessaContext {
                         if let Type::MutRef(inner) = expected_type {
                             t[0] = *inner.clone();
                             *id = mut_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+                            
                             return;                            
                         }
                     }
@@ -300,6 +322,10 @@ impl NessaContext {
                             if inner_1 == inner_2 {
                                 t[0] = *inner_2.clone();
                                 *id = demut_id;
+
+                                // Sanity check and overload registration
+                                self.static_check(expr).unwrap();
+                                
                                 return;
                             }
                         }
@@ -337,6 +363,9 @@ impl NessaContext {
                                         vec!(*a.clone())
                                     );
 
+                                    // Sanity check and overload registration
+                                    self.static_check(expr).unwrap();
+
                                     return;
                                 }
                             }
@@ -353,6 +382,9 @@ impl NessaContext {
                                         vec!(), 
                                         vec!(*a.clone())
                                     );
+
+                                    // Sanity check and overload registration
+                                    self.static_check(expr).unwrap();
 
                                     return;
                                 }
@@ -375,6 +407,9 @@ impl NessaContext {
                                 Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
                             );
 
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+
                             return;
                         }
                     }
@@ -390,6 +425,9 @@ impl NessaContext {
                                 a.clone(), 
                                 Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
                             );
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
 
                             return;
                         }

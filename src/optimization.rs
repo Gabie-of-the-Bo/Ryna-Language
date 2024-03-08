@@ -717,7 +717,6 @@ impl NessaContext {
 
     pub fn inline_functions_expr(&self, expr: &mut NessaExpr, offset: &mut usize) {
         match expr {
-            NessaExpr::UnaryOperation(_, _, _, e) |
             NessaExpr::Return(_, e) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
@@ -727,6 +726,114 @@ impl NessaContext {
             NessaExpr::Tuple(_, exprs) => {
                 self.inline_functions(exprs, offset);
             },
+
+            NessaExpr::UnaryOperation(l, id, t, e) => {
+                self.inline_functions_expr(e, offset);
+
+                let arg_types = self.infer_type(e).unwrap();
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.unary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&i.0.2[0], self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut inlined_body = self.inline_body(inner.clone(), vec!(*e.clone()), offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
+                self.inline_functions_expr(a, offset);
+                self.inline_functions_expr(b, offset);
+
+                let arg_types = Type::And(vec!(self.infer_type(a).unwrap(), self.infer_type(b).unwrap()));
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.binary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+                    let other_args = Type::And(i.0.2.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&other_args, self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut inlined_body = self.inline_body(inner.clone(), vec!(*a.clone(), *b.clone()), offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::NaryOperation(l, id, t, c, exprs) => {
+                self.inline_functions_expr(c, offset);
+                self.inline_functions(exprs, offset);
+
+                let mut arg_types_vec = vec!(self.infer_type(c).unwrap());
+                arg_types_vec.extend(exprs.iter().map(|i| self.infer_type(i).unwrap()));
+                let arg_types = Type::And(arg_types_vec);
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.nary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+                    let other_args = Type::And(i.0.2.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&other_args, self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut args_vec = vec!(*c.clone());
+                        args_vec.extend(exprs.iter().cloned());
+        
+                        let mut inlined_body = self.inline_body(inner.clone(), args_vec, offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
 
             NessaExpr::FunctionCall(l, id, t, args) => {
                 self.inline_functions(args, offset);
@@ -762,16 +869,10 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::NaryOperation(_, _, _, c, exprs) |
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
                 self.inline_functions_expr(c, offset);
                 self.inline_functions(exprs, offset);
-            },
-
-            NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.inline_functions_expr(a, offset);
-                self.inline_functions_expr(b, offset);
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {

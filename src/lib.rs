@@ -48,9 +48,6 @@ pub mod id_mapper;
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
 
-#[path = "structures/jump_map.rs"]
-pub mod jump_map;
-
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
@@ -273,6 +270,21 @@ mod integration {
     #[test]
     fn bitwise() {
         integration_test("test/bitwise.nessa");
+    }
+
+    #[test]
+    fn ndl_macros() {
+        integration_test("test/ndl_macros.nessa");
+    }
+
+    #[test]
+    fn do_blocks() {
+        integration_test("test/do_blocks.nessa");
+    }
+
+    #[test]
+    fn break_loops() {
+        integration_test("test/break_loops.nessa");
     }
 
     #[test]

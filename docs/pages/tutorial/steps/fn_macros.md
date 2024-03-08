@@ -19,10 +19,10 @@ syntax fn macro_name from NDL_Pattern {
 ```
 
 When you define a macro of any kind you can "invoke" it by using the syntax anywhere in your code where an expression is legal. Just be aware that 
-macros are internally compiled to a different representation. In the case of function macros, they are converted to lambda expressions:
+macros are internally compiled to a different representation. In the case of function macros, they are converted to **do blocks**:
 
 ```
-syntax macro_name from 'Macro' {
+syntax macro_name from "Macro" {
     {#return 5;}
 }
 
@@ -30,7 +30,7 @@ syntax macro_name from 'Macro' {
 print(Macro);
 
 // ... is compiled to this
-print((() { return 5; })());
+print(do { return 5; });
 ```
 
 You may have noticed that the syntax inside a macro body is not the same as a function. This is because you can only write
@@ -53,8 +53,8 @@ These are the patterns that you can use inside a macro's body:
 Let's see an example where we try to create a macro to initialize an `Array` statically:
 
 ```
-syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} 
-                                 Arg(<expr>, elems)] ']' {
+syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} 
+                                 Arg(<expr>, elems)] "]" {
     {#let res = arr<} {$type} {#>(} {#);\n}
     {@i in $elems} {
         {#res.push(} {$i} {#);\n}
@@ -72,7 +72,7 @@ let array = <Int>[1, 2, 3, 4, 5];
 Which will then be compiled to this:
 
 ```
-let array = (() {
+let array = do {
     let res = arr<Int>();
 
     res.push(1);
@@ -82,7 +82,7 @@ let array = (() {
     res.push(5);
 
     return *res;
-})();
+};
 ```
 
 As you can imagine, this allows you to create very complex behaviours transparently. You can see more 

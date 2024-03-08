@@ -20,11 +20,11 @@ sometimes. This can easily be fixed by using delimiters:
 We can represent this syntax using the following *NDL* pattern:
 
 ```
-'{' 
-    {s} Arg(<expr>, condition) {s} '?' 
-    {s} Arg(<expr>, if_true) {s} ':' 
+"{" 
+    {s} Arg(<expr>, condition) {s} "?" 
+    {s} Arg(<expr>, if_true) {s} ":" 
     {s} Arg(<expr>, if_false) {s} 
-'}'
+"}"
 ```
 
 ## Creating the macro
@@ -50,11 +50,11 @@ let var = { 4 > 6 ? 1 + 2 : 1 + 4 };
 Here, the `1 + 2` will never be executed, since the condition is `false`. The compiled code would be the following:
 
 ```
-let var = (() {
+let var = do {
     if 4 > 6 {
         return 1 + 2;
     }
 
     return 1 + 4;
-})();
+};
 ```

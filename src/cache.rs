@@ -1,4 +1,4 @@
-use std::{hash::Hash, cell::RefCell};
+use std::{cell::{RefCell, RefMut}, hash::Hash};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports, compilation::CompiledNessaExpr};
@@ -17,6 +17,10 @@ impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Default for Cache<K, V> {
 impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Cache<K, V> {
     pub fn inner_clone(&self) -> FxHashMap<K, V> {
         return self.inner.borrow().clone();
+    }
+
+    pub fn inner_borrow_mut(&self) -> RefMut<FxHashMap<K, V>> {
+        self.inner.borrow_mut()
     }
 
     pub fn get<F: FnMut(K) -> V>(&self, key: K, mut f: F) -> V {

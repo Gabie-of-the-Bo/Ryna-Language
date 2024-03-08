@@ -274,6 +274,8 @@ impl NessaContext {
         return match expr {
             NessaExpr::Literal(_, obj) => Ok(obj.get_type()),
 
+            NessaExpr::DoBlock(_, _, t) => Ok(t.clone()),
+
             NessaExpr::CompiledLambda(_, _, a, r, _) => Ok(
                 if a.len() == 1 {
                     Type::Function(
@@ -382,6 +384,7 @@ impl NessaContext {
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
+            NessaExpr::Break(l) |
             NessaExpr::While(l, _, _) |
             NessaExpr::For(l, _, _, _) |
             NessaExpr::Return(l, _) => Err(NessaError::compiler_error(

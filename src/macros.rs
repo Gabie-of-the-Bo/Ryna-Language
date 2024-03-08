@@ -7,7 +7,7 @@ use crate::{context::NessaContext, parser::{many_separated0, Span, PResult, iden
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NessaMacroType {
-    Function, Expression, Block
+    Function, Expression, Block, Ndl
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

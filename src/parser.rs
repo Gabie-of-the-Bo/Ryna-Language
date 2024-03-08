@@ -2,14 +2,14 @@ use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 
 use nom::AsChar;
-use nom::bytes::complete::{take_until, take_till};
+use nom::bytes::complete::{tag, take_till, take_until};
 use nom::combinator::cut;
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::sequence::preceded;
 use nom::{
     IResult,
     combinator::{map, map_res, opt, eof, value, recognize},
-    bytes::complete::{take_while, take_while1, tag, escaped_transform},
+    bytes::complete::{take_while, take_while1, escaped_transform},
     sequence::{tuple, delimited, terminated},
     branch::alt,
     character::complete::{multispace1, satisfy},
@@ -57,7 +57,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -196,6 +196,8 @@ pub enum NessaExpr {
     CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
+    DoBlock(Location, Vec<NessaExpr>, Type),
+    Break(Location),
 
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -256,9 +258,11 @@ impl NessaExpr {
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
+            NessaExpr::Break(_) |
             NessaExpr::For(_, _, _, _) |
             NessaExpr::Return(_, _) => false,
 
+            NessaExpr::DoBlock(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -330,7 +334,7 @@ pub fn identifier_parser(input: Span<'_>) -> PResult<'_, String> {
     )(input)
 }
 
-fn string_parser(input: Span<'_>) -> PResult<'_, String> {
+pub fn string_parser(input: Span<'_>) -> PResult<'_, String> {
     delimited(
         tag("\""), 
         alt((
@@ -951,6 +955,7 @@ impl NessaContext {
                                 )(Span::new(&code))
                             },
                             
+                            NessaMacroType::Ndl |
                             NessaMacroType::Block => unreachable!(),
                         };
                         
@@ -960,13 +965,7 @@ impl NessaContext {
                                     NessaMacroType::Function => {
                                         Ok((
                                             input, 
-                                            NessaExpr::NaryOperation(
-                                                loc.clone(), 
-                                                CALL_OP, 
-                                                vec!(), 
-                                                Box::new(NessaExpr::Lambda(loc, vec!(), Type::InferenceMarker, lines)),
-                                                vec!()
-                                            )
+                                            NessaExpr::DoBlock(loc.clone(), lines, Type::InferenceMarker)
                                         ))
                                     },
 
@@ -992,6 +991,7 @@ impl NessaContext {
                                         }
                                     },
 
+                                    NessaMacroType::Ndl |
                                     NessaMacroType::Block => unreachable!(),
                                 }
                             },
@@ -1336,12 +1336,13 @@ impl NessaContext {
                     map(terminated(tag("fn"), empty1), |_| NessaMacroType::Function),
                     map(terminated(tag("expr"), empty1), |_| NessaMacroType::Expression),
                     map(terminated(tag("block"), empty1), |_| NessaMacroType::Block),
+                    map(terminated(tag("ndl"), empty1), |_| NessaMacroType::Ndl),
                 ))),
                 context("Expected identifier after 'syntax' in syntax definition", cut(identifier_parser)),
                 empty1,
                 context("Expected 'from' after identifier in syntax definition", cut(tag("from"))),
                 empty1,
-                cut(|input| parse_ndl_pattern(input, true, true)),
+                cut(|input| parse_ndl_pattern(input, true, true, self)),
                 empty0
             )),
             |(_, _, t, n, _, _, _, p, _)| (t.unwrap_or(NessaMacroType::Function), n, p)
@@ -1429,6 +1430,20 @@ impl NessaContext {
                 ))
             ),
             |(l, (ih, _, ib, ei, e))| NessaExpr::If(l, Box::new(ih), ib, ei, e)
+        )(input);
+    }
+
+    fn break_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(delimited(
+                empty0, 
+                tag("break"), 
+                tuple((
+                    empty0,
+                    context("Expected ';' at the end of break statement", cut(tag(";")))
+                ))
+            )),
+            |(l, _)| NessaExpr::Break(l)
         )(input);
     }
     
@@ -2143,7 +2158,7 @@ impl NessaContext {
                 empty1,
                 context("Expected 'from' after 'syntax' in class syntax definition", cut(tag("from"))),
                 empty1,
-                cut(|input| parse_ndl_pattern(input, true, true)),
+                cut(|input| parse_ndl_pattern(input, true, true, self)),
                 empty0,
                 context("Expected ';' at the end of class syntax definition", cut(tag(";")))
             )),
@@ -2558,6 +2573,16 @@ impl NessaContext {
         )(input);
     }
 
+    fn do_block_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+        map(
+            located(preceded(
+                terminated(tag("do"), empty0),
+                |input| self.code_block_parser(input, cache)
+            )),
+            |(l, c)| NessaExpr::DoBlock(l, c, Type::InferenceMarker)
+        )(input)
+    }
+
     fn lambda_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
             located(
@@ -2616,6 +2641,7 @@ impl NessaContext {
         return alt((
             |input| self.operation_parser(input, checked_precs, cache),
             |input| self.custom_syntax_parser(input, cache),
+            |input| self.do_block_parser(input, cache),
             |input| self.lambda_parser(input, cache),
             |input| self.tuple_parser(input, cache),
             |input| self.literal_parser(input, cache),
@@ -2638,6 +2664,7 @@ impl NessaContext {
                     |input| self.while_parser(input, cache),
                     |input| self.for_parser(input, cache),
                     |input| self.if_parser(input, cache),
+                    |input| self.break_parser(input),
                     |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
                 )),
                 |i| vec!(i)
@@ -3963,9 +3990,9 @@ mod tests {
         }";
 
         let sync_lists_str = "class SyncLists<K, V> {
-            syntax from 'test';
+            syntax from \"test\";
             syntax from [[a-h] | d];
-            syntax from Arg(['-'], Sign) Arg(1{d}, Int) ['.' Arg(1{d}, Dec)];
+            syntax from Arg([\"-\"], Sign) Arg(1{d}, Int) [\".\" Arg(1{d}, Dec)];
 
             from: Array<'K>;
             to: Array<'V>;

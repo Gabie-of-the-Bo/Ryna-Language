@@ -1,7 +1,7 @@
 import * from array_extensions;
 
 // Input is not allowed in this example
-syntax block embed_bf from 'BF' {s} '{' Arg(1{s | '+' | '-' | '.' | '<' | '>' | '[' | ']'}, code) '}' {
+syntax block embed_bf from "BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | "[" | "]"}, code) "}" {
     {|        
         // Memory array
         emit("let mem = arr_with_capacity<Int>(1000);");

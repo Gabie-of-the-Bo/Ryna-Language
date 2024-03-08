@@ -385,6 +385,9 @@ pub fn compute_project_hash(path: &String, macro_code: Option<String>) -> Result
         final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 
+    // Add nessa version
+    final_hash.push_str(env!("CARGO_PKG_VERSION"));
+
     Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache))
 }
 

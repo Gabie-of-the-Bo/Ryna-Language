@@ -5,6 +5,7 @@ use std::time::UNIX_EPOCH;
 
 use seq_macro::seq;
 
+use crate::compilation::CompiledNessaExpr;
 use crate::number::ONE;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
@@ -127,6 +128,30 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[STR], Type::Empty, |_, _, v, _| { 
         print!("{}", v[0].get::<String>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[INT.to_ref().or(INT.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<Integer>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[FLOAT.to_ref().or(FLOAT.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<f64>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[BOOL.to_ref().or(BOOL.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<bool>());
+
+        Ok(Object::empty())
+    }).unwrap();
+
+    ctx.define_native_function_overload(idx, 0, &[STR.to_ref().or(STR.to_mut())], Type::Empty, |_, _, v, _| { 
+        print!("{}", v[0].deref::<String>());
 
         Ok(Object::empty())
     }).unwrap();
@@ -546,6 +571,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().move_contents()),
             (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
+
+            (Type::MutRef(b), a) if *a == **b => Ok(v.pop().unwrap().get_mut_nostack()),
+            (Type::Ref(b), a) if *a == **b => Ok(v.pop().unwrap().get_ref_nostack()),
+
             (a, b) if a == b => Ok(v.pop().unwrap().move_contents()),
             
             _ => Err(format!(
@@ -569,6 +598,10 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
             (a, Type::MutRef(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
             (a, Type::Ref(b)) if *a == **b => Ok(v.pop().unwrap().deref_obj().deep_clone()),
+            
+            (Type::MutRef(b), a) if *a == **b => Ok(v.pop().unwrap().get_mut_nostack()),
+            (Type::Ref(b), a) if *a == **b => Ok(v.pop().unwrap().get_ref_nostack()),
+
             (a, b) if a == b => Ok(v.pop().unwrap().deep_clone()),
             
             _ => Err(format!(
@@ -1020,15 +1053,17 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         seq!(J in 2..10 {
             let ts = Type::And((0..J).map(|i| Type::TemplateParam(i, vec!())).collect());
 
-            ctx.define_native_function_overload(
+            let res = ctx.define_native_function_overload(
                 idx, 
                 J,
                 &[ts.clone()], 
                 Type::TemplateParam(I, vec!()), 
                 |_, _, v, _| Ok(v[0].get::<NessaTuple>().elements[I].clone())
             ).unwrap();
+
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMove(I), 0));
             
-            ctx.define_native_function_overload(
+            let res = ctx.define_native_function_overload(
                 idx, 
                 J,
                 &[Type::Ref(Box::new(ts.clone()))], 
@@ -1036,13 +1071,17 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 |_, _, v, _| Ok(v[0].deref::<NessaTuple>().elements[I].get_ref())
             ).unwrap();
             
-            ctx.define_native_function_overload(
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemRef(I), 0));
+
+            let res = ctx.define_native_function_overload(
                 idx, 
                 J,
                 &[Type::MutRef(Box::new(ts))], 
                 Type::MutRef(Box::new(Type::TemplateParam(I, vec!()))), 
                 |_, _, v, _| Ok(v[0].deref::<NessaTuple>().elements[I].get_mut())
             ).unwrap();
+
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMut(I), 0));
         });
     });
 }

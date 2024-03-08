@@ -179,7 +179,7 @@ while condition {
 }
 ```
 
-conditions must also evaluate to `Bool`.
+conditions must also evaluate to `Bool`. You can `break` out of while loops.
 
 ### For
 
@@ -194,4 +194,4 @@ for i in container {
 }
 ```
 
-if you want to make a custom class iterable you have to implement that Interface manually.
+if you want to make a custom class iterable you have to implement that Interface manually. You can `break` out of for loops.

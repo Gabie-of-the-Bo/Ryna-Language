@@ -4,7 +4,7 @@ class Dice {
         The arguments are parsed as the corresponding types and 
         assigned as needed
     */
-    syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
+    syntax from Arg(1{d}, rolls) "D" Arg(1{d}, sides);
 
     rolls: Int;
     sides: Int;
@@ -51,7 +51,7 @@ while it < 1000 {
 }
 
 class InnerDice {
-    syntax from '[' Arg(1{d} 'D' 1{d}, inner_dice) ']';
+    syntax from "[" Arg(1{d} "D" 1{d}, inner_dice) "]";
 
     inner_dice: Dice;
 }

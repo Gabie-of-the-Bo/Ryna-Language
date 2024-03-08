@@ -9,9 +9,9 @@ basic building blocks for more compplicated literals. Here is a table with the b
 
 | Type     | NDL Pattern           | Regex        |
 | -------- | --------------------- | ------------ |
-| `Int`    | `['-'] 1{d}`          | `-?\d+`      |
-| `Float`  | `['-'] 1{d} '.' 1{d}` | `-?\d+\.\d+` |
-| `Bool`   | `'true' | 'false'`    | `true|false` |
+| `Int`    | `["-"] 1{d}`          | `-?\d+`      |
+| `Float`  | `["-"] 1{d} "." 1{d}` | `-?\d+\.\d+` |
+| `Bool`   | `"true" | "false"`    | `true|false` |
 | `String` | No constaint          | `.*`         |
 
 Everything that follows these syntaxes can be parsed as an instance of this type.
@@ -35,7 +35,7 @@ using Nessa:
 
 ```
 class Dice {
-    syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, sides);
+    syntax from Arg(1{d}, rolls) "D" Arg(1{d}, sides);
 
     rolls: Int;
     sides: Int;
@@ -50,7 +50,7 @@ Now let's take a look at a different use case: an **integer array**:
 
 ```
 class Ints {
-    syntax from '[' Arg(1{d}, ints) {', ' Arg(1{d}, ints)} ']';
+    syntax from "[" Arg(1{d}, ints) {", " Arg(1{d}, ints)} "]";
 
     ints: Array<Int>;
 }

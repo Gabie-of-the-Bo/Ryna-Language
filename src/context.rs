@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use colored::Colorize;
 
 use crate::cache::NessaCache;
+use crate::compilation::NessaInstruction;
 use crate::interfaces::Interface;
 use crate::interfaces::InterfaceBinaryOpHeader;
 use crate::interfaces::InterfaceConstraint;
@@ -46,6 +47,8 @@ pub struct NessaContext {
     pub variables: Vec<Object>,
 
     pub lambdas: usize,
+    pub lambda_code: Vec<NessaInstruction>,
+    pub lambda_positions: HashMap<usize, usize>,
 
     pub cache: NessaCache,
 

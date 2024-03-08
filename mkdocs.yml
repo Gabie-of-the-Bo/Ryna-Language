@@ -26,6 +26,8 @@ nav:
       - Functions: 
         - Defining Functions: 'pages/tutorial/steps/def_functions.md'
         - Special Functions: 'pages/tutorial/steps/esp_functions.md'
+        - Lambda Expressions: 'pages/tutorial/steps/lambdas.md'
+        - Do Blocks: 'pages/tutorial/steps/do_blocks.md'
       - Defining Operators: 'pages/tutorial/steps/operators.md'
       - Defining Classes: 'pages/tutorial/steps/classes.md'
       - Defining Interfaces: 'pages/tutorial/steps/interfaces.md'
@@ -35,6 +37,7 @@ nav:
         - Function Macros: 'pages/tutorial/steps/fn_macros.md'
         - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
+        - NDL Macros: 'pages/tutorial/steps/ndl_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
       - Importing Modules: 'pages/tutorial/steps/imports.md'
     - Learn by example:

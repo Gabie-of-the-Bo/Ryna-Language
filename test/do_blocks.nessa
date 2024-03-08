@@ -1,0 +1,13 @@
+let var = 3;
+
+let res = do {
+    if var > 2 {
+        return 5;
+    }
+
+    return 2;
+};
+
+if res != 5 {
+    panic("This should not happen");
+}

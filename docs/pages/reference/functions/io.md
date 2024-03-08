@@ -12,7 +12,7 @@
     <tbody>
         <tr>
             <td rowspan="1"> <code>print(obj: Int) -> ()</code> </td>
-            <td rowspan="4">
+            <td rowspan="8">
                 Prints <code>obj</code> to stdout
             </td>
         </tr>
@@ -24,6 +24,18 @@
         </tr>
         <tr>
             <td rowspan="1"> <code>print(obj: Str) -> ()</code> </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>print(obj: &Int | @Int) -> ()</code> </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>print(obj: &Float | @Float) -> ()</code> </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>print(obj: &Bool | @Bool) -> ()</code> </td>
+        </tr>
+        <tr>
+            <td rowspan="1"> <code>print(obj: &Str | @Str) -> ()</code> </td>
         </tr>
     </tbody>
 </table>

@@ -1,5 +1,5 @@
 // Unable to parse
-syntax block test from Arg(1{l}, a) '#' Arg(1{d}, b) {
+syntax block test from Arg(1{l}, a) "#" Arg(1{d}, b) {
     {#let } {$a} {# = } {$b} {#;}
 }
 

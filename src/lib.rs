@@ -48,9 +48,6 @@ pub mod id_mapper;
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
 
-#[path = "structures/jump_map.rs"]
-pub mod jump_map;
-
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;

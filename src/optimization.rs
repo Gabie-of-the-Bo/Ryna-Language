@@ -1,12 +1,14 @@
 use rustc_hash::FxHashMap;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, jump_map::JumpMap, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::NessaExpr, types::{Type, INT}};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
 
 /*
     ╒═══════════════════════════╕
     │ Syntax tree optimizations │
     ╘═══════════════════════════╛
 */
+
+const INLINE_THRESHOLD: f32 = 50.0;
 
 impl NessaContext {
     pub fn count_usages_expr(&self, expr: &NessaExpr, var_usages: &mut FxHashMap<usize, usize>, offset: usize) {
@@ -111,16 +113,19 @@ impl NessaContext {
                 let move_id = self.get_function_id("move".into()).unwrap();
                 let deref_id = self.get_function_id("deref".into()).unwrap();
 
+                for e in exprs.iter_mut() {
+                    self.insert_moves_expr(e, var_usages);
+                }
+
                 if *id == deref_id && exprs.len() == 1 {
                     if let NessaExpr::Variable(_, var_id, _, var_type) = &exprs[0] {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *id = move_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
                         }
                     }
-                }
-
-                for e in exprs {
-                    self.insert_moves_expr(e, var_usages);
                 }
             },
 
@@ -133,6 +138,9 @@ impl NessaContext {
                     if let NessaExpr::Variable(_, var_id, _, var_type) = &**e {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *expr = NessaExpr::FunctionCall(l.clone(), move_id, tm.clone(), vec!((**e).clone()));
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
                         }
                     }
                 }
@@ -267,12 +275,20 @@ impl NessaContext {
                     // Move / Deref
                     if given_type == expected_type.clone().to_mut() {
                         *id = if *id == fwd_id { move_id } else { deref_id };
+
+                        // Sanity check and overload registration
+                        self.static_check(expr).unwrap();
+
                         return;
                     }
 
                     // Deref
                     if given_type == expected_type.clone().to_ref() {
                         *id = deref_id;
+
+                        // Sanity check and overload registration
+                        self.static_check(expr).unwrap();
+                        
                         return;
                     }
 
@@ -281,6 +297,10 @@ impl NessaContext {
                         if let Type::Ref(inner) = expected_type {
                             t[0] = *inner.clone();
                             *id = ref_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+                            
                             return;                            
                         }
                     }
@@ -290,6 +310,10 @@ impl NessaContext {
                         if let Type::MutRef(inner) = expected_type {
                             t[0] = *inner.clone();
                             *id = mut_id;
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+                            
                             return;                            
                         }
                     }
@@ -300,6 +324,10 @@ impl NessaContext {
                             if inner_1 == inner_2 {
                                 t[0] = *inner_2.clone();
                                 *id = demut_id;
+
+                                // Sanity check and overload registration
+                                self.static_check(expr).unwrap();
+                                
                                 return;
                             }
                         }
@@ -337,6 +365,9 @@ impl NessaContext {
                                         vec!(*a.clone())
                                     );
 
+                                    // Sanity check and overload registration
+                                    self.static_check(expr).unwrap();
+
                                     return;
                                 }
                             }
@@ -353,6 +384,9 @@ impl NessaContext {
                                         vec!(), 
                                         vec!(*a.clone())
                                     );
+
+                                    // Sanity check and overload registration
+                                    self.static_check(expr).unwrap();
 
                                     return;
                                 }
@@ -375,6 +409,9 @@ impl NessaContext {
                                 Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
                             );
 
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
+
                             return;
                         }
                     }
@@ -390,6 +427,9 @@ impl NessaContext {
                                 a.clone(), 
                                 Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
                             );
+
+                            // Sanity check and overload registration
+                            self.static_check(expr).unwrap();
 
                             return;
                         }
@@ -440,6 +480,442 @@ impl NessaContext {
         }
     }
 
+    pub fn inlining_weight(&self, body: &Vec<NessaExpr>) -> f32 {
+        self.compiled_form_body_size(body, false).unwrap() as f32
+    }
+
+    pub fn max_variable(&self, expr: &NessaExpr, offset: &mut usize) {
+        match expr {
+            NessaExpr::Variable(_, id, _, _) => {
+                *offset = (*offset).max(*id);
+            },
+
+            NessaExpr::CompiledVariableDefinition(_, id, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
+                *offset = (*offset).max(*id);
+                self.max_variable(e, offset)
+            },
+
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) => self.max_variable(e, offset),
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.max_variable(e, offset);
+                }
+            },
+
+            NessaExpr::CompiledFor(_, iterator_idx, element_idx, _, c, exprs) => {
+                *offset = (*offset).max(*iterator_idx);
+                *offset = (*offset).max(*element_idx);
+
+                self.max_variable(c, offset);
+
+                for e in exprs {
+                    self.max_variable(e, offset);
+                }
+            },
+
+            NessaExpr::While(_, c, exprs) => {
+                self.max_variable(c, offset);
+
+                for e in exprs {
+                    self.max_variable(e, offset);
+                }
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.max_variable(c, offset);
+
+                for e in exprs {
+                    self.max_variable(e, offset);
+                }
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.max_variable(a, offset);
+                self.max_variable(b, offset);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.max_variable(ic, offset);
+                
+                for e in ib {
+                    self.max_variable(e, offset);
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.max_variable(ei_h, offset);
+                    
+                    for e in ei_b {
+                        self.max_variable(e, offset);
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.max_variable(e, offset);
+                    }
+                }
+            },
+            
+            NessaExpr::Break(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    pub fn offset_variables(&self, expr: &mut NessaExpr, offset: usize) {
+        match expr {
+            NessaExpr::Variable(_, id, _, _) => {
+                *id += offset;
+            },
+
+            NessaExpr::CompiledVariableDefinition(_, id, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
+                *id += offset;
+                self.offset_variables(e, offset)
+            },
+
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) => self.offset_variables(e, offset),
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.offset_variables(e, offset);
+                }
+            },
+
+            NessaExpr::CompiledFor(_, iterator_idx, element_idx, _, c, exprs) => {
+                *iterator_idx += offset;
+                *element_idx += offset;
+
+                self.offset_variables(c, offset);
+                
+                for e in exprs {
+                    self.offset_variables(e, offset);
+                }
+            }
+
+            NessaExpr::While(_, c, exprs) => {
+                self.offset_variables(c, offset);
+
+                for e in exprs {
+                    self.offset_variables(e, offset);
+                }
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.offset_variables(c, offset);
+
+                for e in exprs {
+                    self.offset_variables(e, offset);
+                }
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.offset_variables(a, offset);
+                self.offset_variables(b, offset);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.offset_variables(ic, offset);
+                
+                for e in ib {
+                    self.offset_variables(e, offset);
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.offset_variables(ei_h, offset);
+                    
+                    for e in ei_b {
+                        self.offset_variables(e, offset);
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.offset_variables(e, offset);
+                    }
+                }
+            },
+            
+            NessaExpr::Break(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    pub fn inline_body(&self, mut body: Vec<NessaExpr>, args: Vec<NessaExpr>, var_offset: &mut usize, l: &Location) -> Vec<NessaExpr> {
+        let mut res = vec!();
+
+        // Get number of vars
+        let arg_num = args.len();
+        let mut func_offset = 0;
+
+        for line in body.iter() {
+            self.max_variable(line, &mut func_offset);
+        }
+
+        // Define variables
+        for (idx, arg) in args.into_iter().enumerate() {
+            res.push(NessaExpr::CompiledVariableAssignment(
+                l.clone(),
+                idx + *var_offset + 1,
+                format!("__arg_{}__", idx + *var_offset + 1),
+                self.infer_type(&arg).unwrap(),
+                Box::new(arg)
+            ))
+        }
+
+        // Map body
+        for line in body.iter_mut() {
+            self.offset_variables(line, *var_offset + 1);
+        }
+
+        res.append(&mut body);
+
+        // Update variable number
+        *var_offset += func_offset + arg_num + 1;
+
+        res
+    }
+
+    pub fn inline_functions_expr(&self, expr: &mut NessaExpr, offset: &mut usize) {
+        match expr {
+            NessaExpr::Return(_, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                self.inline_functions(exprs, offset);
+            },
+
+            NessaExpr::UnaryOperation(l, id, t, e) => {
+                self.inline_functions_expr(e, offset);
+
+                let arg_types = self.infer_type(e).unwrap();
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.unary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&i.0.2[0], self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut inlined_body = self.inline_body(inner.clone(), vec!(*e.clone()), offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
+                self.inline_functions_expr(a, offset);
+                self.inline_functions_expr(b, offset);
+
+                let arg_types = Type::And(vec!(self.infer_type(a).unwrap(), self.infer_type(b).unwrap()));
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.binary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+                    let other_args = Type::And(i.0.2.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&other_args, self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut inlined_body = self.inline_body(inner.clone(), vec!(*a.clone(), *b.clone()), offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::NaryOperation(l, id, t, c, exprs) => {
+                self.inline_functions_expr(c, offset);
+                self.inline_functions(exprs, offset);
+
+                let mut arg_types_vec = vec!(self.infer_type(c).unwrap());
+                arg_types_vec.extend(exprs.iter().map(|i| self.infer_type(i).unwrap()));
+                let arg_types = Type::And(arg_types_vec);
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.nary.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+                    let other_args = Type::And(i.0.2.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&other_args, self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut args_vec = vec!(*c.clone());
+                        args_vec.extend(exprs.iter().cloned());
+        
+                        let mut inlined_body = self.inline_body(inner.clone(), args_vec, offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::FunctionCall(l, id, t, args) => {
+                self.inline_functions(args, offset);
+
+                let arg_types = Type::And(args.iter().map(|i| self.infer_type(i).unwrap()).collect());
+                let templates = Type::And(t.clone());
+
+                let cache_entry = self.cache.templates.functions.inner_borrow_mut();
+
+                let body = cache_entry.iter().find(|i| {
+                    let other_tm = Type::And(i.0.1.clone());
+                    let other_args = Type::And(i.0.2.clone());
+
+                    i.0.0 == *id && templates.bindable_to(&other_tm, self) && arg_types.bindable_to(&other_args, self)
+                }).map(|i| i.1);
+
+                if let Some(inner) = body {
+                    let weight = self.inlining_weight(inner);
+
+                    if weight < INLINE_THRESHOLD {
+                        let mut inlined_body = self.inline_body(inner.clone(), args.clone(), offset, l);
+                        let return_type = self.infer_type(expr).unwrap();
+
+                        // Add empty return if needed
+                        if let Type::Empty = return_type {
+                            if NessaContext::ensured_return_check_body(&inlined_body, &Location::none(), "Operation").is_err() {
+                                inlined_body.push(NessaExpr::Return(Location::none(), Box::new(NessaExpr::Literal(Location::none(), Object::empty()))));
+                            }
+                        }
+
+                        *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+                    }
+                }
+            }
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.inline_functions_expr(c, offset);
+                self.inline_functions(exprs, offset);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.inline_functions_expr(ic, offset);
+                self.inline_functions(ib, offset);
+
+                for (ei_h, ei_b) in ei {
+                    self.inline_functions_expr(ei_h, offset);
+                    self.inline_functions(ei_b, offset);
+                }
+
+                if let Some(inner) = eb {
+                    self.inline_functions(inner, offset);
+                }
+            },
+            
+            NessaExpr::Break(_) |
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    pub fn inline_functions(&self, body: &mut Vec<NessaExpr>, offset: &mut usize) {
+        for i in body {
+            self.inline_functions_expr(i, offset);
+        } 
+    }
+
     pub fn strength_reduction(&self, body: &mut Vec<NessaExpr>) {
         for i in body {
             self.strength_reduction_expr(i);
@@ -450,6 +926,16 @@ impl NessaContext {
         self.insert_moves(body);
         self.strength_reduction(body);
     }
+
+    pub fn late_optimize(&self, body: &mut Vec<NessaExpr>) {
+        let mut var_offset = 0;
+
+        for line in body.iter() {
+            self.max_variable(line, &mut var_offset);
+        }
+
+        self.inline_functions(body, &mut var_offset);
+    }
 }
 
 /*
@@ -458,18 +944,95 @@ impl NessaContext {
     ╘════════════════════════╛
 */
 
-fn apply_jump_change(change: (usize, usize), program: &mut Vec<NessaInstruction>) {
-    match &mut program[change.0].instruction {
-        CompiledNessaExpr::Lambda(to, _, _) |
-        CompiledNessaExpr::Call(to) |
-        CompiledNessaExpr::Jump(to) => *to = change.1,
-                
-        CompiledNessaExpr::RelativeJumpIfFalse(to, _) |
-        CompiledNessaExpr::RelativeJumpIfTrue(to, _) => *to = change.1 - change.0,
+fn compute_labels(program: &mut Vec<NessaInstruction>) {
+    let mut labels = FxHashMap::default(); 
+    let mut curr_idx = 0;
 
-        CompiledNessaExpr::RelativeJump(to) => *to = change.1 as i32 - change.0 as i32,
+    // Generate labels
+    for (idx, i) in program.iter_mut().enumerate() {
+        match &mut i.instruction {
+            CompiledNessaExpr::Lambda(to, _, _) |
+            CompiledNessaExpr::Call(to) |
+            CompiledNessaExpr::Jump(to) => {
+                if !labels.contains_key(to) {
+                    labels.entry(*to).or_insert(curr_idx);
+                    *to = curr_idx;
+                    curr_idx += 1;
 
-        _ => unreachable!()
+                } else {
+                    *to = labels[to];
+                }
+            },
+                    
+            CompiledNessaExpr::RelativeJumpIfFalse(to, _) |
+            CompiledNessaExpr::RelativeJumpIfTrue(to, _) => {
+                let p = idx + *to;
+
+                if !labels.contains_key(&p) {
+                    labels.entry(p).or_insert(curr_idx);
+                    *to = curr_idx;
+                    curr_idx += 1;
+
+                } else {
+                    *to = labels[&p];
+                }
+            },
+    
+            CompiledNessaExpr::RelativeJump(to) => {
+                let p = (idx as i32 + *to) as usize;
+
+                if !labels.contains_key(&p) {
+                    labels.entry(p).or_insert(curr_idx);
+                    *to = curr_idx as i32;
+                    curr_idx += 1;
+
+                } else {
+                    *to = labels[&p] as i32;
+                }
+            },
+    
+            _ => { }
+        }
+    }
+
+    // Insert labels
+    for (line, tag) in &labels {
+        program[*line].labels.insert(*tag);
+    }
+}
+
+fn reassign_labels(program: &mut Vec<NessaInstruction>) {
+    let mut positions = FxHashMap::default(); 
+
+    // Generate label positions
+    for (idx, i) in program.iter_mut().enumerate() {
+        for l in &i.labels {
+            positions.entry(*l).or_insert(idx);
+        }
+
+        i.labels.clear();
+    }
+
+    // Recompute positions
+    for (idx, i) in program.iter_mut().enumerate() {
+        match &mut i.instruction {
+            CompiledNessaExpr::Lambda(to, _, _) |
+            CompiledNessaExpr::Call(to) |
+            CompiledNessaExpr::Jump(to) => {
+                *to = positions[to];
+            },
+                    
+            CompiledNessaExpr::RelativeJumpIfFalse(to, _) |
+            CompiledNessaExpr::RelativeJumpIfTrue(to, _) => {
+                *to = positions[to] - idx;
+            },
+    
+            CompiledNessaExpr::RelativeJump(to) => {
+                *to = positions[&(*to as usize)] as i32 - idx as i32;
+            },
+    
+            _ => { }
+        }
     }
 }
 
@@ -477,34 +1040,17 @@ impl NessaContext {
     fn peephole_optimization(&self, program: &mut Vec<NessaInstruction>) {
         use CompiledNessaExpr::*;
 
-        let mut jumps = JumpMap::from_code(&program);
+        compute_labels(program);
+
         let mut changed = true;
 
         macro_rules! remove_instruction {
             ($idx: expr) => {
+                let labels_to_remove = program[$idx].labels.clone();
+                program[$idx + 1].labels.extend(&labels_to_remove);
                 program.remove($idx);
-
-                for (_, change) in jumps.remove_line($idx) {
-                    apply_jump_change(change, program);
-                }
             };
         }
-
-        while changed {
-            changed = false;
-
-            for i in 0..program.len() {
-                // Delete size 1 jumps
-                if let RelativeJump(1) = &program[i].instruction {
-                    remove_instruction!(i);
-
-                    changed = true;
-                    break;
-                }
-            }
-        }
-
-        changed = true;
 
         while changed {
             changed = false;
@@ -618,35 +1164,67 @@ impl NessaContext {
                 }
             }
         }
+        
+        reassign_labels(program);
+    }
 
-        changed = true;
+    fn remove_empty_calls(&self, program: &mut Vec<NessaInstruction>) {
+        use CompiledNessaExpr::*;
 
-        while changed {
-            changed = false;
+        let mut lines_to_remove = vec!();
 
-            for i in 0..program.len() {
-                // Delete identity functions
-                if let Call(loc) = &program[i].instruction {
-                    if let Return = &program[*loc].instruction {
-                        let mut idxs = program.iter()
-                                              .enumerate()
-                                              .filter(|i| i.1.instruction == Call(*loc))
-                                              .map(|i| i.0)
-                                              .collect::<Vec<_>>();
-
-                        idxs.push(*loc);
-                        idxs.sort();
-
-                        for idx in idxs.iter().rev() {
-                            remove_instruction!(*idx);
-                        }
-
-                        changed = true;
-                        break;
-                    }
-                }
+        // Look for empty calls
+        for (idx, i) in program.iter().enumerate() {
+            match i.instruction {
+                Call(loc) if program[loc].instruction == Return => {
+                    lines_to_remove.push(idx);
+                    lines_to_remove.push(loc);
+                },
+                _ => { }
             }
         }
+
+        lines_to_remove.sort();
+        lines_to_remove.dedup();
+
+        // Remove lines
+        compute_labels(program);
+
+        for line in lines_to_remove.into_iter().rev() {
+            let labels_to_remove = program[line].labels.clone();
+            program[line + 1].labels.extend(&labels_to_remove);
+            program.remove(line);
+        }
+
+        reassign_labels(program);
+    }
+
+    fn remove_single_relative_jumps(&self, program: &mut Vec<NessaInstruction>) {
+        use CompiledNessaExpr::*;
+
+        let mut lines_to_remove = vec!();
+
+        // Look for empty calls
+        for (idx, i) in program.iter().enumerate() {
+            match i.instruction {
+                RelativeJump(1) => lines_to_remove.push(idx),
+                _ => { }
+            }
+        }
+
+        lines_to_remove.sort();
+        lines_to_remove.dedup();
+
+        // Remove lines
+        compute_labels(program);
+
+        for line in lines_to_remove.into_iter().rev() {
+            let labels_to_remove = program[line].labels.clone();
+            program[line + 1].labels.extend(&labels_to_remove);
+            program.remove(line);
+        }
+
+        reassign_labels(program);
     }
 }
 
@@ -659,6 +1237,8 @@ impl NessaContext {
 impl NessaContext {
     pub fn optimize_instructions(&self, program: &mut Vec<NessaInstruction>) {
         self.peephole_optimization(program);
+        self.remove_single_relative_jumps(program);
+        self.remove_empty_calls(program);
     }
 }
 

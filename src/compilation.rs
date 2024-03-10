@@ -7,6 +7,7 @@ use nom::error::{VerboseErrorKind, VerboseError};
 use rustc_hash::FxHashSet;
 use seq_macro::seq;
 use serde::{Serialize, Deserialize};
+use malachite::Integer;
 
 use crate::cache::needs_import;
 use crate::cache::needs_line_import;
@@ -17,7 +18,6 @@ use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::ITERABLE_ID;
-use crate::number::Integer;
 use crate::object::TypeInstance;
 use crate::parser::*;
 use crate::object::NessaArray;
@@ -4051,7 +4051,8 @@ impl NessaContext{
 
 #[cfg(test)]
 mod tests {
-    use crate::number::*;
+    use malachite::Integer;
+
     use crate::object::*;
     use crate::parser::*;
     use crate::context::*;

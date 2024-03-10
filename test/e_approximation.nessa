@@ -1,9 +1,17 @@
+fn fact(n: Int) -> Int {
+    if n <= 0 {
+        return 1;
+    }
+
+    return n * fact(n - 1);
+}
+
 fn e(iters: Int) -> Float {
     let i = 0;
     let res = 0.0;
 
     while i < iters {
-        res = res + 1.0 / fact(i);
+        res = res + 1.0 / fact(*i);
         i := i + 1;
     }
 

@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
+use malachite::Integer;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, number::{Integer, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
 
 /*
     ╒═══════════════════════════╕
@@ -357,7 +358,7 @@ impl NessaContext {
                     if let NessaExpr::BinaryOperation(_, ADD_BINOP_ID, _, a_inner, b_inner) = &**b {
                         if a_inner == a {
                             if let NessaExpr::Literal(_, obj) = &**b_inner {
-                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == Integer::from(1) {
                                     *expr = NessaExpr::FunctionCall(
                                         l.clone(), 
                                         self.get_function_id("inc".into()).unwrap(), 
@@ -377,7 +378,7 @@ impl NessaContext {
                     if let NessaExpr::BinaryOperation(_, SUB_BINOP_ID, _, a_inner, b_inner) = &**b {
                         if a_inner == a {
                             if let NessaExpr::Literal(_, obj) = &**b_inner {
-                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == Integer::from(1) {
                                     *expr = NessaExpr::FunctionCall(
                                         l.clone(), 
                                         self.get_function_id("dec".into()).unwrap(), 
@@ -398,40 +399,48 @@ impl NessaContext {
                 // Change multiplications for shifts when applicable
                 if *id == MUL_BINOP_ID && *t_a.deref_type() == INT && *t_b.deref_type() == INT {
                     if let NessaExpr::Literal(_, obj) = &**a {
-                        if obj.get_type() == INT && obj.get::<Integer>().is_positive_power_of_two() {
-                            let shift = u64::BITS - obj.get::<Integer>().limbs[0].leading_zeros();
+                        if obj.get_type() == INT {
+                            let n = obj.get::<Integer>().clone();
 
-                            *expr = NessaExpr::BinaryOperation(
-                                l.clone(),
-                                SHL_BINOP_ID, 
-                                vec!(), 
-                                b.clone(), 
-                                Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
-                            );
-
-                            // Sanity check and overload registration
-                            self.static_check(expr).unwrap();
-
-                            return;
+                            if is_valid_index(&n) && to_usize(&n).is_power_of_two() {
+                                let shift = u64::BITS - to_usize(&n).leading_zeros();
+    
+                                *expr = NessaExpr::BinaryOperation(
+                                    l.clone(),
+                                    SHL_BINOP_ID, 
+                                    vec!(), 
+                                    b.clone(), 
+                                    Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
+                                );
+    
+                                // Sanity check and overload registration
+                                self.static_check(expr).unwrap();
+    
+                                return;
+                            }
                         }
                     }
-                    
+
                     if let NessaExpr::Literal(_, obj) = &**b {
-                        if obj.get_type() == INT && obj.get::<Integer>().is_positive_power_of_two() {
-                            let shift = u64::BITS - obj.get::<Integer>().limbs[0].leading_zeros();
+                        if obj.get_type() == INT {
+                            let n = obj.get::<Integer>().clone();
 
-                            *expr = NessaExpr::BinaryOperation(
-                                l.clone(),
-                                SHL_BINOP_ID, 
-                                vec!(), 
-                                a.clone(), 
-                                Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
-                            );
-
-                            // Sanity check and overload registration
-                            self.static_check(expr).unwrap();
-
-                            return;
+                            if is_valid_index(&n) && to_usize(&n).is_power_of_two() {
+                                let shift = u64::BITS - to_usize(&n).leading_zeros();
+    
+                                *expr = NessaExpr::BinaryOperation(
+                                    l.clone(),
+                                    SHL_BINOP_ID, 
+                                    vec!(), 
+                                    a.clone(), 
+                                    Box::new(NessaExpr::Literal(l.clone(), Object::new(Integer::from(shift - 1))))
+                                );
+    
+                                // Sanity check and overload registration
+                                self.static_check(expr).unwrap();
+    
+                                return;
+                            }
                         }
                     }
                 }

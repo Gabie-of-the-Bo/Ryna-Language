@@ -60,6 +60,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,

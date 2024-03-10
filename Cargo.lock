@@ -823,8 +823,6 @@ dependencies = [
  "md5",
  "nom",
  "nom_locate",
- "num-bigint",
- "num-traits",
  "panic-message",
  "rand",
  "rayon",
@@ -864,27 +862,6 @@ dependencies = [
  "bytecount",
  "memchr",
  "nom",
-]
-
-[[package]]
-name = "num-bigint"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "608e7659b5c3d7cba262d894801b9ec9d00de989e8a82bd4bef91d08da45cdc0"
-dependencies = [
- "autocfg",
- "num-integer",
- "num-traits",
- "rand",
-]
-
-[[package]]
-name = "num-integer"
-version = "0.1.46"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]

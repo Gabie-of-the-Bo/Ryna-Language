@@ -1682,19 +1682,19 @@ impl NessaContext{
 
                 self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code.len());
 
-                for i in 0..a.len() {
+                for (i, arg) in a.iter().enumerate() {
                     if i == 0 {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             "Lambda expression start".into(),
-                            a[i].1.clone()
+                            arg.1.clone()
                         ));
 
                     } else {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             String::new(),
-                            a[i].1.clone()
+                            arg.1.clone()
                         ));
                     }
                 }
@@ -2067,7 +2067,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&and, self) {
                                 // Store parameters
-                                for i in 0..a.len(){
+                                for (i, arg) in args.iter().enumerate() {
                                     if i == 0 {
                                         let comment = format!(
                                             "fn {}{}({}) -> {}",
@@ -2080,14 +2080,14 @@ impl NessaContext{
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i), 
                                             comment,
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
 
                                     } else {
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i),
                                             String::new(),
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
                                     }
                                 }
@@ -2185,7 +2185,7 @@ impl NessaContext{
                                     c_rep = close_rep.clone();
                                 }
     
-                                for i in 0..=a.len(){
+                                for (i, arg) in args.iter().enumerate() {
                                     if i == 0 {
                                         let comment = format!(
                                             "op ({}){}{}{} -> {}", 
@@ -2199,14 +2199,14 @@ impl NessaContext{
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i), 
                                             comment,
-                                            args[0].clone()
+                                            arg.clone()
                                         ));
     
                                     } else {
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i),
                                             String::new(),
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
                                     }
                                 }
@@ -3987,19 +3987,19 @@ impl NessaContext{
             // Early optimization
             self.optimize(lines);
 
-            for (_, body) in &mut *self.cache.templates.functions.inner_borrow_mut() {
+            for body in self.cache.templates.functions.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.unary.inner_borrow_mut() {
+            for body in self.cache.templates.unary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.binary.inner_borrow_mut() {
+            for body in self.cache.templates.binary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.nary.inner_borrow_mut() {
+            for body in self.cache.templates.nary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 

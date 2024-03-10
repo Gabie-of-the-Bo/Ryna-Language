@@ -257,8 +257,8 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 0, INT, INT, Integer, arg_1, arg_2, arg_1 + arg_2);
     define_binary_native_op_combinations!(ctx, 0, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 + arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 0, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(&arg_1) + arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 0, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 + to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 0, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(arg_1) + arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 0, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 + to_f64(arg_2));
 
     define_binary_native_op_combinations!(ctx, 0, STR, STR, String, arg_1, arg_2, format!("{}{}", arg_1, arg_2));
 
@@ -266,29 +266,29 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 1, INT, INT, Integer, arg_1, arg_2, arg_1 - arg_2);
     define_binary_native_op_combinations!(ctx, 1, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 - arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 1, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(&arg_1) - arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 1, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 - to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 1, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(arg_1) - arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 1, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 - to_f64(arg_2));
 
     ctx.define_binary_operator("*".into(), false, 500).unwrap();
 
     define_binary_native_op_combinations!(ctx, 2, INT, INT, Integer, arg_1, arg_2, arg_1 * arg_2);
     define_binary_native_op_combinations!(ctx, 2, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 * arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 2, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(&arg_1) * arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 2, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 * to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 2, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(arg_1) * arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 2, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 * to_f64(arg_2));
 
     ctx.define_binary_operator("/".into(), false, 550).unwrap();
 
     define_binary_native_op_combinations!(ctx, 3, INT, INT, Integer, arg_1, arg_2, arg_1 / arg_2);
     define_binary_native_op_combinations!(ctx, 3, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 / arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 3, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(&arg_1) / arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 3, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 / to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 3, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(arg_1) / arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 3, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 / to_f64(arg_2));
 
     ctx.define_binary_operator("%".into(), false, 600).unwrap();
 
     define_binary_native_op_combinations!(ctx, 4, INT, INT, Integer, arg_1, arg_2, arg_1 % arg_2);
     define_binary_native_op_combinations!(ctx, 4, FLOAT, FLOAT, f64, arg_1, arg_2, arg_1 % arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 4, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(&arg_1) % arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 4, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 % to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 4, INT, FLOAT, FLOAT, Integer, f64, arg_1, arg_2, to_f64(arg_1) % arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 4, FLOAT, INT, FLOAT, f64, Integer, arg_1, arg_2, arg_1 % to_f64(arg_2));
 
     /*
         ╒══════════════════════╕
@@ -308,29 +308,29 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 6, INT, BOOL, Integer, arg_1, arg_2, arg_1 < arg_2);
     define_binary_native_op_combinations!(ctx, 6, FLOAT, BOOL, f64, arg_1, arg_2, arg_1 < arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 6, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(&arg_1) < *arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 6, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 < to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 6, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(arg_1) < *arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 6, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 < to_f64(arg_2));
 
     ctx.define_binary_operator(">".into(), false, 950).unwrap();
 
     define_binary_native_op_combinations!(ctx, 7, INT, BOOL, Integer, arg_1, arg_2, arg_1 > arg_2);
     define_binary_native_op_combinations!(ctx, 7, FLOAT, BOOL, f64, arg_1, arg_2, arg_1 > arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 7, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(&arg_1) > *arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 7, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 > to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 7, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(arg_1) > *arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 7, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 > to_f64(arg_2));
 
     ctx.define_binary_operator("<=".into(), false, 1000).unwrap();
 
     define_binary_native_op_combinations!(ctx, 8, INT, BOOL, Integer, arg_1, arg_2, arg_1 <= arg_2);
     define_binary_native_op_combinations!(ctx, 8, FLOAT, BOOL, f64, arg_1, arg_2, arg_1 <= arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 8, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(&arg_1) <= *arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 8, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 <= to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 8, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(arg_1) <= *arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 8, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 <= to_f64(arg_2));
 
     ctx.define_binary_operator(">=".into(), false, 1050).unwrap();
 
     define_binary_native_op_combinations!(ctx, 9, INT, BOOL, Integer, arg_1, arg_2, arg_1 >= arg_2);
     define_binary_native_op_combinations!(ctx, 9, FLOAT, BOOL, f64, arg_1, arg_2, arg_1 >= arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 9, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(&arg_1) >= *arg_2);
-    define_binary_native_op_combinations_distinct!(ctx, 9, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 >= to_f64(&arg_2));
+    define_binary_native_op_combinations_distinct!(ctx, 9, INT, FLOAT, BOOL, Integer, f64, arg_1, arg_2, to_f64(arg_1) >= *arg_2);
+    define_binary_native_op_combinations_distinct!(ctx, 9, FLOAT, INT, BOOL, f64, Integer, arg_1, arg_2, *arg_1 >= to_f64(arg_2));
 
     ctx.define_binary_operator("==".into(), false, 1100).unwrap();
 

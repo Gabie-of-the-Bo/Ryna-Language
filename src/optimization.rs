@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 use malachite::Integer;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
 
 /*
     ╒═══════════════════════════╕
@@ -12,7 +12,7 @@ use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaCo
 const INLINE_THRESHOLD: f32 = 50.0;
 
 impl NessaContext {
-    pub fn count_usages_expr(&self, expr: &NessaExpr, var_usages: &mut FxHashMap<usize, usize>, offset: usize) {
+    pub fn count_usages_expr(expr: &NessaExpr, var_usages: &mut FxHashMap<usize, usize>, offset: usize) {
         match expr {
             NessaExpr::Variable(_, id, _, _) => {
                 *var_usages.entry(*id).or_default() += offset;
@@ -21,57 +21,57 @@ impl NessaContext {
             NessaExpr::UnaryOperation(_, _, _, e) |
             NessaExpr::Return(_, e) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.count_usages_expr(e, var_usages, offset),
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => NessaContext::count_usages_expr(e, var_usages, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
-                    self.count_usages_expr(e, var_usages, offset);
+                    NessaContext::count_usages_expr(e, var_usages, offset);
                 }
             },
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
-                self.count_usages_expr(c, var_usages, offset); // Set offset of 2 in order not to insert moves inside loops
+                NessaContext::count_usages_expr(c, var_usages, offset); // Set offset of 2 in order not to insert moves inside loops
 
                 for e in exprs {
-                    self.count_usages_expr(e, var_usages, 2);
+                    NessaContext::count_usages_expr(e, var_usages, 2);
                 }
             },
 
             NessaExpr::NaryOperation(_, _, _, c, exprs) => {
-                self.count_usages_expr(c, var_usages, offset);
+                NessaContext::count_usages_expr(c, var_usages, offset);
 
                 for e in exprs {
-                    self.count_usages_expr(e, var_usages, offset);
+                    NessaContext::count_usages_expr(e, var_usages, offset);
                 }
             },
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.count_usages_expr(a, var_usages, offset);
-                self.count_usages_expr(b, var_usages, offset);
+                NessaContext::count_usages_expr(a, var_usages, offset);
+                NessaContext::count_usages_expr(b, var_usages, offset);
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {
-                self.count_usages_expr(ic, var_usages, offset);
+                NessaContext::count_usages_expr(ic, var_usages, offset);
                 
                 for e in ib {
-                    self.count_usages_expr(e, var_usages, offset);
+                    NessaContext::count_usages_expr(e, var_usages, offset);
                 }
 
                 for (ei_h, ei_b) in ei {
-                    self.count_usages_expr(ei_h, var_usages, offset);
+                    NessaContext::count_usages_expr(ei_h, var_usages, offset);
                     
                     for e in ei_b {
-                        self.count_usages_expr(e, var_usages, offset);
+                        NessaContext::count_usages_expr(e, var_usages, offset);
                     }
                 }
 
                 if let Some(inner) = eb {
                     for e in inner {
-                        self.count_usages_expr(e, var_usages, offset);
+                        NessaContext::count_usages_expr(e, var_usages, offset);
                     }
                 }
             },
@@ -210,7 +210,7 @@ impl NessaContext {
 
         // Count usages
         for i in body.iter() {
-            self.count_usages_expr(i, &mut var_usages, 1);
+            NessaContext::count_usages_expr(i, &mut var_usages, 1);
         }
         
         // insert moves
@@ -328,8 +328,6 @@ impl NessaContext {
 
                                 // Sanity check and overload registration
                                 self.static_check(expr).unwrap();
-                                
-                                return;
                             }
                         }
                     }
@@ -358,7 +356,7 @@ impl NessaContext {
                     if let NessaExpr::BinaryOperation(_, ADD_BINOP_ID, _, a_inner, b_inner) = &**b {
                         if a_inner == a {
                             if let NessaExpr::Literal(_, obj) = &**b_inner {
-                                if obj.get_type() == INT && *obj.get::<Integer>() == Integer::from(1) {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
                                     *expr = NessaExpr::FunctionCall(
                                         l.clone(), 
                                         self.get_function_id("inc".into()).unwrap(), 
@@ -378,7 +376,7 @@ impl NessaContext {
                     if let NessaExpr::BinaryOperation(_, SUB_BINOP_ID, _, a_inner, b_inner) = &**b {
                         if a_inner == a {
                             if let NessaExpr::Literal(_, obj) = &**b_inner {
-                                if obj.get_type() == INT && *obj.get::<Integer>() == Integer::from(1) {
+                                if obj.get_type() == INT && *obj.get::<Integer>() == *ONE {
                                     *expr = NessaExpr::FunctionCall(
                                         l.clone(), 
                                         self.get_function_id("dec".into()).unwrap(), 
@@ -438,8 +436,6 @@ impl NessaContext {
     
                                 // Sanity check and overload registration
                                 self.static_check(expr).unwrap();
-    
-                                return;
                             }
                         }
                     }
@@ -493,7 +489,7 @@ impl NessaContext {
         self.compiled_form_body_size(body, false).unwrap() as f32
     }
 
-    pub fn max_variable(&self, expr: &NessaExpr, offset: &mut usize) {
+    pub fn max_variable(expr: &NessaExpr, offset: &mut usize) {
         match expr {
             NessaExpr::Variable(_, id, _, _) => {
                 *offset = (*offset).max(*id);
@@ -502,18 +498,18 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
                 *offset = (*offset).max(*id);
-                self.max_variable(e, offset)
+                NessaContext::max_variable(e, offset)
             },
 
             NessaExpr::UnaryOperation(_, _, _, e) |
-            NessaExpr::Return(_, e) => self.max_variable(e, offset),
+            NessaExpr::Return(_, e) => NessaContext::max_variable(e, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
-                    self.max_variable(e, offset);
+                    NessaContext::max_variable(e, offset);
                 }
             },
 
@@ -521,52 +517,52 @@ impl NessaContext {
                 *offset = (*offset).max(*iterator_idx);
                 *offset = (*offset).max(*element_idx);
 
-                self.max_variable(c, offset);
+                NessaContext::max_variable(c, offset);
 
                 for e in exprs {
-                    self.max_variable(e, offset);
+                    NessaContext::max_variable(e, offset);
                 }
             },
 
             NessaExpr::While(_, c, exprs) => {
-                self.max_variable(c, offset);
+                NessaContext::max_variable(c, offset);
 
                 for e in exprs {
-                    self.max_variable(e, offset);
+                    NessaContext::max_variable(e, offset);
                 }
             },
 
             NessaExpr::NaryOperation(_, _, _, c, exprs) => {
-                self.max_variable(c, offset);
+                NessaContext::max_variable(c, offset);
 
                 for e in exprs {
-                    self.max_variable(e, offset);
+                    NessaContext::max_variable(e, offset);
                 }
             },
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.max_variable(a, offset);
-                self.max_variable(b, offset);
+                NessaContext::max_variable(a, offset);
+                NessaContext::max_variable(b, offset);
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {
-                self.max_variable(ic, offset);
+                NessaContext::max_variable(ic, offset);
                 
                 for e in ib {
-                    self.max_variable(e, offset);
+                    NessaContext::max_variable(e, offset);
                 }
 
                 for (ei_h, ei_b) in ei {
-                    self.max_variable(ei_h, offset);
+                    NessaContext::max_variable(ei_h, offset);
                     
                     for e in ei_b {
-                        self.max_variable(e, offset);
+                        NessaContext::max_variable(e, offset);
                     }
                 }
 
                 if let Some(inner) = eb {
                     for e in inner {
-                        self.max_variable(e, offset);
+                        NessaContext::max_variable(e, offset);
                     }
                 }
             },
@@ -591,7 +587,7 @@ impl NessaContext {
         }
     }
 
-    pub fn offset_variables(&self, expr: &mut NessaExpr, offset: usize) {
+    pub fn offset_variables(expr: &mut NessaExpr, offset: usize) {
         match expr {
             NessaExpr::Variable(_, id, _, _) => {
                 *id += offset;
@@ -600,18 +596,18 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
                 *id += offset;
-                self.offset_variables(e, offset)
+                NessaContext::offset_variables(e, offset)
             },
 
             NessaExpr::UnaryOperation(_, _, _, e) |
-            NessaExpr::Return(_, e) => self.offset_variables(e, offset),
+            NessaExpr::Return(_, e) => NessaContext::offset_variables(e, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
-                    self.offset_variables(e, offset);
+                    NessaContext::offset_variables(e, offset);
                 }
             },
 
@@ -619,52 +615,52 @@ impl NessaContext {
                 *iterator_idx += offset;
                 *element_idx += offset;
 
-                self.offset_variables(c, offset);
+                NessaContext::offset_variables(c, offset);
                 
                 for e in exprs {
-                    self.offset_variables(e, offset);
+                    NessaContext::offset_variables(e, offset);
                 }
             }
 
             NessaExpr::While(_, c, exprs) => {
-                self.offset_variables(c, offset);
+                NessaContext::offset_variables(c, offset);
 
                 for e in exprs {
-                    self.offset_variables(e, offset);
+                    NessaContext::offset_variables(e, offset);
                 }
             },
 
             NessaExpr::NaryOperation(_, _, _, c, exprs) => {
-                self.offset_variables(c, offset);
+                NessaContext::offset_variables(c, offset);
 
                 for e in exprs {
-                    self.offset_variables(e, offset);
+                    NessaContext::offset_variables(e, offset);
                 }
             },
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.offset_variables(a, offset);
-                self.offset_variables(b, offset);
+                NessaContext::offset_variables(a, offset);
+                NessaContext::offset_variables(b, offset);
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {
-                self.offset_variables(ic, offset);
+                NessaContext::offset_variables(ic, offset);
                 
                 for e in ib {
-                    self.offset_variables(e, offset);
+                    NessaContext::offset_variables(e, offset);
                 }
 
                 for (ei_h, ei_b) in ei {
-                    self.offset_variables(ei_h, offset);
+                    NessaContext::offset_variables(ei_h, offset);
                     
                     for e in ei_b {
-                        self.offset_variables(e, offset);
+                        NessaContext::offset_variables(e, offset);
                     }
                 }
 
                 if let Some(inner) = eb {
                     for e in inner {
-                        self.offset_variables(e, offset);
+                        NessaContext::offset_variables(e, offset);
                     }
                 }
             },
@@ -697,7 +693,7 @@ impl NessaContext {
         let mut func_offset = 0;
 
         for line in body.iter() {
-            self.max_variable(line, &mut func_offset);
+            NessaContext::max_variable(line, &mut func_offset);
         }
 
         // Define variables
@@ -713,7 +709,7 @@ impl NessaContext {
 
         // Map body
         for line in body.iter_mut() {
-            self.offset_variables(line, *var_offset + 1);
+            NessaContext::offset_variables(line, *var_offset + 1);
         }
 
         res.append(&mut body);
@@ -940,7 +936,7 @@ impl NessaContext {
         let mut var_offset = 0;
 
         for line in body.iter() {
-            self.max_variable(line, &mut var_offset);
+            NessaContext::max_variable(line, &mut var_offset);
         }
 
         self.inline_functions(body, &mut var_offset);
@@ -953,7 +949,7 @@ impl NessaContext {
     ╘════════════════════════╛
 */
 
-fn compute_labels(program: &mut Vec<NessaInstruction>) {
+fn compute_labels(program: &mut [NessaInstruction]) {
     let mut labels = FxHashMap::default(); 
     let mut curr_idx = 0;
 
@@ -1010,7 +1006,7 @@ fn compute_labels(program: &mut Vec<NessaInstruction>) {
     }
 }
 
-fn reassign_labels(program: &mut Vec<NessaInstruction>) {
+fn reassign_labels(program: &mut [NessaInstruction]) {
     let mut positions = FxHashMap::default(); 
 
     // Generate label positions
@@ -1215,9 +1211,8 @@ impl NessaContext {
 
         // Look for empty calls
         for (idx, i) in program.iter().enumerate() {
-            match i.instruction {
-                RelativeJump(1) => lines_to_remove.push(idx),
-                _ => { }
+            if let RelativeJump(1) = i.instruction {
+                lines_to_remove.push(idx);
             }
         }
 

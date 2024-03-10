@@ -56,7 +56,7 @@ impl PartialEq for NessaFile {
 
 impl NessaFile {
     pub fn is_open(&self) -> bool {
-        return self.file.is_some();
+        self.file.is_some()
     }
 
     pub fn close(&mut self) -> Result<(), String> {

@@ -20,9 +20,7 @@ path = "src/main.rs"
 [dependencies]
 seq-macro = "0.2"
 rand = "0.8.5"
-impl_ops = "0.1.1"
 rayon = "1.9.0"
-bit-set = "0.5.3"
 nom = "7.1.3"
 nom_locate = "4.2.0"
 clap = "4.4.2"
@@ -40,11 +38,10 @@ regex = "1.10.0"
 directories = "5.0.1"
 lazy_static = "1.4.0"
 git2 = "0.18.2"
+malachite = { version = "0.4.5", features = ["enable_serde", "random"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-num-traits = "0.2.17"
-num-bigint = { version = "0.4.4", features = ["rand"] }
 panic-message = "0.3.0"
 
 [[bench]]

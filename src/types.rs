@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 use colored::Colorize;
 use serde::{Serialize, Deserialize};
+use malachite::Integer;
 
 use crate::context::NessaContext;
 use crate::id_mapper::IdMapper;
@@ -11,7 +12,6 @@ use crate::nessa_error;
 use crate::object::Object;
 use crate::parser::Location;
 use crate::patterns::Pattern;
-use crate::number::Integer;
 
 /*
                                                   ╒══════════════════╕
@@ -721,7 +721,7 @@ pub const T_2: Type = Type::TemplateParam(2, vec!());
 
 // Standard context
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new))).unwrap();
+    ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new).map_err(|_| "Invalid Int format".into()))).unwrap();
     ctx.define_type("Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
     ctx.define_type("String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 

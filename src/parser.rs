@@ -1,6 +1,9 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
+use std::str::FromStr;
 
+use malachite::num::conversion::string::options::FromSciStringOptions;
+use malachite::num::conversion::traits::FromSciString;
 use nom::AsChar;
 use nom::bytes::complete::{tag, take_till, take_until};
 use nom::combinator::cut;
@@ -18,6 +21,7 @@ use nom::{
 
 use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
+use malachite::Integer;
 
 use crate::config::ImportMap;
 use crate::functions::Function;
@@ -25,7 +29,6 @@ use crate::interfaces::{InterfaceConstraint, Interface};
 use crate::macros::{parse_nessa_macro, NessaMacro, NessaMacroType};
 use crate::operations::Operator;
 use crate::object::{Object, TypeInstance};
-use crate::number::Integer;
 use crate::precedence_cache::PrecedenceCache;
 use crate::types::*;
 use crate::operations::*;
@@ -57,6 +60,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,
@@ -814,7 +818,7 @@ impl NessaContext {
                 opt(tag("-")),
                 take_while1(|c: char| c.is_ascii_digit())
             )),
-            |(s, n)| Integer::from(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str())
+            |(s, n)| Integer::from_str(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str()).unwrap()
         )(input);
     }
 
@@ -824,7 +828,12 @@ impl NessaContext {
                 tag("0b"),
                 take_while1(|c: char| c == '0' || c == '1')
             ),
-            |n: Span<'a>| Integer::from_bin(n.to_string().as_str())
+            |n: Span<'a>| {
+                let mut options = FromSciStringOptions::default();
+                options.set_base(2);
+
+                Integer::from_sci_string_with_options(n.to_string().as_str(), options).unwrap()
+            }
         )(input);
     }
 
@@ -834,7 +843,12 @@ impl NessaContext {
                 tag("0x"),
                 take_while1(|c: char| c.is_hex_digit())
             ),
-            |n: Span<'a>| Integer::from_hex(n.to_string().as_str())
+            |n: Span<'a>| {
+                let mut options = FromSciStringOptions::default();
+                options.set_base(16);
+
+                Integer::from_sci_string_with_options(n.to_string().as_str(), options).unwrap()
+            }
         )(input);
     }
 
@@ -2882,7 +2896,6 @@ mod tests {
     use crate::interfaces::PRINTABLE_ID;
     use crate::parser::*;
     use crate::object::*;
-    use crate::number::*;
 
     #[test]
     fn type_parsing() {

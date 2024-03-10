@@ -1,10 +1,8 @@
-#[macro_use] extern crate impl_ops;
 extern crate nom;
 
 #[macro_use]
 extern crate lazy_static;
 
-pub mod number;
 pub mod cache;
 pub mod patterns;
 pub mod object;
@@ -30,11 +28,11 @@ pub mod config;
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
 
+#[path = "algorithms/integer_ext.rs"]
+pub mod integer_ext;
+
 #[path = "algorithms/git.rs"]
 pub mod git;
-
-#[path = "stdlib/math.rs"]
-pub mod math;
 
 #[path = "structures/graph.rs"]
 pub mod graph;

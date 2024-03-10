@@ -3,14 +3,15 @@ use std::io::Write;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use rand::Rng;
 use seq_macro::seq;
+use malachite::Integer;
+use malachite::num::arithmetic::traits::Abs;
 
 use crate::compilation::CompiledNessaExpr;
-use crate::number::ONE;
+use crate::integer_ext::*;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
-use crate::math::rand_f64;
-use crate::number::Integer;
 use crate::types::*;
 use crate::object::*;
 use crate::context::NessaContext;
@@ -101,7 +102,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
-        *v[0].deref::<Integer>() += &*ONE;
+        *v[0].deref::<Integer>() += Integer::from(1);
 
         Ok(Object::empty())
     }).unwrap();
@@ -220,7 +221,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let size = v[1].get::<Integer>();
 
-            if size.is_valid_index() && array.elements.try_reserve_exact(size.as_usize()).is_ok() {
+            if is_valid_index(&size) && array.elements.try_reserve_exact(to_usize(&size)).is_ok() {
                 Ok(Object::empty())
     
             } else {
@@ -425,56 +426,52 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("sin".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sin());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).sin());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sin());
 
     let idx = ctx.define_function("cos".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().cos());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).cos());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.cos());
 
     let idx = ctx.define_function("tan".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().tan());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).tan());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.tan());
 
     let idx = ctx.define_function("sinh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sinh());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).sinh());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sinh());
 
     let idx = ctx.define_function("cosh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().cosh());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).cosh());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.cosh());
 
     let idx = ctx.define_function("tanh".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().tanh());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).tanh());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.tanh());
-
-    let idx = ctx.define_function("fact".into()).unwrap();
-
-    define_unary_function_overloads!(ctx, idx, INT, INT, Integer, a, a.fact()?);
 
     let idx = ctx.define_function("ln".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().ln());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).ln());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.ln());
 
     let idx = ctx.define_function("log2".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().log2());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).log2());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.log2());
 
     let idx = ctx.define_function("log10".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().log10());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).log10());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.log10());
 
     let idx = ctx.define_function("exp".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().exp());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).exp());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.exp());
 
     let idx = ctx.define_function("floor".into()).unwrap();
@@ -495,25 +492,25 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("sqrt".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64().sqrt());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a).sqrt());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.sqrt());
 
     let idx = ctx.define_function("abs".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, INT, Integer, a, a.abs());
+    define_unary_function_overloads!(ctx, idx, INT, INT, Integer, a, a.clone().abs());
     define_unary_function_overloads!(ctx, idx, FLOAT, FLOAT, f64, a, a.abs());
 
     let idx = ctx.define_function("rand".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[], FLOAT, |_, _, _, _| Ok(Object::new(rand_f64()))).unwrap();
+    ctx.define_native_function_overload(idx, 0, &[], FLOAT, |_, _, _, _| Ok(Object::new(rand::thread_rng().gen_range(0.0..1.0)))).unwrap();
 
     let idx = ctx.define_function("rand_int".into()).unwrap();
 
-    define_binary_function_overloads!(ctx, idx, INT, INT, Integer, a, b, Integer::rand_int_range(&a, &b)?);
+    define_binary_function_overloads!(ctx, idx, INT, INT, Integer, a, b, randint(a.clone(), b.clone()));
 
     let idx = ctx.define_function("as_float".into()).unwrap();
 
-    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, a.to_f64());
+    define_unary_function_overloads!(ctx, idx, INT, FLOAT, Integer, a, to_f64(&a));
 
     let idx = ctx.define_function("is".into()).unwrap();
 
@@ -713,7 +710,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let file = v[0].deref::<NessaFile>();
         let num_bytes = v[1].get::<Integer>();
 
-        if !num_bytes.is_valid_index() || num_bytes.is_zero() {
+        if !is_valid_index(&num_bytes) || *num_bytes == *ZERO {
             return Err(format!("Unable to read {} bytes from file", num_bytes));
         }
 
@@ -721,7 +718,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
         }
 
-        let mut buf = vec!(0; num_bytes.as_usize());
+        let mut buf = vec!(0; to_usize(&num_bytes));
         let res = file.file.as_ref().unwrap().borrow_mut().read_exact(&mut buf);
 
         match res {
@@ -764,8 +761,8 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         for n in &content.elements {
             let byte = &*n.get::<Integer>();
 
-            if byte.is_valid_byte() {
-                bytes.push(byte.limbs[0] as u8);
+            if is_valid_byte(byte) {
+                bytes.push(to_u8(byte));
             
             } else {
                 return Err(format!("{} is not a valid byte value", byte));
@@ -798,14 +795,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         let string = &*v[0].deref::<String>();
         let idx = &*v[1].get::<Integer>();
 
-        if !idx.is_valid_index() {
+        if !is_valid_index(idx) {
             return Err(format!("{} is not a valid index", idx));
         
-        } else if string.len() <= idx.as_usize() {
+        } else if string.len() <= to_usize(idx) {
             return Err(format!("{} is higher than the length of the string ({})", idx, string.len()));
         }
 
-        if let Some(character) = string[idx.as_usize()..].chars().next() {
+        if let Some(character) = string[to_usize(idx)..].chars().next() {
             Ok(ObjectBlock::Int(Integer::from(character as u64)).to_obj())
 
         } else {
@@ -818,11 +815,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, v, _| {
         let cp = &*v[0].get::<Integer>();
 
-        if !cp.is_valid_index() {
+        if !is_valid_index(cp) {
             return Err(format!("{} is not a valid code point", cp));
         }
 
-        if let Some(character) = char::from_u32(cp.limbs[0] as u32) {
+        if let Some(character) = char::from_u32(to_u32(cp)) {
             Ok(ObjectBlock::Str(character.to_string()).to_obj())
 
         } else {
@@ -835,11 +832,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
         let cp = &*v[0].get::<Integer>();
 
-        if !cp.is_valid_index() {
+        if !is_valid_index(cp) {
             return Err(format!("{} is not a valid code point", cp));
         }
 
-        if let Some(character) = char::from_u32(cp.limbs[0] as u32) {
+        if let Some(character) = char::from_u32(to_u32(cp)) {
             Ok(ObjectBlock::Int(Integer::from(character.len_utf8() as u64)).to_obj())
 
         } else {
@@ -868,11 +865,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         for i in &arr.elements {
             let n = &*i.get::<Integer>();
 
-            if !n.is_valid_byte() {
+            if !is_valid_byte(n) {
                 return Err(format!("{} is not a valid byte", n));
             }
             
-            bytes.push(n.as_u8());
+            bytes.push(to_u8(n));
         }
 
         if let Ok(string) = String::from_utf8(bytes) {
@@ -887,7 +884,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT], INT, |_, _, v, _| {
         let cp = &*v[0].get::<Integer>();
-        Ok(Object::new(Integer::from(*cp.limbs.first().unwrap())))
+        Ok(Object::new(truncate(cp)))
     }).unwrap();
 
     let idx = ctx.define_function("input".into()).unwrap();
@@ -912,14 +909,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     ctx.define_native_function_overload(idx, 0, &[INT], STR, |_, _, v, ctx| {
         let idx = &*v[0].get::<Integer>();
 
-        if !idx.is_valid_index() {
+        if !is_valid_index(idx) {
             return Err(format!("{} is not a valid index", idx));
         
-        } else if ctx.program_input.len() <= idx.as_usize() {
+        } else if ctx.program_input.len() <= to_usize(idx) {
             return Err(format!("{} is higher than the number of input arguments ({})", idx, ctx.program_input.len()));
         }
 
-        Ok(Object::new(ctx.program_input[idx.as_usize()].clone()))
+        Ok(Object::new(ctx.program_input[to_usize(idx)].clone()))
     }).unwrap();
 
     let idx = ctx.define_function("set".into()).unwrap();
@@ -933,14 +930,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let idx = &*v[2].get::<Integer>();
 
-            if !idx.is_valid_index() {
+            if !is_valid_index(idx) {
                 return Err(format!("{} is not a valid index", idx));
             
-            } else if array.elements.len() <= idx.as_usize() {
+            } else if array.elements.len() <= to_usize(idx) {
                 return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements[idx.as_usize()] = v[1].clone();
+            array.elements[to_usize(idx)] = v[1].clone();
 
             Ok(Object::empty())
         }
@@ -957,14 +954,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let idx = &*v[2].get::<Integer>();
 
-            if !idx.is_valid_index() {
+            if !is_valid_index(idx) {
                 return Err(format!("{} is not a valid index", idx));
             
-            } else if array.elements.len() <= idx.as_usize() {
+            } else if array.elements.len() <= to_usize(idx) {
                 return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements.insert(idx.as_usize(), v[1].clone());
+            array.elements.insert(to_usize(idx), v[1].clone());
 
             Ok(Object::empty())
         }
@@ -981,14 +978,14 @@ pub fn standard_functions(ctx: &mut NessaContext) {
             let mut array = v[0].deref::<NessaArray>();
             let idx = &*v[1].get::<Integer>();
 
-            if !idx.is_valid_index() {
+            if !is_valid_index(idx) {
                 return Err(format!("{} is not a valid index", idx));
             
-            } else if array.elements.len() <= idx.as_usize() {
+            } else if array.elements.len() <= to_usize(idx) {
                 return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             
-            array.elements.remove(idx.as_usize());
+            array.elements.remove(to_usize(idx));
 
             Ok(Object::empty())
         }
@@ -1023,15 +1020,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 Ok(d) => {
                     let duration = d.as_nanos();
 
-                    if duration <= u64::MAX as u128 {
-                        Ok(Object::new(Integer::from(duration as u64)))
-
-                    } else {
-                        let low = duration as u64;
-                        let high = (duration >> 64) as u64;
-
-                        Ok(Object::new(Integer::new(false, vec!(low, high))))
-                    }
+                    Ok(Object::new(Integer::from(duration)))
                 },
                 Err(_) => Err("Unable to get current time".into()),
             }
@@ -1041,7 +1030,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("dec".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
-        *v[0].deref::<Integer>() -= &*ONE;
+        *v[0].deref::<Integer>() -= Integer::from(1);
 
         Ok(Object::empty())
     }).unwrap();

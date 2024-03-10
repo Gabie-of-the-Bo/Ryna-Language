@@ -4,10 +4,12 @@ use std::time::Instant;
 use colored::Colorize;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use malachite::Integer;
+use malachite::num::conversion::traits::{RoundingFrom, SaturatingInto};
+use malachite::rounding_modes::RoundingMode;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::nessa_warning;
-use crate::number::{Integer, ONE};
 use crate::types::Type;
 use crate::object::{NessaTuple, Object, TypeInstance};
 use crate::context::NessaContext;
@@ -547,7 +549,7 @@ impl NessaContext {
                     }
                 }),
 
-                ToFloat => unary_op!("ToFloat", a, get, Integer, a.to_f64()),
+                ToFloat => unary_op!("ToFloat", a, get, Integer, f64::rounding_from(a, RoundingMode::Exact).0),
 
                 Ref => nessa_instruction!("Ref", {
                     let a = stack.pop().unwrap();
@@ -587,13 +589,13 @@ impl NessaContext {
 
                 Inc => nessa_instruction!("Inc", {
                     let a = stack.pop().unwrap();
-                    *a.deref::<Integer>() += &*ONE;
+                    *a.deref::<Integer>() += Integer::from(1);
                     ip += 1;
                 }),
 
                 Dec => nessa_instruction!("Dec", {
                     let a = stack.pop().unwrap();
-                    *a.deref::<Integer>() -= &*ONE;
+                    *a.deref::<Integer>() -= Integer::from(1);
                     ip += 1;
                 }),
 
@@ -602,7 +604,7 @@ impl NessaContext {
                 Muli => bin_op!("Muli", a, b, get, get, Integer, a * b),
                 Divi => bin_op!("Divi", a, b, get, get, Integer, a / b),
                 Modi => bin_op!("Modi", a, b, get, get, Integer, a % b),
-                Negi => unary_op!("Negi", a, get, Integer, Integer::new(!a.negative, a.limbs.clone())),
+                Negi => unary_op!("Negi", a, get, Integer, -a),
                 Addf => bin_op!("Addf", a, b, get, get, f64, a + b),
                 Subf => bin_op!("Subf", a, b, get, get, f64, a - b),
                 Mulf => bin_op!("Mulf", a, b, get, get, f64, a * b),
@@ -614,8 +616,8 @@ impl NessaContext {
                 AndB => bin_op!("AndB", a, b, get, get, Integer, a & b),
                 OrB => bin_op!("OrB", a, b, get, get, Integer, a | b),
                 XorB => bin_op!("XorB", a, b, get, get, Integer, a ^ b),
-                Shl => bin_op!("Shl", a, b, get, get, Integer, if b.negative { a >> b.limbs[0] } else { a << b.limbs[0] }),
-                Shr => bin_op!("Shr", a, b, get, get, Integer, if b.negative { a << b.limbs[0] } else { a >> b.limbs[0] }),
+                Shl => bin_op!("Shl", a, b, get, get, Integer, a << SaturatingInto::<i64>::saturating_into(b)),
+                Shr => bin_op!("Shr", a, b, get, get, Integer, a >> SaturatingInto::<i64>::saturating_into(b)),
 
                 Lti => bin_op!("Lti", a, b, get, get, Integer, a < b),
                 Gti => bin_op!("Gti", a, b, get, get, Integer, a > b),
@@ -671,7 +673,8 @@ impl NessaContext {
 
 #[cfg(test)]
 mod tests {
-    use crate::number::*;
+    use malachite::Integer;
+
     use crate::object::*;
     use crate::context::*;
     use crate::types::*;

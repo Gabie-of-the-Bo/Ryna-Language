@@ -1,6 +1,7 @@
 use std::{cell::{Ref, RefCell, RefMut}, fs::File, path::PathBuf, rc::Rc};
 
-use crate::{compilation::message_and_exit, context::NessaContext, number::Integer, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use crate::{compilation::message_and_exit, context::NessaContext, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use malachite::Integer;
 
 type DataBlock = Rc<RefCell<ObjectBlock>>;
 
@@ -55,7 +56,7 @@ impl PartialEq for NessaFile {
 
 impl NessaFile {
     pub fn is_open(&self) -> bool {
-        return self.file.is_some();
+        self.file.is_some()
     }
 
     pub fn close(&mut self) -> Result<(), String> {
@@ -122,7 +123,7 @@ pub enum ObjectBlock {
     NoValue, //  Empty is a type, this represents no value at all
 
     Empty,
-    Int(Integer),
+    Int(malachite::Integer),
     Float(f64),
     Str(String),
     Bool(bool),
@@ -529,7 +530,7 @@ impl_nessa_data!(NessaFile, File);
 #[cfg(test)]
 mod tests {
     use crate::context::standard_ctx;
-    use crate::number::Integer;
+    use malachite::Integer;
     use crate::object::*;
 
     #[test]

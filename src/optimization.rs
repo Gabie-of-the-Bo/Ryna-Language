@@ -1138,6 +1138,9 @@ impl NessaContext {
                     [TupleElemRef(id), Copy] => { change_first!(TupleElemCopy(*id)); },
                     [TupleElemMut(id), Deref] => { change_first!(TupleElemDeref(*id)); },
                     [TupleElemRef(id), Deref] => { change_first!(TupleElemDeref(*id)); },
+                    
+                    [IdxMut, Demut] => { change_first!(IdxRef); },
+                    [IdxMut, Move] => { change_first!(IdxMoveRef); },
 
                     [Not, Not] |
                     [Negi, Negi] |

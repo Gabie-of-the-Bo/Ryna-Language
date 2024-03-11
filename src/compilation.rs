@@ -687,6 +687,8 @@ pub enum CompiledNessaExpr {
     TupleElemCopy(usize),
     TupleElemDeref(usize),
 
+    IdxMove, IdxRef, IdxMut, IdxMoveRef,
+
     StoreVariable(usize),
     GetVariable(usize),
     RefVariable(usize),
@@ -701,6 +703,7 @@ pub enum CompiledNessaExpr {
     RelativeJumpIfFalse(usize, bool),
     RelativeJumpIfTrue(usize, bool),
     Call(usize),
+    LambdaCall, LambdaCallRef,
     Return,
 
     NativeFunctionCall(usize, usize, Vec<Type>),
@@ -2678,6 +2681,9 @@ impl NessaContext{
                 if let Some(pos) = self.cache.locations.nary.get_checked(&(*id, arg_types, t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
+                } else if let Some((opcode, _)) = self.cache.opcodes.nary.get_checked(&(*id, ov_id)) {
+                    res.push(NessaInstruction::from(opcode));
+                
                 } else {                    
                     res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, t.clone())));
                 }   

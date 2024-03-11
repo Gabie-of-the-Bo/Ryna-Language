@@ -9,9 +9,10 @@ use malachite::num::conversion::traits::{RoundingFrom, SaturatingInto};
 use malachite::rounding_modes::RoundingMode;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
+use crate::integer_ext::{is_valid_index, to_usize};
 use crate::nessa_warning;
 use crate::types::Type;
-use crate::object::{NessaTuple, Object, TypeInstance};
+use crate::object::{NessaArray, NessaLambda, NessaTuple, Object, TypeInstance};
 use crate::context::NessaContext;
 use crate::operations::Operator;
 use crate::compilation::{CompiledNessaExpr, NessaError};
@@ -194,6 +195,43 @@ impl NessaContext {
             };
         }
 
+        macro_rules! idx_op {
+            ($deref_arr: ident, $ref_method: ident) => {
+                let arr = stack.pop().unwrap();
+                let first = stack.pop().unwrap();
+
+                let arr = &*arr.$deref_arr::<NessaArray>();
+                let idx = &*first.get::<Integer>();
+
+                if !is_valid_index(idx) {
+                    return Err(NessaError::execution_error(format!("{} is not a valid index", idx)));
+                
+                } else {
+                    let native_idx = to_usize(idx);
+                    
+                    if arr.elements.len() <= native_idx {
+                        return Err(NessaError::execution_error(format!("{} is higher than the length of the array ({})", idx, arr.elements.len())));
+    
+                    } else {
+                        stack.push(arr.elements[native_idx].$ref_method());
+                    }
+                } 
+
+                ip += 1;
+            };
+        }
+
+        macro_rules! lambda_call {
+            ($lambda_ref: ident) => {
+                let arg = stack.pop().unwrap();
+                let f = &arg.$lambda_ref::<NessaLambda>();
+                
+                call_stack.push((ip + 1, offset, -1));
+                ip = f.loc as i32;
+                offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+            };
+        }
+
         call_stack.push((0, 0, -1));
 
         loop {
@@ -320,6 +358,11 @@ impl NessaContext {
                     ip += 1;
                 }),
 
+                IdxMove => nessa_instruction!("IdxMove", { idx_op!(get, move_contents_if_ref); }),
+                IdxRef => nessa_instruction!("IdxRef", { idx_op!(deref, get_ref_nostack); }),
+                IdxMut => nessa_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
+                IdxMoveRef => nessa_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
+
                 StoreVariable(id) => nessa_instruction!("StoreVariable", {
                     let idx = call_stack.len() - 1;
                     let l = &mut call_stack[idx].2;
@@ -380,6 +423,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfTrue(to, false) => nessa_instruction!("RelativeJumpIfTrue", {
                     if *stack.pop().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -388,6 +432,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfFalse(to, true) => nessa_instruction!("RelativeJumpIfFalse", {
                     if !*stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -396,6 +441,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfTrue(to, true) => nessa_instruction!("RelativeJumpIfTrue", {
                     if *stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -404,6 +450,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 Call(to) => nessa_instruction!("Call", {
                     call_stack.push((ip + 1, offset, -1));
                     ip = *to as i32;
@@ -413,6 +460,10 @@ impl NessaContext {
                         *fn_count.entry(*to).or_default() += 1;
                     }
                 }),
+
+                LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
+                LambdaCallRef => nessa_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+
                 Return => nessa_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
 

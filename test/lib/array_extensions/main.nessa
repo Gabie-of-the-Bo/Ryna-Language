@@ -69,7 +69,7 @@ fn<T> reverse(array: @Array<'T>) -> @Array<'T> {
     let i = 0;
     
     while i < half {
-        swap(array[i], array[length - i - 1]);
+        swap(array[*i], array[length - i - 1]);
         i.inc();
     }
 

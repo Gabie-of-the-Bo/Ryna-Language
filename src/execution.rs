@@ -12,7 +12,7 @@ use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, sa
 use crate::integer_ext::{is_valid_index, to_usize};
 use crate::nessa_warning;
 use crate::types::Type;
-use crate::object::{NessaArray, NessaTuple, Object, TypeInstance};
+use crate::object::{NessaArray, NessaLambda, NessaTuple, Object, TypeInstance};
 use crate::context::NessaContext;
 use crate::operations::Operator;
 use crate::compilation::{CompiledNessaExpr, NessaError};
@@ -218,6 +218,17 @@ impl NessaContext {
                 } 
 
                 ip += 1;
+            };
+        }
+
+        macro_rules! lambda_call {
+            ($lambda_ref: ident) => {
+                let arg = stack.pop().unwrap();
+                let f = &arg.$lambda_ref::<NessaLambda>();
+                
+                call_stack.push((ip + 1, offset, -1));
+                ip = f.loc as i32;
+                offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
             };
         }
 
@@ -449,6 +460,9 @@ impl NessaContext {
                         *fn_count.entry(*to).or_default() += 1;
                     }
                 }),
+
+                LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
+                LambdaCallRef => nessa_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 
                 Return => nessa_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();

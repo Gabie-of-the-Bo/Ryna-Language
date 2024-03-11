@@ -703,6 +703,7 @@ pub enum CompiledNessaExpr {
     RelativeJumpIfFalse(usize, bool),
     RelativeJumpIfTrue(usize, bool),
     Call(usize),
+    LambdaCall, LambdaCallRef,
     Return,
 
     NativeFunctionCall(usize, usize, Vec<Type>),

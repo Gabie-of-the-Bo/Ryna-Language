@@ -350,56 +350,35 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             Box::new(Type::TemplateParam(n, vec!()))
         );
 
-        ctx.define_native_nary_operation(
+        let res = ctx.define_native_nary_operation(
             0, n + 1, 
             Type::MutRef(Box::new(f_type.clone())), 
             args.as_slice(), 
             Type::TemplateParam(n, vec!()), 
-            |(s, off, call_stack, ip), _, _| {
-                let a = s.pop().unwrap();
-                let f = &a.deref::<NessaLambda>();
-                
-                call_stack.push((*ip + 1, *off, -1));
-                *ip = f.loc as i32;
-                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
-                
-                Ok(())
-            }
+            EMPTY_NARY_FUNC
         ).unwrap();
 
-        ctx.define_native_nary_operation(
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCallRef, 0));
+
+        let res = ctx.define_native_nary_operation(
             0, n + 1, 
             Type::Ref(Box::new(f_type.clone())), 
             args.as_slice(), 
             Type::TemplateParam(n, vec!()), 
-            |(s, off, call_stack, ip), _, _| {
-                let a = s.pop().unwrap();
-                let f = &a.deref::<NessaLambda>();
-                
-                call_stack.push((*ip + 1, *off, -1));
-                *ip = f.loc as i32;
-                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
-                
-                Ok(())
-            }
+            EMPTY_NARY_FUNC
         ).unwrap();
 
-        ctx.define_native_nary_operation(
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCallRef, 0));
+
+        let res = ctx.define_native_nary_operation(
             0, n + 1, 
             f_type, 
             args.as_slice(), 
             Type::TemplateParam(n, vec!()), 
-            |(s, off, call_stack, ip), _, _| {
-                let a = s.pop().unwrap();
-                let f = &a.get::<NessaLambda>();
-                
-                call_stack.push((*ip + 1, *off, -1));
-                *ip = f.loc as i32;
-                *off += (call_stack[call_stack.len() - 2].2 + 1) as usize;
-                
-                Ok(())
-            }
+            EMPTY_NARY_FUNC
         ).unwrap();
+
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCall, 0));
     }  
 
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();

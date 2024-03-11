@@ -202,6 +202,7 @@ pub enum NessaExpr {
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
     Break(Location),
+    Continue(Location),
 
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -263,6 +264,7 @@ impl NessaExpr {
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::For(_, _, _, _) |
             NessaExpr::Return(_, _) => false,
 
@@ -1458,6 +1460,20 @@ impl NessaContext {
                 ))
             )),
             |(l, _)| NessaExpr::Break(l)
+        )(input);
+    }
+
+    fn continue_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(delimited(
+                empty0, 
+                tag("continue"), 
+                tuple((
+                    empty0,
+                    context("Expected ';' at the end of continue statement", cut(tag(";")))
+                ))
+            )),
+            |(l, _)| NessaExpr::Continue(l)
         )(input);
     }
     
@@ -2679,6 +2695,7 @@ impl NessaContext {
                     |input| self.for_parser(input, cache),
                     |input| self.if_parser(input, cache),
                     |input| self.break_parser(input),
+                    |input| self.continue_parser(input),
                     |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
                 )),
                 |i| vec!(i)

@@ -1,9 +1,7 @@
-use malachite::Integer;
-
+use crate::compilation::CompiledNessaExpr;
 use crate::types::{Type, INT, BOOL, STR, T_0, FLOAT};
 use crate::{object::*, ARR_OF};
 use crate::context::NessaContext;
-use crate::integer_ext::*;
 
 /*
                                                   ╒══════════════════╕
@@ -25,6 +23,7 @@ pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
 
 const EMPTY_UN_FUNC: UnaryFunctionInner = |_, _, _| Ok(Object::empty());
 const EMPTY_BIN_FUNC: BinaryFunctionInner = |_, _, _, _, _| Ok(Object::empty());
+const EMPTY_NARY_FUNC: NaryFunctionInner = |_, _, _| Ok(());
 
 #[derive(Clone)]
 pub enum Operator {
@@ -338,35 +337,6 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
     define_binary_native_op_combinations!(ctx, 19, INT, INT);
 }
 
-macro_rules! idx_op_definition {
-    ($array_type: expr, $idx_type: expr, $result_type: expr, $ctx: expr, $deref_arr: ident, $deref_idx: ident, $ref_method: ident) => {
-        $ctx.define_native_nary_operation(
-            1, 1, $array_type, &[$idx_type], $result_type, 
-            |(s, _, _, ip), _, _| {
-                let arr = s.pop().unwrap();
-                let first = s.pop().unwrap();
-
-                let arr = &*arr.$deref_arr::<NessaArray>();
-                let idx = &*first.$deref_idx::<Integer>();
-
-                if !is_valid_index(idx) {
-                    return Err(format!("{} is not a valid index", idx));
-                
-                } else if arr.elements.len() <= to_usize(idx) {
-                    return Err(format!("{} is higher than the length of the array ({})", idx, arr.elements.len()));
-
-                } else {
-                    s.push(arr.elements[to_usize(idx)].$ref_method());
-                }
-
-                *ip += 1;
-    
-                return Ok(());
-            }
-        ).unwrap();
-    };
-}
-
 pub const CALL_OP: usize = 0;
 
 pub fn standard_nary_operations(ctx: &mut NessaContext) {
@@ -435,66 +405,12 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
 
     // Indexing operations on arrays
-    idx_op_definition!(
-        ARR_OF!(T_0),
-        INT,
-        T_0,
-        ctx, deref, get, clone
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_mut(),
-        INT,
-        T_0.to_mut(),
-        ctx, deref, get, get_mut
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_ref(),
-        INT,
-        T_0.to_ref(),
-        ctx, deref, get, get_ref
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0),
-        INT.to_mut(),
-        T_0,
-        ctx, deref, deref, clone
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_mut(),
-        INT.to_mut(),
-        T_0.to_mut(),
-        ctx, deref, deref, get_mut
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_ref(),
-        INT.to_mut(),
-        T_0.to_ref(),
-        ctx, deref, deref, get_ref
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0),
-        Type::Ref(Box::new(INT)),
-        T_0,
-        ctx, deref, deref, clone
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_mut(),
-        Type::Ref(Box::new(INT)),
-        T_0.to_mut(),
-        ctx, deref, deref, get_mut
-    );
-
-    idx_op_definition!(
-        ARR_OF!(T_0).to_ref(),
-        Type::Ref(Box::new(INT)),
-        T_0.to_ref(),
-        ctx, deref, deref, get_ref
-    );
+    let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0), &[INT], T_0, EMPTY_NARY_FUNC).unwrap();
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxMove, 0));
+    
+    let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0).to_mut(), &[INT], T_0.to_mut(), EMPTY_NARY_FUNC).unwrap();
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxMut, 0));
+    
+    let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0).to_ref(), &[INT], T_0.to_ref(), EMPTY_NARY_FUNC).unwrap();
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxRef, 0));
 }

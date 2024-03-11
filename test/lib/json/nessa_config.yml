@@ -1,7 +1,7 @@
 ---
 module_name: json
 version: 0.1.0
-hash: 7e06a28da7fa34b891b667c32d776f6f
+hash: 96fce0b810da84bc6f5c1b6e3f6a9c11
 module_paths:
   - test/lib
 modules:

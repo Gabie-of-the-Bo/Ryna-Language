@@ -1239,6 +1239,35 @@ impl NessaContext {
 
         reassign_labels(program);
     }
+
+    fn remove_jump_chains(&self, program: &mut Vec<NessaInstruction>) {
+        use CompiledNessaExpr::*;
+
+        let mut changed = true;
+
+        while changed {
+            changed = false;
+            
+            let mut increments = FxHashMap::default();
+
+            // Look for jump chains
+            for (idx, i) in program.iter().enumerate() {
+                if let RelativeJump(loc) = i.instruction {
+                    if let RelativeJump(loc_2) = program[(idx as i32 + loc) as usize].instruction {
+                        increments.entry(idx).or_insert(loc_2);
+                    }
+                }
+            }
+
+            // Apply skips
+            for (idx, inc) in increments {
+                if let RelativeJump(loc) = &mut program[idx].instruction {
+                    *loc += inc;
+                    changed = true;
+                }
+            }
+        }
+    }
 }
 
 /*
@@ -1252,6 +1281,7 @@ impl NessaContext {
         self.peephole_optimization(program);
         self.remove_single_relative_jumps(program);
         self.remove_empty_calls(program);
+        self.remove_jump_chains(program);
     }
 }
 

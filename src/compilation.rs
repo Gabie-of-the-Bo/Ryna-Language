@@ -724,6 +724,8 @@ pub enum CompiledNessaExpr {
     Modi, Modf,
     Negi, Negf,
 
+    AddStr,
+
     // Bitwise opcodes
     NotB, AndB, OrB, XorB, Shr, Shl,
 
@@ -734,6 +736,8 @@ pub enum CompiledNessaExpr {
     Gteqi, Gteqf,
     Eqi, Eqf,
     Neqi, Neqf,
+    EqBool, NeqBool,
+    EqStr, NeqStr,
 
     // Logical opcodes
     Not, Or, And, Xor,
@@ -765,7 +769,8 @@ impl CompiledNessaExpr {
             Addi | Subi | Muli | Divi | Modi |
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
             Not | Or | And | Xor |
-            NotB | AndB | OrB | XorB | Shr | Shl
+            NotB | AndB | OrB | XorB | Shr | Shl |
+            EqStr | NeqStr | EqBool | NeqBool | AddStr
         )
     }
 

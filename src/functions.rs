@@ -28,6 +28,8 @@ pub type FunctionOverload = Option<FunctionOverloadInner>;
 
 pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
 
+const EMPTY_FUNC: FunctionOverloadInner = |_, _, _, _| Ok(Object::empty());
+
 #[derive(Clone)]
 pub struct Function {
     pub id: usize,
@@ -101,11 +103,7 @@ pub const IS_CONSUMED_FUNC_ID: usize = 12;
 pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
-        *v[0].deref::<Integer>() += Integer::from(1);
-
-        Ok(Object::empty())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("print".into()).unwrap();
 
@@ -159,41 +157,24 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     
     let idx = ctx.define_function("deref".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, v, _| {
-        Ok(v[0].deref_obj().deep_clone())
-    }).unwrap();
-
-    ctx.define_native_function_overload(idx, 1, &[T_0.to_ref()], T_0, |_, _, v, _| {
-        Ok(v[0].deref_obj().deep_clone())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, EMPTY_FUNC).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_ref()], T_0, EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("ref".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), |_, _, v, _| {
-        Ok(v[0].get_ref_nostack())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_ref(), EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("mut".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), |_, _, v, _| {
-        Ok(v[0].get_mut_nostack())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0], T_0.to_mut(), EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("demut".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0.to_ref(), |_, _, v, _| {
-        Ok(v[0].get_ref())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0.to_ref(), EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("arr".into()).unwrap();
 
-    ctx.define_native_function_overload(
-        idx, 
-        1,
-        &[], 
-        ARR_OF!(T_0), 
-        |t, _, _, _| Ok(Object::arr(vec!(), t[0].clone()))
-    ).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[], ARR_OF!(T_0), |t, _, _, _| Ok(Object::arr(vec!(), t[0].clone()))).unwrap();
 
     let idx = ctx.define_function("push".into()).unwrap();
 
@@ -551,9 +532,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("move".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, |_, _, mut v, _| { 
-        Ok(v.pop().unwrap().move_contents())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, EMPTY_FUNC).unwrap();
 
     let idx = ctx.define_function("fwd".into()).unwrap();
 
@@ -1029,11 +1008,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 
     let idx = ctx.define_function("dec".into()).unwrap();
 
-    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, |_, _, v, _| { 
-        *v[0].deref::<Integer>() -= Integer::from(1);
-
-        Ok(Object::empty())
-    }).unwrap();
+    ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
@@ -1047,7 +1022,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 J,
                 &[ts.clone()], 
                 Type::TemplateParam(I, vec!()), 
-                |_, _, v, _| Ok(v[0].get::<NessaTuple>().elements[I].clone())
+                EMPTY_FUNC
             ).unwrap();
 
             ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMove(I), 0));
@@ -1057,7 +1032,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 J,
                 &[Type::Ref(Box::new(ts.clone()))], 
                 Type::Ref(Box::new(Type::TemplateParam(I, vec!()))), 
-                |_, _, v, _| Ok(v[0].deref::<NessaTuple>().elements[I].get_ref())
+                EMPTY_FUNC
             ).unwrap();
             
             ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemRef(I), 0));
@@ -1067,7 +1042,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 J,
                 &[Type::MutRef(Box::new(ts))], 
                 Type::MutRef(Box::new(Type::TemplateParam(I, vec!()))), 
-                |_, _, v, _| Ok(v[0].deref::<NessaTuple>().elements[I].get_mut())
+                EMPTY_FUNC
             ).unwrap();
 
             ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMut(I), 0));

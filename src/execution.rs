@@ -612,6 +612,8 @@ impl NessaContext {
                 Modf => bin_op!("Modf", a, b, get, get, f64, a % b),
                 Negf => unary_op!("Negf", a, get, f64, -a),
 
+                AddStr => bin_op!("AddStr", a, b, get, get, String, format!("{}{}", a, b)),
+
                 NotB => unary_op!("NotB", a, get, Integer, !a),
                 AndB => bin_op!("AndB", a, b, get, get, Integer, a & b),
                 OrB => bin_op!("OrB", a, b, get, get, Integer, a | b),
@@ -631,6 +633,12 @@ impl NessaContext {
                 Gteqf => bin_op!("Gteqf", a, b, get, get, f64, a >= b),
                 Eqf => bin_op!("Eqf", a, b, get, get, f64, a == b),
                 Neqf => bin_op!("Neqf", a, b, get, get, f64, a != b),
+
+                EqBool => bin_op!("EqBool", a, b, get, get, bool, a == b),
+                NeqBool => bin_op!("NeqBool", a, b, get, get, bool, a != b),
+
+                EqStr => bin_op!("EqStr", a, b, get, get, String, a == b),
+                NeqStr => bin_op!("NeqStr", a, b, get, get, String, a != b),
 
                 Not => unary_op!("Not", a, get, bool, !a),
                 Or => bin_op!("Or", a, b, get, get, bool, *a || *b),

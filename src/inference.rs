@@ -385,6 +385,7 @@ impl NessaContext {
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
             NessaExpr::Break(l) |
+            NessaExpr::Continue(l) |
             NessaExpr::While(l, _, _) |
             NessaExpr::For(l, _, _, _) |
             NessaExpr::Return(l, _) => Err(NessaError::compiler_error(

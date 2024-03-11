@@ -664,6 +664,11 @@ impl NessaContext {
 */
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PlaceholderType {
+    Break, Continue
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CompiledNessaExpr {
     Empty,
     Bool(bool),
@@ -746,6 +751,8 @@ pub enum CompiledNessaExpr {
     Not, Or, And, Xor,
     
     Nand, Nor, // Only via peephole optimization
+
+    Placeholder(PlaceholderType),
 
     Halt
 }
@@ -1675,6 +1682,7 @@ impl NessaContext{
     ) -> Result<(), NessaError> {
         return match line {
             NessaExpr::Break(..) |
+            NessaExpr::Continue(..) |
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::ClassDefinition(..) |
@@ -2452,7 +2460,13 @@ impl NessaContext{
         return match expr {
             NessaExpr::Break(_) => {
                 Ok(vec!(
-                    NessaInstruction::from(CompiledNessaExpr::Halt) // Placeholder
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Break)) // Placeholder
+                ))
+            }
+            
+            NessaExpr::Continue(_) => {
+                Ok(vec!(
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Continue)) // Placeholder
                 ))
             }
 
@@ -2764,12 +2778,15 @@ impl NessaContext{
                 // Jump to the beginning of the loop
                 res.push(NessaInstruction::from(beginning_jmp));
 
-                // Transform breaks into relative jumps
+                // Transform breaks and continues into relative jumps
                 let length = res.len();
 
                 for (idx, i) in res.iter_mut().enumerate() {
-                    if let CompiledNessaExpr::Halt = i.instruction {
+                    if let CompiledNessaExpr::Placeholder(PlaceholderType::Break) = i.instruction {
                         i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                    
+                    } else if let CompiledNessaExpr::Placeholder(PlaceholderType::Continue) = i.instruction {
+                        i.instruction = CompiledNessaExpr::RelativeJump(-(idx as i32));
                     }
                 }
 
@@ -2791,6 +2808,7 @@ impl NessaContext{
 
                 if let Type::Basic(BOOL_ID) = consumed_res {
                     let for_body = self.compiled_form_body(b)?;
+                    let for_body_len = for_body.len();
 
                     // Convert the iterable into an iterator
                     if it_native {
@@ -2816,7 +2834,7 @@ impl NessaContext{
                     }                                    
 
                     // Jump to end of loop
-                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5, false)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body_len + 5, false)));
 
                     // Get next value
                     res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
@@ -2833,19 +2851,22 @@ impl NessaContext{
                     res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
 
                     // Add for body
-                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body.len() as i32 + 6));
+                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body_len as i32 + 6));
 
                     res.extend(for_body);
 
                     // Jump to the beginning of the loop
                     res.push(NessaInstruction::from(beginning_jmp));
 
-                    // Transform breaks into relative jumps
+                    // Transform breaks and continues into relative jumps
                     let length = res.len();
 
                     for (idx, i) in res.iter_mut().enumerate() {
-                        if let CompiledNessaExpr::Halt = i.instruction {
+                        if let CompiledNessaExpr::Placeholder(PlaceholderType::Break) = i.instruction {
                             i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                        
+                        } else if let CompiledNessaExpr::Placeholder(PlaceholderType::Continue) = i.instruction {
+                            i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32 - 1);
                         }
                     }
 

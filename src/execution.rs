@@ -698,6 +698,8 @@ impl NessaContext {
                 Nor => bin_op!("Nor", a, b, get, get, bool, !(*a || *b)),
                 Nand => bin_op!("Nand", a, b, get, get, bool, !(*a && *b)),
 
+                Placeholder(_) => unreachable!(),
+
                 Halt => break,
             }
         }

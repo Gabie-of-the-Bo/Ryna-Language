@@ -77,6 +77,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
@@ -185,6 +186,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
@@ -465,6 +467,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
@@ -568,6 +571,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
@@ -666,6 +670,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
@@ -895,6 +900,7 @@ impl NessaContext {
             },
             
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |

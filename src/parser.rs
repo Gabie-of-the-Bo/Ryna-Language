@@ -1230,10 +1230,11 @@ impl NessaContext {
                         |input| self.nessa_expr_parser_wrapper(input, &mut FxHashSet::default(), cache)
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(close)
                 ))
             ),
-            move |(l, (_, t, _, _, b, _, _))| NessaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
+            move |(l, (_, t, _, _, b, _, _, _))| NessaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
         )(input)
     }
 
@@ -1565,6 +1566,7 @@ impl NessaContext {
                     ))
                 ),
                 empty0,
+                opt(tuple((tag(","), empty0))),
                 context("Expected ')' after parameters in function definition", cut(tag(")"))),
                 opt(
                     preceded(
@@ -1573,7 +1575,7 @@ impl NessaContext {
                     )
                 )
             )),
-            |(_, t, _, n, _, _, _, a, _, _, r)| (n, t, a, r.unwrap_or(Type::Empty))
+            |(_, t, _, n, _, _, _, a, _, _, _, r)| (n, t, a, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -2060,7 +2062,7 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, opt(tuple((tag(","), empty0))), tag(")")))))
                 ),
                 empty0,
                 |input| self.nary_operator_parser(input),
@@ -2589,10 +2591,11 @@ impl NessaContext {
                         |input| self.nessa_expr_parser(input, cache)
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(")")
                 ))
             ),
-            |(l, (_, _, e, _, _))| {
+            |(l, (_, _, e, _, _, _))| {
                 if e.is_empty() {
                     NessaExpr::Literal(l, Object::empty())
 
@@ -2641,6 +2644,7 @@ impl NessaContext {
                         ))
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(")"),
                     empty0,
                     opt(
@@ -2663,7 +2667,7 @@ impl NessaContext {
                     ))
                 ))   
             ),
-            |(l, (_, _, a, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
+            |(l, (_, _, a, _, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
         )(input);
     }
 

@@ -1086,7 +1086,7 @@ impl NessaContext {
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
-                self.get_constants(c, consts, const_exprs); // Set offset of 2 in order not to insert moves inside loops
+                self.get_constants(c, consts, const_exprs);
 
                 for e in exprs {
                     self.get_constants(e, consts, const_exprs);
@@ -1181,7 +1181,7 @@ impl NessaContext {
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
-                self.sub_variables(c, assigned_exprs); // Set offset of 2 in order not to insert moves inside loops
+                self.sub_variables(c, assigned_exprs);
 
                 for e in exprs {
                     self.sub_variables(e, assigned_exprs);
@@ -1273,7 +1273,7 @@ impl NessaContext {
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
-                self.remove_assignments_expr(c, assigned_exprs); // Set offset of 2 in order not to insert moves inside loops
+                self.remove_assignments_expr(c, assigned_exprs);
                 self.remove_assignments(exprs, assigned_exprs);
             },
 

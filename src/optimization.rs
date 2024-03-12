@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use malachite::Integer;
 
 use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
@@ -10,6 +10,13 @@ use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaCo
 */
 
 const INLINE_THRESHOLD: f32 = 50.0;
+
+lazy_static! {
+    pub static ref CONST_UNOP: FxHashSet<usize> = [].iter().copied().collect();
+    pub static ref CONST_BINOP: FxHashSet<usize> = [].iter().copied().collect();
+    pub static ref CONST_NARYOP: FxHashSet<usize> = [].iter().copied().collect();
+    pub static ref CONST_FUNC: FxHashSet<usize> = [].iter().copied().collect();
+}
 
 impl NessaContext {
     pub fn count_usages_expr(expr: &NessaExpr, var_usages: &mut FxHashMap<usize, usize>, offset: usize) {
@@ -703,7 +710,7 @@ impl NessaContext {
 
         // Define variables
         for (idx, arg) in args.into_iter().enumerate() {
-            res.push(NessaExpr::CompiledVariableAssignment(
+            res.push(NessaExpr::CompiledVariableDefinition(
                 l.clone(),
                 idx + *var_offset + 1,
                 format!("__arg_{}__", idx + *var_offset + 1),
@@ -936,6 +943,325 @@ impl NessaContext {
     pub fn optimize(&self, body: &mut Vec<NessaExpr>) {
         self.insert_moves(body);
         self.strength_reduction(body);
+    } 
+
+    pub fn is_constant_expr(expr: &NessaExpr, consts: &FxHashMap<usize, bool>) -> bool {
+        match expr {
+            NessaExpr::Literal(..) => true,
+            NessaExpr::Variable(_, id, _, _) => *consts.get(id).unwrap_or(&false),
+
+            NessaExpr::UnaryOperation(_, id, _, e) => CONST_UNOP.contains(id) && NessaContext::is_constant_expr(e, consts),
+            NessaExpr::BinaryOperation(_, id, _, a, b) => CONST_BINOP.contains(id) && NessaContext::is_constant_expr(a, consts) && NessaContext::is_constant_expr(b, consts),
+
+            NessaExpr::NaryOperation(_, id, _, c, exprs) => {
+                CONST_NARYOP.contains(id) && NessaContext::is_constant_expr(c, consts) &&
+                exprs.iter().all(|i| NessaContext::is_constant_expr(i, consts))
+            },
+
+            NessaExpr::FunctionCall(_, id, _, exprs) => {
+                CONST_FUNC.contains(id) && exprs.iter().all(|i| NessaContext::is_constant_expr(i, consts))
+            }
+            
+            _ => false
+        }
+    }
+
+    pub fn compute_constant_expr(expr: &NessaExpr, const_exprs: &FxHashMap<usize, NessaExpr>) -> Object {
+        match expr {
+            NessaExpr::Literal(_, obj) => obj.clone(),
+            NessaExpr::Variable(_, id, _, _) => NessaContext::compute_constant_expr(const_exprs.get(id).unwrap(), const_exprs),
+
+            NessaExpr::UnaryOperation(_, _, _, _) => todo!(),
+            NessaExpr::BinaryOperation(_, _, _, _, _) => todo!(),
+            NessaExpr::NaryOperation(_, _, _, _, _) => todo!(),
+            NessaExpr::FunctionCall(_, _, _, _) => todo!(),
+            
+            _ => unreachable!()
+        }
+    }
+    
+    pub fn get_constants(expr: &NessaExpr, consts: &mut FxHashMap<usize, bool>, const_exprs: &mut FxHashMap<usize, NessaExpr>) {
+        match expr {
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e)  => NessaContext::get_constants(e, consts, const_exprs),
+            
+            NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
+                if NessaContext::is_constant_expr(e, consts) {
+                    consts.insert(*id, true);
+                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, &const_exprs)));    
+                }
+            },
+            NessaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    NessaContext::get_constants(e, consts, const_exprs);
+                }
+            },
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                NessaContext::get_constants(c, consts, const_exprs); // Set offset of 2 in order not to insert moves inside loops
+
+                for e in exprs {
+                    NessaContext::get_constants(e, consts, const_exprs);
+                }
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                NessaContext::get_constants(c, consts, const_exprs);
+
+                for e in exprs {
+                    NessaContext::get_constants(e, consts, const_exprs);
+                }
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                NessaContext::get_constants(a, consts, const_exprs);
+                NessaContext::get_constants(b, consts, const_exprs);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                NessaContext::get_constants(ic, consts, const_exprs);
+                
+                for e in ib {
+                    NessaContext::get_constants(e, consts, const_exprs);
+                }
+
+                for (ei_h, ei_b) in ei {
+                    NessaContext::get_constants(ei_h, consts, const_exprs);
+                    
+                    for e in ei_b {
+                        NessaContext::get_constants(e, consts, const_exprs);
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        NessaContext::get_constants(e, consts, const_exprs);
+                    }
+                }
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+    
+    fn sub_variables(&self, expr: &mut NessaExpr, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
+        match expr {
+            NessaExpr::Variable(l, id, _, _) => {
+                if assigned_exprs.contains_key(id) {
+                    let mut_id = self.get_function_id("mut".into()).unwrap();
+                    let const_expr = assigned_exprs[id].clone();
+                    let t = self.infer_type(&const_expr).unwrap();
+
+                    *expr = NessaExpr::FunctionCall(l.clone(), mut_id, vec!(t), vec!(const_expr));
+                    
+                    // Sanity check and overload registration
+                    self.static_check(expr).unwrap();
+                }
+            }
+
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
+            
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.sub_variables(e, assigned_exprs);
+                }
+            },
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.sub_variables(c, assigned_exprs); // Set offset of 2 in order not to insert moves inside loops
+
+                for e in exprs {
+                    self.sub_variables(e, assigned_exprs);
+                }
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.sub_variables(c, assigned_exprs);
+
+                for e in exprs {
+                    self.sub_variables(e, assigned_exprs);
+                }
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.sub_variables(a, assigned_exprs);
+                self.sub_variables(b, assigned_exprs);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.sub_variables(ic, assigned_exprs);
+                
+                for e in ib {
+                    self.sub_variables(e, assigned_exprs);
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.sub_variables(ei_h, assigned_exprs);
+                    
+                    for e in ei_b {
+                        self.sub_variables(e, assigned_exprs);
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.sub_variables(e, assigned_exprs);
+                    }
+                }
+            },
+            
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    fn remove_assignments(&self, exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
+        fn filter_assignments(exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
+            exprs.retain(|i| match i {
+                NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id) => false,
+                _ => true
+            });
+        }
+
+        filter_assignments(exprs, assigned_exprs);
+
+        for e in exprs {
+            self.remove_assignments_expr(e, assigned_exprs);
+        }
+    }
+
+    fn remove_assignments_expr(&self, expr: &mut NessaExpr, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
+        match expr {
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e)  => self.remove_assignments_expr(e, assigned_exprs),
+            
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => self.remove_assignments(exprs, assigned_exprs),
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.remove_assignments_expr(c, assigned_exprs); // Set offset of 2 in order not to insert moves inside loops
+                self.remove_assignments(exprs, assigned_exprs);
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.remove_assignments_expr(c, assigned_exprs);
+                self.remove_assignments(exprs, assigned_exprs);
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.remove_assignments_expr(a, assigned_exprs);
+                self.remove_assignments_expr(b, assigned_exprs);
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.remove_assignments_expr(ic, assigned_exprs);
+                self.remove_assignments(ib, assigned_exprs);
+
+                for (ei_h, ei_b) in ei {
+                    self.remove_assignments_expr(ei_h, assigned_exprs);
+                    self.remove_assignments(ei_b, assigned_exprs)
+                }
+
+                if let Some(inner) = eb {
+                    self.remove_assignments(inner, assigned_exprs);
+                }
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
+    pub fn constant_propagation(&self, body: &mut Vec<NessaExpr>) {
+        let mut var_usages = FxHashMap::default();
+        let mut consts = FxHashMap::default();
+        let mut assigned_exprs = FxHashMap::default();
+
+        // Compute constants
+        for i in body.iter() {
+            NessaContext::count_usages_expr(i, &mut var_usages, 1);
+            NessaContext::get_constants(i, &mut consts, &mut assigned_exprs);
+        }
+
+        // Filter by usages
+        assigned_exprs.retain(|i, _| *consts.get(i).unwrap_or(&false) && *var_usages.get(i).unwrap_or(&0) == 1);
+        
+        // Sub variables
+        for i in body.iter_mut() {
+            self.sub_variables(i, &mut assigned_exprs);
+        }
+
+        // Remove assignments
+        self.remove_assignments(body, &mut assigned_exprs);
     }
 
     pub fn late_optimize(&self, body: &mut Vec<NessaExpr>) {
@@ -946,6 +1272,7 @@ impl NessaContext {
         }
 
         self.inline_functions(body, &mut var_offset);
+        self.constant_propagation(body);
     }
 }
 

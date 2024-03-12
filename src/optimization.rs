@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use malachite::Integer;
 
-use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, MUL_BINOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, INT}};
+use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaContext, integer_ext::{is_valid_index, to_usize, ONE}, object::Object, operations::{ADD_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, SHL_BINOP_ID, SUB_BINOP_ID}, parser::{Location, NessaExpr}, types::{Type, FLOAT, INT}};
 
 /*
     ╒═══════════════════════════╕
@@ -12,10 +12,10 @@ use crate::{compilation::{CompiledNessaExpr, NessaInstruction}, context::NessaCo
 const INLINE_THRESHOLD: f32 = 50.0;
 
 lazy_static! {
-    pub static ref CONST_UNOP: FxHashSet<usize> = [].iter().copied().collect();
-    pub static ref CONST_BINOP: FxHashSet<usize> = [].iter().copied().collect();
-    pub static ref CONST_NARYOP: FxHashSet<usize> = [].iter().copied().collect();
-    pub static ref CONST_FUNC: FxHashSet<usize> = [].iter().copied().collect();
+    pub static ref CONST_UNOP_IDS: FxHashSet<usize> = [NEG_UNOP_ID].iter().cloned().collect();
+    pub static ref CONST_BINOP_IDS: FxHashSet<usize> = [ADD_BINOP_ID, SUB_BINOP_ID, MUL_BINOP_ID, DIV_BINOP_ID, MOD_BINOP_ID].iter().copied().collect();
+    pub static ref CONST_NARYOP_IDS: FxHashSet<usize> = [].iter().copied().collect();
+    pub static ref CONST_FUNC_IDS: FxHashSet<usize> = [].iter().copied().collect();
 }
 
 impl NessaContext {
@@ -945,21 +945,34 @@ impl NessaContext {
         self.strength_reduction(body);
     } 
 
-    pub fn is_constant_expr(expr: &NessaExpr, consts: &FxHashMap<usize, bool>) -> bool {
+    pub fn is_constant_expr(&self, expr: &NessaExpr, consts: &FxHashMap<usize, bool>) -> bool {
+        macro_rules! is_num {
+            ($expr: expr) => {
+                match *self.infer_type($expr).unwrap().deref_type().deref_type() {
+                    Type::Basic(crate::types::INT_ID) | Type::Basic(crate::types::FLOAT_ID) => true,
+                    _ => false
+                }
+            };
+        }
+
         match expr {
             NessaExpr::Literal(..) => true,
             NessaExpr::Variable(_, id, _, _) => *consts.get(id).unwrap_or(&false),
 
-            NessaExpr::UnaryOperation(_, id, _, e) => CONST_UNOP.contains(id) && NessaContext::is_constant_expr(e, consts),
-            NessaExpr::BinaryOperation(_, id, _, a, b) => CONST_BINOP.contains(id) && NessaContext::is_constant_expr(a, consts) && NessaContext::is_constant_expr(b, consts),
+            NessaExpr::UnaryOperation(_, id, _, e) => {
+                CONST_UNOP_IDS.contains(id) && self.is_constant_expr(e, consts) && is_num!(e)
+            },
+            NessaExpr::BinaryOperation(_, id, _, a, b) => {
+                CONST_BINOP_IDS.contains(id) && self.is_constant_expr(a, consts) && self.is_constant_expr(b, consts) && is_num!(a) && is_num!(b)
+            },
 
             NessaExpr::NaryOperation(_, id, _, c, exprs) => {
-                CONST_NARYOP.contains(id) && NessaContext::is_constant_expr(c, consts) &&
-                exprs.iter().all(|i| NessaContext::is_constant_expr(i, consts))
+                CONST_NARYOP_IDS.contains(id) && self.is_constant_expr(c, consts) &&
+                exprs.iter().all(|i| self.is_constant_expr(i, consts))
             },
 
             NessaExpr::FunctionCall(_, id, _, exprs) => {
-                CONST_FUNC.contains(id) && exprs.iter().all(|i| NessaContext::is_constant_expr(i, consts))
+                CONST_FUNC_IDS.contains(id) && exprs.iter().all(|i| self.is_constant_expr(i, consts))
             }
             
             _ => false
@@ -971,8 +984,77 @@ impl NessaContext {
             NessaExpr::Literal(_, obj) => obj.clone(),
             NessaExpr::Variable(_, id, _, _) => NessaContext::compute_constant_expr(const_exprs.get(id).unwrap(), const_exprs),
 
-            NessaExpr::UnaryOperation(_, _, _, _) => todo!(),
-            NessaExpr::BinaryOperation(_, _, _, _, _) => todo!(),
+            NessaExpr::UnaryOperation(_, id, _, e) => {
+                let inner = NessaContext::compute_constant_expr(e, const_exprs);
+                let t = inner.get_type();
+
+                match *id {
+                    NEG_UNOP_ID if t == INT => Object::new(-inner.get::<Integer>().clone()),
+                    NEG_UNOP_ID if t == FLOAT => Object::new(-inner.get::<f64>().clone()),
+                    _ => unreachable!()
+                }    
+            },
+
+            NessaExpr::BinaryOperation(_, id, _, a, b) => {
+                let a_inner = NessaContext::compute_constant_expr(a, const_exprs);
+                let b_inner = NessaContext::compute_constant_expr(b, const_exprs);
+                let ta = a_inner.get_type();
+                let tb = b_inner.get_type();
+
+                macro_rules! bin_op {
+                    ($op: tt, $type_a: ident, $type_b: ident) => {
+                        Object::new(a_inner.get::<$type_a>().clone() $op b_inner.get::<$type_b>().clone())
+                    };
+                }
+
+                macro_rules! bin_op_l {
+                    ($op: tt, $type_a: ident, $type_b: ident, $func: ident) => {
+                        {
+                            use crate::integer_ext::*;
+                            Object::new($func(&*a_inner.get::<$type_a>()) $op b_inner.get::<$type_b>().clone())    
+                        }
+                    };
+                }
+
+                macro_rules! bin_op_r {
+                    ($op: tt, $type_a: ident, $type_b: ident, $func: ident) => {
+                        {
+                            use crate::integer_ext::*;
+                            Object::new(a_inner.get::<$type_a>().clone() $op $func(&*b_inner.get::<$type_b>()))    
+                        }
+                    };
+                }
+
+                match *id {
+                    ADD_BINOP_ID if ta == INT && tb == INT => bin_op!(+, Integer, Integer),
+                    ADD_BINOP_ID if ta == FLOAT && tb == FLOAT => bin_op!(+, f64, f64),
+                    ADD_BINOP_ID if ta == INT && tb == FLOAT => bin_op_l!(+, Integer, f64, to_f64),
+                    ADD_BINOP_ID if ta == FLOAT && tb == INT => bin_op_r!(+, f64, Integer, to_f64),
+                    
+                    SUB_BINOP_ID if ta == INT && tb == INT => bin_op!(-, Integer, Integer),
+                    SUB_BINOP_ID if ta == FLOAT && tb == FLOAT => bin_op!(-, f64, f64),
+                    SUB_BINOP_ID if ta == INT && tb == FLOAT => bin_op_l!(-, Integer, f64, to_f64),
+                    SUB_BINOP_ID if ta == FLOAT && tb == INT => bin_op_r!(-, f64, Integer, to_f64),
+                    
+                    MUL_BINOP_ID if ta == INT && tb == INT => bin_op!(*, Integer, Integer),
+                    MUL_BINOP_ID if ta == FLOAT && tb == FLOAT => bin_op!(*, f64, f64),
+                    MUL_BINOP_ID if ta == INT && tb == FLOAT => bin_op_l!(*, Integer, f64, to_f64),
+                    MUL_BINOP_ID if ta == FLOAT && tb == INT => bin_op_r!(*, f64, Integer, to_f64),
+                    
+                    DIV_BINOP_ID if ta == INT && tb == INT => bin_op!(/, Integer, Integer),
+                    DIV_BINOP_ID if ta == FLOAT && tb == FLOAT => bin_op!(/, f64, f64),
+                    DIV_BINOP_ID if ta == INT && tb == FLOAT => bin_op_l!(/, Integer, f64, to_f64),
+                    DIV_BINOP_ID if ta == FLOAT && tb == INT => bin_op_r!(/, f64, Integer, to_f64),
+                    
+                    MOD_BINOP_ID if ta == INT && tb == INT => bin_op!(%, Integer, Integer),
+                    MOD_BINOP_ID if ta == FLOAT && tb == FLOAT => bin_op!(%, f64, f64),
+                    MOD_BINOP_ID if ta == INT && tb == FLOAT => bin_op_l!(%, Integer, f64, to_f64),
+                    MOD_BINOP_ID if ta == FLOAT && tb == INT => bin_op_r!(%, f64, Integer, to_f64),
+
+                    _ => unreachable!()
+                }
+            },
+
             NessaExpr::NaryOperation(_, _, _, _, _) => todo!(),
             NessaExpr::FunctionCall(_, _, _, _) => todo!(),
             
@@ -980,13 +1062,13 @@ impl NessaContext {
         }
     }
     
-    pub fn get_constants(expr: &NessaExpr, consts: &mut FxHashMap<usize, bool>, const_exprs: &mut FxHashMap<usize, NessaExpr>) {
+    pub fn get_constants(&self, expr: &NessaExpr, consts: &mut FxHashMap<usize, bool>, const_exprs: &mut FxHashMap<usize, NessaExpr>) {
         match expr {
             NessaExpr::UnaryOperation(_, _, _, e) |
-            NessaExpr::Return(_, e)  => NessaContext::get_constants(e, consts, const_exprs),
+            NessaExpr::Return(_, e)  => self.get_constants(e, consts, const_exprs),
             
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
-                if NessaContext::is_constant_expr(e, consts) {
+                if self.is_constant_expr(e, consts) {
                     consts.insert(*id, true);
                     const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, &const_exprs)));    
                 }
@@ -998,50 +1080,50 @@ impl NessaContext {
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
-                    NessaContext::get_constants(e, consts, const_exprs);
+                    self.get_constants(e, consts, const_exprs);
                 }
             },
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
-                NessaContext::get_constants(c, consts, const_exprs); // Set offset of 2 in order not to insert moves inside loops
+                self.get_constants(c, consts, const_exprs); // Set offset of 2 in order not to insert moves inside loops
 
                 for e in exprs {
-                    NessaContext::get_constants(e, consts, const_exprs);
+                    self.get_constants(e, consts, const_exprs);
                 }
             },
 
             NessaExpr::NaryOperation(_, _, _, c, exprs) => {
-                NessaContext::get_constants(c, consts, const_exprs);
+                self.get_constants(c, consts, const_exprs);
 
                 for e in exprs {
-                    NessaContext::get_constants(e, consts, const_exprs);
+                    self.get_constants(e, consts, const_exprs);
                 }
             },
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                NessaContext::get_constants(a, consts, const_exprs);
-                NessaContext::get_constants(b, consts, const_exprs);
+                self.get_constants(a, consts, const_exprs);
+                self.get_constants(b, consts, const_exprs);
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {
-                NessaContext::get_constants(ic, consts, const_exprs);
+                self.get_constants(ic, consts, const_exprs);
                 
                 for e in ib {
-                    NessaContext::get_constants(e, consts, const_exprs);
+                    self.get_constants(e, consts, const_exprs);
                 }
 
                 for (ei_h, ei_b) in ei {
-                    NessaContext::get_constants(ei_h, consts, const_exprs);
+                    self.get_constants(ei_h, consts, const_exprs);
                     
                     for e in ei_b {
-                        NessaContext::get_constants(e, consts, const_exprs);
+                        self.get_constants(e, consts, const_exprs);
                     }
                 }
 
                 if let Some(inner) = eb {
                     for e in inner {
-                        NessaContext::get_constants(e, consts, const_exprs);
+                        self.get_constants(e, consts, const_exprs);
                     }
                 }
             },
@@ -1249,7 +1331,7 @@ impl NessaContext {
         // Compute constants
         for i in body.iter() {
             NessaContext::count_usages_expr(i, &mut var_usages, 1);
-            NessaContext::get_constants(i, &mut consts, &mut assigned_exprs);
+            self.get_constants(i, &mut consts, &mut assigned_exprs);
         }
 
         // Filter by usages

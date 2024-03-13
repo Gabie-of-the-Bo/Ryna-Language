@@ -7,6 +7,7 @@ use nom::error::{VerboseErrorKind, VerboseError};
 use rustc_hash::FxHashSet;
 use seq_macro::seq;
 use serde::{Serialize, Deserialize};
+use malachite::Integer;
 
 use crate::cache::needs_import;
 use crate::cache::needs_line_import;
@@ -17,7 +18,6 @@ use crate::context::NessaContext;
 use crate::graph::DirectedGraph;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::ITERABLE_ID;
-use crate::number::Integer;
 use crate::object::TypeInstance;
 use crate::parser::*;
 use crate::object::NessaArray;
@@ -664,6 +664,11 @@ impl NessaContext {
 */
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum PlaceholderType {
+    Break, Continue
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CompiledNessaExpr {
     Empty,
     Bool(bool),
@@ -687,6 +692,8 @@ pub enum CompiledNessaExpr {
     TupleElemCopy(usize),
     TupleElemDeref(usize),
 
+    IdxMove, IdxRef, IdxMut, IdxMoveRef,
+
     StoreVariable(usize),
     GetVariable(usize),
     RefVariable(usize),
@@ -701,6 +708,7 @@ pub enum CompiledNessaExpr {
     RelativeJumpIfFalse(usize, bool),
     RelativeJumpIfTrue(usize, bool),
     Call(usize),
+    LambdaCall, LambdaCallRef,
     Return,
 
     NativeFunctionCall(usize, usize, Vec<Type>),
@@ -724,6 +732,8 @@ pub enum CompiledNessaExpr {
     Modi, Modf,
     Negi, Negf,
 
+    AddStr,
+
     // Bitwise opcodes
     NotB, AndB, OrB, XorB, Shr, Shl,
 
@@ -734,11 +744,15 @@ pub enum CompiledNessaExpr {
     Gteqi, Gteqf,
     Eqi, Eqf,
     Neqi, Neqf,
+    EqBool, NeqBool,
+    EqStr, NeqStr,
 
     // Logical opcodes
     Not, Or, And, Xor,
     
     Nand, Nor, // Only via peephole optimization
+
+    Placeholder(PlaceholderType),
 
     Halt
 }
@@ -765,7 +779,8 @@ impl CompiledNessaExpr {
             Addi | Subi | Muli | Divi | Modi |
             Lti | Gti | Lteqi | Gteqi | Eqi | Neqi | Negi |
             Not | Or | And | Xor |
-            NotB | AndB | OrB | XorB | Shr | Shl
+            NotB | AndB | OrB | XorB | Shr | Shl |
+            EqStr | NeqStr | EqBool | NeqBool | AddStr
         )
     }
 
@@ -1667,6 +1682,7 @@ impl NessaContext{
     ) -> Result<(), NessaError> {
         return match line {
             NessaExpr::Break(..) |
+            NessaExpr::Continue(..) |
             NessaExpr::Literal(..) |
             NessaExpr::Variable(..) |
             NessaExpr::ClassDefinition(..) |
@@ -1682,19 +1698,19 @@ impl NessaContext{
 
                 self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code.len());
 
-                for i in 0..a.len() {
+                for (i, arg) in a.iter().enumerate() {
                     if i == 0 {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             "Lambda expression start".into(),
-                            a[i].1.clone()
+                            arg.1.clone()
                         ));
 
                     } else {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             String::new(),
-                            a[i].1.clone()
+                            arg.1.clone()
                         ));
                     }
                 }
@@ -2067,7 +2083,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&and, self) {
                                 // Store parameters
-                                for i in 0..a.len(){
+                                for (i, arg) in args.iter().enumerate() {
                                     if i == 0 {
                                         let comment = format!(
                                             "fn {}{}({}) -> {}",
@@ -2080,14 +2096,14 @@ impl NessaContext{
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i), 
                                             comment,
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
 
                                     } else {
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i),
                                             String::new(),
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
                                     }
                                 }
@@ -2185,7 +2201,7 @@ impl NessaContext{
                                     c_rep = close_rep.clone();
                                 }
     
-                                for i in 0..=a.len(){
+                                for (i, arg) in args.iter().enumerate() {
                                     if i == 0 {
                                         let comment = format!(
                                             "op ({}){}{}{} -> {}", 
@@ -2199,14 +2215,14 @@ impl NessaContext{
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i), 
                                             comment,
-                                            args[0].clone()
+                                            arg.clone()
                                         ));
     
                                     } else {
                                         res.push(NessaInstruction::new_with_type(
                                             CompiledNessaExpr::StoreVariable(i),
                                             String::new(),
-                                            args[i].clone()
+                                            arg.clone()
                                         ));
                                     }
                                 }
@@ -2444,7 +2460,13 @@ impl NessaContext{
         return match expr {
             NessaExpr::Break(_) => {
                 Ok(vec!(
-                    NessaInstruction::from(CompiledNessaExpr::Halt) // Placeholder
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Break)) // Placeholder
+                ))
+            }
+            
+            NessaExpr::Continue(_) => {
+                Ok(vec!(
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Continue)) // Placeholder
                 ))
             }
 
@@ -2673,6 +2695,9 @@ impl NessaContext{
                 if let Some(pos) = self.cache.locations.nary.get_checked(&(*id, arg_types, t.clone())) {
                     res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
 
+                } else if let Some((opcode, _)) = self.cache.opcodes.nary.get_checked(&(*id, ov_id)) {
+                    res.push(NessaInstruction::from(opcode));
+                
                 } else {                    
                     res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, t.clone())));
                 }   
@@ -2753,12 +2778,15 @@ impl NessaContext{
                 // Jump to the beginning of the loop
                 res.push(NessaInstruction::from(beginning_jmp));
 
-                // Transform breaks into relative jumps
+                // Transform breaks and continues into relative jumps
                 let length = res.len();
 
                 for (idx, i) in res.iter_mut().enumerate() {
-                    if let CompiledNessaExpr::Halt = i.instruction {
+                    if let CompiledNessaExpr::Placeholder(PlaceholderType::Break) = i.instruction {
                         i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                    
+                    } else if let CompiledNessaExpr::Placeholder(PlaceholderType::Continue) = i.instruction {
+                        i.instruction = CompiledNessaExpr::RelativeJump(-(idx as i32));
                     }
                 }
 
@@ -2780,6 +2808,7 @@ impl NessaContext{
 
                 if let Type::Basic(BOOL_ID) = consumed_res {
                     let for_body = self.compiled_form_body(b)?;
+                    let for_body_len = for_body.len();
 
                     // Convert the iterable into an iterator
                     if it_native {
@@ -2805,7 +2834,7 @@ impl NessaContext{
                     }                                    
 
                     // Jump to end of loop
-                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body.len() + 5, false)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body_len + 5, false)));
 
                     // Get next value
                     res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
@@ -2822,19 +2851,22 @@ impl NessaContext{
                     res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
 
                     // Add for body
-                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body.len() as i32 + 6));
+                    let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body_len as i32 + 6));
 
                     res.extend(for_body);
 
                     // Jump to the beginning of the loop
                     res.push(NessaInstruction::from(beginning_jmp));
 
-                    // Transform breaks into relative jumps
+                    // Transform breaks and continues into relative jumps
                     let length = res.len();
 
                     for (idx, i) in res.iter_mut().enumerate() {
-                        if let CompiledNessaExpr::Halt = i.instruction {
+                        if let CompiledNessaExpr::Placeholder(PlaceholderType::Break) = i.instruction {
                             i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32);
+                        
+                        } else if let CompiledNessaExpr::Placeholder(PlaceholderType::Continue) = i.instruction {
+                            i.instruction = CompiledNessaExpr::RelativeJump((length - idx) as i32 - 1);
                         }
                     }
 
@@ -3987,19 +4019,19 @@ impl NessaContext{
             // Early optimization
             self.optimize(lines);
 
-            for (_, body) in &mut *self.cache.templates.functions.inner_borrow_mut() {
+            for body in self.cache.templates.functions.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.unary.inner_borrow_mut() {
+            for body in self.cache.templates.unary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.binary.inner_borrow_mut() {
+            for body in self.cache.templates.binary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
-            for (_, body) in &mut *self.cache.templates.nary.inner_borrow_mut() {
+            for body in self.cache.templates.nary.inner_borrow_mut().values_mut() {
                 self.optimize(body);
             }
 
@@ -4051,7 +4083,8 @@ impl NessaContext{
 
 #[cfg(test)]
 mod tests {
-    use crate::number::*;
+    use malachite::Integer;
+
     use crate::object::*;
     use crate::parser::*;
     use crate::context::*;

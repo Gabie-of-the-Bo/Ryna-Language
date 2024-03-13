@@ -160,9 +160,9 @@ impl NessaContext {
         if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[id] {
             Err(NessaError::compiler_error(format!(
                 "Unable to get n-ary operator overload for {}{}{}{}",
-                t.get_name(self),
+                a_type.get_name(self),
                 open_rep,
-                arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
+                b_type.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                 close_rep
             ), l, vec!()))
 
@@ -385,6 +385,7 @@ impl NessaContext {
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
             NessaExpr::Break(l) |
+            NessaExpr::Continue(l) |
             NessaExpr::While(l, _, _) |
             NessaExpr::For(l, _, _, _) |
             NessaExpr::Return(l, _) => Err(NessaError::compiler_error(

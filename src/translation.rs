@@ -1,4 +1,4 @@
-use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, ANDB_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, ORB_BINOP_ID, OR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID}};
+use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, ANDB_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, ORB_BINOP_ID, OR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID, STR_ID}};
 
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
@@ -59,6 +59,44 @@ pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
             return match (a.deref_type(), b.deref_type()) {
                 (Type::Basic(INT_ID), Type::Basic(INT_ID)) => Some(i_opcode.clone()),
                 (Type::Basic(FLOAT_ID), Type::Basic(FLOAT_ID)) => Some(f_opcode.clone()),
+                (Type::Basic(INT_ID), Type::Basic(FLOAT_ID)) => Some(f_opcode.clone()),
+                (Type::Basic(FLOAT_ID), Type::Basic(INT_ID)) => Some(f_opcode.clone()),
+                _ => None
+            }
+        });
+    }
+
+    // String opcodes
+    let ids = [
+        EQ_BINOP_ID, NEQ_BINOP_ID, ADD_BINOP_ID
+    ];
+
+    let opcodes = [
+        EqStr, NeqStr, AddStr
+    ];
+    
+    for (id, opcode) in ids.iter().zip(opcodes) {
+        load_binop_opcodes(ctx, *id, |a, b| {
+            return match (a.deref_type(), b.deref_type()) {
+                (Type::Basic(STR_ID), Type::Basic(STR_ID)) => Some(opcode.clone()),
+                _ => None
+            }
+        });
+    }
+
+    // Bool opcodes
+    let ids = [
+        EQ_BINOP_ID, NEQ_BINOP_ID
+    ];
+
+    let opcodes = [
+        EqBool, NeqBool
+    ];
+    
+    for (id, opcode) in ids.iter().zip(opcodes) {
+        load_binop_opcodes(ctx, *id, |a, b| {
+            return match (a.deref_type(), b.deref_type()) {
+                (Type::Basic(BOOL_ID), Type::Basic(BOOL_ID)) => Some(opcode.clone()),
                 _ => None
             }
         });

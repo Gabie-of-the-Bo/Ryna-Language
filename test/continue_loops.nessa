@@ -1,0 +1,52 @@
+let array = arr<Int>();
+
+array.push(0);
+array.push(1);
+array.push(2);
+array.push(3);
+array.push(4);
+array.push(5);
+
+let ok = false;
+
+for i in array {
+    if i == 4 {
+        continue;
+    }
+
+    if i == 5 {
+        ok = true;
+    }
+
+    if i == 4 {
+        panic("This should not happen");
+    }
+}
+
+if !ok {
+    panic("This should not happen");
+}
+
+let it = 0;
+ok = false;
+
+while it <= 100 {
+    if it == 99 {
+        it.inc();
+        continue;
+    }
+
+    if it == 100 {
+        ok = true;
+    }
+
+    if it == 99 {
+        panic("This should not happen");
+    }
+
+    it.inc();
+}
+
+if !ok {
+    panic("This should not happen");
+}

@@ -1,6 +1,9 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
+use std::str::FromStr;
 
+use malachite::num::conversion::string::options::FromSciStringOptions;
+use malachite::num::conversion::traits::FromSciString;
 use nom::AsChar;
 use nom::bytes::complete::{tag, take_till, take_until};
 use nom::combinator::cut;
@@ -18,6 +21,7 @@ use nom::{
 
 use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
+use malachite::Integer;
 
 use crate::config::ImportMap;
 use crate::functions::Function;
@@ -25,7 +29,6 @@ use crate::interfaces::{InterfaceConstraint, Interface};
 use crate::macros::{parse_nessa_macro, NessaMacro, NessaMacroType};
 use crate::operations::Operator;
 use crate::object::{Object, TypeInstance};
-use crate::number::Integer;
 use crate::precedence_cache::PrecedenceCache;
 use crate::types::*;
 use crate::operations::*;
@@ -57,6 +60,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
     })
 }
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Location {
     pub line: usize,
@@ -198,6 +202,7 @@ pub enum NessaExpr {
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
     Break(Location),
+    Continue(Location),
 
     CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -259,6 +264,7 @@ impl NessaExpr {
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
             NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
             NessaExpr::For(_, _, _, _) |
             NessaExpr::Return(_, _) => false,
 
@@ -814,7 +820,7 @@ impl NessaContext {
                 opt(tag("-")),
                 take_while1(|c: char| c.is_ascii_digit())
             )),
-            |(s, n)| Integer::from(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str())
+            |(s, n)| Integer::from_str(format!("{}{}", s.unwrap_or(Span::new("")), n).as_str()).unwrap()
         )(input);
     }
 
@@ -824,7 +830,12 @@ impl NessaContext {
                 tag("0b"),
                 take_while1(|c: char| c == '0' || c == '1')
             ),
-            |n: Span<'a>| Integer::from_bin(n.to_string().as_str())
+            |n: Span<'a>| {
+                let mut options = FromSciStringOptions::default();
+                options.set_base(2);
+
+                Integer::from_sci_string_with_options(n.to_string().as_str(), options).unwrap()
+            }
         )(input);
     }
 
@@ -834,7 +845,12 @@ impl NessaContext {
                 tag("0x"),
                 take_while1(|c: char| c.is_hex_digit())
             ),
-            |n: Span<'a>| Integer::from_hex(n.to_string().as_str())
+            |n: Span<'a>| {
+                let mut options = FromSciStringOptions::default();
+                options.set_base(16);
+
+                Integer::from_sci_string_with_options(n.to_string().as_str(), options).unwrap()
+            }
         )(input);
     }
 
@@ -1214,10 +1230,11 @@ impl NessaContext {
                         |input| self.nessa_expr_parser_wrapper(input, &mut FxHashSet::default(), cache)
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(close)
                 ))
             ),
-            move |(l, (_, t, _, _, b, _, _))| NessaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
+            move |(l, (_, t, _, _, b, _, _, _))| NessaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
         )(input)
     }
 
@@ -1446,6 +1463,20 @@ impl NessaContext {
             |(l, _)| NessaExpr::Break(l)
         )(input);
     }
+
+    fn continue_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+        return map(
+            located(delimited(
+                empty0, 
+                tag("continue"), 
+                tuple((
+                    empty0,
+                    context("Expected ';' at the end of continue statement", cut(tag(";")))
+                ))
+            )),
+            |(l, _)| NessaExpr::Continue(l)
+        )(input);
+    }
     
     fn for_header_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, (String, NessaExpr)> {
         return map(
@@ -1535,6 +1566,7 @@ impl NessaContext {
                     ))
                 ),
                 empty0,
+                opt(tuple((tag(","), empty0))),
                 context("Expected ')' after parameters in function definition", cut(tag(")"))),
                 opt(
                     preceded(
@@ -1543,7 +1575,7 @@ impl NessaContext {
                     )
                 )
             )),
-            |(_, t, _, n, _, _, _, a, _, _, r)| (n, t, a, r.unwrap_or(Type::Empty))
+            |(_, t, _, n, _, _, _, a, _, _, _, r)| (n, t, a, r.unwrap_or(Type::Empty))
         )(input);
     }
 
@@ -2030,7 +2062,7 @@ impl NessaContext {
                             |t| t.unwrap_or(Type::Wildcard)
                         )
                     )),
-                    context("Expected ')' in operation definition", cut(tuple((empty0, tag(")")))))
+                    context("Expected ')' in operation definition", cut(tuple((empty0, opt(tuple((tag(","), empty0))), tag(")")))))
                 ),
                 empty0,
                 |input| self.nary_operator_parser(input),
@@ -2559,10 +2591,11 @@ impl NessaContext {
                         |input| self.nessa_expr_parser(input, cache)
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(")")
                 ))
             ),
-            |(l, (_, _, e, _, _))| {
+            |(l, (_, _, e, _, _, _))| {
                 if e.is_empty() {
                     NessaExpr::Literal(l, Object::empty())
 
@@ -2611,6 +2644,7 @@ impl NessaContext {
                         ))
                     ),
                     empty0,
+                    opt(tuple((tag(","), empty0))),
                     tag(")"),
                     empty0,
                     opt(
@@ -2633,7 +2667,7 @@ impl NessaContext {
                     ))
                 ))   
             ),
-            |(l, (_, _, a, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
+            |(l, (_, _, a, _, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
         )(input);
     }
 
@@ -2665,6 +2699,7 @@ impl NessaContext {
                     |input| self.for_parser(input, cache),
                     |input| self.if_parser(input, cache),
                     |input| self.break_parser(input),
+                    |input| self.continue_parser(input),
                     |input| terminated(|input| self.nessa_expr_parser(input, cache), cut(tuple((empty0, tag(";")))))(input)
                 )),
                 |i| vec!(i)
@@ -2882,7 +2917,6 @@ mod tests {
     use crate::interfaces::PRINTABLE_ID;
     use crate::parser::*;
     use crate::object::*;
-    use crate::number::*;
 
     #[test]
     fn type_parsing() {

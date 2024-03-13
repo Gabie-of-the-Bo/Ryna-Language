@@ -28,7 +28,7 @@ fn<T> serialize(serializer: @JSONSerializer, obj: Array<'T [Serializable<JSONSer
     let res = "[";
 
     for i in range(0, obj.len()) {
-        res = res + serializer.serialize(*obj[i]);
+        res = res + serializer.serialize(*obj[*i]);
 
         if i < obj.len() - 1 {
             res = res + ", ";

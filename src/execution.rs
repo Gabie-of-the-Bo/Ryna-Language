@@ -4,12 +4,15 @@ use std::time::Instant;
 use colored::Colorize;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use malachite::Integer;
+use malachite::num::conversion::traits::{RoundingFrom, SaturatingInto};
+use malachite::rounding_modes::RoundingMode;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
+use crate::integer_ext::{is_valid_index, to_usize};
 use crate::nessa_warning;
-use crate::number::{Integer, ONE};
 use crate::types::Type;
-use crate::object::{NessaTuple, Object, TypeInstance};
+use crate::object::{NessaArray, NessaLambda, NessaTuple, Object, TypeInstance};
 use crate::context::NessaContext;
 use crate::operations::Operator;
 use crate::compilation::{CompiledNessaExpr, NessaError};
@@ -192,6 +195,43 @@ impl NessaContext {
             };
         }
 
+        macro_rules! idx_op {
+            ($deref_arr: ident, $ref_method: ident) => {
+                let arr = stack.pop().unwrap();
+                let first = stack.pop().unwrap();
+
+                let arr = &*arr.$deref_arr::<NessaArray>();
+                let idx = &*first.get::<Integer>();
+
+                if !is_valid_index(idx) {
+                    return Err(NessaError::execution_error(format!("{} is not a valid index", idx)));
+                
+                } else {
+                    let native_idx = to_usize(idx);
+                    
+                    if arr.elements.len() <= native_idx {
+                        return Err(NessaError::execution_error(format!("{} is higher than the length of the array ({})", idx, arr.elements.len())));
+    
+                    } else {
+                        stack.push(arr.elements[native_idx].$ref_method());
+                    }
+                } 
+
+                ip += 1;
+            };
+        }
+
+        macro_rules! lambda_call {
+            ($lambda_ref: ident) => {
+                let arg = stack.pop().unwrap();
+                let f = &arg.$lambda_ref::<NessaLambda>();
+                
+                call_stack.push((ip + 1, offset, -1));
+                ip = f.loc as i32;
+                offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+            };
+        }
+
         call_stack.push((0, 0, -1));
 
         loop {
@@ -318,6 +358,11 @@ impl NessaContext {
                     ip += 1;
                 }),
 
+                IdxMove => nessa_instruction!("IdxMove", { idx_op!(get, move_contents_if_ref); }),
+                IdxRef => nessa_instruction!("IdxRef", { idx_op!(deref, get_ref_nostack); }),
+                IdxMut => nessa_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
+                IdxMoveRef => nessa_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
+
                 StoreVariable(id) => nessa_instruction!("StoreVariable", {
                     let idx = call_stack.len() - 1;
                     let l = &mut call_stack[idx].2;
@@ -378,6 +423,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfTrue(to, false) => nessa_instruction!("RelativeJumpIfTrue", {
                     if *stack.pop().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -386,6 +432,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfFalse(to, true) => nessa_instruction!("RelativeJumpIfFalse", {
                     if !*stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -394,6 +441,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 RelativeJumpIfTrue(to, true) => nessa_instruction!("RelativeJumpIfTrue", {
                     if *stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
@@ -402,6 +450,7 @@ impl NessaContext {
                         ip += 1;
                     }
                 }),
+
                 Call(to) => nessa_instruction!("Call", {
                     call_stack.push((ip + 1, offset, -1));
                     ip = *to as i32;
@@ -411,6 +460,10 @@ impl NessaContext {
                         *fn_count.entry(*to).or_default() += 1;
                     }
                 }),
+
+                LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
+                LambdaCallRef => nessa_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+
                 Return => nessa_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
 
@@ -547,7 +600,7 @@ impl NessaContext {
                     }
                 }),
 
-                ToFloat => unary_op!("ToFloat", a, get, Integer, a.to_f64()),
+                ToFloat => unary_op!("ToFloat", a, get, Integer, f64::rounding_from(a, RoundingMode::Exact).0),
 
                 Ref => nessa_instruction!("Ref", {
                     let a = stack.pop().unwrap();
@@ -587,13 +640,13 @@ impl NessaContext {
 
                 Inc => nessa_instruction!("Inc", {
                     let a = stack.pop().unwrap();
-                    *a.deref::<Integer>() += &*ONE;
+                    *a.deref::<Integer>() += Integer::from(1);
                     ip += 1;
                 }),
 
                 Dec => nessa_instruction!("Dec", {
                     let a = stack.pop().unwrap();
-                    *a.deref::<Integer>() -= &*ONE;
+                    *a.deref::<Integer>() -= Integer::from(1);
                     ip += 1;
                 }),
 
@@ -602,7 +655,7 @@ impl NessaContext {
                 Muli => bin_op!("Muli", a, b, get, get, Integer, a * b),
                 Divi => bin_op!("Divi", a, b, get, get, Integer, a / b),
                 Modi => bin_op!("Modi", a, b, get, get, Integer, a % b),
-                Negi => unary_op!("Negi", a, get, Integer, Integer::new(!a.negative, a.limbs.clone())),
+                Negi => unary_op!("Negi", a, get, Integer, -a),
                 Addf => bin_op!("Addf", a, b, get, get, f64, a + b),
                 Subf => bin_op!("Subf", a, b, get, get, f64, a - b),
                 Mulf => bin_op!("Mulf", a, b, get, get, f64, a * b),
@@ -610,12 +663,14 @@ impl NessaContext {
                 Modf => bin_op!("Modf", a, b, get, get, f64, a % b),
                 Negf => unary_op!("Negf", a, get, f64, -a),
 
+                AddStr => bin_op!("AddStr", a, b, get, get, String, format!("{}{}", a, b)),
+
                 NotB => unary_op!("NotB", a, get, Integer, !a),
                 AndB => bin_op!("AndB", a, b, get, get, Integer, a & b),
                 OrB => bin_op!("OrB", a, b, get, get, Integer, a | b),
                 XorB => bin_op!("XorB", a, b, get, get, Integer, a ^ b),
-                Shl => bin_op!("Shl", a, b, get, get, Integer, if b.negative { a >> b.limbs[0] } else { a << b.limbs[0] }),
-                Shr => bin_op!("Shr", a, b, get, get, Integer, if b.negative { a << b.limbs[0] } else { a >> b.limbs[0] }),
+                Shl => bin_op!("Shl", a, b, get, get, Integer, a << SaturatingInto::<i64>::saturating_into(b)),
+                Shr => bin_op!("Shr", a, b, get, get, Integer, a >> SaturatingInto::<i64>::saturating_into(b)),
 
                 Lti => bin_op!("Lti", a, b, get, get, Integer, a < b),
                 Gti => bin_op!("Gti", a, b, get, get, Integer, a > b),
@@ -630,12 +685,20 @@ impl NessaContext {
                 Eqf => bin_op!("Eqf", a, b, get, get, f64, a == b),
                 Neqf => bin_op!("Neqf", a, b, get, get, f64, a != b),
 
+                EqBool => bin_op!("EqBool", a, b, get, get, bool, a == b),
+                NeqBool => bin_op!("NeqBool", a, b, get, get, bool, a != b),
+
+                EqStr => bin_op!("EqStr", a, b, get, get, String, a == b),
+                NeqStr => bin_op!("NeqStr", a, b, get, get, String, a != b),
+
                 Not => unary_op!("Not", a, get, bool, !a),
                 Or => bin_op!("Or", a, b, get, get, bool, *a || *b),
                 And => bin_op!("And", a, b, get, get, bool, *a && *b),
                 Xor => bin_op!("Xor", a, b, get, get, bool, *a ^ *b),
                 Nor => bin_op!("Nor", a, b, get, get, bool, !(*a || *b)),
                 Nand => bin_op!("Nand", a, b, get, get, bool, !(*a && *b)),
+
+                Placeholder(_) => unreachable!(),
 
                 Halt => break,
             }
@@ -671,7 +734,8 @@ impl NessaContext {
 
 #[cfg(test)]
 mod tests {
-    use crate::number::*;
+    use malachite::Integer;
+
     use crate::object::*;
     use crate::context::*;
     use crate::types::*;

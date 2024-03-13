@@ -1,9 +1,13 @@
-fn fact(n: Int) -> Int {
+fn fact_tail(n: Int, a: Int) -> Int {
     if n <= 0 {
-        return 1;
+        return move(a);
     }
 
-    return n * fact(n - 1);
+    return fact_tail(n - 1, a * n);
+}
+
+fn fact(n: Int) -> Int {
+    return fact_tail(move(n), 1);
 }
 
 fn e(iters: Int) -> Float {

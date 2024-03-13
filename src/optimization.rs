@@ -1658,12 +1658,16 @@ impl NessaContext {
             changed = false;
             
             let mut increments = FxHashMap::default();
+            let mut early_rets = FxHashSet::default();
 
             // Look for jump chains
             for (idx, i) in program.iter().enumerate() {
                 if let RelativeJump(loc) = i.instruction {
                     if let RelativeJump(loc_2) = program[(idx as i32 + loc) as usize].instruction {
                         increments.entry(idx).or_insert(loc_2);
+                    
+                    } else if let Return = program[(idx as i32 + loc) as usize].instruction {
+                        early_rets.insert(idx);
                     }
                 }
             }
@@ -1675,7 +1679,51 @@ impl NessaContext {
                     changed = true;
                 }
             }
+
+            for idx in early_rets {
+                program[idx].instruction = Return;
+                changed = true;
+            }
         }
+    }
+
+    fn tail_call_optimization(&self, program: &mut Vec<NessaInstruction>) {
+        use CompiledNessaExpr::*;
+
+        compute_labels(program);
+
+        let mut changed = true;
+
+        while changed {
+            changed = false;
+            
+            macro_rules! remove_instruction {
+                ($idx: expr) => {
+                    let labels_to_remove = program[$idx].labels.clone();
+                    program[$idx + 1].labels.extend(&labels_to_remove);
+                    program.remove($idx);
+                };
+            }
+
+            for i in 0..(program.len() - 1) {
+                macro_rules! change_first {
+                    ($new_expr: expr) => {
+                        program[i].instruction = $new_expr;
+                        remove_instruction!(i + 1);
+    
+                        changed = true;
+                        break;
+                    };
+                }
+                
+                match [&program[i].instruction, &program[i + 1].instruction] {
+                    [Call(loc), Return] => { change_first!(Jump(*loc)); }
+                    _ => { }
+                }
+            }
+        }
+
+        reassign_labels(program);
     }
 }
 
@@ -1691,6 +1739,7 @@ impl NessaContext {
         self.remove_single_relative_jumps(program);
         self.remove_empty_calls(program);
         self.remove_jump_chains(program);
+        self.tail_call_optimization(program);
     }
 }
 

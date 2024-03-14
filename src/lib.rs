@@ -114,7 +114,7 @@ mod integration {
 
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
-        let (_, all_mods, files) = compute_project_hash(path_str, None).unwrap();
+        let (_, all_mods, files) = compute_project_hash(path_str, None, true).unwrap();
         let err = precompile_nessa_module_with_config(path_str, all_mods, files, true);
 
         if let Err(err) = &err {

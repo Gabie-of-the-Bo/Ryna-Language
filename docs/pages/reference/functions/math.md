@@ -242,31 +242,6 @@
     </tbody>
 </table>
 
-### fact
-
-<table>
-    <thead>
-        <tr>
-            <th>Overload</th>
-            <th>Description</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td> <code>fact(n: Int) -> Int</code> </td>
-            <td rowspan="3">
-                Calculates the factorial of <code>n</code>
-            </td>
-        </tr>
-        <tr>
-            <td> <code>fact(n: &Int) -> Int</code> </td>
-        </tr>
-        <tr>
-            <td> <code>fact(n: @Int) -> Int</code> </td>
-        </tr>
-    </tbody>
-</table>
-
 ### ln
 
 <table>

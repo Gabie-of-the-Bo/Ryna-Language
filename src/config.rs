@@ -369,7 +369,7 @@ pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionMo
     Ok((module.ctx, module.code))
 }
 
-pub fn compute_project_hash(path: &String, macro_code: Option<String>) -> Result<(String, VersionModCache, FileCache), NessaError> {
+pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize: bool) -> Result<(String, VersionModCache, FileCache), NessaError> {
     let module_path = Path::new(path);
     let (all_modules, file_cache) = get_all_modules_cascade(module_path, macro_code)?;
 
@@ -387,6 +387,9 @@ pub fn compute_project_hash(path: &String, macro_code: Option<String>) -> Result
 
     // Add nessa version
     final_hash.push_str(env!("CARGO_PKG_VERSION"));
+
+    // Add nessa optimization flag
+    final_hash.push_str(&optimize.to_string());
 
     Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache))
 }

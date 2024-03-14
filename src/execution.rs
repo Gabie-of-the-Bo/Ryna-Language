@@ -45,7 +45,7 @@ impl NessaContext {
 
         let no_macro = macro_code.is_none();
 
-        match compute_project_hash(&path, macro_code) {
+        match compute_project_hash(&path, macro_code, optimize) {
             Ok((hash, all_mods, files)) => {
                 combined_hash = hash.clone();
                 all_modules = all_mods;
@@ -72,7 +72,11 @@ impl NessaContext {
 
         match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
-                Ok(mut instr) => {                    
+                Ok(mut instr) => {     
+                    if optimize {
+                        ctx.optimize_instructions(&mut instr);
+                    }
+               
                     if no_macro {
                         let ser_module = ctx.get_serializable_module(combined_hash, &instr);
 
@@ -82,11 +86,6 @@ impl NessaContext {
                     }
 
                     ctx.program_input = program_input.to_vec();
-
-                    if optimize {
-                        ctx.optimize_instructions(&mut instr);
-                    }
-
                     ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
                 },
 

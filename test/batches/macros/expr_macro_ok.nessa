@@ -1,5 +1,5 @@
 syntax expr test from Arg(1{d}, a) "x" Arg(1{d}, b) {
-    {$a} {#*} {$b}
+    $a * $b
 }
 
 if 5x6 != 30 {

@@ -881,7 +881,7 @@ impl NessaContext {
                         }
 
                         if let Type::Basic(t_id) = t {  
-                            return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0].into());
+                            return self.type_templates[*t_id].parser.unwrap()(self, &self.type_templates[*t_id], &args[n][0]);
                         }
 
                         if let Type::Template(ARR_ID, t) = t {  

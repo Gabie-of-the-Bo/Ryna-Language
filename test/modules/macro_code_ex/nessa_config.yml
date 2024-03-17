@@ -1,7 +1,7 @@
 ---
 module_name: macro_code_ex
 version: 0.1.0
-hash: faa6f77535337950cff4c49dba562b02
+hash: 2fea3180bf5f59cc0bd160ffee46805c
 module_paths:
   - test/lib
 modules:

@@ -4,10 +4,10 @@ syntax expr test from Arg(1{d}, a) "x" Arg(1{d}, b) {
 
         fn double(n: Int) -> Int {
             return n * 2;
-        }
+        \}
 
-        let a = {$a};
-        let b = {$b};
+        let a = $a;
+        let b = $b;
 
         emit(double(gcd(*a, *b)).to_string());
     |}

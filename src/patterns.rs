@@ -48,8 +48,8 @@ impl Pattern {
         };
     }
 
-    pub fn extract<'a>(&self, text: Span<'a>, ctx: &NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<&'a str>>> {
-        fn merge<'a>(a: &mut HashMap<String, Vec<&'a str>>, b: HashMap<String, Vec<&'a str>>) {
+    pub fn extract<'a>(&self, text: Span<'a>, ctx: &NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
+        fn merge<'a>(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
             }
@@ -143,7 +143,7 @@ impl Pattern {
             Pattern::Arg(p, k) => {
                 let (i, mut o) = p.extract(text, ctx, cache)?;
 
-                o.entry(k.clone()).or_default().push(&text[..(text.len() - i.len())]);
+                o.entry(k.clone()).or_default().push(text[..(text.len() - i.len())].into());
 
                 Ok((i, o))
             }
@@ -477,20 +477,20 @@ mod tests {
         ));
 
         assert_eq!(u_pattern.extract("125".into(), &ctx, &RefCell::default()).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("")),
-            ("Int".into(), vec!("125")),
+            ("Sign".into(), vec!("".into())),
+            ("Int".into(), vec!("125".into())),
         )));
 
         assert_eq!(u_pattern.extract("0.056".into(), &ctx, &RefCell::default()).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("")),
-            ("Int".into(), vec!("0")),
-            ("Dec".into(), vec!("056")),
+            ("Sign".into(), vec!("".into())),
+            ("Int".into(), vec!("0".into())),
+            ("Dec".into(), vec!("056".into())),
         )));
 
         assert_eq!(u_pattern.extract("-13.26".into(), &ctx, &RefCell::default()).unwrap().1, HashMap::from_iter(vec!(
-            ("Sign".into(), vec!("-")),
-            ("Int".into(), vec!("13")),
-            ("Dec".into(), vec!("26")),
+            ("Sign".into(), vec!("-".into())),
+            ("Int".into(), vec!("13".into())),
+            ("Dec".into(), vec!("26".into())),
         )));
 
         assert!(!ok_result(u_pattern.extract(Span::new("+100"), &ctx, &RefCell::default())));

@@ -16,7 +16,7 @@ internally:
 
 ```
 syntax expr double_integer from "Dbl" Arg(1{d}, n) {
-    {$n} {# + } {$n}
+    $n + $n
 }
 
 // This macro ...

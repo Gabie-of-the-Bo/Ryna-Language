@@ -11,32 +11,32 @@ syntax block embed_bf from "BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | 
         emit("let pt = 500;");
 
         // Code
-        let code = "{$code}".ref().utf8_array();
+        let code = "$code".ref().utf8_array();
 
         // Execution
         for i in code {
             if i == '+' {
                 emit("mem[*pt] := mem[*pt] + 1;");
             
-            } else if i == '-' {
+            \} else if i == '-' {
                 emit("mem[*pt] := mem[*pt] - 1;");
             
-            } else if i == '.' {
+            \} else if i == '.' {
                 emit("out.push(*mem[*pt]);");
             
-            } else if i == '<' {
+            \} else if i == '<' {
                 emit("pt = pt - 1;");
 
-            } else if i == '>' {
+            \} else if i == '>' {
                 emit("pt = pt + 1;");
             
-            } else if i == '[' {
+            \} else if i == '[' {
                 emit("while mem[*pt] != 0 {");
             
-            } else if i == ']' {
-                emit("}");
-            }
-        }
+            \} else if i == ']' {
+                emit("\}");
+            \}
+        \}
     |}
 }
 

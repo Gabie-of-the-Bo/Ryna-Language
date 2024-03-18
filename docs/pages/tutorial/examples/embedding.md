@@ -15,16 +15,16 @@ details are not that important in this tutorial, but we have to know some things
 
 Finally, the instructions do the following when executed:
 
-| Instruction  | Effect               |
-| -------- | -------------------- |
-| >     | Increase *P* by one |
-| <     | Decrease *P* by one |
-| +     | Increase *T[P]* by one |
-| -     | Decrease *T[P]* by one |
-| [     | Jump to the matching `]` if *T[P]* is 0 |
-| ]     | Jump to the matching `[` if *T[P]* is not 0 |
-| .     | Output *T[P]* |
-| ,     | Input value to *T[P]* |
+| Instruction | Effect                                      |
+| ----------- | ------------------------------------------- |
+| >           | Increase *P* by one                         |
+| <           | Decrease *P* by one                         |
+| +           | Increase *T[P]* by one                      |
+| -           | Decrease *T[P]* by one                      |
+| [           | Jump to the matching `]` if *T[P]* is 0     |
+| ]           | Jump to the matching `[` if *T[P]* is not 0 |
+| .           | Output *T[P]*                               |
+| ,           | Input value to *T[P]*                       |
 
 ## Matching the language
 
@@ -106,19 +106,19 @@ Later, we must create the memory pointer in a similar way:
 ```
 
 With this, we can begin generating the code that corresponds to the embedded Brainfuck code. For this, we have to
-create a variable inside the macro code pattern by using variable substitution and iterate over each character:
+create a variable inside the macro code pattern by using a variable pattern and iterate over each character:
 
 ```
 {|        
     // ...
 
     // Code
-    let code = "{$code}".ref().utf8_array();
+    let code = "$code".ref().utf8_array();
 
     // Execution
     for i in code {
         // Handle each case
-    }
+    \}
 
     // ...
 |}
@@ -126,7 +126,8 @@ create a variable inside the macro code pattern by using variable substitution a
 
 Now comes the hardest part: translating the instructions to valid Nessa code given our simple model. For this, we will translate the
 `>` and `<` operations as changing `pt`, `+` and `-` as changing the value in `mem[*pt]` and `.` as writing to an array **outside the macro**.
-Interestingly, `[` and `]` can be handled by being translated to `while mem[*pt] != 0 {` and `}`, respectively.
+Interestingly, `[` and `]` can be handled by being translated to `while mem[*pt] != 0 {` and `}`, respectively. We have to be careful
+because every closing brace must be escaped if it is not the one that closes the code pattern (including the ones inside strings).
 
 The final code that handles the instructions is the following:
 
@@ -139,25 +140,25 @@ The final code that handles the instructions is the following:
         if i == '+' { 
             emit("mem[*pt] := mem[*pt] + 1;"); // +
         
-        } else if i == '-' {
+        \} else if i == '-' {
             emit("mem[*pt] := mem[*pt] - 1;"); // -
         
-        } else if i == '.' {
+        \} else if i == '.' {
             emit("out.push(*mem[*pt]);");      // .
         
-        } else if i == '<' {
+        \} else if i == '<' {
             emit("pt = pt - 1;");              // <
 
-        } else if i == '>' {
+        \} else if i == '>' {
             emit("pt = pt + 1;");              // >
         
-        } else if i == '[' {
+        \} else if i == '[' {
             emit("while mem[*pt] != 0 {");     // [
         
-        } else if i == ']' {                    // ]
-            emit("}");
-        }
-    }
+        \} else if i == ']' {                    // ]
+            emit("\}");
+        \}
+    \}
 
     // ...
 |}

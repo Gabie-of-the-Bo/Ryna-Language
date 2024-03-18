@@ -1,9 +1,9 @@
 syntax block test from Arg(1{l}, a) "#" Arg(1{d}, b) {
-    {#let } {$a} {# = } {$b} {#;}
+    let $a = $b;
 
-    {#if } {$a} {# < 5 \{}
-        {$a} {# = 5;}
-    {#\}}  
+    if $a < 5 {
+        $a = 5;
+    \}  
 }
 
 test#30

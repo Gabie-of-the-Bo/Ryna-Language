@@ -14,14 +14,12 @@ syntax ndl macro_name from NDL_Pattern {
 This macro would have to create a string that can be parsed as an NDL pattern. This syntax can then be used safely inside any
 implicit class syntax or macro.
 
-This would be an example that transforms a pattern into a series of that pattern separated by commas:
+This would be an example that transforms a pattern into a series of that pattern separated by commas (again, note that we need to
+escape the closing brace):
 
 ```
 syntax ndl comma_separated from "#" s Arg(<ndl>, inner) s "#" {
-    {$inner}
-    {# \{ ", " }
-        {$inner}
-    {# \}}
+    $inner { ", " $inner \}
 }
 
 // Usage example

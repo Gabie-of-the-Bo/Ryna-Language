@@ -1,8 +1,5 @@
 syntax ndl example from "#" s Arg(<ndl>, inner) s "#" {
-    {$inner}
-    {# \{ ", " }
-        {$inner}
-    {# \}}
+    $inner { ", " $inner \}
 }
 
 class Ints {

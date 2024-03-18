@@ -1,18 +1,22 @@
 import * from hashset;
 
-syntax set_initialization from "<" Arg(<type>, type) ">{" [{Arg(<expr>, elems) "," s} Arg(<expr>, elems)] "}" {
-    {#let res = hashset<} {$type} {#>(} {#);\n}
-    {@i in $elems} {
-        {#res.add(} {$i} {#);\n}
+syntax set_initialization from "<" Arg(<type>, type) ">{" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "}" {
+    let res = hashset<$type>();
+
+    @elems.i {
+        res.add($elems.i);
     }
-    {#return *res;}
+    
+    return move(res);
 }
 
 syntax set_comprehension from "{" [s] Arg(<expr>, map) s "for" s Arg(<ident>, it) [s] ":" [s] Arg(<type>, type) s "in" s Arg(<expr>, container) [s] "}" {
-    {#let res = hashset<} {$type} {#>();\n}
-    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
-    {#for _it_ in }{$container}{# \{\n}
-        {#  res.add(func(*_it_));\n}
-    {#\}\n\n}
-    {#return res;}
+    let res = hashset<$type>();
+    let func = ($it: $type) -> $type $map;
+
+    for _it_ in $container {
+        res.add(func(*_it_));
+    \}
+    
+    return move(res);
 }

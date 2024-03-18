@@ -36,16 +36,18 @@ Note that you need `Arg`s to mark the variables that we will use inside the body
 ## Generating the body
 
 Internally, a list comprehension is just a **for loop** with a transformation function. There are multiple ways to do this, but
-this is one of them:
+this is one of them (again, note that we have to escape the for's closing brace):
 
 ```
 syntax list_comprehension from [...] {
-    {#let res = arr<} {$type} {#>();\n}
-    {#let func = (} {$it} {#: } {$type} {#) -> } {$type} {# } {$map}{#;\n\n}
-    {#for _it_ in }{$container}{# \{\n}
-        {#  res.push(func(*_it_));\n}
-    {#\}\n\n}
-    {#return *res;}
+    let res = arr<$type>();
+    let func = ($it: $type) -> $type $map;
+
+    for _it_ in $container {
+        res.push(func(*_it_));
+    \}
+    
+    return move(res);
 }
 ```
 
@@ -62,7 +64,7 @@ This would compile to:
 ```
 let array = do {
     let res = arr<Int>();
-    let func = (i: Int) { i * 2 };
+    let func = (i: Int) -> Int i * 2;
 
     for _it_ in <Int>[1, 2, 3, 4, 5] {
         res.push(func(*_it_));

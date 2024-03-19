@@ -1,6 +1,7 @@
 use std::collections::{HashSet, HashMap};
 
 use colored::Colorize;
+use rustc_hash::FxHashSet;
 
 use crate::compilation::NessaError;
 use crate::context::NessaContext;
@@ -23,7 +24,7 @@ impl NessaContext {
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
-            NessaExpr::CompiledLambda(l, _, _, _, body) |
+            NessaExpr::CompiledLambda(l, _, _, _, _, body) |
             NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
 
             NessaExpr::DoBlock(l, body, _) => NessaContext::ensured_return_check_body(body, l, "Do block"),
@@ -122,7 +123,7 @@ impl NessaContext {
                 NessaContext::ensured_return_check(expr)
             }
 
-            (NessaExpr::CompiledLambda(_, _, _, ret, body), None) => {
+            (NessaExpr::CompiledLambda(_, _, _, _, ret, body), None) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
@@ -200,7 +201,7 @@ impl NessaContext {
             NessaExpr::ClassDefinition(..) => Ok(()),
 
             NessaExpr::DoBlock(_, body, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, body) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, body) |
             NessaExpr::Tuple(_, body) => {
                 for line in body {
                     self.ambiguity_check(line)?;
@@ -548,7 +549,7 @@ impl NessaContext {
 
             NessaExpr::Return(_, e) => NessaContext::break_continue_check(e, allowed),
 
-            NessaExpr::CompiledLambda(_, _, _, _, b) => {
+            NessaExpr::CompiledLambda(_, _, _, _, _, b) => {
                 for i in b {
                     NessaContext::break_continue_check(i, false)?;
                 }
@@ -757,7 +758,11 @@ impl NessaContext {
 
             NessaExpr::Return(_, e) => self.invalid_type_check(e),
 
-            NessaExpr::CompiledLambda(l, _, args, ret, b) => {
+            NessaExpr::CompiledLambda(l, _, c, args, ret, b) => {
+                for (_, i) in c {
+                    self.invalid_type_check(i)?;
+                }
+
                 for i in b {
                     self.invalid_type_check(i)?;
                 }
@@ -1260,7 +1265,11 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledLambda(l, _, args, _, b) => {
+            NessaExpr::CompiledLambda(l, _, c, args, _, b) => {
+                for (_, i) in c {
+                    self.type_check(i)?;
+                }     
+
                 for (_, t) in args {
                     self.check_type_well_formed(t, l)?;
                 }
@@ -2021,7 +2030,11 @@ impl NessaContext {
     }
 
     pub fn lambda_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        if let NessaExpr::CompiledLambda(l, _, a, r, b) = expr {
+        if let NessaExpr::CompiledLambda(l, _, c, a, r, b) = expr {
+            for (_, i) in c {
+                self.no_template_check(i)?;
+            }
+
             if r.has_templates() {
                 return Err(NessaError::compiler_error("Parametric types are not allowed in lambda return types".into(), l, vec!()));
             }
@@ -2041,12 +2054,12 @@ impl NessaContext {
         }
     }
 
-    pub fn repeated_args(&self, args: &Vec<&String>) -> Result<(), String> {
+    pub fn repeated_args(&self, args: &Vec<&String>, item: &str) -> Result<(), String> {
         let mut args_set = HashSet::new();
 
         for i in args {
             if args_set.contains(i) {
-                return Err(format!("Parameter \"{}\" is defined multiple times", i));
+                return Err(format!("{} \"{}\" is defined multiple times", item, i));
             }
 
             args_set.insert(i);
@@ -2059,13 +2072,13 @@ impl NessaContext {
         return match expr {
             NessaExpr::PostfixOperationDefinition(l, _, t, n, _, _, _) |
             NessaExpr::PrefixOperationDefinition(l, _, t, n, _, _, _) => {
-                let err = self.repeated_args(&vec!(n));
+                let err = self.repeated_args(&vec!(n), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
-                let err = self.repeated_args(&t.iter().collect());
+                let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -2075,13 +2088,13 @@ impl NessaContext {
             }
 
             NessaExpr::BinaryOperationDefinition(l, _, t, (n1, _), (n2, _), _, _) => {
-                let err = self.repeated_args(&vec!(n1, n2));
+                let err = self.repeated_args(&vec!(n1, n2), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
-                let err = self.repeated_args(&t.iter().collect());
+                let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -2094,13 +2107,13 @@ impl NessaContext {
                 let mut args = vec!(n1);
                 args.extend(n.iter().map(|(i, _)| i));
 
-                let err = self.repeated_args(&args);
+                let err = self.repeated_args(&args, "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
-                let err = self.repeated_args(&t.iter().collect());
+                let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -2110,13 +2123,13 @@ impl NessaContext {
             }
 
             NessaExpr::FunctionDefinition(l, _, t, a, _, _) => {
-                let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect());
+                let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
 
-                let err = self.repeated_args(&t.iter().collect());
+                let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -2125,13 +2138,28 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledLambda(l, _, a, _, _) => {
-                let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect());
+            NessaExpr::CompiledLambda(l, _, c, a, _, _) => {
+                let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
                 }
-                
+
+                let err = self.repeated_args(&c.iter().map(|(n, _)| n).collect(), "Capture");
+
+                if let Err(msg) = err {
+                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                }
+
+                let cap_names = &c.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
+                let arg_names = &a.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
+
+                for n in cap_names {
+                    if arg_names.contains(n) {
+                        return Err(NessaError::compiler_error(format!("Capture \"{}\" is also defined as a parameter", n), l, vec!()));
+                    }
+                }
+
                 Ok(())
             }
 

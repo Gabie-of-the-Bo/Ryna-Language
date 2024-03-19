@@ -539,15 +539,30 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::Lambda(l, a, r, b) => {
-                self.compile(b, a)?;
+            NessaExpr::Lambda(l, c, a, r, b) => {
+                let mut captures = vec!();
+                let mut capture_args = vec!();
+
+                // Compile lambda captures
+                for n in c {
+                    if var_map.is_var_defined(n) {
+                        let (idx, t) = var_map.get_var(n).unwrap();
+                        captures.push((n.clone(), NessaExpr::Variable(l.clone(), *idx, n.clone(), t.clone())));
+                        capture_args.push((n.clone(), t.clone()));
+                    
+                    } else {
+                        return Err(NessaError::compiler_error(format!("Variable with name {} is not defined", n.green()), l, vec!()));
+                    }
+                }
+
+                self.compile(b, &capture_args.iter().chain(a.iter()).cloned().collect())?;
 
                 // Infer further
                 if *r == Type::InferenceMarker {
                     *r = self.infer_lambda_return_type(b)?.unwrap_or(Type::Empty);
                 }
 
-                *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, a.clone(), r.clone(), b.clone());
+                *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, captures, a.clone(), r.clone(), b.clone());
                 self.lambdas += 1;
             },
 
@@ -676,7 +691,7 @@ pub enum CompiledNessaExpr {
     Float(f64),
     Str(String),
     Array(usize, Type),
-    Lambda(usize, Type, Type),
+    Lambda(usize, usize, Type, Type),
 
     Construct(usize, usize, Vec<Type>),
     AttributeMove(usize),
@@ -809,9 +824,10 @@ impl CompiledNessaExpr {
                 t.get_name(ctx)
             ),
 
-            Lambda(pos, args, ret) => format!(
-                "{}({}, {}, {})", "Lambda".green(), 
+            Lambda(pos, cap, args, ret) => format!(
+                "{}({}, {}, {}, {})", "Lambda".green(), 
                 pos.to_string().magenta(), 
+                cap.to_string().magenta(), 
                 args.get_name(ctx),
                 ret.get_name(ctx)
             ),
@@ -1101,8 +1117,12 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::CompiledLambda(_, _, args, ret, b) => {
+            NessaExpr::CompiledLambda(_, _, c, args, ret, b) => {
                 self.get_inner_dep_graph_body(b, parent, deps);
+
+                for (_, a) in c {
+                    self.get_inner_dep_graph_expr(a, parent, deps);
+                }
 
                 for (_, t) in args {
                     for td in t.type_dependencies() {
@@ -1602,7 +1622,7 @@ impl NessaContext{
 
             NessaExpr::Variable(_, _, _, t) => *t = t.sub_templates(templates),
 
-            NessaExpr::Lambda(_, args, r, lines) => {
+            NessaExpr::Lambda(_, _, args, r, lines) => {
                 for (_, tp) in args {
                     *tp = tp.sub_templates(templates);
                 }
@@ -1693,26 +1713,34 @@ impl NessaContext{
             NessaExpr::BinaryOperatorDefinition(..) |
             NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
-            NessaExpr::CompiledLambda(_, i, a, _, b) => {
+            NessaExpr::CompiledLambda(_, i, c, a, _, b) => {
                 self.compile_lambdas(b)?;
 
                 self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code.len());
 
-                for (i, arg) in a.iter().enumerate() {
+                for (i, e) in c.iter().enumerate() {
                     if i == 0 {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             "Lambda expression start".into(),
-                            arg.1.clone()
+                            self.infer_type(&e.1).unwrap()
                         ));
 
                     } else {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             String::new(),
-                            arg.1.clone()
+                            self.infer_type(&e.1).unwrap()
                         ));
                     }
+                }
+
+                for (i, arg) in a.iter().enumerate() {
+                    self.lambda_code.push(NessaInstruction::new_with_type(
+                        CompiledNessaExpr::StoreVariable(i + c.len()), 
+                        String::new(),
+                        arg.1.clone()
+                    ));
                 }
 
                 self.lambda_code.extend(self.compiled_form_body(b)?);
@@ -2480,9 +2508,16 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::CompiledLambda(_, i, a, r, _) => {
-                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
+            NessaExpr::CompiledLambda(_, i, c, a, r, _) => {
+                let mut res = vec!();
+
+                for (_, i) in c.iter().rev() {
+                    res.extend(self.compiled_form_expr(i, false)?);
+                }
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::Lambda(
                     *self.lambda_positions.get(i).unwrap(),
+                    c.len(),
                     if a.len() == 1 {
                         a[0].1.clone()
 
@@ -3611,7 +3646,7 @@ impl NessaContext{
                 self.map_nessa_expression(e, ctx, id_mapper)?;
             }
 
-            NessaExpr::Lambda(l, a, ret, lines) => {
+            NessaExpr::Lambda(l, _, a, ret, lines) => {
                 for (_, t) in a {
                     *t = t.map_type(self, ctx, id_mapper, l)
                 }

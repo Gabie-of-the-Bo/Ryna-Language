@@ -204,7 +204,7 @@ pub enum NessaExpr {
     Break(Location),
     Continue(Location),
 
-    CompiledLambda(Location, usize, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    CompiledLambda(Location, usize, Vec<(String, NessaExpr)>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Macro
     Macro(Location, String, NessaMacroType, Pattern, NessaMacro),
@@ -212,7 +212,7 @@ pub enum NessaExpr {
     // Uncompiled
     Literal(Location, Object),
     Tuple(Location, Vec<NessaExpr>),
-    Lambda(Location, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    Lambda(Location, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     NameReference(Location, String),
 
     UnaryOperation(Location, usize, Vec<Type>, Box<NessaExpr>),
@@ -272,10 +272,10 @@ impl NessaExpr {
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Tuple(_, _) |
-            NessaExpr::Lambda(_, _, _, _) |
+            NessaExpr::Lambda(_, _, _, _, _) |
             NessaExpr::NameReference(_, _) |
             NessaExpr::UnaryOperation(_, _, _, _) |
             NessaExpr::BinaryOperation(_, _, _, _, _) |
@@ -512,7 +512,7 @@ impl NessaExpr {
                 }
             }
 
-            NessaExpr::Lambda(_, a, r, b) => {
+            NessaExpr::Lambda(_, _, a, r, b) => {
                 a.iter_mut().for_each(|(_, t)| {
                     t.compile_templates(templates);
                 });
@@ -2620,6 +2620,14 @@ impl NessaContext {
         return map(
             located(
                 tuple((
+                    opt(delimited(
+                        tuple((tag("["), empty0)),
+                        separated_list1(
+                            tuple((empty0, tag(","), empty0)),
+                            identifier_parser
+                        ),
+                        tuple((empty0, tag("]"), empty0))
+                    )),
                     tag("("),
                     empty0,
                     separated_list0(
@@ -2667,7 +2675,7 @@ impl NessaContext {
                     ))
                 ))   
             ),
-            |(l, (_, _, a, _, _, _, _, r, b))| NessaExpr::Lambda(l, a, r.unwrap_or(Type::InferenceMarker), b)
+            |(l, (c, _, _, a, _, _, _, _, r, b))| NessaExpr::Lambda(l, c.unwrap_or_default(), a, r.unwrap_or(Type::InferenceMarker), b)
         )(input);
     }
 
@@ -3150,6 +3158,8 @@ mod tests {
         let def_5_str = "let lambda = (a: Int, b: Int) -> Bool { return a < b; };";
         let def_6_str = "let lambda = (n: Int) -> Int n * 2;";
         let def_7_str = "let lambda = (n: Int) n + 1;";
+        let def_8_str = "let lambda = [a](n: Int) n + a;";
+        let def_9_str = "let lambda = [a, b](n: Int) n + b;";
 
         let (_, def_1) = ctx.variable_definition_parser(Span::new(def_1_str), &RefCell::default()).unwrap();
         let (_, def) = ctx.variable_definition_parser(Span::new(def_str), &RefCell::default()).unwrap();
@@ -3158,6 +3168,8 @@ mod tests {
         let (_, def_5) = ctx.variable_definition_parser(Span::new(def_5_str), &RefCell::default()).unwrap();
         let (_, def_6) = ctx.variable_definition_parser(Span::new(def_6_str), &RefCell::default()).unwrap();
         let (_, def_7) = ctx.variable_definition_parser(Span::new(def_7_str), &RefCell::default()).unwrap();
+        let (_, def_8) = ctx.variable_definition_parser(Span::new(def_8_str), &RefCell::default()).unwrap();
+        let (_, def_9) = ctx.variable_definition_parser(Span::new(def_9_str), &RefCell::default()).unwrap();
 
         assert_eq!(def_1, NessaExpr::VariableDefinition(Location::none(), "var".into(), INT, Box::new(NessaExpr::NameReference(Location::none(), "a".into()))));
         assert_eq!(def, NessaExpr::VariableDefinition(Location::none(), 
@@ -3171,6 +3183,7 @@ mod tests {
             "lambda".into(), 
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
+                vec!(),
                 vec!(
                     ("a".into(), INT),
                     ("b".into(), INT)
@@ -3192,6 +3205,7 @@ mod tests {
             "lambda".into(), 
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
+                vec!(),
                 vec!(
                     ("n".into(), INT)
                 ),
@@ -3212,6 +3226,7 @@ mod tests {
             "lambda".into(), 
             Type::InferenceMarker, 
             Box::new(NessaExpr::Lambda(Location::none(), 
+                vec!(),
                 vec!(
                     ("n".into(), INT)
                 ),
@@ -3223,6 +3238,50 @@ mod tests {
                             vec!(),
                             Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
                             Box::new(NessaExpr::Literal(Location::none(), Object::new(Integer::from(1))))
+                        )
+                    ))
+                )
+            ))
+        ));
+        
+        assert_eq!(def_8, NessaExpr::VariableDefinition(Location::none(), 
+            "lambda".into(), 
+            Type::InferenceMarker, 
+            Box::new(NessaExpr::Lambda(Location::none(), 
+                vec!("a".into()),
+                vec!(
+                    ("n".into(), INT)
+                ),
+                Type::InferenceMarker,
+                vec!(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::BinaryOperation(Location::none(), 
+                            0, 
+                            vec!(),
+                            Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
+                            Box::new(NessaExpr::NameReference(Location::none(), "a".into()))
+                        )
+                    ))
+                )
+            ))
+        ));
+        
+        assert_eq!(def_9, NessaExpr::VariableDefinition(Location::none(), 
+            "lambda".into(), 
+            Type::InferenceMarker, 
+            Box::new(NessaExpr::Lambda(Location::none(), 
+                vec!("a".into(), "b".into()),
+                vec!(
+                    ("n".into(), INT)
+                ),
+                Type::InferenceMarker,
+                vec!(
+                    NessaExpr::Return(Location::none(), Box::new(
+                        NessaExpr::BinaryOperation(Location::none(), 
+                            0, 
+                            vec!(),
+                            Box::new(NessaExpr::NameReference(Location::none(), "n".into())),
+                            Box::new(NessaExpr::NameReference(Location::none(), "b".into()))
                         )
                     ))
                 )

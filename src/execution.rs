@@ -224,6 +224,8 @@ impl NessaContext {
             ($lambda_ref: ident) => {
                 let arg = stack.pop().unwrap();
                 let f = &arg.$lambda_ref::<NessaLambda>();
+
+                stack.extend(f.captures.iter().rev().cloned());
                 
                 call_stack.push((ip + 1, offset, -1));
                 ip = f.loc as i32;
@@ -269,8 +271,11 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                Lambda(pos, args, ret) => nessa_instruction!("Lambda", {
-                    stack.push(Object::lambda(*pos, args.clone(), ret.clone()));
+                Lambda(pos, cap, args, ret) => nessa_instruction!("Lambda", {
+                    let start_idx = stack.len() - cap;
+                    let captures = stack.drain(start_idx..).rev().collect();
+
+                    stack.push(Object::lambda(*pos, captures, args.clone(), ret.clone()));
                     ip += 1;
                 }),
 

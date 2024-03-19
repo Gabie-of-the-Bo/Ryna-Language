@@ -276,7 +276,7 @@ impl NessaContext {
 
             NessaExpr::DoBlock(_, _, t) => Ok(t.clone()),
 
-            NessaExpr::CompiledLambda(_, _, a, r, _) => Ok(
+            NessaExpr::CompiledLambda(_, _, _, a, r, _) => Ok(
                 if a.len() == 1 {
                     Type::Function(
                         Box::new(a[0].1.clone()),
@@ -367,7 +367,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |
             NessaExpr::Macro(l, _, _, _, _) |
-            NessaExpr::Lambda(l, _, _, _) |
+            NessaExpr::Lambda(l, _, _, _, _) |
             NessaExpr::NameReference(l, _) |
             NessaExpr::VariableDefinition(l, _, _, _) |
             NessaExpr::VariableAssignment(l, _, _) |

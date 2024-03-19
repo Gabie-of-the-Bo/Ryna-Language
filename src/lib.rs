@@ -291,6 +291,11 @@ mod integration {
     }
 
     #[test]
+    fn lambda_capture() {
+        integration_test("test/lambda_capture.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

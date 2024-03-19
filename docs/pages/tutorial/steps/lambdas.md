@@ -6,23 +6,24 @@ In order to have first class functions you have to use **lambda expressions**. T
 The syntax to create lambda expression is as follows:
 
 ```
-(arg_1: Type_1, arg_2: Type_2, ...) -> ReturnType { 
+[captures](arg_1: Type_1, arg_2: Type_2, ...) -> ReturnType { 
     [body]    
 };
 
 // With inferred return type
-(arg_1: Type_1, arg_2: Type_2, ...) { 
+[captures](arg_1: Type_1, arg_2: Type_2, ...) { 
     [body]    
 };
 
 // Direct return
-(arg_1: Type_1, arg_2: Type_2, ...) expression;
+[captures](arg_1: Type_1, arg_2: Type_2, ...) expression;
 ```
+
+**Captures** are optional.
 
 ## Using them
 
-In terms of functionality, they are the same as regular functions, including the fact that you cannot use variables outside its context.
-Here is an example:
+In terms of functionality, they are the same as regular functions. Here is an example:
 
 ```
 let double = (i: Int) i * 2;
@@ -30,4 +31,20 @@ let double = (i: Int) i * 2;
 print(double(4)); // Prints 8
 ```
 
-Of course, you can pass lambdas as function arguments as long as you use the correct type (see **function types**).
+If you want to access data outside the context of the lambda expression, you can use **captures** (you can only capture variables, not expressions):
+
+```
+let i = -1;
+
+let count = [i]() {
+    i.inc();
+    return *i;
+};
+
+let c0 = count(); // 0
+let c1 = count(); // 1
+let c2 = count(); // 2
+let c3 = count(); // 3
+```
+
+Of course, you can also pass lambdas as function arguments as long as you use the correct type (see **function types**).

@@ -1,6 +1,46 @@
 use colored::Colorize;
+use derive_builder::Builder;
+use rustc_hash::FxHashSet;
 
-use crate::{context::NessaContext, parser::NessaExpr, operations::Operator};
+use crate::{context::NessaContext, operations::Operator, parser::NessaExpr, types::Type};
+
+// Instruction-level debug information
+
+#[derive(Clone, Debug, Default, PartialEq, Builder)]
+pub struct DebugInfo {
+    #[builder(default)]
+    pub comment: String,
+    
+    #[builder(default)]
+    pub var_type: Option<Type>,
+    
+    #[builder(default)]
+    pub labels: FxHashSet<usize>,
+    
+    #[builder(default)]
+    pub functions: FxHashSet<String>,
+    
+    #[builder(default)]
+    pub lines: FxHashSet<usize>
+}
+
+impl DebugInfo {
+    pub fn merge_with(&mut self, other: &DebugInfo) {
+        self.functions.extend(other.functions.iter().cloned());
+        self.lines.extend(&other.lines);
+        self.labels.extend(&other.labels);
+
+        if self.comment.is_empty() && !other.comment.is_empty() {
+            self.comment = other.comment.clone();
+        }
+    }
+
+    pub fn set_line(&mut self, line: usize) {
+        self.lines.insert(line);
+    }
+}
+
+// Expression printing
 
 impl NessaContext {
     pub fn to_string(&self, expr: &NessaExpr) -> String  {

@@ -1442,7 +1442,7 @@ fn compute_labels(program: &mut [NessaInstruction]) {
 
     // Insert labels
     for (line, tag) in &labels {
-        program[*line].labels.insert(*tag);
+        program[*line].debug_info.labels.insert(*tag);
     }
 }
 
@@ -1451,11 +1451,11 @@ fn reassign_labels(program: &mut [NessaInstruction]) {
 
     // Generate label positions
     for (idx, i) in program.iter_mut().enumerate() {
-        for l in &i.labels {
+        for l in &i.debug_info.labels {
             positions.entry(*l).or_insert(idx);
         }
 
-        i.labels.clear();
+        i.debug_info.labels.clear();
     }
 
     // Recompute positions
@@ -1491,8 +1491,8 @@ impl NessaContext {
 
         macro_rules! remove_instruction {
             ($idx: expr) => {
-                let labels_to_remove = program[$idx].labels.clone();
-                program[$idx + 1].labels.extend(&labels_to_remove);
+                let labels_to_remove = program[$idx].debug_info.labels.clone();
+                program[$idx + 1].debug_info.labels.extend(&labels_to_remove);
                 program.remove($idx);
             };
         }
@@ -1535,7 +1535,7 @@ impl NessaContext {
                 macro_rules! is_not_ref {
                     ($idx: expr) => {
                         {
-                            let instr_t = &program[$idx].var_type;
+                            let instr_t = &program[$idx].debug_info.var_type;
 
                             instr_t.is_some() &&
                             !instr_t.as_ref().unwrap().is_ref()    
@@ -1639,8 +1639,8 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
@@ -1666,8 +1666,8 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
@@ -1724,8 +1724,8 @@ impl NessaContext {
             
             macro_rules! remove_instruction {
                 ($idx: expr) => {
-                    let labels_to_remove = program[$idx].labels.clone();
-                    program[$idx + 1].labels.extend(&labels_to_remove);
+                    let other = program[$idx].debug_info.clone();
+                    program[$idx + 1].debug_info.merge_with(&other);
                     program.remove($idx);
                 };
             }

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
@@ -15,6 +16,8 @@ use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::NessaModule;
 use crate::context::NessaContext;
+use crate::debug::DebugInfo;
+use crate::debug::DebugInfoBuilder;
 use crate::graph::DirectedGraph;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::ITERABLE_ID;
@@ -923,14 +926,12 @@ impl CompiledNessaExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
-    pub comment: String,
-    pub var_type: Option<Type>,
-    pub labels: FxHashSet<usize>
+    pub debug_info: DebugInfo
 }
 
 impl NessaInstruction {
     pub fn to_string(&self, ctx: &NessaContext) -> String {
-        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { " # " }, self.comment)
+        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.debug_info.comment.is_empty() { "" } else { " # " }, self.debug_info.comment)
     }
 }
 
@@ -938,9 +939,7 @@ impl From<CompiledNessaExpr> for NessaInstruction {
     fn from(obj: CompiledNessaExpr) -> NessaInstruction {
         NessaInstruction {
             instruction: obj,
-            comment: String::new(),
-            var_type: None,
-            labels: FxHashSet::default()
+            debug_info: DebugInfo::default()
         }
     }
 }
@@ -949,19 +948,19 @@ impl NessaInstruction {
     pub fn new(instruction: CompiledNessaExpr, comment: String) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment,
-            var_type: None,
-            labels: FxHashSet::default()
+            debug_info: DebugInfoBuilder::default().comment(comment).build().unwrap()
         }
     }
 
     pub fn new_with_type(instruction: CompiledNessaExpr, comment: String, var_type: Type) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment,
-            var_type: Some(var_type),
-            labels: FxHashSet::default()
+            debug_info: DebugInfoBuilder::default().comment(comment).var_type(Some(var_type)).build().unwrap()
         }
+    }
+
+    pub fn set_line(&mut self, line: usize) {
+        self.debug_info.set_line(line);
     }
 }
 

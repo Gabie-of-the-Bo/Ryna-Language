@@ -26,6 +26,7 @@ pub fn text_pattern_char(input: Span<'_>) -> PResult<char> {
             map_opt(
                 satisfy(|_| true),
                 |c| match c {
+                    '\\' => Some('\\'),
                     'n' => Some('\n'),
                     't' => Some('\t'),
                     '{' => Some('{'),

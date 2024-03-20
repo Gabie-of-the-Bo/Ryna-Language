@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::Instant;
 
 use colored::Colorize;
@@ -9,6 +8,7 @@ use malachite::num::conversion::traits::{RoundingFrom, SaturatingInto};
 use malachite::rounding_modes::RoundingMode;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
+use crate::debug::DebugInfo;
 use crate::integer_ext::{is_valid_index, to_usize};
 use crate::nessa_warning;
 use crate::types::Type;
@@ -35,7 +35,7 @@ impl NessaContext {
             println!("{:<3} {}", idx, i.to_string(self));
         }
         
-        self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
+        self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[])
     }
 
     pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
@@ -86,7 +86,16 @@ impl NessaContext {
                     }
 
                     ctx.program_input = program_input.to_vec();
-                    ctx.execute_compiled_code::<DEBUG>(&instr.into_iter().map(|i| i.instruction).collect::<Vec<_>>())
+
+                    let mut instructions = Vec::with_capacity(instr.len());
+                    let mut debug_info = Vec::with_capacity(instr.len());
+
+                    for i in instr {
+                        instructions.push(i.instruction);
+                        debug_info.push(i.debug_info);
+                    }
+
+                    ctx.execute_compiled_code::<DEBUG>(&instructions, &debug_info)
                 },
 
                 Err(err) => err.emit(),
@@ -103,13 +112,9 @@ impl NessaContext {
 
 #[derive(Serialize)]
 pub struct ProfilingInfo {
-    pub instr_count: HashMap<&'static str, usize>,
-    pub instr_time: HashMap<&'static str, u128>,
-    pub loc_count: HashMap<i32, usize>,
-    pub loc_time: HashMap<i32, u128>,
-    pub ranges: FxHashMap<String, (usize, usize)>,
-    pub fn_count: HashMap<usize, usize>,
-    pub fn_time: HashMap<String, (u128, u128, f64)>,
+    pub instr_count: FxHashMap<&'static str, usize>,
+    pub instr_time: FxHashMap<&'static str, u128>,
+    pub loc_time: FxHashMap<usize, u128>,
     pub total_time: u128
 }
 
@@ -118,21 +123,8 @@ pub struct ExecutionInfo {
     pub captured_output: String
 }
 
-
-impl ProfilingInfo {
-    pub fn process(&mut self) {
-        self.total_time = self.loc_time.values().copied().sum();
-
-        self.fn_time = self.ranges.iter().map(|(n, (f, t))| {
-            let time = (*f..*t).map(|j| *self.loc_time.get(&(j as i32)).unwrap_or(&0)).sum();
-            let count = *self.fn_count.get(f).unwrap_or(&1);
-            (n.clone(), (time, (time as f64 / count as f64) as u128, time as f64 / self.total_time as f64))
-        }).collect();
-    }
-}
-
 impl NessaContext {
-    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr]) -> Result<ExecutionInfo, NessaError> {
+    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr], debug_info: &[DebugInfo]) -> Result<ExecutionInfo, NessaError> {
         use CompiledNessaExpr::*;
 
         let mut ip: i32 = 0;
@@ -141,11 +133,9 @@ impl NessaContext {
         let mut call_stack: Vec<(i32, usize, i32)> = Vec::with_capacity(1000);
         let mut stack: Vec<Object> = Vec::with_capacity(1000);
 
-        let mut instr_count = HashMap::<&str, usize>::new();
-        let mut instr_time = HashMap::<&str, u128>::new();
-        let mut loc_count = HashMap::<i32, usize>::new();
-        let mut loc_time = HashMap::<i32, u128>::new();
-        let mut fn_count = HashMap::new();
+        let mut instr_count = FxHashMap::<&str, usize>::default();
+        let mut instr_time = FxHashMap::<&str, u128>::default();
+        let mut loc_time = FxHashMap::<usize, u128>::default();
 
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
@@ -183,10 +173,11 @@ impl NessaContext {
                     let elapsed = now.elapsed().as_nanos();
 
                     *instr_time.entry($name).or_default() += elapsed;
-                    *loc_time.entry(ip).or_default() += elapsed;
-
                     *instr_count.entry($name).or_default() += 1;
-                    *loc_count.entry(ip).or_default() += 1;
+
+                    for line in &debug_info[ip as usize].lines {
+                        *loc_time.entry(*line).or_default() += elapsed;
+                    }
 
                 } else {
                     $expr
@@ -459,10 +450,6 @@ impl NessaContext {
                     call_stack.push((ip + 1, offset, -1));
                     ip = *to as i32;
                     offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
-
-                    if DEBUG {
-                        *fn_count.entry(*to).or_default() += 1;
-                    }
                 }),
 
                 LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
@@ -710,16 +697,10 @@ impl NessaContext {
 
         Ok(ExecutionInfo {
             profiling_info: if DEBUG {
-                let mut ex = ProfilingInfo { 
-                    instr_count, instr_time, loc_count, loc_time, fn_count,
-                    ranges: self.cache.ranges.inner_clone(),
-                    fn_time: HashMap::new(),
+                Some(ProfilingInfo { 
+                    instr_count, instr_time, loc_time,
                     total_time: 0
-                };
-
-                ex.process();
-
-                Some(ex)
+                })
 
             } else {
                 None

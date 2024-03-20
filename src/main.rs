@@ -122,22 +122,11 @@ fn main() {
                     .action(ArgAction::SetTrue)
                     .default_value("false")
                 )
-        )
-        .subcommand(
-            Command::new("profile")
-                .about("Profile Nessa project")
                 .arg(
-                    Arg::new("INPUT")
-                    .help("Specifies the file you want to execute")
-                    .required(false)
-                    .default_value(".")
-                    .index(1)
-                )
-                .arg(
-                    Arg::new("recompile")
-                    .help("Force recompilation")
-                    .long("recompile")
-                    .short('r')
+                    Arg::new("profile")
+                    .help("Profile code")
+                    .long("profile")
+                    .short('p')
                     .action(ArgAction::SetTrue)
                     .default_value("false")
                 )
@@ -248,11 +237,11 @@ fn main() {
     */
 
     match args.subcommand() {
-        Some(("profile", run_args)) |
         Some(("run", run_args)) => {
             let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
             let optimize = *run_args.get_one::<bool>("optimize").unwrap_or(&false);
+            let profile = *run_args.get_one::<bool>("profile").unwrap_or(&false);
 
             let program_input = match run_args.get_many::<String>("PROGRAM_INPUT") {
                 Some(i) => i.cloned().collect::<Vec<_>>(),
@@ -261,11 +250,11 @@ fn main() {
 
             let res;
 
-            if let Some(("profile", _)) = args.subcommand() {
-                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile, false, &program_input);
+            if profile {
+                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, &program_input);
 
             } else {
-                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile, optimize, &program_input);
+                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, &program_input);
             }
             
             match res {

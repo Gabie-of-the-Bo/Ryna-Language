@@ -175,8 +175,25 @@ impl NessaContext {
                     *instr_time.entry($name).or_default() += elapsed;
                     *instr_count.entry($name).or_default() += 1;
 
+                    let mut seen = rustc_hash::FxHashSet::default();
+                    
+                    // For each line in the ip
                     for line in &debug_info[ip as usize].lines {
-                        *loc_time.entry(*line).or_default() += elapsed;
+                        if !seen.contains(line) {
+                            seen.insert(line);
+                            *loc_time.entry(*line).or_default() += elapsed;    
+                        }
+                    }
+
+                    // For each frame in the stack (excluding the first)
+                    for (i, ..) in &call_stack[1..] {
+                        // For each line in each frame
+                        for line in &debug_info[*i as usize].lines {
+                            if !seen.contains(line) {
+                                seen.insert(line);
+                                *loc_time.entry(*line).or_default() += elapsed;    
+                            }
+                        }
                     }
 
                 } else {

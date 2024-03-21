@@ -137,6 +137,7 @@ impl NessaContext {
         let mut instr_count = FxHashMap::<&str, usize>::default();
         let mut instr_time = FxHashMap::<&str, u128>::default();
         let mut loc_time = FxHashMap::<Arc<String>, FxHashMap<usize, u128>>::default();
+        let mut total_time = 0;
 
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
@@ -185,6 +186,8 @@ impl NessaContext {
                     for j in lines_to_check {
                         *loc_time.entry(j.0.clone()).or_default().entry(j.1).or_default() += elapsed;    
                     }
+
+                    total_time += elapsed;
 
                 } else {
                     $expr
@@ -705,8 +708,7 @@ impl NessaContext {
         Ok(ExecutionInfo {
             profiling_info: if DEBUG {
                 Some(ProfilingInfo { 
-                    instr_count, instr_time, loc_time,
-                    total_time: 0
+                    instr_count, instr_time, loc_time, total_time
                 })
 
             } else {

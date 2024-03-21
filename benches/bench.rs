@@ -61,7 +61,7 @@ pub fn execution_benchmarks(c: &mut Criterion) {
 
         group.bench_function("Execution", |b| b.iter(|| {
             let mut ctx_cpy = ctx.clone();
-            ctx_cpy.execute_compiled_code::<false>(&compiled).unwrap();
+            ctx_cpy.execute_compiled_code::<false>(&compiled, &[]).unwrap();
         }));
 
         group.finish();

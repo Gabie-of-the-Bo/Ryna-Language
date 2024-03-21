@@ -152,6 +152,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
         
         ctx.optimize = optimize;
         ctx.module_path = path.clone();
+        ctx.module_name = config_yml.module_name.clone().into();
 
         if *is_macro {
             define_macro_emit_fn(&mut ctx, "emit".into());

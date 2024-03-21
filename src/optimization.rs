@@ -1015,7 +1015,7 @@ impl NessaContext {
 
                 match *id {
                     NEG_UNOP_ID if t == INT => Object::new(-inner.get::<Integer>().clone()),
-                    NEG_UNOP_ID if t == FLOAT => Object::new(-inner.get::<f64>().clone()),
+                    NEG_UNOP_ID if t == FLOAT => Object::new(-*inner.get::<f64>()),
                     _ => unreachable!()
                 }    
             },
@@ -1095,7 +1095,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
                 if self.is_constant_expr(e, consts) {
                     consts.insert(*id, true);
-                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, &const_exprs)));    
+                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, const_exprs)));    
                 }
             },
             NessaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
@@ -1271,10 +1271,7 @@ impl NessaContext {
 
     fn remove_assignments(&self, exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
         fn filter_assignments(exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
-            exprs.retain(|i| match i {
-                NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id) => false,
-                _ => true
-            });
+            exprs.retain(|i| !matches!(i, NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id)));
         }
 
         filter_assignments(exprs, assigned_exprs);
@@ -1442,7 +1439,7 @@ fn compute_labels(program: &mut [NessaInstruction]) {
 
     // Insert labels
     for (line, tag) in &labels {
-        program[*line].labels.insert(*tag);
+        program[*line].debug_info.labels.insert(*tag);
     }
 }
 
@@ -1451,11 +1448,11 @@ fn reassign_labels(program: &mut [NessaInstruction]) {
 
     // Generate label positions
     for (idx, i) in program.iter_mut().enumerate() {
-        for l in &i.labels {
+        for l in &i.debug_info.labels {
             positions.entry(*l).or_insert(idx);
         }
 
-        i.labels.clear();
+        i.debug_info.labels.clear();
     }
 
     // Recompute positions
@@ -1491,8 +1488,8 @@ impl NessaContext {
 
         macro_rules! remove_instruction {
             ($idx: expr) => {
-                let labels_to_remove = program[$idx].labels.clone();
-                program[$idx + 1].labels.extend(&labels_to_remove);
+                let labels_to_remove = program[$idx].debug_info.labels.clone();
+                program[$idx + 1].debug_info.labels.extend(&labels_to_remove);
                 program.remove($idx);
             };
         }
@@ -1535,7 +1532,7 @@ impl NessaContext {
                 macro_rules! is_not_ref {
                     ($idx: expr) => {
                         {
-                            let instr_t = &program[$idx].var_type;
+                            let instr_t = &program[$idx].debug_info.var_type;
 
                             instr_t.is_some() &&
                             !instr_t.as_ref().unwrap().is_ref()    
@@ -1639,8 +1636,8 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
@@ -1666,15 +1663,15 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
         reassign_labels(program);
     }
 
-    fn remove_jump_chains(&self, program: &mut Vec<NessaInstruction>) {
+    fn remove_jump_chains(&self, program: &mut [NessaInstruction]) {
         use CompiledNessaExpr::*;
 
         let mut changed = true;
@@ -1724,8 +1721,8 @@ impl NessaContext {
             
             macro_rules! remove_instruction {
                 ($idx: expr) => {
-                    let labels_to_remove = program[$idx].labels.clone();
-                    program[$idx + 1].labels.extend(&labels_to_remove);
+                    let other = program[$idx].debug_info.clone();
+                    program[$idx + 1].debug_info.merge_with(&other);
                     program.remove($idx);
                 };
             }
@@ -1741,9 +1738,8 @@ impl NessaContext {
                     };
                 }
                 
-                match [&program[i].instruction, &program[i + 1].instruction] {
-                    [Call(loc), Return] => { change_first!(Jump(*loc)); }
-                    _ => { }
+                if let [Call(loc), Return] = [&program[i].instruction, &program[i + 1].instruction] {
+                    change_first!(Jump(*loc));
                 }
             }
         }

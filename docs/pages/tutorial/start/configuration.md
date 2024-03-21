@@ -41,10 +41,7 @@ recompilation by using the `--recompile` flag.
 > ***Note:*** this file is still at a very experimental stage, so things may change and you might see some things that are not documented. Only the parts meant for
 > non-developers will be explained here.
 
-> ***Note 2:*** this file does not record generic functions very well for now.
-
-The **prof.json** file is a json that contains many values, but the only ones that you should care about are the following:
+The **prof.json** file is a JSON that contains many values, but the only ones that you should care about are the following:
 
 * **total_time**: total execution time in nanoseconds.
-* **fn_count**: map where the keys are the signatures of the functions in your code and the values are the number of times they have been called.
-* **fn_time**: map where the keys are the signatures of the functions in your code and the values are the combined execution time of each one.
+* **loc_time**: map where the keys are the modules and the values are the times in nanoseconds spent executing that line in the module.

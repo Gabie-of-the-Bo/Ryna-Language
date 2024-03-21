@@ -1,6 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::cell::RefCell;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use malachite::num::conversion::string::options::FromSciStringOptions;
 use malachite::num::conversion::traits::FromSciString;
@@ -65,16 +66,21 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 pub struct Location {
     pub line: usize,
     pub column: usize,
-    pub span: String
+    pub span: String,
+    pub module: Arc<String>
 }
 
-impl Location {
-    pub fn new(line: usize, column: usize, span: String) -> Self {
-        Location { line, column, span }
+lazy_static! {
+    static ref NO_MOD: Arc<String> = Arc::new(String::new());
+}
+
+impl Location {    
+    pub fn new(line: usize, column: usize, span: String, module: Arc<String>) -> Self {
+        Location { line, column, span, module }
     }
 
     pub fn none() -> Self {
-        Self::new(0, 0, "".into())
+        Self::new(0, 0, "".into(), NO_MOD.clone())
     }
 }
 
@@ -137,19 +143,6 @@ pub fn empty1(mut input: Span<'_>) -> PResult<'_, ()> {
     }
     
     Ok((input, ()))
-}
-
-// Parser combinator that allows to store the precise location of an element
-pub fn located<'a, O, P1: FnMut(Span<'a>) -> PResult<'a, O>>(mut parser: P1) -> impl FnMut(Span<'a>) -> PResult<'a, (Location, O)> {
-    move |input| {
-        let (rest, res) = parser(input)?;
-
-        let line = input.location_line() as usize;
-        let column = input.get_column();
-        let span = &input[..(input.len() - rest.len())];
-
-        Ok((rest, (Location::new(line, column, span.to_string()), res)))
-    }
 }
 
 pub fn many_separated0<
@@ -536,6 +529,19 @@ impl NessaExpr {
 }
 
 impl NessaContext {
+    // Parser combinator that allows to store the precise location of an element
+    pub fn located<'a, O, P1: FnMut(Span<'a>) -> PResult<'a, O>>(&'a self, mut parser: P1) -> impl FnMut(Span<'a>) -> PResult<'a, (Location, O)> {
+        move |input| {
+            let (rest, res) = parser(input)?;
+
+            let line = input.location_line() as usize;
+            let column = input.get_column();
+            let span = &input[..(input.len() - rest.len())];
+
+            Ok((rest, (Location::new(line, column, span.to_string(), self.module_name.clone()), res)))
+        }
+    }
+
     /*
         ╒═══════════════════╕
         │ Auxiliary methods │
@@ -587,27 +593,27 @@ impl NessaContext {
         ╘═════════════════╛
     */
 
-    fn wildcard_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn wildcard_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         map(tag("*"), |_| Type::Wildcard)(input)
     }
 
-    fn empty_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn empty_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         map(tag("()"), |_| Type::Empty)(input)
     }
 
-    fn self_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn self_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         map(tag("Self"), |_| Type::SelfType)(input)
     }
 
-    fn basic_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn basic_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         map_res(identifier_parser, |n| Result::<_, String>::Ok(Type::Basic(self.get_type_id(n)?)))(input)
     }
 
-    fn interface_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
+    fn interface_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
         map_res(identifier_parser, |n| self.get_interface_id(n))(input)
     }
 
-    fn template_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn template_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             tuple((
                 tag("'"),
@@ -640,7 +646,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn constant_reference_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn constant_reference_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             tuple((
                 tag("&"),
@@ -650,7 +656,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn mutable_reference_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn mutable_reference_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             tuple((
                 tag("@"),
@@ -660,7 +666,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn or_type_parser<'a>(&self, input: Span<'a>, func: bool) -> PResult<'a, Type> {
+    fn or_type_parser<'a>(&'a self, input: Span<'a>, func: bool) -> PResult<'a, Type> {
         return map(
             separated_list1(
                 tuple((empty0, tag("|"), empty0)), 
@@ -670,7 +676,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn and_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn and_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return map(
             delimited(
                 tag("("),
@@ -684,7 +690,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn parametric_type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    fn parametric_type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return map_res(
             tuple((
                 identifier_parser,
@@ -702,7 +708,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn function_type_parser<'a>(&self, input: Span<'a>, or: bool) -> PResult<'a, Type> {
+    fn function_type_parser<'a>(&'a self, input: Span<'a>, or: bool) -> PResult<'a, Type> {
         return map(
             tuple((
                 |input| self.type_parser_wrapper(input, false, or),
@@ -715,7 +721,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn type_parser_wrapper<'a>(&self, input: Span<'a>, func: bool, or: bool) -> PResult<'a, Type> {
+    fn type_parser_wrapper<'a>(&'a self, input: Span<'a>, func: bool, or: bool) -> PResult<'a, Type> {
         return match (func, or) {
             (true, true) => alt((
                 |input| self.function_type_parser(input, or),
@@ -771,7 +777,7 @@ impl NessaContext {
         };
     }
 
-    pub fn type_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Type> {
+    pub fn type_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Type> {
         return self.type_parser_wrapper(input, true, true);
     }
 
@@ -781,14 +787,14 @@ impl NessaContext {
         ╘═════════════════╛
     */
 
-    fn bool_parser<'a>(&self, input: Span<'a>) -> PResult<'a, bool> {
+    fn bool_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, bool> {
         alt((
             map(tag("true"), |_| true),
             map(tag("false"), |_| false),
         ))(input)
     }
 
-    fn char_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+    fn char_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Integer> {
         map(
             delimited(
                 tag("'"),
@@ -814,7 +820,7 @@ impl NessaContext {
         )(input)
     }
 
-    fn integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+    fn integer_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Integer> {
         return map(
             tuple((
                 opt(tag("-")),
@@ -824,7 +830,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn binary_integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+    fn binary_integer_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Integer> {
         return map(
             preceded(
                 tag("0b"),
@@ -839,7 +845,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn hex_integer_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Integer> {
+    fn hex_integer_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Integer> {
         return map(
             preceded(
                 tag("0x"),
@@ -854,7 +860,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn float_parser<'a>(&self, input: Span<'a>) -> PResult<'a, f64> {
+    fn float_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, f64> {
         map(
             tuple((
                 opt(tag("-")),
@@ -868,7 +874,7 @@ impl NessaContext {
         )(input)
     }
 
-    pub fn parse_literal_type<'a>(&self, c_type: &TypeTemplate, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Object> {
+    pub fn parse_literal_type<'a>(&'a self, c_type: &'a TypeTemplate, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Object> {
         for p in &c_type.patterns {
             let res = map_res(
                 |input| p.extract(input, self, cache),
@@ -887,7 +893,7 @@ impl NessaContext {
                         if let Type::Template(ARR_ID, t) = t {  
                             if let &[Type::Basic(t_id)] = &t[..] {
                                 return args[n].iter().cloned()
-                                    .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg.into()))
+                                    .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg))
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|r| Object::arr(r, Type::Basic(t_id)));
                             }
@@ -909,7 +915,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn custom_literal_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Object> {
+    fn custom_literal_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Object> {
         for c in &self.type_templates {
             let res = self.parse_literal_type(c, input, cache);
 
@@ -921,9 +927,9 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
     
-    fn literal_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn literal_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 alt((
                     |input| self.custom_literal_parser(input, cache),
                     map(|input| self.bool_parser(input), Object::new),
@@ -939,11 +945,11 @@ impl NessaContext {
         )(input);
     }
     
-    fn custom_syntax_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn custom_syntax_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 != NessaMacroType::Block) {
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
-                let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string());
+                let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string(), self.module_name.clone());
 
                 input = new_input;
 
@@ -1035,7 +1041,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"))
     }
 
-    fn custom_syntax_block_parser<'a>(&self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    fn custom_syntax_block_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let prev_input = input;
 
         for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
@@ -1085,16 +1091,16 @@ impl NessaContext {
         return Err(verbose_error(prev_input, "Unable to parse"))
     }
     
-    fn variable_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn variable_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(identifier_parser),
+            self.located(identifier_parser),
             |(l, v)| NessaExpr::NameReference(l, v)
         )(input);
     }
     
-    fn prefix_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn prefix_operation_parser<'a>(&'a self, input: Span<'a>, id: usize, rep: &str, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag(rep),
                     empty0,
@@ -1121,12 +1127,12 @@ impl NessaContext {
         )(input);
     }
     
-    fn postfix_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn postfix_operation_parser<'a>(&'a self, input: Span<'a>, id: usize, rep: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         let mut checked_cpy = checked_precs.clone();
         checked_cpy.insert(prec);
 
         map(
-            located(
+            self.located(
                 tuple((
                     move |input| self.nessa_expr_parser_wrapper(input, &mut checked_cpy, cache),
                     empty0,
@@ -1153,14 +1159,14 @@ impl NessaContext {
         )(input)
     }
     
-    fn binary_operation_parser<'a>(&self, input: Span<'a>, id: usize, rep: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn binary_operation_parser<'a>(&'a self, input: Span<'a>, id: usize, rep: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         let mut checked_cpy = checked_precs.clone();
         checked_cpy.insert(prec);
 
         let (input, a) = self.nessa_expr_parser_wrapper(input, &mut checked_cpy, cache)?;
 
         map(
-            located(
+            self.located(
                 tuple((
                     empty0,
                     opt(
@@ -1196,7 +1202,7 @@ impl NessaContext {
         )(input)
     }
     
-    fn nary_operation_parser<'a>(&self, input: Span<'a>, id: usize, open: &str, close: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nary_operation_parser<'a>(&'a self, input: Span<'a>, id: usize, open: &str, close: &str, prec: usize, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         let mut checked_cpy = checked_precs.clone();
         checked_cpy.insert(prec);
         checked_cpy.insert(LT_BINOP_PREC);
@@ -1204,7 +1210,7 @@ impl NessaContext {
         let (input, a) = self.nessa_expr_parser_wrapper(input, &mut checked_cpy, cache)?;
 
         map(
-            located(
+            self.located(
                 tuple((
                     empty0,
                     opt(
@@ -1238,7 +1244,7 @@ impl NessaContext {
         )(input)
     }
 
-    fn operation_parser<'a>(&self, input: Span<'a>, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn operation_parser<'a>(&'a self, input: Span<'a>, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         for o in self.sorted_ops.iter().rev() {
             // Skip already checked precedences
             if checked_precs.contains(&o.get_precedence()) {
@@ -1281,9 +1287,9 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
     
-    fn variable_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn variable_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("let"),
                     empty0,
@@ -1308,9 +1314,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn variable_assignment_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn variable_assignment_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     identifier_parser,
                     empty0,
@@ -1325,9 +1331,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn return_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn return_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("return"),
                     empty0,
@@ -1344,7 +1350,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn macro_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (NessaMacroType, String, Pattern)> {
+    fn macro_header_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (NessaMacroType, String, Pattern)> {
         map(
             tuple((
                 tag("syntax"),
@@ -1366,7 +1372,7 @@ impl NessaContext {
         )(input)
     }
 
-    fn if_header_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn if_header_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
             tuple((
                 tag("if"),
@@ -1377,7 +1383,7 @@ impl NessaContext {
         )(input);
     }
     
-    fn while_header_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn while_header_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
             tuple((
                 tag("while"),
@@ -1388,7 +1394,7 @@ impl NessaContext {
         )(input);
     }
     
-    fn else_if_header_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn else_if_header_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
             tuple((
                 tag("else"),
@@ -1401,9 +1407,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn macro_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn macro_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.macro_header_parser(input),
                     empty0,
@@ -1414,9 +1420,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn if_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn if_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.if_header_parser(input, cache),
                     empty0,
@@ -1450,9 +1456,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn break_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn break_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(delimited(
+            self.located(delimited(
                 empty0, 
                 tag("break"), 
                 tuple((
@@ -1464,9 +1470,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn continue_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn continue_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(delimited(
+            self.located(delimited(
                 empty0, 
                 tag("continue"), 
                 tuple((
@@ -1478,7 +1484,7 @@ impl NessaContext {
         )(input);
     }
     
-    fn for_header_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, (String, NessaExpr)> {
+    fn for_header_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, (String, NessaExpr)> {
         return map(
             tuple((
                 tag("for"),
@@ -1493,9 +1499,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn while_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn while_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.while_header_parser(input, cache),
                     empty0,
@@ -1506,9 +1512,9 @@ impl NessaContext {
         )(input);
     }
     
-    fn for_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn for_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.for_header_parser(input, cache),
                     empty0,
@@ -1519,7 +1525,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn function_header_parser<'a>(&self, input: Span<'a>) -> PResult<'a, FunctionHeader> {
+    fn function_header_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, FunctionHeader> {
         return map(
             tuple((
                 tag("fn"),
@@ -1579,9 +1585,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn function_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn function_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.function_header_parser(input),
                     empty0,
@@ -1600,9 +1606,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn prefix_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn prefix_operator_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("unary"),
                     empty1,
@@ -1631,9 +1637,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn postfix_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn postfix_operator_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("unary"),
                     empty1,
@@ -1662,9 +1668,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn binary_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn binary_operator_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("binary"),
                     opt(
@@ -1697,9 +1703,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn nary_operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn nary_operator_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("nary"),
                     empty1,
@@ -1732,7 +1738,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn operator_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn operator_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return alt((
             |input| self.prefix_operator_definition_parser(input),
             |input| self.postfix_operator_definition_parser(input),
@@ -1741,7 +1747,7 @@ impl NessaContext {
         ))(input)
     }
 
-    fn prefix_operator_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
+    fn prefix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
         for o in &self.unary_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if *prefix {
@@ -1757,7 +1763,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn postfix_operator_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
+    fn postfix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
         for o in &self.unary_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if !*prefix {
@@ -1773,7 +1779,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn binary_operator_parser<'a>(&self, input: Span<'a>) -> PResult<'a, usize> {
+    fn binary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
         for o in &self.binary_ops {
             if let Operator::Binary{id, representation, ..} = o {
                 let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1787,7 +1793,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn nary_operator_parser<'a>(&self, input: Span<'a>) -> PResult<'a, (usize, Vec<(String, Type)>)> {
+    fn nary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (usize, Vec<(String, Type)>)> {
         for o in &self.nary_ops {
             if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                 let res = map(
@@ -1830,7 +1836,7 @@ impl NessaContext {
         return Err(verbose_error(input, "Unable to parse"));
     }
 
-    fn prefix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
+    fn prefix_operation_header_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1886,7 +1892,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn postfix_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
+    fn postfix_operation_header_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, UnaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -1942,7 +1948,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn binary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, BinaryOpHeader> {
+    fn binary_operation_header_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, BinaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -2021,7 +2027,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn nary_operation_header_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NaryOpHeader> {
+    fn nary_operation_header_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NaryOpHeader> {
         return map(
             tuple((
                 tag("op"),
@@ -2077,9 +2083,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn prefix_operation_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn prefix_operation_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.prefix_operation_header_definition_parser(input),
                     empty0,
@@ -2096,9 +2102,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn postfix_operation_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn postfix_operation_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.postfix_operation_header_definition_parser(input),
                     empty0,
@@ -2115,9 +2121,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn binary_operation_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn binary_operation_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.binary_operation_header_definition_parser(input),
                     empty0,
@@ -2135,9 +2141,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn nary_operation_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nary_operation_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     |input| self.nary_operation_header_definition_parser(input),
                     empty0,
@@ -2155,7 +2161,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn operation_definition_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn operation_definition_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return alt((
             |input| self.prefix_operation_definition_parser(input, cache),
             |input| self.postfix_operation_definition_parser(input, cache),
@@ -2164,7 +2170,7 @@ impl NessaContext {
         ))(input);
     }
 
-    fn code_block_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    fn code_block_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return map(
             delimited(
                 tuple((tag("{"), empty0)),
@@ -2175,7 +2181,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn macro_body_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaMacro> {
+    fn macro_body_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaMacro> {
         delimited(
             tuple((tag("{"), empty0)),
             parse_nessa_macro,
@@ -2183,7 +2189,7 @@ impl NessaContext {
         )(input)
     }
 
-    fn inline_class_syntax_parser<'a>(&self, input: Span<'a>) -> PResult<'a, Pattern> {
+    fn inline_class_syntax_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, Pattern> {
         return map(
             tuple((
                 tag("syntax"),
@@ -2198,7 +2204,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn alias_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+    fn alias_name_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, String> {
         map(
             tuple((
                 tag("type"),
@@ -2227,9 +2233,9 @@ impl NessaContext {
         )(input)
     }
 
-    fn alias_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn alias_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("type"),
                     empty1,
@@ -2268,7 +2274,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn class_name_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+    fn class_name_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, String> {
         map(
             tuple((
                 tag("class"),
@@ -2297,9 +2303,9 @@ impl NessaContext {
         )(input)
     }
 
-    fn class_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn class_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("class"),
                     empty1,
@@ -2368,7 +2374,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn interface_definition_name_parser<'a>(&self, input: Span<'a>) -> PResult<'a, String> {
+    fn interface_definition_name_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, String> {
         map(
             tuple((
                 tag("interface"),
@@ -2397,9 +2403,9 @@ impl NessaContext {
         )(input)
     }
 
-    fn interface_definition_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn interface_definition_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("interface"),
                     empty1,
@@ -2522,9 +2528,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn interface_implementation_parser<'a>(&self, input: Span<'a>) -> PResult<'a, NessaExpr> {
+    fn interface_implementation_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("implement"),
                     empty0,
@@ -2580,9 +2586,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn tuple_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn tuple_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     tag("("),
                     empty0,
@@ -2606,9 +2612,9 @@ impl NessaContext {
         )(input);
     }
 
-    fn do_block_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn do_block_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         map(
-            located(preceded(
+            self.located(preceded(
                 terminated(tag("do"), empty0),
                 |input| self.code_block_parser(input, cache)
             )),
@@ -2616,9 +2622,9 @@ impl NessaContext {
         )(input)
     }
 
-    fn lambda_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn lambda_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return map(
-            located(
+            self.located(
                 tuple((
                     opt(delimited(
                         tuple((tag("["), empty0)),
@@ -2669,7 +2675,7 @@ impl NessaContext {
                     alt((
                         |input| self.code_block_parser(input, cache),
                         map(
-                            located(|input| self.nessa_expr_parser(input, cache)),
+                            self.located(|input| self.nessa_expr_parser(input, cache)),
                             |(l, e)| vec!(NessaExpr::Return(l, Box::new(e))) // Implicit return
                         )
                     ))
@@ -2679,7 +2685,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn nessa_expr_parser_wrapper<'a>(&self, input: Span<'a>, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    fn nessa_expr_parser_wrapper<'a>(&'a self, input: Span<'a>, checked_precs: &mut FxHashSet<usize>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return alt((
             |input| self.operation_parser(input, checked_precs, cache),
             |input| self.custom_syntax_parser(input, cache),
@@ -2691,11 +2697,11 @@ impl NessaContext {
         ))(input);
     }
 
-    pub fn nessa_expr_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
+    pub fn nessa_expr_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
         return self.nessa_expr_parser_wrapper(input, &mut FxHashSet::default(), cache);
     }
 
-    fn nessa_line_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    fn nessa_line_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return alt((
             |input| self.custom_syntax_block_parser(input, cache),
             map(
@@ -2715,7 +2721,7 @@ impl NessaContext {
         ))(input);
     }
 
-    fn nessa_global_parser<'a>(&self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    fn nessa_global_parser<'a>(&'a self, input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         return alt((
             |input| self.custom_syntax_block_parser(input, cache),
             map(
@@ -2741,7 +2747,7 @@ impl NessaContext {
         ))(input);
     }
 
-    pub fn nessa_operators_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_operators_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2757,7 +2763,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_function_headers_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<FunctionHeader>> {
+    pub fn nessa_function_headers_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<FunctionHeader>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2773,7 +2779,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_operations_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_operations_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2789,7 +2795,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_macros_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_macros_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2805,7 +2811,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_interface_implementation_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_interface_implementation_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2821,7 +2827,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_interface_definition_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_interface_definition_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2837,7 +2843,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_interface_definition_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<String>> {
+    pub fn nessa_interface_definition_names_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<String>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2853,7 +2859,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_class_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_class_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let mut ops = vec!();
 
         while input.len() > 0 {
@@ -2873,7 +2879,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_class_names_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, HashSet<String>> {
+    pub fn nessa_class_names_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, HashSet<String>> {
         let mut ops = HashSet::new();
 
         while input.len() > 0 {
@@ -2893,7 +2899,7 @@ impl NessaContext {
         Ok(("".into(), ops))
     }
 
-    pub fn nessa_parser<'a>(&self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
+    pub fn nessa_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
         while let Ok((i, _)) = nessa_info_parser(input) {
             input = i;
         }

@@ -131,7 +131,7 @@ mod integration {
                     println!("{:<3} {}", idx, i.to_string(&ctx));
                 }
 
-                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>()) {
+                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[]) {
                     err.emit();
                 }
             },

@@ -50,6 +50,6 @@ impl CompiledNessaModule {
 
         ctx.program_input = program_input.to_vec();
 
-        ctx.execute_compiled_code::<DEBUG>(&self.instructions)
+        ctx.execute_compiled_code::<DEBUG>(&self.instructions, &[])
     }
 }

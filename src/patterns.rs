@@ -48,8 +48,8 @@ impl Pattern {
         };
     }
 
-    pub fn extract<'a>(&self, text: Span<'a>, ctx: &NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
-        fn merge<'a>(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
+    pub fn extract<'a>(&'a self, text: Span<'a>, ctx: &'a NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
+        fn merge(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
             }
@@ -151,7 +151,7 @@ impl Pattern {
     }
 }
 
-fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
+fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
     return if and {
         map(
             separated_list1(empty1, |i| parse_ndl_pattern(i, false, false, ctx)), 
@@ -163,7 +163,7 @@ fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &NessaContext) -> PResult<'a, P
     }
 }
 
-fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
+fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
     return if or {
         return map(
             separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true, ctx)), 
@@ -175,7 +175,7 @@ fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &NessaContext) -> PResult<'a, Pat
     }
 }
 
-fn custom_ndl_pattern_parser<'a>(ctx: &NessaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
+fn custom_ndl_pattern_parser<'a>(ctx: &'a NessaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
     let prev_input = input;
 
     for (_, mt, p, m) in ctx.macros.iter().filter(|i| i.1 == NessaMacroType::Ndl) {            
@@ -219,7 +219,7 @@ fn custom_ndl_pattern_parser<'a>(ctx: &NessaContext, mut input: Span<'a>, cache:
     return Err(verbose_error(prev_input, "Unable to parse"))
 }
 
-pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &NessaContext) -> PResult<'a, Pattern> {
+pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
     return alt((
         |input| custom_ndl_pattern_parser(ctx, input, &RefCell::default()),
         |i| parse_or(i, or, ctx),

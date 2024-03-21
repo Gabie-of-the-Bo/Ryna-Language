@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use colored::Colorize;
 use derive_builder::Builder;
 use rustc_hash::FxHashSet;
@@ -21,13 +23,13 @@ pub struct DebugInfo {
     pub functions: FxHashSet<String>,
     
     #[builder(default)]
-    pub lines: FxHashSet<usize>
+    pub lines: FxHashSet<(Arc<String>, usize)> // (Module, line)
 }
 
 impl DebugInfo {
     pub fn merge_with(&mut self, other: &DebugInfo) {
         self.functions.extend(other.functions.iter().cloned());
-        self.lines.extend(&other.lines);
+        self.lines.extend(other.lines.iter().cloned());
         self.labels.extend(&other.labels);
 
         if self.comment.is_empty() && !other.comment.is_empty() {
@@ -35,8 +37,8 @@ impl DebugInfo {
         }
     }
 
-    pub fn set_line(&mut self, line: usize) {
-        self.lines.insert(line);
+    pub fn set_line(&mut self, module: Arc<String>, line: usize) {
+        self.lines.insert((module, line));
     }
 }
 

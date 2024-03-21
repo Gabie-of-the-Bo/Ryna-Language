@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use colored::Colorize;
 
@@ -54,6 +55,7 @@ pub struct NessaContext {
 
     pub optimize: bool,
     
+    pub module_name: Arc<String>,
     pub module_path: String,
     pub captured_output: RefCell<String>,
     pub program_input: Vec<String>

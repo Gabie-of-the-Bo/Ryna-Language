@@ -960,7 +960,7 @@ impl NessaInstruction {
     }
 
     pub fn set_loc(mut self, loc: &Location) -> Self {
-        self.debug_info.set_line(loc.line);
+        self.debug_info.set_line(loc.module.clone(), loc.line);
         self
     }
 }

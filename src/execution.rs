@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use colored::Colorize;
@@ -114,7 +115,7 @@ impl NessaContext {
 pub struct ProfilingInfo {
     pub instr_count: FxHashMap<&'static str, usize>,
     pub instr_time: FxHashMap<&'static str, u128>,
-    pub loc_time: FxHashMap<usize, u128>,
+    pub loc_time: FxHashMap<Arc<String>, FxHashMap<usize, u128>>,
     pub total_time: u128
 }
 
@@ -135,7 +136,7 @@ impl NessaContext {
 
         let mut instr_count = FxHashMap::<&str, usize>::default();
         let mut instr_time = FxHashMap::<&str, u128>::default();
-        let mut loc_time = FxHashMap::<usize, u128>::default();
+        let mut loc_time = FxHashMap::<Arc<String>, FxHashMap<usize, u128>>::default();
 
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
@@ -175,25 +176,14 @@ impl NessaContext {
                     *instr_time.entry($name).or_default() += elapsed;
                     *instr_count.entry($name).or_default() += 1;
 
-                    let mut seen = rustc_hash::FxHashSet::default();
+                    let lines_to_check = call_stack[1..].iter()
+                                                        .flat_map(|i| &debug_info[i.0 as usize].lines)
+                                                        .chain(&debug_info[ip as usize].lines)
+                                                        .collect::<rustc_hash::FxHashSet<_>>();
                     
-                    // For each line in the ip
-                    for line in &debug_info[ip as usize].lines {
-                        if !seen.contains(line) {
-                            seen.insert(line);
-                            *loc_time.entry(*line).or_default() += elapsed;    
-                        }
-                    }
-
                     // For each frame in the stack (excluding the first)
-                    for (i, ..) in &call_stack[1..] {
-                        // For each line in each frame
-                        for line in &debug_info[*i as usize].lines {
-                            if !seen.contains(line) {
-                                seen.insert(line);
-                                *loc_time.entry(*line).or_default() += elapsed;    
-                            }
-                        }
+                    for j in lines_to_check {
+                        *loc_time.entry(j.0.clone()).or_default().entry(j.1).or_default() += elapsed;    
                     }
 
                 } else {

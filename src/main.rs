@@ -248,14 +248,12 @@ fn main() {
                 None => vec!(),
             };
 
-            let res;
-
-            if profile {
-                res = NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, &program_input);
+            let res = if profile {
+                NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, &program_input)
 
             } else {
-                res = NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, &program_input);
-            }
+                NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, &program_input)
+            };
             
             match res {
                 Ok(ex) => {

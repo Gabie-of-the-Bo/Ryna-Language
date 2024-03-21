@@ -1015,7 +1015,7 @@ impl NessaContext {
 
                 match *id {
                     NEG_UNOP_ID if t == INT => Object::new(-inner.get::<Integer>().clone()),
-                    NEG_UNOP_ID if t == FLOAT => Object::new(-inner.get::<f64>().clone()),
+                    NEG_UNOP_ID if t == FLOAT => Object::new(-*inner.get::<f64>()),
                     _ => unreachable!()
                 }    
             },
@@ -1095,7 +1095,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
                 if self.is_constant_expr(e, consts) {
                     consts.insert(*id, true);
-                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, &const_exprs)));    
+                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, const_exprs)));    
                 }
             },
             NessaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
@@ -1271,10 +1271,7 @@ impl NessaContext {
 
     fn remove_assignments(&self, exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
         fn filter_assignments(exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
-            exprs.retain(|i| match i {
-                NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id) => false,
-                _ => true
-            });
+            exprs.retain(|i| matches!(i, NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id)));
         }
 
         filter_assignments(exprs, assigned_exprs);
@@ -1674,7 +1671,7 @@ impl NessaContext {
         reassign_labels(program);
     }
 
-    fn remove_jump_chains(&self, program: &mut Vec<NessaInstruction>) {
+    fn remove_jump_chains(&self, program: &mut [NessaInstruction]) {
         use CompiledNessaExpr::*;
 
         let mut changed = true;
@@ -1741,9 +1738,8 @@ impl NessaContext {
                     };
                 }
                 
-                match [&program[i].instruction, &program[i + 1].instruction] {
-                    [Call(loc), Return] => { change_first!(Jump(*loc)); }
-                    _ => { }
+                if let [Call(loc), Return] = [&program[i].instruction, &program[i + 1].instruction] {
+                    change_first!(Jump(*loc));
                 }
             }
         }

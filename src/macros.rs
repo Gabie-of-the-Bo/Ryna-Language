@@ -55,17 +55,17 @@ pub fn text_pattern_end(input: Span<'_>) -> PResult<()> {
 pub fn parse_text(input: Span<'_>) -> PResult<NessaMacro> {
     map_opt(
         many_till(text_pattern_char, peek(text_pattern_end)),
-        |(i, _)| if i.len() > 0 { Some(NessaMacro::Text(i.iter().collect())) } else { None }
+        |(i, _)| if !i.is_empty() { Some(NessaMacro::Text(i.iter().collect())) } else { None }
     )(input)
 }
 
-pub fn parse_var<'a>(input: Span<'a>) -> PResult<NessaMacro> {
+pub fn parse_var(input: Span<'_>) -> PResult<NessaMacro> {
     map(
         preceded(
             tag("$"),
             identifier_parser
         ),
-        |i| NessaMacro::Var(i)
+        NessaMacro::Var
     )(input)
 }
 
@@ -81,7 +81,7 @@ pub fn parse_index(input: Span<'_>) -> PResult<NessaMacro> {
     )(input)
 }
 
-pub fn parse_loop_header<'a>(input: Span<'a>) -> PResult<(String, String)> {
+pub fn parse_loop_header(input: Span<'_>) -> PResult<(String, String)> {
     map(
         tuple((
             tag("@"),
@@ -179,7 +179,7 @@ impl NessaMacro {
             };
         }
 
-        return match self {
+        match self {
             NessaMacro::Text(s) => Ok(s.clone()),
             
             NessaMacro::Var(v) => {
@@ -232,7 +232,7 @@ impl NessaMacro {
 
                 Ok(ex.captured_output)
             }
-        };
+        }
     }
 }
 

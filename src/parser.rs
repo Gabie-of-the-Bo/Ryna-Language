@@ -893,7 +893,7 @@ impl NessaContext {
                         if let Type::Template(ARR_ID, t) = t {  
                             if let &[Type::Basic(t_id)] = &t[..] {
                                 return args[n].iter().cloned()
-                                    .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg.into()))
+                                    .map(|arg| self.type_templates[t_id].parser.unwrap()(self, &self.type_templates[t_id], &arg))
                                     .collect::<Result<Vec<_>, _>>()
                                     .map(|r| Object::arr(r, Type::Basic(t_id)));
                             }

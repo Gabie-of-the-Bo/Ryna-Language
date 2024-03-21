@@ -49,7 +49,7 @@ impl Pattern {
     }
 
     pub fn extract<'a>(&'a self, text: Span<'a>, ctx: &'a NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
-        fn merge<'a>(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
+        fn merge(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
             }

@@ -1,6 +1,8 @@
 [package]
 name = "nessa-language"
 description = "An extensible programming language with a strong type system"
+keywords = ["programming-language", "interpreter"]
+categories = ["command-line-utilities", "compilers"]
 documentation = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 homepage = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 repository = "https://github.com/Gabie-of-the-Bo/Nessa-Language"

@@ -131,7 +131,7 @@ mod integration {
                     println!("{:<3} {}", idx, i.to_string(&ctx));
                 }
 
-                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>()) {
+                if let Err(err) = ctx.execute_compiled_code::<false>(&code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[]) {
                     err.emit();
                 }
             },
@@ -291,6 +291,11 @@ mod integration {
     }
 
     #[test]
+    fn lambda_capture() {
+        integration_test("test/lambda_capture.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }
@@ -373,5 +378,10 @@ mod integration {
     #[test]
     fn bf_embed() {
         module_test("test/modules/bf_embed");
+    }
+
+    #[test]
+    fn match_test() {
+        module_test("test/modules/match_test");
     }
 }

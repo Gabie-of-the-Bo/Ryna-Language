@@ -33,6 +33,7 @@ pub struct NessaArrayIt {
 #[derive(Clone, PartialEq, Debug)]
 pub struct NessaLambda {
     pub loc: usize,
+    pub captures: Vec<Object>,
     pub args_type: Box<Type>,
     pub ret_type: Box<Type>
 }
@@ -257,6 +258,7 @@ impl ObjectBlock {
             }),
             ObjectBlock::Lambda(l) => ObjectBlock::Lambda(NessaLambda { 
                 loc: l.loc, 
+                captures: l.captures.iter().map(Object::deep_clone).collect(),
                 args_type: l.args_type.clone(), 
                 ret_type: l.ret_type.clone() 
             }),
@@ -294,8 +296,8 @@ impl Object {
         ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type: Box::new(it_type) }).to_obj()
     }
 
-    pub fn lambda(loc: usize, args_type: Type, ret_type: Type) -> Self {
-        ObjectBlock::Lambda(NessaLambda { loc, args_type: Box::new(args_type), ret_type: Box::new(ret_type) }).to_obj()
+    pub fn lambda(loc: usize, captures: Vec<Object>, args_type: Type, ret_type: Type) -> Self {
+        ObjectBlock::Lambda(NessaLambda { loc, captures, args_type: Box::new(args_type), ret_type: Box::new(ret_type) }).to_obj()
     }
 
     pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {

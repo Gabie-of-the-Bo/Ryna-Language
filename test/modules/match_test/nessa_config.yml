@@ -1,0 +1,10 @@
+---
+module_name: match_test
+version: 0.1.0
+hash: 57a99857edea9007754565d4829f7183
+module_paths:
+  - test/lib
+modules:
+  match:
+    path: "test\\lib\\match"
+    version: 0.1.0

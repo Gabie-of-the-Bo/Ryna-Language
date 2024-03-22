@@ -14,13 +14,14 @@ syntax block macro_name from NDL_Pattern {
 The main difference with expression and function macros is that these can only be used as statements, so they do not count as valid expressions.
 Code such as `1 + <some_block_macro>` is not valid Nessa. You need to use expression and function macros for that.
 
-An example of a block macro that creates an early return would be the following:
+An example of a block macro that creates an early return would be the following (note that we have to escape the closing brace of the if statement in order
+for the macro body to be correct):
 
 ```
 syntax block early_return from "ret#" Arg(1{l}, name) ";" {
-    {#if } {$name} {# < 5 \{}
-        {#return false;}
-    {#\}}
+    if $name < 5 {
+        return false;
+    \}
 }
 
 // This function ...

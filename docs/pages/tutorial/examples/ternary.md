@@ -29,15 +29,15 @@ We can represent this syntax using the following *NDL* pattern:
 
 ## Creating the macro
 
-You can create the macro for the ternary operator using the following code:
+You can create the macro for the ternary operator using the following code (note that we have to escape the if's closing brace):
 
 ```
 syntax ternary_operator from [...] {
-    {#if } {$condition} {#\{}
-        {#return } {$if_true} {#;}
-    {#\}}
+    if $condition {
+        return $if_true;
+    \}
     
-    {#return } {$if_false} {#;}
+    return $if_false;
 }
 ```
 

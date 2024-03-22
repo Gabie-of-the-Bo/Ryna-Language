@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
@@ -15,6 +16,8 @@ use crate::config::ImportMap;
 use crate::config::Imports;
 use crate::config::NessaModule;
 use crate::context::NessaContext;
+use crate::debug::DebugInfo;
+use crate::debug::DebugInfoBuilder;
 use crate::graph::DirectedGraph;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::ITERABLE_ID;
@@ -539,15 +542,30 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::Lambda(l, a, r, b) => {
-                self.compile(b, a)?;
+            NessaExpr::Lambda(l, c, a, r, b) => {
+                let mut captures = vec!();
+                let mut capture_args = vec!();
+
+                // Compile lambda captures
+                for n in c {
+                    if var_map.is_var_defined(n) {
+                        let (idx, t) = var_map.get_var(n).unwrap();
+                        captures.push((n.clone(), NessaExpr::Variable(l.clone(), *idx, n.clone(), t.clone())));
+                        capture_args.push((n.clone(), t.clone()));
+                    
+                    } else {
+                        return Err(NessaError::compiler_error(format!("Variable with name {} is not defined", n.green()), l, vec!()));
+                    }
+                }
+
+                self.compile(b, &capture_args.iter().chain(a.iter()).cloned().collect())?;
 
                 // Infer further
                 if *r == Type::InferenceMarker {
                     *r = self.infer_lambda_return_type(b)?.unwrap_or(Type::Empty);
                 }
 
-                *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, a.clone(), r.clone(), b.clone());
+                *expr = NessaExpr::CompiledLambda(l.clone(), self.lambdas, captures, a.clone(), r.clone(), b.clone());
                 self.lambdas += 1;
             },
 
@@ -676,7 +694,7 @@ pub enum CompiledNessaExpr {
     Float(f64),
     Str(String),
     Array(usize, Type),
-    Lambda(usize, Type, Type),
+    Lambda(usize, usize, Type, Type),
 
     Construct(usize, usize, Vec<Type>),
     AttributeMove(usize),
@@ -809,9 +827,10 @@ impl CompiledNessaExpr {
                 t.get_name(ctx)
             ),
 
-            Lambda(pos, args, ret) => format!(
-                "{}({}, {}, {})", "Lambda".green(), 
+            Lambda(pos, cap, args, ret) => format!(
+                "{}({}, {}, {}, {})", "Lambda".green(), 
                 pos.to_string().magenta(), 
+                cap.to_string().magenta(), 
                 args.get_name(ctx),
                 ret.get_name(ctx)
             ),
@@ -907,14 +926,12 @@ impl CompiledNessaExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
-    pub comment: String,
-    pub var_type: Option<Type>,
-    pub labels: FxHashSet<usize>
+    pub debug_info: DebugInfo
 }
 
 impl NessaInstruction {
     pub fn to_string(&self, ctx: &NessaContext) -> String {
-        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.comment.is_empty() { "" } else { " # " }, self.comment)
+        format!("{:<30}{}{}", self.instruction.to_string(ctx), if self.debug_info.comment.is_empty() { "" } else { " # " }, self.debug_info.comment)
     }
 }
 
@@ -922,9 +939,7 @@ impl From<CompiledNessaExpr> for NessaInstruction {
     fn from(obj: CompiledNessaExpr) -> NessaInstruction {
         NessaInstruction {
             instruction: obj,
-            comment: String::new(),
-            var_type: None,
-            labels: FxHashSet::default()
+            debug_info: DebugInfo::default()
         }
     }
 }
@@ -933,19 +948,20 @@ impl NessaInstruction {
     pub fn new(instruction: CompiledNessaExpr, comment: String) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment,
-            var_type: None,
-            labels: FxHashSet::default()
+            debug_info: DebugInfoBuilder::default().comment(comment).build().unwrap()
         }
     }
 
     pub fn new_with_type(instruction: CompiledNessaExpr, comment: String, var_type: Type) -> NessaInstruction {
         NessaInstruction {
             instruction,
-            comment,
-            var_type: Some(var_type),
-            labels: FxHashSet::default()
+            debug_info: DebugInfoBuilder::default().comment(comment).var_type(Some(var_type)).build().unwrap()
         }
+    }
+
+    pub fn set_loc(mut self, loc: &Location) -> Self {
+        self.debug_info.set_line(loc.module.clone(), loc.line);
+        self
     }
 }
 
@@ -1101,8 +1117,12 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::CompiledLambda(_, _, args, ret, b) => {
+            NessaExpr::CompiledLambda(_, _, c, args, ret, b) => {
                 self.get_inner_dep_graph_body(b, parent, deps);
+
+                for (_, a) in c {
+                    self.get_inner_dep_graph_expr(a, parent, deps);
+                }
 
                 for (_, t) in args {
                     for td in t.type_dependencies() {
@@ -1602,7 +1622,7 @@ impl NessaContext{
 
             NessaExpr::Variable(_, _, _, t) => *t = t.sub_templates(templates),
 
-            NessaExpr::Lambda(_, args, r, lines) => {
+            NessaExpr::Lambda(_, _, args, r, lines) => {
                 for (_, tp) in args {
                     *tp = tp.sub_templates(templates);
                 }
@@ -1693,26 +1713,34 @@ impl NessaContext{
             NessaExpr::BinaryOperatorDefinition(..) |
             NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
-            NessaExpr::CompiledLambda(_, i, a, _, b) => {
+            NessaExpr::CompiledLambda(_, i, c, a, _, b) => {
                 self.compile_lambdas(b)?;
 
                 self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code.len());
 
-                for (i, arg) in a.iter().enumerate() {
+                for (i, e) in c.iter().enumerate() {
                     if i == 0 {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             "Lambda expression start".into(),
-                            arg.1.clone()
+                            self.infer_type(&e.1).unwrap()
                         ));
 
                     } else {
                         self.lambda_code.push(NessaInstruction::new_with_type(
                             CompiledNessaExpr::StoreVariable(i), 
                             String::new(),
-                            arg.1.clone()
+                            self.infer_type(&e.1).unwrap()
                         ));
                     }
+                }
+
+                for (i, arg) in a.iter().enumerate() {
+                    self.lambda_code.push(NessaInstruction::new_with_type(
+                        CompiledNessaExpr::StoreVariable(i + c.len()), 
+                        String::new(),
+                        arg.1.clone()
+                    ));
                 }
 
                 self.lambda_code.extend(self.compiled_form_body(b)?);
@@ -2458,31 +2486,38 @@ impl NessaContext{
         root: bool
     ) -> Result<Vec<NessaInstruction>, NessaError> {
         return match expr {
-            NessaExpr::Break(_) => {
+            NessaExpr::Break(l) => {
                 Ok(vec!(
-                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Break)) // Placeholder
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Break)).set_loc(l) // Placeholder
                 ))
             }
             
-            NessaExpr::Continue(_) => {
+            NessaExpr::Continue(l) => {
                 Ok(vec!(
-                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Continue)) // Placeholder
+                    NessaInstruction::from(CompiledNessaExpr::Placeholder(PlaceholderType::Continue)).set_loc(l) // Placeholder
                 ))
             }
 
-            NessaExpr::Literal(_, obj) => {
+            NessaExpr::Literal(l, obj) => {
                 let mut res = NessaContext::compile_literal(obj);
                 
                 if root { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
                 }
 
-                Ok(res)
+                Ok(res.into_iter().map(|i| i.set_loc(l)).collect())
             },
 
-            NessaExpr::CompiledLambda(_, i, a, r, _) => {
-                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Lambda(
+            NessaExpr::CompiledLambda(l, i, c, a, r, _) => {
+                let mut res = vec!();
+
+                for (_, i) in c.iter().rev() {
+                    res.extend(self.compiled_form_expr(i, false)?);
+                }
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::Lambda(
                     *self.lambda_positions.get(i).unwrap(),
+                    c.len(),
                     if a.len() == 1 {
                         a[0].1.clone()
 
@@ -2490,16 +2525,16 @@ impl NessaContext{
                         Type::And(a.iter().map(|(_, t)| t).cloned().collect())
                     },
                     r.clone()
-                )));
+                )).set_loc(l));
                 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             },
 
-            NessaExpr::DoBlock(_, lines, _) => {
+            NessaExpr::DoBlock(l, lines, _) => {
                 let mut res = self.compiled_form_body(lines)?;
                 let length = res.len();
 
@@ -2511,50 +2546,50 @@ impl NessaContext{
                 }
                 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             }
 
-            NessaExpr::Tuple(_, e) => {
+            NessaExpr::Tuple(l, e) => {
                 let mut res = vec!();
 
                 for i in e.iter().rev() {
                     res.extend(self.compiled_form_expr(i, false)?);
                 }
 
-                res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(e.len())));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Tuple(e.len())).set_loc(l));
                 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             }
 
-            NessaExpr::Variable(_, id, _, _) => {
-                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)));
+            NessaExpr::Variable(l, id, _, _) => {
+                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)).set_loc(l));
                 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             }, 
 
-            NessaExpr::CompiledVariableDefinition(_, id, _, t, e) | NessaExpr::CompiledVariableAssignment(_, id, _, t, e) => {
+            NessaExpr::CompiledVariableDefinition(l, id, _, t, e) | NessaExpr::CompiledVariableAssignment(l, id, _, t, e) => {
                 let mut res = self.compiled_form_expr(e, false)?;
                 res.push(NessaInstruction::new_with_type(
                     CompiledNessaExpr::StoreVariable(*id),
                     String::new(),
                     t.clone()
-                ));
+                ).set_loc(l));
 
                 Ok(res)
             },
 
-            NessaExpr::UnaryOperation(_, id, t, e) => {
+            NessaExpr::UnaryOperation(l, id, t, e) => {
                 let mut res = self.compiled_form_expr(e, false)?;
 
                 let i_t = self.infer_type(e)?;
@@ -2562,35 +2597,35 @@ impl NessaContext{
                 let ov_id = self.cache.overloads.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())).unwrap();
 
                 if let Some(pos) = self.cache.locations.unary.get_checked(&(*id, vec!(i_t.clone()), t.clone())) {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
 
                 } else if let Some((opcode, _)) = self.cache.opcodes.unary.get_checked(&(*id, ov_id)) {                    
                     // Deref if necessary
                     if opcode.needs_deref() && i_t.is_ref() {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Deref).set_loc(l));
                     }
 
                     // Convert to float if necessary
                     if opcode.needs_float() {
                         if let Type::Basic(INT_ID) = i_t.deref_type() {
-                            res.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                            res.push(NessaInstruction::from(CompiledNessaExpr::ToFloat).set_loc(l));
                         }
                     }
 
-                    res.push(NessaInstruction::from(opcode));
+                    res.push(NessaInstruction::from(opcode).set_loc(l));
 
                 } else {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::UnaryOperatorCall(*id, ov_id, t.clone())).set_loc(l));
                 }   
 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             },
 
-            NessaExpr::BinaryOperation(_, id, t, a, b) => {
+            NessaExpr::BinaryOperation(l, id, t, a, b) => {
                 let mut res_a = self.compiled_form_expr(b, false)?;
                 let mut res_b = self.compiled_form_expr(a, false)?;
                 
@@ -2607,7 +2642,7 @@ impl NessaContext{
                 let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.binary.get_checked(&(*id, vec!(a_t.clone(), b_t.clone()), t.clone())) {
-                    res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos));
+                    res_op = NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l);
 
                 } else {
                     if (*id == AND_BINOP_ID || *id == OR_BINOP_ID) && *a_t.deref_type() == BOOL && *b_t.deref_type() == BOOL {
@@ -2621,29 +2656,29 @@ impl NessaContext{
                         // Deref if necessary
                         if opcode.needs_deref() {
                             if a_t.is_ref() {
-                                res_b.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                                res_b.push(NessaInstruction::from(CompiledNessaExpr::Deref).set_loc(l));
                             }
         
                             if b_t.is_ref() {
-                                res_a.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                                res_a.push(NessaInstruction::from(CompiledNessaExpr::Deref).set_loc(l));
                             }
                         }
     
                         // Convert to float if necessary
                         if opcode.needs_float() {
                             if let Type::Basic(INT_ID) = a_t.deref_type() {
-                                res_b.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                                res_b.push(NessaInstruction::from(CompiledNessaExpr::ToFloat).set_loc(l));
                             }
     
                             if let Type::Basic(INT_ID) = b_t.deref_type() {
-                                res_a.push(NessaInstruction::from(CompiledNessaExpr::ToFloat));
+                                res_a.push(NessaInstruction::from(CompiledNessaExpr::ToFloat).set_loc(l));
                             }
                         }
 
-                        res_op = NessaInstruction::from(opcode);
+                        res_op = NessaInstruction::from(opcode).set_loc(l);
 
                     } else {
-                        res_op = NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id, t.clone()));
+                        res_op = NessaInstruction::from(CompiledNessaExpr::BinaryOperatorCall(*id, ov_id, t.clone())).set_loc(l);
                     }
                 }
                 
@@ -2653,10 +2688,10 @@ impl NessaContext{
                     res = res_b;
 
                     if short_circuit_on {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(res_a.len() + 2, true)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(res_a.len() + 2, true)).set_loc(l));
 
                     } else {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(res_a.len() + 2, true)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(res_a.len() + 2, true)).set_loc(l));
                     }
 
                     res.append(&mut res_a);
@@ -2669,13 +2704,13 @@ impl NessaContext{
                 res.push(res_op);    
 
                 if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             },
 
-            NessaExpr::NaryOperation(_, id, t, a, b) => {
+            NessaExpr::NaryOperation(l, id, t, a, b) => {
                 let mut res = vec!();
 
                 for i in b.iter().rev() {
@@ -2693,28 +2728,28 @@ impl NessaContext{
                 let ov_id = self.cache.overloads.nary.get_checked(&(*id, arg_types.clone(), t.clone())).unwrap();
 
                 if let Some(pos) = self.cache.locations.nary.get_checked(&(*id, arg_types, t.clone())) {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
 
                 } else if let Some((opcode, _)) = self.cache.opcodes.nary.get_checked(&(*id, ov_id)) {
-                    res.push(NessaInstruction::from(opcode));
+                    res.push(NessaInstruction::from(opcode).set_loc(l));
                 
                 } else {                    
-                    res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, t.clone())));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::NaryOperatorCall(*id, ov_id, t.clone())).set_loc(l));
                 }   
 
                 if root { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
             },
 
-            NessaExpr::If(_, ih, ib, ei, e) => {
+            NessaExpr::If(l, ih, ib, ei, e) => {
                 let mut res = self.compiled_form_expr(ih, false)?;
                 let if_body = self.compiled_form_body(ib)?;
 
                 if self.infer_type(ih).unwrap().is_ref() {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref).set_loc(l));
                 }
 
                 res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfFalse(if_body.len() + 2, false)));
@@ -2760,13 +2795,13 @@ impl NessaContext{
                 Ok(res)
             },
 
-            NessaExpr::While(_, c, b) => {
+            NessaExpr::While(l, c, b) => {
                 // Start with the condition
                 let mut res = self.compiled_form_expr(c, false)?;
                 let while_body = self.compiled_form_body(b)?;
 
                 if self.infer_type(c).unwrap().is_ref() {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Deref).set_loc(l));
                 }
                 
                 // Add while body
@@ -2812,43 +2847,43 @@ impl NessaContext{
 
                     // Convert the iterable into an iterator
                     if it_native {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(ITERATOR_FUNC_ID, it_ov_id, it_args)).set_loc(l));
 
                     } else {
                         let pos = self.cache.locations.functions.get_checked(&(ITERATOR_FUNC_ID, vec!(t.clone()), it_args.clone())).unwrap();
-                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
                     }
 
                     // Store the iterator
-                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*it_var_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*it_var_id)).set_loc(l));
 
                     // Check end of iterator
-                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)).set_loc(l));
 
                     if consumed_native {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)).set_loc(l));
 
                     } else {
                         let pos = self.cache.locations.functions.get_checked(&(IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone())).unwrap();
-                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
                     }                                    
 
                     // Jump to end of loop
                     res.push(NessaInstruction::from(CompiledNessaExpr::RelativeJumpIfTrue(for_body_len + 5, false)));
 
                     // Get next value
-                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::GetVariable(*it_var_id)).set_loc(l));
 
                     if next_native {
-                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)).set_loc(l));
 
                     } else {
                         let pos = self.cache.locations.functions.get_checked(&(NEXT_FUNC_ID, vec!(it_mut.clone()), next_args.clone())).unwrap();
-                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
                     }
 
                     // Store next value
-                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::StoreVariable(*elem_var_id)).set_loc(l));
 
                     // Add for body
                     let beginning_jmp = CompiledNessaExpr::RelativeJump(-(for_body_len as i32 + 6));
@@ -2877,14 +2912,14 @@ impl NessaContext{
                 }
             },
 
-            NessaExpr::Return(_, e) => {
+            NessaExpr::Return(l, e) => {
                 let mut res = self.compiled_form_expr(e, false)?;
-                res.push(NessaInstruction::from(CompiledNessaExpr::Return));
+                res.push(NessaInstruction::from(CompiledNessaExpr::Return).set_loc(l));
 
                 Ok(res)
             },
 
-            NessaExpr::FunctionCall(_, id, t, a) => {
+            NessaExpr::FunctionCall(l, id, t, a) => {
                 let mut res = vec!();
 
                 for i in a.iter().rev() {
@@ -2897,7 +2932,7 @@ impl NessaContext{
                 let mut translated_opcode = CompiledNessaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Call(pos)).set_loc(l));
 
                 } else if let Some((mut opcode, _)) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)) {
                     // TODO: add conversions and derefs if necessary 
@@ -2909,14 +2944,14 @@ impl NessaContext{
 
                     translated_opcode = opcode.clone();
 
-                    res.push(NessaInstruction::from(opcode));
+                    res.push(NessaInstruction::from(opcode).set_loc(l));
 
                 } else {
-                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())).set_loc(l));
                 }
 
                 if root && !translated_opcode.needs_no_drop() { // Drop if the return value is unused
-                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop));
+                    res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
                 }
 
                 Ok(res)
@@ -3611,7 +3646,7 @@ impl NessaContext{
                 self.map_nessa_expression(e, ctx, id_mapper)?;
             }
 
-            NessaExpr::Lambda(l, a, ret, lines) => {
+            NessaExpr::Lambda(l, _, a, ret, lines) => {
                 for (_, t) in a {
                     *t = t.map_type(self, ctx, id_mapper, l)
                 }

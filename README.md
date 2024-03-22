@@ -11,17 +11,15 @@
   
 # What is _Nessa_?
 
-**_Nessa_** is an imperative concept programming language with formal enough semantics to allow mathematical proofs. Many of its ideas come from the [_ULAN Language_](https://idus.us.es/handle/11441/84976) <sup>(Spanish only)</sup>, of which I'm also the author. The points of this language are to challenge the idea of classical software mantainability and to take extensible programming to an extreme in order to minimize syntatical and semantical noise.
+**_Nessa_** is an imperative concept programming language with a stong type system. Many of its ideas come from the [_ULAN Language_](https://idus.us.es/handle/11441/84976) <sup>(Spanish only)</sup>, of which I'm also the author. The points of this language are to challenge the idea of classical software mantainability and to take extensible programming to an extreme in order to minimize syntatical and semantical noise.
 
 Take a look at the [official page](https://gabie-of-the-bo.github.io/Nessa-Language/) to learn about the language and its features!
 
-# Is _Nessa_ ready for production use?
+# Can I use _Nessa_?
 
-**Not yet**. The language is at an *experimental* stage, so it is indeed usable, but expect some things to fail.
+**Of course!** The language is at an *experimental* stage, so it is indeed usable, but expect some things to fail. You can take a look [here](https://gabie-of-the-bo.github.io/Nessa-Language/pages/tutorial/start/install/) for instructions on how to install the interpreter.
 
 # Features
-
-> **_Disclaimer:_** these might be changed and/or expanded in future releases
 
 These are some of the things you can do with Nessa:
 
@@ -29,9 +27,30 @@ These are some of the things you can do with Nessa:
 * **Full parametric algebraic types**:
 
   ```
-  a: Int | String;        // Either a number or a string
-  b: (Int, String);       // A number followed by a string
-  c: Array<Int | String>; // An array of elements that are either numbers of strings
+  Int | String;        // Either a number or a string
+  (Int, String);       // A number followed by a string
+  Array<Int | String>; // An array of elements that are either numbers of strings
+  ```
+
+* **Recursive types**:
+
+  ```
+  class Nil {}
+  type Tree<T> = Nil | ('T, Tree<'T>, Tree<'T>);
+
+  let t: Tree<Int> = (
+      3, 
+      (
+          1, 
+          Nil(), 
+          (
+              3, 
+              (1, Nil(), Nil()), 
+              (2, Nil(), Nil())
+          )
+      ), 
+      (2, Nil(), Nil())
+  );
   ```
 
 * **Powerful function overloading semantics**: you will be able to define functions using this rich type system and make use of call polymorphism semantics:
@@ -60,7 +79,7 @@ These are some of the things you can do with Nessa:
   // Template arguments are automatically inferred from the parameters if possible
   5.is_number();        // This is true
   "Test".is_number();   // This is false
-  5.is_number<Int>()    // You can also explicitly instantiate the template
+  5.is_number<Int>();   // You can also explicitly instantiate the template
   ```
 
 * **Custom literals**: you will be able to create new literals using an internal language called _NDL_ (_Nessa Definition Language_):
@@ -81,12 +100,14 @@ These are some of the things you can do with Nessa:
 * **Compile-time syntax extensions**: you will be able to extend the syntax of the language using _NDL_ by means of high level patterns:
 
   ```
-  syntax array_initialization from '<' Arg(<type>, type) '>[' [{Arg(<expr>, elems) ',' {' '}} Arg(<expr>, elems)] ']' {
-      {#let res = arr<} {$type} {#>(} {#);\n}
-      {@i in $elems} {
-          {#res.push(} {$i} {#);\n}
+  syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
+      let res = arr<$type>();
+
+      @elems.i {
+          res.push($elems.i);
       }
-      {#return *res;}
+      
+      return move(res);
   }
 
   let array = <Int>[1, 2, 3, 4];
@@ -102,11 +123,11 @@ These are some of the things you can do with Nessa:
   
   // Operation definition for each operator
   // These can be overloaded and templated just the same as functions
-  op (a: &Int) ++ {
+  op (a: &Int) ++ -> Int {
     return a + 1;
   }
   
-  op (a: &Int) <=> (b: &Int) {
+  op (a: &Int) <=> (b: &Int) -> Int {
     if a < b {
       return -1;
     }
@@ -118,7 +139,19 @@ These are some of the things you can do with Nessa:
     return 0;
   }
   
-  op (a: &Int) `(b: &Int, c: &Int)´ {
-    return a + b * c; // This one is pretty much made up
+  op (a: &Int) `(b: &Int, c: &Int)´ -> Int {
+    return a + b * c;
   }
   ```
+
+# Projects written in _Nessa_
+
+> If you want to showcase a project here, you can submit a pull request or open an issue :)
+
+## Chessa engine
+
+[Chessa](https://github.com/Gabie-of-the-Bo/Chessa/) (pun intended) is a simple chess engine written in _Nessa_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
+
+# Contribute
+
+You can contribute to the project by opening issues when you find a bug in the interpreter or when you happen to have a suggestion on how to improve either the language or the documentation. All contributions, big or small, are welcome :)

@@ -30,8 +30,13 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => NessaContext::count_usages_expr(e, var_usages, offset),
 
+            NessaExpr::CompiledLambda(_, _, c, _, _, _) => {
+                for (_, e) in c {
+                    NessaContext::count_usages_expr(e, var_usages, 2); // Set offset of 2 in order not to insert moves inside captures
+                }
+            }
+
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -110,8 +115,19 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.insert_moves_expr(e, var_usages),
 
+            NessaExpr::CompiledLambda(_, _, c, _, _, exprs) => {
+                let mut var_usages_lambda = FxHashMap::default();
+
+                for (_, e) in c {
+                    NessaContext::count_usages_expr(e, &mut var_usages_lambda, 2); // Set offset of 2 in order not to insert moves inside captures
+                }
+
+                for e in exprs {
+                    self.insert_moves_expr(e, &mut var_usages_lambda);
+                }                
+            }
+
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
                     self.insert_moves_expr(e, var_usages);
@@ -236,7 +252,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
                     self.strength_reduction_expr(e);
@@ -515,7 +531,7 @@ impl NessaContext {
             NessaExpr::Return(_, e) => NessaContext::max_variable(e, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -613,8 +629,17 @@ impl NessaContext {
             NessaExpr::UnaryOperation(_, _, _, e) |
             NessaExpr::Return(_, e) => NessaContext::offset_variables(e, offset),
 
+            NessaExpr::CompiledLambda(_, _, c, _, _, exprs) => {
+                for (_, e) in c {
+                    NessaContext::offset_variables(e, offset);
+                }
+
+                for e in exprs {
+                    NessaContext::offset_variables(e, offset);
+                }
+            }
+
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -739,7 +764,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 self.inline_functions(exprs, offset);
             },
@@ -990,7 +1015,7 @@ impl NessaContext {
 
                 match *id {
                     NEG_UNOP_ID if t == INT => Object::new(-inner.get::<Integer>().clone()),
-                    NEG_UNOP_ID if t == FLOAT => Object::new(-inner.get::<f64>().clone()),
+                    NEG_UNOP_ID if t == FLOAT => Object::new(-*inner.get::<f64>()),
                     _ => unreachable!()
                 }    
             },
@@ -1070,13 +1095,13 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
                 if self.is_constant_expr(e, consts) {
                     consts.insert(*id, true);
-                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, &const_exprs)));    
+                    const_exprs.insert(*id, NessaExpr::Literal(Location::none(), NessaContext::compute_constant_expr(e, const_exprs)));    
                 }
             },
             NessaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -1171,7 +1196,7 @@ impl NessaContext {
             NessaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
             
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -1246,10 +1271,7 @@ impl NessaContext {
 
     fn remove_assignments(&self, exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
         fn filter_assignments(exprs: &mut Vec<NessaExpr>, assigned_exprs: &mut FxHashMap<usize, NessaExpr>) {
-            exprs.retain(|i| match i {
-                NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id) => false,
-                _ => true
-            });
+            exprs.retain(|i| !matches!(i, NessaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id)));
         }
 
         filter_assignments(exprs, assigned_exprs);
@@ -1267,7 +1289,7 @@ impl NessaContext {
             NessaExpr::Return(_, e)  => self.remove_assignments_expr(e, assigned_exprs),
             
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, exprs) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => self.remove_assignments(exprs, assigned_exprs),
 
@@ -1371,7 +1393,7 @@ fn compute_labels(program: &mut [NessaInstruction]) {
     // Generate labels
     for (idx, i) in program.iter_mut().enumerate() {
         match &mut i.instruction {
-            CompiledNessaExpr::Lambda(to, _, _) |
+            CompiledNessaExpr::Lambda(to, _, _, _) |
             CompiledNessaExpr::Call(to) |
             CompiledNessaExpr::Jump(to) => {
                 if !labels.contains_key(to) {
@@ -1417,7 +1439,7 @@ fn compute_labels(program: &mut [NessaInstruction]) {
 
     // Insert labels
     for (line, tag) in &labels {
-        program[*line].labels.insert(*tag);
+        program[*line].debug_info.labels.insert(*tag);
     }
 }
 
@@ -1426,17 +1448,17 @@ fn reassign_labels(program: &mut [NessaInstruction]) {
 
     // Generate label positions
     for (idx, i) in program.iter_mut().enumerate() {
-        for l in &i.labels {
+        for l in &i.debug_info.labels {
             positions.entry(*l).or_insert(idx);
         }
 
-        i.labels.clear();
+        i.debug_info.labels.clear();
     }
 
     // Recompute positions
     for (idx, i) in program.iter_mut().enumerate() {
         match &mut i.instruction {
-            CompiledNessaExpr::Lambda(to, _, _) |
+            CompiledNessaExpr::Lambda(to, _, _, _) |
             CompiledNessaExpr::Call(to) |
             CompiledNessaExpr::Jump(to) => {
                 *to = positions[to];
@@ -1466,8 +1488,8 @@ impl NessaContext {
 
         macro_rules! remove_instruction {
             ($idx: expr) => {
-                let labels_to_remove = program[$idx].labels.clone();
-                program[$idx + 1].labels.extend(&labels_to_remove);
+                let labels_to_remove = program[$idx].debug_info.labels.clone();
+                program[$idx + 1].debug_info.labels.extend(&labels_to_remove);
                 program.remove($idx);
             };
         }
@@ -1510,7 +1532,7 @@ impl NessaContext {
                 macro_rules! is_not_ref {
                     ($idx: expr) => {
                         {
-                            let instr_t = &program[$idx].var_type;
+                            let instr_t = &program[$idx].debug_info.var_type;
 
                             instr_t.is_some() &&
                             !instr_t.as_ref().unwrap().is_ref()    
@@ -1614,8 +1636,8 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
@@ -1641,15 +1663,15 @@ impl NessaContext {
         compute_labels(program);
 
         for line in lines_to_remove.into_iter().rev() {
-            let labels_to_remove = program[line].labels.clone();
-            program[line + 1].labels.extend(&labels_to_remove);
+            let other = program[line].debug_info.clone();
+            program[line + 1].debug_info.merge_with(&other);
             program.remove(line);
         }
 
         reassign_labels(program);
     }
 
-    fn remove_jump_chains(&self, program: &mut Vec<NessaInstruction>) {
+    fn remove_jump_chains(&self, program: &mut [NessaInstruction]) {
         use CompiledNessaExpr::*;
 
         let mut changed = true;
@@ -1699,8 +1721,8 @@ impl NessaContext {
             
             macro_rules! remove_instruction {
                 ($idx: expr) => {
-                    let labels_to_remove = program[$idx].labels.clone();
-                    program[$idx + 1].labels.extend(&labels_to_remove);
+                    let other = program[$idx].debug_info.clone();
+                    program[$idx + 1].debug_info.merge_with(&other);
                     program.remove($idx);
                 };
             }
@@ -1716,9 +1738,8 @@ impl NessaContext {
                     };
                 }
                 
-                match [&program[i].instruction, &program[i + 1].instruction] {
-                    [Call(loc), Return] => { change_first!(Jump(*loc)); }
-                    _ => { }
+                if let [Call(loc), Return] = [&program[i].instruction, &program[i + 1].instruction] {
+                    change_first!(Jump(*loc));
                 }
             }
         }

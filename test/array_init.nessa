@@ -1,9 +1,11 @@
 syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
-    {#let res = arr<} {$type} {#>(} {#);\n}
-    {@i in $elems} {
-        {#res.push(} {$i} {#);\n}
+    let res = arr<$type>();
+
+    @elems.i {
+        res.push($elems.i);
     }
-    {#return *res;}
+    
+    return move(res);
 }
 
 // Now we can use this syntax

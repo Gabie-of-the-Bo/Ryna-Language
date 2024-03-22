@@ -379,4 +379,9 @@ mod integration {
     fn bf_embed() {
         module_test("test/modules/bf_embed");
     }
+
+    #[test]
+    fn match_test() {
+        module_test("test/modules/match_test");
+    }
 }

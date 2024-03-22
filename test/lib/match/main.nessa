@@ -1,0 +1,25 @@
+syntax expr match from "match" s Arg(<expr>, ex) [s] 
+    "{" 
+        [s] Arg([<ident> [s] ":" [s]], n) Arg(<type>, ts) [s] "=>" [s] Arg(<expr>, es) [s]
+        { [","] [s] Arg([<ident> [s] ":" [s]], n) Arg(<type>, ts) [s] "=>" [s] Arg(<expr>, es) [s] }
+        [","] [s] "_" [s] "=>" [s] Arg(<expr>, fe) [s]
+        [","] [s]
+    "}" 
+{
+    do {
+        @ts.i {
+            if is<$ts.i>($ex) {
+                {|
+                    // Create variable if there is a name
+                    if "$n.i".ref().len() != 0 {
+                        emit("let $n.i $ts.i = as<$ts.i>($ex);");
+                    \} 
+                |}
+                
+                return $es.i;
+            \}
+        }
+
+        return $fe;
+    \}
+}

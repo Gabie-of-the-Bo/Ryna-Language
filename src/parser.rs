@@ -715,7 +715,7 @@ impl NessaContext {
                 empty0,
                 tag("=>"),
                 empty0,
-                context("Invalid return on function type", cut(|input| self.type_parser_wrapper(input, false, or)))
+                |input| self.type_parser_wrapper(input, false, or),
             )),
             |(f, _, _, _, t)| Type::Function(Box::new(f), Box::new(t))
         )(input);

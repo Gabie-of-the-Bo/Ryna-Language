@@ -1,0 +1,13 @@
+import * from match;
+
+fn test(obj: *) -> Int {
+    return match *obj { 
+        n: Int => n * 2, 
+        s: String => s.len() * 2,
+        _ => 2
+    };
+}
+
+if test(10) != 20 || test(50) != 100 || test("Test") != 8 || test(0.5) != 2 {
+    panic("This should not happen");
+}

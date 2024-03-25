@@ -1698,7 +1698,8 @@ impl NessaContext{
 
     pub fn compile_lambda_expr(
         &mut self, 
-        line: &NessaExpr
+        line: &NessaExpr,
+        only_length: bool
     ) -> Result<(), NessaError> {
         return match line {
             NessaExpr::Break(..) |
@@ -1714,36 +1715,41 @@ impl NessaContext{
             NessaExpr::NaryOperatorDefinition(..) => Ok(()),
 
             NessaExpr::CompiledLambda(_, i, c, a, _, b) => {
-                self.compile_lambdas(b)?;
+                self.compile_lambdas(b, only_length)?;
 
-                self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code.len());
+                if only_length {
+                    self.lambda_positions.entry(*i).or_insert(1 + self.lambda_code_length);
+                    
+                    self.lambda_code_length += self.compiled_form_body_size(b, true)? + a.len() + c.len();
 
-                for (i, e) in c.iter().enumerate() {
-                    if i == 0 {
+                } else {
+                    for (i, e) in c.iter().enumerate() {
+                        if i == 0 {
+                            self.lambda_code.push(NessaInstruction::new_with_type(
+                                CompiledNessaExpr::StoreVariable(i), 
+                                "Lambda expression start".into(),
+                                self.infer_type(&e.1).unwrap()
+                            ));
+    
+                        } else {
+                            self.lambda_code.push(NessaInstruction::new_with_type(
+                                CompiledNessaExpr::StoreVariable(i), 
+                                String::new(),
+                                self.infer_type(&e.1).unwrap()
+                            ));
+                        }
+                    }
+    
+                    for (i, arg) in a.iter().enumerate() {
                         self.lambda_code.push(NessaInstruction::new_with_type(
-                            CompiledNessaExpr::StoreVariable(i), 
-                            "Lambda expression start".into(),
-                            self.infer_type(&e.1).unwrap()
-                        ));
-
-                    } else {
-                        self.lambda_code.push(NessaInstruction::new_with_type(
-                            CompiledNessaExpr::StoreVariable(i), 
+                            CompiledNessaExpr::StoreVariable(i + c.len()), 
                             String::new(),
-                            self.infer_type(&e.1).unwrap()
+                            arg.1.clone()
                         ));
                     }
+    
+                    self.lambda_code.extend(self.compiled_form_body(b)?);
                 }
-
-                for (i, arg) in a.iter().enumerate() {
-                    self.lambda_code.push(NessaInstruction::new_with_type(
-                        CompiledNessaExpr::StoreVariable(i + c.len()), 
-                        String::new(),
-                        arg.1.clone()
-                    ));
-                }
-
-                self.lambda_code.extend(self.compiled_form_body(b)?);
                 
                 Ok(())
             }
@@ -1751,11 +1757,11 @@ impl NessaContext{
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
             NessaExpr::Return(_, e) |
-            NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e),
+            NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, only_length),
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                self.compile_lambda_expr(a)?;
-                self.compile_lambda_expr(b)?;
+                self.compile_lambda_expr(a, only_length)?;
+                self.compile_lambda_expr(b, only_length)?;
 
                 Ok(())
             }
@@ -1763,23 +1769,23 @@ impl NessaContext{
             NessaExpr::CompiledFor(_, _, _, _, a, b) |
             NessaExpr::While(_, a, b) |
             NessaExpr::NaryOperation(_, _, _, a, b) => {
-                self.compile_lambda_expr(a)?;
-                self.compile_lambdas(b)?;
+                self.compile_lambda_expr(a, only_length)?;
+                self.compile_lambdas(b, only_length)?;
 
                 Ok(())
             }
 
             NessaExpr::If(_, ih, ib, ei, eb) => {
-                self.compile_lambda_expr(ih)?;
-                self.compile_lambdas(ib)?;
+                self.compile_lambda_expr(ih, only_length)?;
+                self.compile_lambdas(ib, only_length)?;
 
                 for (ei_h, ei_b) in ei {
-                    self.compile_lambda_expr(ei_h)?;
-                    self.compile_lambdas(ei_b)?;
+                    self.compile_lambda_expr(ei_h, only_length)?;
+                    self.compile_lambdas(ei_b, only_length)?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    self.compile_lambdas(eb_inner)?;                    
+                    self.compile_lambdas(eb_inner, only_length)?;                    
                 }
 
                 Ok(())
@@ -1787,7 +1793,7 @@ impl NessaContext{
 
             NessaExpr::DoBlock(_, args, _) |
             NessaExpr::Tuple(_, args) |
-            NessaExpr::FunctionCall(_, _, _, args) => self.compile_lambdas(args),
+            NessaExpr::FunctionCall(_, _, _, args) => self.compile_lambdas(args, only_length),
 
             NessaExpr::PrefixOperationDefinition(..) |
             NessaExpr::PostfixOperationDefinition(..) |
@@ -1803,16 +1809,17 @@ impl NessaContext{
 
     pub fn compile_lambdas(
         &mut self, 
-        lines: &Vec<NessaExpr>
+        lines: &Vec<NessaExpr>,
+        only_length: bool
     ) -> Result<(), NessaError> {
         for line in lines {
-            self.compile_lambda_expr(line)?;
+            self.compile_lambda_expr(line, only_length)?;
         }
 
         Ok(())
     }
 
-    pub fn compile_function_lambdas(&mut self, lines: &Vec<NessaExpr>) -> Result<(), NessaError> {
+    pub fn compile_function_lambdas(&mut self, lines: &Vec<NessaExpr>, only_length: bool) -> Result<(), NessaError> {
         for expr in lines {
             match expr {
                 NessaExpr::FunctionDefinition(_, id, _, a, _, _) => {
@@ -1823,7 +1830,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&and, self) {
                                 let sub_b = self.cache.templates.functions.get_checked(&(*id, ov.clone(), arg_types.clone())).unwrap();
-                                self.compile_lambdas(&sub_b)?;
+                                self.compile_lambdas(&sub_b, only_length)?;
                             }
                         }
                     }
@@ -1835,7 +1842,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(tp, self) {
                                 let sub_b = self.cache.templates.unary.get_checked(&(*id, ov.clone(), vec!(tp.clone()))).unwrap();
-                                self.compile_lambdas(&sub_b)?;
+                                self.compile_lambdas(&sub_b, only_length)?;
                             }
                         }
                     }
@@ -1848,7 +1855,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&and, self) {    
                                 let sub_b = self.cache.templates.binary.get_checked(&(*id, ov.clone(), vec!(t1.clone(), t2.clone()))).unwrap();
-                                self.compile_lambdas(&sub_b)?;
+                                self.compile_lambdas(&sub_b, only_length)?;
                             }
                         }
                     }
@@ -1864,7 +1871,7 @@ impl NessaContext{
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(&and, self) {
                                 let sub_b = self.cache.templates.nary.get_checked(&(*id, ov.clone(), arg_types.clone())).unwrap();
-                                self.compile_lambdas(&sub_b)?;
+                                self.compile_lambdas(&sub_b, only_length)?;
                             }
                         }
                     }
@@ -1878,10 +1885,10 @@ impl NessaContext{
     }
 
     pub fn compiled_form(&mut self, lines: &Vec<NessaExpr>) -> Result<Vec<NessaInstruction>, NessaError> {
-        self.compile_function_lambdas(lines)?;
-        self.compile_lambdas(lines)?;
+        self.compile_function_lambdas(lines, true)?;
+        self.compile_lambdas(lines, true)?;
 
-        let mut program_size = 1 + self.lambda_code.len();
+        let mut program_size = 1 + self.lambda_code_length;
 
         // Define function indexes
         for expr in lines {
@@ -2098,6 +2105,10 @@ impl NessaContext{
         }
 
         let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::Jump(program_size + self.lambda_code.len())));
+
+        self.compile_function_lambdas(lines, false)?;
+        self.compile_lambdas(lines, false)?;
+
         res.append(&mut self.lambda_code);
 
         // Define functions

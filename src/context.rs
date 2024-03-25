@@ -48,6 +48,7 @@ pub struct NessaContext {
     pub variables: Vec<Object>,
 
     pub lambdas: usize,
+    pub lambda_code_length: usize,
     pub lambda_code: Vec<NessaInstruction>,
     pub lambda_positions: HashMap<usize, usize>,
 

@@ -2302,7 +2302,7 @@ impl NessaContext{
         use NessaExpr::*;
 
         match expr {
-            Variable(..) | CompiledLambda(..) => {
+            Variable(..) => {
                 *root_counter += root as usize; // Add drop instruction
 
                 Ok(1)
@@ -2314,6 +2314,12 @@ impl NessaContext{
                 Ok(NessaContext::compiled_literal_size(obj))
             },
             
+            CompiledLambda(_, _, c, ..) => {
+                *root_counter += root as usize; // Add drop instruction
+                
+                Ok(1 + c.len())
+            }
+
             UnaryOperation(_, id, t, arg) => {
                 *root_counter += root as usize; // Add drop instruction
 

@@ -123,7 +123,7 @@ impl NessaContext {
                 NessaContext::ensured_return_check(expr)
             }
 
-            (NessaExpr::CompiledLambda(_, _, _, _, ret, body), None) => {
+            (NessaExpr::CompiledLambda(_, _, _, _, ret, body), _) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {

@@ -3566,6 +3566,8 @@ impl NessaContext{
         id_mapper: &mut IdMapper
     ) -> Result<(), NessaError> {
         match expr {
+            NessaExpr::Break(..) |
+            NessaExpr::Continue(..) |
             NessaExpr::Literal(..) |
             NessaExpr::NameReference(..) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |

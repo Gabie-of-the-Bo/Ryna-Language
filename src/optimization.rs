@@ -1101,7 +1101,6 @@ impl NessaContext {
             NessaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
 
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -1153,6 +1152,7 @@ impl NessaContext {
                 }
             },
             
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Break(_) |
             NessaExpr::Continue(_) |
@@ -1196,7 +1196,6 @@ impl NessaContext {
             NessaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
             
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
@@ -1248,6 +1247,7 @@ impl NessaContext {
                 }
             },
             
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
             NessaExpr::Break(_) |
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
@@ -1289,7 +1289,6 @@ impl NessaContext {
             NessaExpr::Return(_, e)  => self.remove_assignments_expr(e, assigned_exprs),
             
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
             NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => self.remove_assignments(exprs, assigned_exprs),
 
@@ -1322,7 +1321,8 @@ impl NessaContext {
                     self.remove_assignments(inner, assigned_exprs);
                 }
             },
-            
+
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Break(_) |
             NessaExpr::Continue(_) |

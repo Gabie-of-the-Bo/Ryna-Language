@@ -1948,6 +1948,7 @@ impl NessaContext {
                 self.no_template_check(e)
             }
 
+            NessaExpr::DoBlock(_, e, _) |
             NessaExpr::Tuple(_, e) => {
                 for i in e {
                     self.no_template_check(i)?;

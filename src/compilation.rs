@@ -1615,10 +1615,18 @@ impl NessaContext{
 
     pub fn subtitute_type_params_expr(expr: &mut NessaExpr, templates: &HashMap<usize, Type>) {
         match expr {
+            NessaExpr::Continue(..) |
+            NessaExpr::Break(..) |
             NessaExpr::Literal(..) |
             NessaExpr::NameReference(..) => {},
 
             NessaExpr::Tuple(_, e) => e.iter_mut().for_each(|i| NessaContext::subtitute_type_params_expr(i, templates)),
+
+            NessaExpr::DoBlock(_, e, t) => {
+                *t = t.sub_templates(templates);
+                
+                e.iter_mut().for_each(|i| NessaContext::subtitute_type_params_expr(i, templates))
+            },
 
             NessaExpr::Variable(_, _, _, t) => *t = t.sub_templates(templates),
 
@@ -2302,6 +2310,9 @@ impl NessaContext{
         use NessaExpr::*;
 
         match expr {
+            Break(..) |
+            Continue(..) => Ok(1),
+
             Variable(..) => {
                 *root_counter += root as usize; // Add drop instruction
 
@@ -3586,6 +3597,14 @@ impl NessaContext{
             }
 
             NessaExpr::Tuple(_, b) => {
+                for arg in b {
+                    self.map_nessa_expression(arg, ctx, id_mapper)?;
+                }
+            }
+
+            NessaExpr::DoBlock(l, b, t) => {
+                *t = t.map_type(self, ctx, id_mapper, l);
+
                 for arg in b {
                     self.map_nessa_expression(arg, ctx, id_mapper)?;
                 }

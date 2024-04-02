@@ -536,7 +536,7 @@ pub fn standard_ctx() -> NessaContext {
 
     load_optimized_opcodes(&mut ctx);
 
-    ctx.variables = vec!(Object::no_value(); 1000); // 1000 variables by default
+    ctx.variables = vec!(Object::no_value(); 10000); // 10000 variables by default
 
     ctx
 }

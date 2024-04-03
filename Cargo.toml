@@ -11,6 +11,17 @@ authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 license = "MIT"
 
+[profile.release] 
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+
+[profile.release-debug] 
+inherits = "release"
+codegen-units = 16
+lto = false
+panic = "unwind"
+
 [lib]
 name = "nessa"
 path = "src/lib.rs"

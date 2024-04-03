@@ -42,6 +42,8 @@ lazy_static = "1.4.0"
 git2 = "0.18.2"
 malachite = { version = "0.4.5", features = ["enable_serde", "random"] }
 derive_builder = "0.20.0"
+rpmalloc = "0.2.0"
+rclite = "0.2.4"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

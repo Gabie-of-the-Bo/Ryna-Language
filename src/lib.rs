@@ -1,3 +1,6 @@
+#[global_allocator]
+static ALLOC: rpmalloc::RpMalloc = rpmalloc::RpMalloc;
+
 extern crate nom;
 
 #[macro_use]
@@ -45,6 +48,9 @@ pub mod id_mapper;
 
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
+
+#[path = "structures/mut_cell.rs"]
+pub mod mut_cell;
 
 #[cfg(test)]
 mod integration {

@@ -184,7 +184,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             array.elements.push(v[1].clone());
 
             Ok(Object::empty())
@@ -199,7 +199,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             let size = v[1].get::<Integer>();
 
             if is_valid_index(&size) && array.elements.try_reserve_exact(to_usize(&size)).is_ok() {
@@ -297,11 +297,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
         T_0.to_mut(), 
         |_, _, v, _| {
-            let mut iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<NessaArrayIt>();
             let item;
 
             {
-                let mut reference = iterator.block.borrow_mut();
+                let reference = iterator.block.borrow_mut();
                 let array = &reference.mut_inner::<NessaArray>();
                 item = array.elements[iterator.pos].get_mut();
             }
@@ -318,11 +318,11 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_ref())))], 
         T_0.to_ref(), 
         |_, _, v, _| {
-            let mut iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<NessaArrayIt>();
             let item;
 
             {
-                let mut reference = iterator.block.borrow_mut();
+                let reference = iterator.block.borrow_mut();
                 let array = &reference.mut_inner::<NessaArray>();
                 item = array.elements[iterator.pos].get_ref();
             }
@@ -906,7 +906,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0, INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             let idx = &*v[2].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -930,7 +930,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0, INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             let idx = &*v[2].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -954,7 +954,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             let idx = &*v[1].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -978,7 +978,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut()], 
         Type::Empty, 
         |_, _, v, _| {
-            let mut array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<NessaArray>();
             array.elements.pop();
 
             Ok(Object::empty())

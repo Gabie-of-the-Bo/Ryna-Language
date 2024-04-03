@@ -11,6 +11,17 @@ authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 license = "MIT"
 
+[profile.release] 
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+
+[profile.release-debug] 
+inherits = "release"
+codegen-units = 16
+lto = false
+panic = "unwind"
+
 [lib]
 name = "nessa"
 path = "src/lib.rs"
@@ -42,6 +53,8 @@ lazy_static = "1.4.0"
 git2 = "0.18.2"
 malachite = { version = "0.4.5", features = ["enable_serde", "random"] }
 derive_builder = "0.20.0"
+rpmalloc = "0.2.0"
+rclite = "0.2.4"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

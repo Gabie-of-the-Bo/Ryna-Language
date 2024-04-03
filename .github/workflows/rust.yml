@@ -17,10 +17,10 @@ jobs:
       with:
         rust-version: stable
         components: clippy
-    - run: cargo build --release
+    - run: cargo build --profile release-debug
       
     - name: Run tests
-      run: cargo test --release
+      run: cargo test --profile release-debug
       
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1

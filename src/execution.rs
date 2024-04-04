@@ -368,6 +368,42 @@ impl NessaContext {
                 IdxMut => nessa_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
                 IdxMoveRef => nessa_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
+                StoreIntVariable(id, obj) => nessa_instruction!("StoreIntVariable", {
+                    let idx = call_stack.len() - 1;
+                    let l = &mut call_stack[idx].2;
+                    *l = (*l).max(*id as i32);
+                    
+                    self.variables[*id + offset] = Object::new(obj.clone());
+                    ip += 1;
+                }),
+
+                StoreStringVariable(id, obj) => nessa_instruction!("StoreStringVariable", {
+                    let idx = call_stack.len() - 1;
+                    let l = &mut call_stack[idx].2;
+                    *l = (*l).max(*id as i32);
+                    
+                    self.variables[*id + offset] = Object::new(obj.clone());
+                    ip += 1;
+                }),
+
+                StoreBoolVariable(id, obj) => nessa_instruction!("StoreBoolVariable", {
+                    let idx = call_stack.len() - 1;
+                    let l = &mut call_stack[idx].2;
+                    *l = (*l).max(*id as i32);
+                    
+                    self.variables[*id + offset] = Object::new(*obj);
+                    ip += 1;
+                }),
+
+                StoreFloatVariable(id, obj) => nessa_instruction!("StoreFloatVariable", {
+                    let idx = call_stack.len() - 1;
+                    let l = &mut call_stack[idx].2;
+                    *l = (*l).max(*id as i32);
+                    
+                    self.variables[*id + offset] = Object::new(*obj);
+                    ip += 1;
+                }),
+                
                 StoreVariable(id) => nessa_instruction!("StoreVariable", {
                     let idx = call_stack.len() - 1;
                     let l = &mut call_stack[idx].2;
@@ -379,6 +415,11 @@ impl NessaContext {
 
                 GetVariable(id) => nessa_instruction!("GetVariable", {
                     stack.push(self.variables[*id + offset].get_mut());
+                    ip += 1;
+                }),
+
+                CloneVariable(id) => nessa_instruction!("CloneVariable", {
+                    stack.push(self.variables[*id + offset].clone());
                     ip += 1;
                 }),
 
@@ -407,6 +448,28 @@ impl NessaContext {
                     let b = stack.pop().unwrap();
 
                     if let Err(msg) = a.assign(b, self) {
+                        return Err(NessaError::execution_error(msg));
+                    }
+
+                    ip += 1;
+                }),
+
+                AssignToVar(id) => nessa_instruction!("AssignToVar", {
+                    let var = &self.variables[*id + offset];
+                    let value = stack.pop().unwrap();
+
+                    if let Err(msg) = var.assign_direct(value, self) {
+                        return Err(NessaError::execution_error(msg));
+                    }
+
+                    ip += 1;
+                }),
+
+                AssignToVarDirect(id) => nessa_instruction!("AssignToVarDirect", {
+                    let var = &self.variables[*id + offset];
+                    let value = stack.pop().unwrap();
+
+                    if let Err(msg) = var.assign(value, self) {
                         return Err(NessaError::execution_error(msg));
                     }
 

@@ -367,7 +367,10 @@ impl Object {
     }
 
     pub fn drop_contents(&self) {
-        self.move_contents();
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) => std::mem::take(&mut *i.borrow_mut()),
+            _ => unreachable!()
+        };
     }
     
     pub fn assign(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {

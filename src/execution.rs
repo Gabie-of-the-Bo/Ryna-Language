@@ -530,6 +530,11 @@ impl NessaContext {
 
                 Return => nessa_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
+                    let idx = call_stack.len() - 1;
+                    let l = call_stack[idx].2.max(0) as usize;
+
+                    // Clear context variables
+                    self.variables[offset..(offset + l)].fill(Object::no_value());
 
                     ip = prev_ip;
                     offset = prev_offset;

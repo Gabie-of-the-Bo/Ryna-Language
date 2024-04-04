@@ -1,5 +1,7 @@
+use mimalloc::MiMalloc;
+
 #[global_allocator]
-static ALLOC: rpmalloc::RpMalloc = rpmalloc::RpMalloc;
+static GLOBAL: MiMalloc = MiMalloc;
 
 extern crate nom;
 

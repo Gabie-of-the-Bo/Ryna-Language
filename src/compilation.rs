@@ -712,13 +712,20 @@ pub enum CompiledNessaExpr {
 
     IdxMove, IdxRef, IdxMut, IdxMoveRef,
 
+    StoreIntVariable(usize, Integer),
+    StoreBoolVariable(usize, bool),
+    StoreFloatVariable(usize, f64),
+    StoreStringVariable(usize, String),
+
     StoreVariable(usize),
     GetVariable(usize),
+    CloneVariable(usize),
     RefVariable(usize),
     DerefVariable(usize),
     CopyVariable(usize),
     MoveVariable(usize),
     Assign,
+    AssignToVar(usize), AssignToVarDirect(usize),
     Drop,
 
     Jump(usize),
@@ -2596,8 +2603,19 @@ impl NessaContext{
                 Ok(res)
             }
 
-            NessaExpr::Variable(l, id, _, _) => {
-                let mut res = vec!(NessaInstruction::from(CompiledNessaExpr::GetVariable(*id)).set_loc(l));
+            NessaExpr::Variable(l, id, _, t) => {
+                let mut res = vec!(
+                    if t.is_ref() {
+                        NessaInstruction::new_with_type(
+                            CompiledNessaExpr::CloneVariable(*id), "".into(), t.clone()
+                        ).set_loc(l)
+    
+                    } else {
+                        NessaInstruction::new_with_type(
+                            CompiledNessaExpr::GetVariable(*id), "".into(), t.clone()
+                        ).set_loc(l)    
+                    }
+                );
                 
                 if root { // Drop if the return value is unused
                     res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
@@ -2972,7 +2990,11 @@ impl NessaContext{
 
                     translated_opcode = opcode.clone();
 
-                    res.push(NessaInstruction::from(opcode).set_loc(l));
+                    res.push(NessaInstruction::new_with_type(
+                        opcode,
+                        "".into(),
+                        self.functions[*id].overloads[ov_id].2.clone()
+                    ).set_loc(l));
 
                 } else {
                     res.push(NessaInstruction::from(CompiledNessaExpr::NativeFunctionCall(*id, ov_id, t.clone())).set_loc(l));

@@ -1557,12 +1557,20 @@ impl NessaContext {
                         change_first!(BinaryOperatorCallNoRet(*op_id, *ov_id, type_args.clone()));
                     }
 
-                    [GetVariable(id), Demut] => { change_first!(RefVariable(*id)); },
-                    [GetVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
+                    [Int(obj), StoreVariable(id)] => { change_second!(StoreIntVariable(*id, obj.clone())); },
+                    [Str(obj), StoreVariable(id)] => { change_second!(StoreStringVariable(*id, obj.clone())); },
+                    [Float(obj), StoreVariable(id)] => { change_second!(StoreFloatVariable(*id, *obj)); },
+                    [Bool(obj), StoreVariable(id)] => { change_second!(StoreBoolVariable(*id, *obj)); },
+
+                    [GetVariable(id) | CloneVariable(id), Assign] if is_not_ref!(i) => { change_first!(AssignToVar(*id)); },
+                    [GetVariable(id) | CloneVariable(id), Assign] => { change_first!(AssignToVarDirect(*id)); },
+
+                    [GetVariable(id) | CloneVariable(id), Demut] => { change_first!(RefVariable(*id)); },
+                    [GetVariable(id) | CloneVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
                     [RefVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
-                    [GetVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
+                    [GetVariable(id) | CloneVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
                     [RefVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
-                    [GetVariable(id), Move] => { change_first!(MoveVariable(*id)); },
+                    [GetVariable(id) | CloneVariable(id), Move] => { change_first!(MoveVariable(*id)); },
                     
                     [AttributeMut(id), Demut] => { change_first!(AttributeRef(*id)); },
                     [AttributeMut(id), Copy] => { change_first!(AttributeCopy(*id)); },

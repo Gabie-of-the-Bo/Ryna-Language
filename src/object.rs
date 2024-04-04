@@ -212,10 +212,14 @@ impl ObjectBlock {
         unreachable!();
     }
 
+    pub fn assign_ref(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
+        self.dereference().borrow_mut().assign(other, ctx)
+    }
+
     pub fn assign(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
         use ObjectBlock::*;
 
-        match (&mut *self.dereference().borrow_mut(), other) {
+        match (self, other) {
             (Int(a), Int(b)) => *a = b,
             (Float(a), Float(b)) => *a = b,
             (Str(a), Str(b)) => *a = b,
@@ -363,10 +367,20 @@ impl Object {
     }
 
     pub fn drop_contents(&self) {
-        self.move_contents();
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) => std::mem::take(&mut *i.borrow_mut()),
+            _ => unreachable!()
+        };
     }
     
     pub fn assign(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
+        match Rc::try_unwrap(other_obj.inner) {
+            Ok(inner) => self.inner.borrow_mut().assign_ref(inner.take(), ctx),
+            Err(inner) => self.inner.borrow_mut().assign_ref(inner.borrow().clone(), ctx)
+        }
+    }
+    
+    pub fn assign_direct(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
         match Rc::try_unwrap(other_obj.inner) {
             Ok(inner) => self.inner.borrow_mut().assign(inner.take(), ctx),
             Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone(), ctx)

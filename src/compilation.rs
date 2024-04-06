@@ -60,6 +60,7 @@ impl NessaError {
         NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, fragment, suggestions }
     }
 
+    #[cold]
     pub fn compiler_error(message: String, location: &Location, suggestions: Vec<String>) -> Self {
         NessaError { 
             err_type: "Compilation error".into(), 
@@ -72,6 +73,7 @@ impl NessaError {
         }
     }
 
+    #[cold]
     pub fn execution_error(message: String) -> Self {
         NessaError { 
             err_type: "Execution error".into(), 
@@ -84,6 +86,7 @@ impl NessaError {
         }
     }
 
+    #[cold]
     pub fn module_error(message: String) -> Self {
         NessaError { 
             err_type: "Module error".into(), 
@@ -96,6 +99,7 @@ impl NessaError {
         }
     }
 
+    #[cold]
     pub fn emit(&self) -> ! {
         if self.has_location {
             let mut frag = self.fragment.as_str();

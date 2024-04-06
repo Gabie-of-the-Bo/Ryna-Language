@@ -1,0 +1,6 @@
+// Too many stack frames (max. of 100000)
+fn test() -> Int {
+    return 1 + test();
+}
+
+test();

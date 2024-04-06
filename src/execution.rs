@@ -128,6 +128,8 @@ impl NessaContext {
     pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr], debug_info: &[DebugInfo]) -> Result<ExecutionInfo, NessaError> {
         use CompiledNessaExpr::*;
 
+        const MAX_STACK_FRAMES: usize = 100000;
+
         let mut ip: i32 = 0;
         let mut offset: usize = 0;
         
@@ -221,6 +223,54 @@ impl NessaContext {
             };
         }
 
+        macro_rules! check_call_stack_limit {
+            () => {
+                if call_stack.len() > MAX_STACK_FRAMES {
+                    return Err(NessaError::execution_error(format!("Too many stack frames (max. of {})", MAX_STACK_FRAMES)));
+                }
+            }
+        }
+
+        macro_rules! store_variable {
+            ($id: expr, $value: expr) => {
+                if $id >= self.variables.len() {
+                    self.variables.resize($id + 1, Object::no_value());
+                }
+
+                // SAFETY: this is safe because the previous check makes sure that the index
+                // exists inside self.variables, making this unsafe access an optimization
+                unsafe { *self.variables.get_unchecked_mut($id) = $value; }
+            }
+        }
+
+        macro_rules! get_variable {
+            ($id: expr) => {
+                // SAFETY: this is safe as long as an storage is made before the access, which
+                // is guaranteed by the Nessa compiler
+                unsafe { self.variables.get_unchecked($id) }
+            }
+        }
+
+        macro_rules! update_max_var {
+            ($id: expr) => {
+                // SAFETY: this is safe because call_stack will never be empty
+                let idx = call_stack.len() - 1;
+                let l = unsafe { &mut call_stack.get_unchecked_mut(idx).2 };
+                *l = (*l).max($id as i32);
+            }
+        }
+
+        macro_rules! add_stack_frame {
+            ($new_ip: expr) => {
+                // SAFETY: this is safe because call_stack will never be empty
+                call_stack.push((ip + 1, offset, -1));
+                ip = $new_ip;
+                unsafe { offset += (call_stack.get_unchecked(call_stack.len() - 2).2 + 1) as usize };
+
+                check_call_stack_limit!();
+            }
+        }
+
         macro_rules! lambda_call {
             ($lambda_ref: ident) => {
                 let arg = stack.pop().unwrap();
@@ -228,9 +278,7 @@ impl NessaContext {
 
                 stack.extend(f.captures.iter().rev().cloned());
                 
-                call_stack.push((ip + 1, offset, -1));
-                ip = f.loc as i32;
-                offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
+                add_stack_frame!(f.loc as i32);
             };
         }
 
@@ -369,77 +417,62 @@ impl NessaContext {
                 IdxMoveRef => nessa_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
                 StoreIntVariable(id, obj) => nessa_instruction!("StoreIntVariable", {
-                    let idx = call_stack.len() - 1;
-                    let l = &mut call_stack[idx].2;
-                    *l = (*l).max(*id as i32);
-                    
-                    self.variables[*id + offset] = Object::new(obj.clone());
+                    update_max_var!(*id);
+                    store_variable!(*id + offset, Object::new(obj.clone()));
                     ip += 1;
                 }),
 
                 StoreStringVariable(id, obj) => nessa_instruction!("StoreStringVariable", {
-                    let idx = call_stack.len() - 1;
-                    let l = &mut call_stack[idx].2;
-                    *l = (*l).max(*id as i32);
-                    
-                    self.variables[*id + offset] = Object::new(obj.clone());
+                    update_max_var!(*id);
+                    store_variable!(*id + offset, Object::new(obj.clone()));
                     ip += 1;
                 }),
 
                 StoreBoolVariable(id, obj) => nessa_instruction!("StoreBoolVariable", {
-                    let idx = call_stack.len() - 1;
-                    let l = &mut call_stack[idx].2;
-                    *l = (*l).max(*id as i32);
-                    
-                    self.variables[*id + offset] = Object::new(*obj);
+                    update_max_var!(*id);
+                    store_variable!(*id + offset, Object::new(*obj));
                     ip += 1;
                 }),
 
                 StoreFloatVariable(id, obj) => nessa_instruction!("StoreFloatVariable", {
-                    let idx = call_stack.len() - 1;
-                    let l = &mut call_stack[idx].2;
-                    *l = (*l).max(*id as i32);
-                    
-                    self.variables[*id + offset] = Object::new(*obj);
+                    update_max_var!(*id);
+                    store_variable!(*id + offset, Object::new(*obj));
                     ip += 1;
                 }),
                 
                 StoreVariable(id) => nessa_instruction!("StoreVariable", {
-                    let idx = call_stack.len() - 1;
-                    let l = &mut call_stack[idx].2;
-                    *l = (*l).max(*id as i32);
-                    
-                    self.variables[*id + offset] = stack.pop().unwrap();
+                    update_max_var!(*id);
+                    store_variable!(*id + offset, stack.pop().unwrap());
                     ip += 1;
                 }),
 
                 GetVariable(id) => nessa_instruction!("GetVariable", {
-                    stack.push(self.variables[*id + offset].get_mut());
+                    stack.push(get_variable!(*id + offset).get_mut());
                     ip += 1;
                 }),
 
                 CloneVariable(id) => nessa_instruction!("CloneVariable", {
-                    stack.push(self.variables[*id + offset].clone());
+                    stack.push(get_variable!(*id + offset).clone());
                     ip += 1;
                 }),
 
                 RefVariable(id) => nessa_instruction!("RefVariable", {
-                    stack.push(self.variables[*id + offset].get_ref());
+                    stack.push(get_variable!(*id + offset).get_ref());
                     ip += 1;
                 }),
 
                 DerefVariable(id) => nessa_instruction!("DerefVariable", {
-                    stack.push(self.variables[*id + offset].deref_if_ref());
+                    stack.push(get_variable!(*id + offset).deref_if_ref());
                     ip += 1;
                 }),
 
                 CopyVariable(id) => nessa_instruction!("CopyVariable", {
-                    stack.push(self.variables[*id + offset].deref_deep_clone());
+                    stack.push(get_variable!(*id + offset).deref_deep_clone());
                     ip += 1;
                 }),
 
                 MoveVariable(id) => nessa_instruction!("MoveVariable", {
-                    stack.push(self.variables[*id + offset].move_contents_if_ref());
+                    stack.push(get_variable!(*id + offset).move_contents_if_ref());
                     ip += 1;
                 }),
 
@@ -455,7 +488,7 @@ impl NessaContext {
                 }),
 
                 AssignToVar(id) => nessa_instruction!("AssignToVar", {
-                    let var = &self.variables[*id + offset];
+                    let var = &get_variable!(*id + offset);
                     let value = stack.pop().unwrap();
 
                     if let Err(msg) = var.assign_direct(value, self) {
@@ -466,7 +499,7 @@ impl NessaContext {
                 }),
 
                 AssignToVarDirect(id) => nessa_instruction!("AssignToVarDirect", {
-                    let var = &self.variables[*id + offset];
+                    let var = &get_variable!(*id + offset);
                     let value = stack.pop().unwrap();
 
                     if let Err(msg) = var.assign(value, self) {
@@ -519,12 +552,7 @@ impl NessaContext {
                     }
                 }),
 
-                Call(to) => nessa_instruction!("Call", {
-                    call_stack.push((ip + 1, offset, -1));
-                    ip = *to as i32;
-                    offset += (call_stack[call_stack.len() - 2].2 + 1) as usize;
-                }),
-
+                Call(to) => nessa_instruction!("Call", { add_stack_frame!(*to as i32); }),
                 LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => nessa_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 

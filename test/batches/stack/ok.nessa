@@ -1,0 +1,9 @@
+fn test(i: Int) -> Int {
+    if i == 0 {
+        return 0;
+    }
+
+    return 1 + test(i - 1);
+}
+
+test(10000);

@@ -319,6 +319,11 @@ mod integration {
     }
 
     #[test]
+    fn stack() {
+        integration_test_batch("test/batches/stack/*.nessa");
+    }
+
+    #[test]
     fn sum() {
         module_test("test/modules/sum");
     }

@@ -22,11 +22,14 @@ impl<T: Clone + PartialEq + Default> MutCell<T> {
         MutCell { inner: UnsafeCell::new(obj) }
     }
 
+    #[allow(clippy::should_implement_trait)]
     #[inline(always)]
     pub fn borrow(&self) -> &T {
         unsafe { &*self.inner.get() }
     }
 
+    #[allow(clippy::should_implement_trait)]
+    #[allow(clippy::mut_from_ref)]
     #[inline(always)]
     pub fn borrow_mut(&self) -> &mut T {
         unsafe { &mut *self.inner.get() }

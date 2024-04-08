@@ -1,7 +1,7 @@
 use std::collections::{ HashMap, HashSet };
 use std::fs;
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use colored::Colorize;
 use glob::glob;
@@ -233,7 +233,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     };
 
     let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
-    let imports = nessa_module_imports_parser(Span::new(&main)).unwrap().1;
+    let imports = nessa_module_imports_parser(Span::new(&main), Arc::new(config_yml.module_name.clone())).unwrap().1;
 
     let mut local_files = glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str())
         .expect("Error while reading module path")
@@ -271,7 +271,9 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
         let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
 
         if import_name != "/main" {
-            config_yml.modules.entry(import_name.clone()).or_insert(ModuleInfo {
+            let parent_module_name = config_yml.module_name.clone();
+
+            config_yml.modules.entry(format!("{}{}", parent_module_name, import_name)).or_insert(ModuleInfo {
                 path: full_import_path.clone(),
                 version: config_yml.version.clone(),
                 is_local: true,
@@ -286,7 +288,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     for (module_name, info) in config_yml.modules.iter_mut() {
         if info.is_local {
             let local_main = fs::read_to_string(&info.path).expect("Error while reading main file");
-            let local_file_imports = nessa_module_imports_parser(Span::new(&local_main)).unwrap().1;
+            let local_file_imports = nessa_module_imports_parser(Span::new(&local_main), Arc::new(config_yml.module_name.clone())).unwrap().1;
 
             local_imports.entry(module_name.clone()).or_insert((local_file_imports.clone(), local_main));
 
@@ -299,7 +301,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
             info.dependencies = local_file_imports.keys()
                                                   .map(|i| (i.clone(), all_deps.get(i).unwrap().clone()))
                                                   .collect();
-
+            
             modules.entry((module_name.clone(), config_yml.version.clone())).or_insert(info.clone());
         }
     }

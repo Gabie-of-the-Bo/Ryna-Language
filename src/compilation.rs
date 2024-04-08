@@ -4067,7 +4067,7 @@ impl NessaContext{
     ) -> Result<(Vec<NessaExpr>, Vec<String>), NessaError> {
         let mut res = vec!();
         let mut source = vec!();
-        let mut imports = nessa_module_imports_parser(Span::new(code)).unwrap().1; // TODO: should cache this
+        let mut imports = nessa_module_imports_parser(Span::new(code), self.module_name.clone()).unwrap().1; // TODO: should cache this
 
         Self::cascade_imports(&mut imports, modules);
         Self::cascade_imports_inner(&mut imports, modules);

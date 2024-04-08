@@ -353,7 +353,7 @@ pub fn string_parser(input: Span<'_>) -> PResult<'_, String> {
     )(input)
 }
 
-fn parse_import_location(input: Span<'_>) -> PResult<String> {
+fn parse_import_location(input: Span<'_>, module: Arc<String>) -> PResult<String> {
     alt((
         identifier_parser,
         map(
@@ -361,12 +361,16 @@ fn parse_import_location(input: Span<'_>) -> PResult<String> {
                 tag("/"),
                 separated_list1(tag("/"), identifier_parser)
             ),
-            |s| format!("/{}", s.join("/"))
+            |s| format!(
+                "{}/{}", 
+                module.split("/").next().unwrap(), // Append parent module's name
+                s.join("/")
+            )
         )
     ))(input)
 }
 
-fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
+fn module_import_parser(input: Span<'_>, module: Arc<String>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
     map(
         tuple((
             tag("import"),
@@ -431,7 +435,7 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
             )),
             context("Expected 'from' after import type", cut(tag("from"))),
             empty1,
-            context("Expected identifier after 'from' in import statement", cut(parse_import_location)),
+            context("Expected identifier after 'from' in import statement", cut(|i| parse_import_location(i, module.clone()))),
             empty0,
             context("Expected ';' at the end of import statement", cut(tag(";")))
         )),
@@ -439,19 +443,19 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
     )(input)
 }
 
-pub fn nessa_info_parser(input: Span<'_>) -> PResult<'_, ()> {
+pub fn nessa_info_parser(input: Span<'_>, module: Arc<String>) -> PResult<'_, ()> {
     delimited(
         empty0,
-        value((), module_import_parser),
+        value((), |i| module_import_parser(i, module.clone())),
         empty0
     )(input)
 }
 
-pub fn nessa_module_imports_parser(mut input: Span<'_>) -> PResult<'_, ImportMap> {
+pub fn nessa_module_imports_parser(mut input: Span<'_>, module: Arc<String>) -> PResult<'_, ImportMap> {
     let mut ops: HashMap<String, HashMap<ImportType, HashSet<String>>> = HashMap::new();
 
     while input.len() > 0 {
-        if let Ok((i, (n, t, v))) = module_import_parser(input) {
+        if let Ok((i, (n, t, v))) = module_import_parser(input, module.clone()) {
             input = i;
             ops.entry(n).or_default().entry(t).or_default().extend(v);
         
@@ -2900,7 +2904,7 @@ impl NessaContext {
     }
 
     pub fn nessa_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        while let Ok((i, _)) = nessa_info_parser(input) {
+        while let Ok((i, _)) = nessa_info_parser(input, self.module_name.clone()) {
             input = i;
         }
 
@@ -3139,18 +3143,21 @@ mod tests {
         let import_prefix_str = "import prefix op \"**\" from module;";
         let import_all_classes_str = "import class * from module;";
         let import_everything_str = "import * from module;";
+        let import_everything_local_str = "import * from /module;";
 
-        let (_, import_fns) = module_import_parser(Span::new(import_fns_str)).unwrap();
-        let (_, import_fns_2) = module_import_parser(Span::new(import_fns_2_str)).unwrap();
-        let (_, import_prefix) = module_import_parser(Span::new(import_prefix_str)).unwrap();
-        let (_, import_all_classes) = module_import_parser(Span::new(import_all_classes_str)).unwrap();
-        let (_, import_everything) = module_import_parser(Span::new(import_everything_str)).unwrap();
+        let (_, import_fns) = module_import_parser(Span::new(import_fns_str), Arc::new("test".into())).unwrap();
+        let (_, import_fns_2) = module_import_parser(Span::new(import_fns_2_str), Arc::new("test".into())).unwrap();
+        let (_, import_prefix) = module_import_parser(Span::new(import_prefix_str), Arc::new("test".into())).unwrap();
+        let (_, import_all_classes) = module_import_parser(Span::new(import_all_classes_str), Arc::new("test".into())).unwrap();
+        let (_, import_everything) = module_import_parser(Span::new(import_everything_str), Arc::new("test".into())).unwrap();
+        let (_, import_everything_local) = module_import_parser(Span::new(import_everything_local_str), Arc::new("test/test2".into())).unwrap();
 
         assert_eq!(import_fns, ("module".into(), ImportType::Fn, ["test".into()].iter().cloned().collect()));
         assert_eq!(import_fns_2, ("module".into(), ImportType::Fn, ["test".into(), "test2".into()].iter().cloned().collect()));
         assert_eq!(import_prefix, ("module".into(), ImportType::Prefix, ["**".into()].iter().cloned().collect()));
         assert_eq!(import_all_classes, ("module".into(), ImportType::Class, ["*".into()].iter().cloned().collect()));
         assert_eq!(import_everything, ("module".into(), ImportType::All, ["*".into()].iter().cloned().collect()));
+        assert_eq!(import_everything_local, ("test/module".into(), ImportType::All, ["*".into()].iter().cloned().collect()));
     }
 
     #[test]

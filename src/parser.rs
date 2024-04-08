@@ -363,7 +363,7 @@ fn parse_import_location(input: Span<'_>, module: Arc<String>) -> PResult<String
             ),
             |s| format!(
                 "{}/{}", 
-                module.split("/").next().unwrap(), // Append parent module's name
+                module.split('/').next().unwrap(), // Append parent module's name
                 s.join("/")
             )
         )

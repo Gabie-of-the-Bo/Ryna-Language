@@ -322,6 +322,7 @@ impl Object {
         Get::<T>::get(self.inner.borrow())
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn deref<T>(&self) -> &mut T where ObjectBlock: Deref<T> + GetMut<T> {
         Deref::<T>::deref(self.inner.borrow())
     }
@@ -400,7 +401,7 @@ impl Object {
     }
 
     pub fn get_ref(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => ObjectBlock::Ref(i.clone()).to_obj(),
 
@@ -409,7 +410,7 @@ impl Object {
     }
 
     pub fn get_mut(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => ObjectBlock::Mut(i.clone()).to_obj(),
 
@@ -430,7 +431,7 @@ impl Object {
     }
 
     pub fn deref_if_ref(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => Object::from_inner(i.clone()),
 
@@ -439,7 +440,7 @@ impl Object {
     }
 
     pub fn deref_deep_clone(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => i.borrow().deep_clone().to_obj(),
 
@@ -460,7 +461,7 @@ impl Object {
     }
 
     pub fn deref_obj(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(r) | ObjectBlock::Mut(r) => Object::from_inner(r.clone()),
             _ => unreachable!()
         };
@@ -480,6 +481,7 @@ pub trait GetMut<T> {
 }
 
 pub trait Deref<T> {
+    #[allow(clippy::mut_from_ref)]
     fn deref(&self) -> &mut T;
 }
 

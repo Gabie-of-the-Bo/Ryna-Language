@@ -301,8 +301,6 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
             info.dependencies = local_file_imports.keys()
                                                   .map(|i| (i.clone(), all_deps.get(i).unwrap().clone()))
                                                   .collect();
-
-            println!("MOD {}", module_name);
             
             modules.entry((module_name.clone(), config_yml.version.clone())).or_insert(info.clone());
         }

@@ -18,12 +18,29 @@ impl ProfSpan {
     }
 
     pub fn end(&self) {
+        let elapsed = self.start.elapsed().as_nanos();
+
         let mut p_entry = PROFILER.lock().unwrap();
         let entry_data = p_entry.entry(self.name).or_insert((0, 0));
 
-        entry_data.0 += self.start.elapsed().as_nanos();
+        entry_data.0 += elapsed;
         entry_data.1 += 1;
     }
+}
+
+#[macro_export]
+macro_rules! profile {
+    ($name: expr, $expr: expr) => {
+        {
+            let span = $crate::profiling::ProfSpan::new($name);
+
+            let res = $expr;
+    
+            span.end();
+    
+            res    
+        }
+    };
 }
 
 #[derive(Tabled)]

@@ -573,7 +573,7 @@ impl NessaContext {
                 self.lambdas += 1;
             },
 
-            NessaExpr::FunctionDefinition(l, _, tm, a, r, b) => {
+            NessaExpr::FunctionDefinition(l, _, _, tm, a, r, b) => {
                 if tm.is_empty() {
                     self.compile(b, a)?;
                 }
@@ -1154,7 +1154,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::FunctionDefinition(_, id, _, args, ret, b) => {
+            NessaExpr::FunctionDefinition(_, _, id, _, args, ret, b) => {
                 self.get_inner_dep_graph_body(b, &(ImportType::Fn, *id), deps);
 
                 for (_, t) in args {
@@ -1458,7 +1458,7 @@ impl NessaContext{
         changed: &mut bool
     ) -> Result<(), NessaError> {
         return match expr {
-            NessaExpr::FunctionDefinition(_, id, _, a, r, b) => {
+            NessaExpr::FunctionDefinition(_, _, id, _, a, r, b) => {
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                 let and = Type::And(arg_types.clone());
 
@@ -1841,7 +1841,7 @@ impl NessaContext{
     pub fn compile_function_lambdas(&mut self, lines: &Vec<NessaExpr>, only_length: bool) -> Result<(), NessaError> {
         for expr in lines {
             match expr {
-                NessaExpr::FunctionDefinition(_, id, _, a, _, _) => {
+                NessaExpr::FunctionDefinition(_, _, id, _, a, _, _) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                     let and = Type::And(arg_types.clone());
 
@@ -1912,7 +1912,7 @@ impl NessaContext{
         // Define function indexes
         for expr in lines {
             match expr {
-                NessaExpr::FunctionDefinition(_, id, t, a, ret, _) => {
+                NessaExpr::FunctionDefinition(_, _, id, t, a, ret, _) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                     let and = Type::And(arg_types.clone());
 
@@ -2133,7 +2133,7 @@ impl NessaContext{
         // Define functions
         for expr in lines {
             match expr {
-                NessaExpr::FunctionDefinition(_, id, _, a, r, _) => {
+                NessaExpr::FunctionDefinition(_, _, id, _, a, r, _) => {
                     let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                     let and = Type::And(arg_types.clone());
 
@@ -3376,7 +3376,7 @@ impl NessaContext{
 
     pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), NessaError> {
         for i in lines {
-            if let NessaExpr::FunctionDefinition(l, id, t, a, r, _)  = i {
+            if let NessaExpr::FunctionDefinition(l, _, id, t, a, r, _)  = i {
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
                 let err = self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None);
 
@@ -3824,7 +3824,7 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::FunctionDefinition(l, id, t, a, r, b) => {
+                NessaExpr::FunctionDefinition(l, an, id, t, a, r, b) => {
                     let f_name = &ctx.functions[*id].name;
                     let fn_id = self.map_nessa_function(ctx, *id, &mut id_mapper, l)?;
 
@@ -3846,7 +3846,7 @@ impl NessaContext{
                         }
 
                         // Add the mapped function to the list of new expressions
-                        res.push(NessaExpr::FunctionDefinition(l.clone(), fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
+                        res.push(NessaExpr::FunctionDefinition(l.clone(), an.clone(), fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
                         new_source.push(module.clone());
                     }
                 }

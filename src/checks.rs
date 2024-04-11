@@ -25,7 +25,7 @@ impl NessaContext {
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
             NessaExpr::CompiledLambda(l, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
+            NessaExpr::FunctionDefinition(l, _, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
 
             NessaExpr::DoBlock(l, body, _) => NessaContext::ensured_return_check_body(body, l, "Do block"),
 
@@ -107,7 +107,7 @@ impl NessaContext {
                 }
             },
 
-            (NessaExpr::FunctionDefinition(_, _, t, _, ret, body), None) |
+            (NessaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
             (NessaExpr::PrefixOperationDefinition(_, _, t, _, _, ret, body), None) |
             (NessaExpr::PostfixOperationDefinition(_, _, t, _, _, ret, body), None) |
             (NessaExpr::BinaryOperationDefinition(_, _, t, _, _, ret, body), None) |
@@ -419,7 +419,7 @@ impl NessaContext {
             NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
             NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
             NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, _, t, _, _, b) => {
+            NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.ambiguity_check(line)?;
@@ -598,7 +598,7 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(_, _, tm, _, _, b) => {
+            NessaExpr::FunctionDefinition(_, _, _, tm, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -856,7 +856,7 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(l, _, tm, args, ret, b) => {
+            NessaExpr::FunctionDefinition(l, _, _, tm, args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -1364,7 +1364,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::FunctionDefinition(l, _, t, args, r, b) => {
+            NessaExpr::FunctionDefinition(l, _, _, t, args, r, b) => {
                 self.check_type_well_formed(r, l)?;
 
                 for (_, t) in args {
@@ -2123,7 +2123,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::FunctionDefinition(l, _, t, a, _, _) => {
+            NessaExpr::FunctionDefinition(l, _, _, t, a, _, _) => {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {

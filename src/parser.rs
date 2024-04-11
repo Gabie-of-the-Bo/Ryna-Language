@@ -24,6 +24,7 @@ use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
 use malachite::Integer;
 
+use crate::annotations::{parse_annotation, Annotation};
 use crate::config::ImportMap;
 use crate::functions::Function;
 use crate::interfaces::{InterfaceConstraint, Interface};
@@ -214,7 +215,7 @@ pub enum NessaExpr {
 
     VariableDefinition(Location, String, Type, Box<NessaExpr>),
     VariableAssignment(Location, String, Box<NessaExpr>),
-    FunctionDefinition(Location, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    FunctionDefinition(Location, Vec<Annotation>, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(Location, String, usize),
     PostfixOperatorDefinition(Location, String, usize),
     BinaryOperatorDefinition(Location, String, bool, usize),
@@ -273,7 +274,7 @@ impl NessaExpr {
             NessaExpr::UnaryOperation(_, _, _, _) |
             NessaExpr::BinaryOperation(_, _, _, _, _) |
             NessaExpr::NaryOperation(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) => true,
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) => true,
         }
     }
 }
@@ -1593,19 +1594,26 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.function_header_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((n, t, mut a, mut r), _, mut b))| {
+            |(l, (an, (n, t, mut a, mut r), _, mut b))| {
                 let u_t = t.unwrap_or_default();
 
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
-                NessaExpr::FunctionDefinition(l, self.get_function_id(n).unwrap(), u_t, a, r, b)
+                NessaExpr::FunctionDefinition(l, an, self.get_function_id(n).unwrap(), u_t, a, r, b)
             }
         )(input);
     }
@@ -3611,6 +3619,7 @@ mod tests {
         assert_eq!(
             test_1,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 vec!(),
@@ -3632,6 +3641,7 @@ mod tests {
         assert_eq!(
             test,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 vec!(
@@ -3697,6 +3707,7 @@ mod tests {
         assert_eq!(
             test_3,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!("K".into(), "V".into()),
                 vec!(

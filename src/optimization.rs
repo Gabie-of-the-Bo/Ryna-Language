@@ -92,7 +92,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -213,7 +213,7 @@ impl NessaContext {
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -494,7 +494,7 @@ impl NessaContext {
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -597,7 +597,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -705,7 +705,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -936,7 +936,7 @@ impl NessaContext {
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -1158,7 +1158,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -1252,7 +1252,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -1328,7 +1328,7 @@ impl NessaContext {
             NessaExpr::Continue(_) |
             NessaExpr::Literal(_, _) |
             NessaExpr::Macro(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |

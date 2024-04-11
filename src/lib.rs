@@ -15,6 +15,7 @@ pub mod operations;
 pub mod functions;
 pub mod types;
 pub mod interfaces;
+pub mod annotations;
 pub mod context;
 
 pub mod debug;

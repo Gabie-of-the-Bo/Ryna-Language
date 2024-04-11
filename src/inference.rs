@@ -371,7 +371,7 @@ impl NessaContext {
             NessaExpr::NameReference(l, _) |
             NessaExpr::VariableDefinition(l, _, _, _) |
             NessaExpr::VariableAssignment(l, _, _) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(l, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(l, _, _) |
             NessaExpr::PostfixOperatorDefinition(l, _, _) |
             NessaExpr::BinaryOperatorDefinition(l, _, _, _) |

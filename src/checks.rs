@@ -3,6 +3,7 @@ use std::collections::{HashSet, HashMap};
 use colored::Colorize;
 use rustc_hash::FxHashSet;
 
+use crate::annotations::Annotation;
 use crate::compilation::NessaError;
 use crate::context::NessaContext;
 use crate::parser::{NessaExpr, Location};
@@ -2168,6 +2169,66 @@ impl NessaContext {
         };
     }
 
+    pub fn check_test_annotation(&self, annot: &Annotation, t: &Vec<String>, args: &Vec<(String, Type)>, ret: &Type) -> Result<(), String> {
+        annot.check_args(&[], &[])?;
+
+        if t.len() > 0 {
+            return Err(format!("Functions annotated with {} cannot be generic", "test".cyan()));
+        }
+
+        if args.len() > 0 {
+            return Err(format!("Functions annotated with {} cannot take any parameters", "test".cyan()));
+        }
+
+        if ret.deref_type() != &BOOL {
+            return Err(format!(
+                "Functions annotated with {} must return {}, {} or {}", 
+                "test".cyan(), BOOL.get_name(self), BOOL.to_ref().get_name(self), BOOL.to_mut().get_name(self)
+            ));
+        }
+        
+        Ok(())
+    }
+
+    pub fn check_doc_annotation(&self, annot: &Annotation, t: &Vec<String>, args: &Vec<(String, Type)>) -> Result<(), String> {
+        for (arg, _) in args {
+            if t.contains(arg) {
+                return Err(format!("Function parameter {} has the same name as a template parameter and this creates ambiguous docs", arg.green()));
+            }
+        }
+
+        annot.check_args(
+            &["0", "1"], 
+            args.iter()
+                .map(|(n, _)| n.as_str())
+                .chain(t.iter().map(String::as_str))
+                .collect::<Vec<_>>().as_slice()
+        )?;
+        
+        Ok(())
+    }
+
+    pub fn annotation_checks(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+        match expr {
+            NessaExpr::FunctionDefinition(l, an, _, t, args, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, args, r),
+                        "doc" => self.check_doc_annotation(a, t, args),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            _ => { }
+        }
+
+        Ok(())
+    }
+
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), NessaError> {
         self.repeated_arguments_check(expr)?;
         self.invalid_type_check(expr)?;
@@ -2178,6 +2239,7 @@ impl NessaContext {
         self.class_check(expr)?;
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;
+        self.annotation_checks(expr)?;
 
         Ok(())
     }

@@ -1,3 +1,4 @@
+use colored::Colorize;
 use nom::{branch::alt, bytes::complete::tag, combinator::{map, opt}, multi::separated_list0, sequence::{delimited, preceded, terminated, tuple}};
 use rustc_hash::FxHashMap;
 
@@ -49,6 +50,36 @@ pub fn parse_annotation<'a>(input: Span<'a>) -> PResult<'a, Annotation> {
             }
         }
     )(input)
+}
+
+impl Annotation {
+    pub fn check_args(&self, required: &[&str], optional: &[&str]) -> Result<(), String> {
+        // Check required arguments
+        for r in required {
+            if !self.args.contains_key(*r) {
+                if r.parse::<usize>().is_ok() {
+                    return Err(format!("Annotation {} does not contain required positional argument with index {}", self.name.cyan(), r.green()));
+
+                } else {
+                    return Err(format!("Annotation {} does not contain required argument with name {}", self.name.cyan(), r.green()));
+                }
+            }
+        }
+
+        // Check the rest of the arguments
+        for arg in self.args.keys() {
+            if !required.contains(&arg.as_str()) && !optional.contains(&arg.as_str()) {
+                if arg.parse::<usize>().is_ok() {
+                    return Err(format!("Unknown positional argument with index {} for annotation {}", arg.green(), self.name.cyan()));
+
+                } else {
+                    return Err(format!("Unknown argument with name {} for annotation {}", arg.green(), self.name.cyan()));
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

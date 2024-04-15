@@ -28,7 +28,7 @@ pub fn parse_annotation<'a>(input: Span<'a>) -> PResult<'a, Annotation> {
                             ))
                         ))
                     ),
-                    tuple((empty0, tag(")")))
+                    tuple((empty0, opt(tuple((tag(","), empty0))), tag(")")))
                 ))
             ))
         ),

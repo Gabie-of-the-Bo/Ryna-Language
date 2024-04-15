@@ -1058,13 +1058,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 //Invalid number of template arguments
-                if self.functions[*id].overloads[ov_id].0 != templates.len() {
+                if self.functions[*id].overloads[ov_id].1 != templates.len() {
                     Err(NessaError::compiler_error(format!(
                         "Function overload for {}{}({}) expected {} type arguments (got {})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                        self.functions[*id].overloads[ov_id].0, templates.len()
+                        self.functions[*id].overloads[ov_id].1, templates.len()
                     ), l, vec!()))
                 
                 } else {

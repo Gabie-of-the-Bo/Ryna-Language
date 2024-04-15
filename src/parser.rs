@@ -236,6 +236,48 @@ pub enum NessaExpr {
 }
 
 impl NessaExpr {
+    pub fn is_definition(&self) -> bool {
+        match self {
+            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => true,
+
+            NessaExpr::VariableDefinition(_, _, _, _) |
+            NessaExpr::VariableAssignment(_, _, _) |
+            NessaExpr::FunctionName(_, _) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
+            NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::FunctionCall(_, _, _, _) |
+            NessaExpr::CompiledFor(_, _, _, _, _, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Tuple(_, _) |
+            NessaExpr::Lambda(_, _, _, _, _) |
+            NessaExpr::NameReference(_, _) |
+            NessaExpr::UnaryOperation(_, _, _, _) |
+            NessaExpr::BinaryOperation(_, _, _, _, _) |
+            NessaExpr::NaryOperation(_, _, _, _, _) |
+            NessaExpr::If(_, _, _, _, _) |
+            NessaExpr::While(_, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::For(_, _, _, _) |
+            NessaExpr::Return(_, _) => false,
+        }
+    }
+
     pub fn is_expr(&self) -> bool {
         match self {
             NessaExpr::FunctionName(_, _) |

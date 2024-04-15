@@ -39,7 +39,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[])
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -71,9 +71,9 @@ impl NessaContext {
             Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize) {
+        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize, test) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
-                Ok(mut instr) => {     
+                Ok(mut instr) => {
                     if optimize {
                         ctx.optimize_instructions(&mut instr);
                     }
@@ -106,8 +106,8 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {        
-        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, program_input)
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {        
+        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, test, program_input)
     }
 }
 
@@ -581,7 +581,7 @@ impl NessaContext {
                 }), 
 
                 NativeFunctionCall(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCall", {
-                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let (_, _, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {
@@ -601,7 +601,7 @@ impl NessaContext {
                 }),
 
                 NativeFunctionCallNoRet(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCallNoRet", {
-                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let (_, _, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {

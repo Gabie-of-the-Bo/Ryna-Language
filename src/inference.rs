@@ -205,7 +205,7 @@ impl NessaContext {
     pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>, call_templates: Option<Vec<Type>>, sub_t: bool, l: &Location) -> Result<(usize, Type, bool, Vec<Type>), NessaError> {
         let t = Type::And(arg_type.clone());
 
-        'outer: for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
+        'outer: for (i, (_, t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
             if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                 if let Some(call_t) = &call_templates {
                     for (i, t) in call_t.iter().enumerate() {
@@ -238,7 +238,7 @@ impl NessaContext {
         let t = Type::And(arg_type);
 
         let overloads = self.functions[id].overloads.iter()
-                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
+                            .map(|(_, _, a, r, _)| (a.clone(), r.clone()))
                             .filter(|(a, _)| t.bindable_to(a, self)).collect::<Vec<_>>();
 
         // Return Some(overloads) if the call is ambiguous, else return None

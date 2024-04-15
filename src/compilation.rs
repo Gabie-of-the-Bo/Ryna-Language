@@ -3376,9 +3376,9 @@ impl NessaContext{
 
     pub fn define_module_function_overloads(&mut self, lines: &Vec<NessaExpr>) -> Result<(), NessaError> {
         for i in lines {
-            if let NessaExpr::FunctionDefinition(l, _, id, t, a, r, _)  = i {
+            if let NessaExpr::FunctionDefinition(l, an, id, t, a, r, _)  = i {
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                let err = self.define_function_overload(*id, t.len(), &arg_types, r.clone(), None);
+                let err = self.define_function_overload(an.clone(), *id, t.len(), &arg_types, r.clone(), None);
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -3841,7 +3841,7 @@ impl NessaContext{
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                        if let Err(err) = self.define_function_overload(fn_id, t.len(), &arg_types, mapped_return.clone(), None) {
+                        if let Err(err) = self.define_function_overload(an.clone(), fn_id, t.len(), &arg_types, mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 

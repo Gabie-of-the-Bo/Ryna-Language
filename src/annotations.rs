@@ -5,8 +5,8 @@ use crate::parser::{empty0, identifier_parser, string_parser, PResult, Span};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Annotation {
-    name: String,
-    args: FxHashMap<String, String>
+    pub name: String,
+    pub args: FxHashMap<String, String>
 }
 
 pub fn parse_annotation<'a>(input: Span<'a>) -> PResult<'a, Annotation> {

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use colored::Colorize;
 
+use crate::annotations::Annotation;
 use crate::cache::NessaCache;
 use crate::compilation::NessaInstruction;
 use crate::interfaces::Interface;
@@ -477,21 +478,21 @@ impl NessaContext {
         Ok(self.functions.len() - 1)
     }
 
-    pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(usize, Type, Type, FunctionOverload)> {
+    pub fn get_function_overloads(&self, id: usize, templates: &[Type], args: &[Type]) -> Vec<&(Vec<Annotation>, usize, Type, Type, FunctionOverload)> {
         let and = Type::And(args.to_vec());
 
-        return self.functions[id].overloads.iter().filter(|(_, t, _, _)| and.bindable_to_template(t, templates, self)).collect::<Vec<_>>();
+        return self.functions[id].overloads.iter().filter(|(_, _, t, _, _)| and.bindable_to_template(t, templates, self)).collect::<Vec<_>>();
     }
 
     pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverloadInner) -> Result<usize, String> {
-        self.define_function_overload(id, templates, args, ret, Some(f))
+        self.define_function_overload(vec!(), id, templates, args, ret, Some(f))
     }
 
-    pub fn define_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<usize, String> {
+    pub fn define_function_overload(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverload) -> Result<usize, String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
 
-        for (_, t, _, _) in &func.overloads{ // Check subsumption
+        for (_, _, t, _, _) in &func.overloads{ // Check subsumption
             if let Type::And(v) = t {
                 if and.bindable_to(t, self) {
                     return Err(format!("Function overload {}({}) is subsumed by {}({}), so it cannot be defined", 
@@ -507,7 +508,7 @@ impl NessaContext {
             }
         }
 
-        self.functions[id].overloads.push((templates, and, ret, f));
+        self.functions[id].overloads.push((annot, templates, and, ret, f));
 
         Ok(self.functions[id].overloads.len() - 1)
     }

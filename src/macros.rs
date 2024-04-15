@@ -227,6 +227,7 @@ impl NessaMacro {
                     Some(sub_code), 
                     true, 
                     ctx.optimize,
+                    false,
                     &[]
                 ).unwrap();
 

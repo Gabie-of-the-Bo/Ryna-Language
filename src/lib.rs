@@ -17,6 +17,7 @@ pub mod types;
 pub mod interfaces;
 pub mod annotations;
 pub mod context;
+pub mod docs;
 
 pub mod debug;
 pub mod parser;
@@ -33,6 +34,9 @@ pub mod config;
 
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
+
+#[path = "algorithms/html_ext.rs"]
+pub mod html_ext;
 
 #[path = "algorithms/integer_ext.rs"]
 pub mod integer_ext;

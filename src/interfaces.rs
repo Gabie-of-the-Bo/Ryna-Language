@@ -55,6 +55,19 @@ impl InterfaceConstraint {
         }
     }
 
+    pub fn get_name_html(&self, ctx: &NessaContext) -> String {
+        if !self.args.is_empty() {
+            format!(
+                "{}&lt;{}&gt;", 
+                ctx.interfaces[self.id].name.green(),
+                self.args.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")
+            )
+
+        } else {
+            format!("{}", ctx.interfaces[self.id].name.green())
+        }
+    }
+
     pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
         if !self.args.is_empty() {
             format!(

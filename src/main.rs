@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
+use nessa::{config::{generate_docs, ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -221,6 +221,17 @@ fn main() {
             )
         )
         .subcommand(
+            Command::new("docs")
+            .about("Generate documentation")
+            .arg(
+                Arg::new("INPUT")
+                .help("Specifies the project for which you want to generate documentation")
+                .required(false)
+                .default_value(".")
+                .index(1)
+            )
+        )
+        .subcommand(
             Command::new("save-deps")
             .about("Create project requirements file")
         )
@@ -367,6 +378,14 @@ fn main() {
 
             if gitignore {
                 fs::write(module_path.join(Path::new(".gitignore")), DEFAULT_GITIGNORE).expect("Unable to write .gitignore");
+            }
+        }
+
+        Some(("docs", run_args)) => {
+            let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
+
+            if let Err(err) = generate_docs(path) {
+                err.emit();
             }
         }
 

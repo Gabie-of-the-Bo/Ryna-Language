@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 use malachite::Integer;
 
 use crate::context::NessaContext;
+use crate::html_ext::HTMLColorable;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::InterfaceConstraint;
 use crate::nessa_error;
@@ -176,6 +177,50 @@ impl Type {
             Type::Template(id, v) => format!("{}<{}>", ctx.type_templates[*id].name.cyan().to_string().clone(), 
                                                        v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
             Type::Function(from, to) => format!("{} => {}", from.get_name(ctx), to.get_name(ctx))
+        }
+    }
+
+    pub fn get_name_html(&self, ctx: &NessaContext) -> String {
+        return match self {
+            Type::Empty => "()".into(),
+            Type::SelfType => format!("{}", "Self".html_cyan()),
+            Type::InferenceMarker => "[Inferred]".into(),
+
+            Type::Basic(id) => ctx.type_templates[*id].name.clone().html_green().to_string(),
+            Type::Ref(t) => format!("{}{}", "&".html_magenta(), t.get_name_html(ctx)),
+            Type::MutRef(t) => format!("{}{}", "@".html_magenta(), t.get_name_html(ctx)),
+            Type::Or(v) => v.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(" | "),
+            Type::And(v) => format!("({})", v.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")),
+
+            Type::Wildcard => "*".html_cyan().to_string(),
+
+            Type::TemplateParam(id, v) => {
+                if !v.is_empty() {
+                    format!(
+                        "{} [{}]", 
+                        format!("'T_{}", id).html_blue(), 
+                        v.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")
+                    )
+
+                } else {
+                    format!("'T_{}", id).html_blue().to_string()
+                }
+            },
+            Type::TemplateParamStr(name, v) => {
+                if !v.is_empty() {
+                    format!(
+                        "{} [{}]", 
+                        format!("'{}", name).html_blue(), 
+                        v.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")
+                    )
+                    
+                } else {
+                    format!("'{}", name).html_blue().to_string()
+                }   
+            },
+            Type::Template(id, v) => format!("{}&lt;{}&gt;", ctx.type_templates[*id].name.html_green().to_string().clone(), 
+                                                       v.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")),
+            Type::Function(from, to) => format!("{} => {}", from.get_name_html(ctx), to.get_name_html(ctx))
         }
     }
 

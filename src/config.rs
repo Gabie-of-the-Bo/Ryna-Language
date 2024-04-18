@@ -13,10 +13,11 @@ use serde_yaml::{from_str, to_string};
 use directories::ProjectDirs;
 
 use crate::compilation::NessaError;
-use crate::{context::*, nessa_error};
+use crate::context::{standard_ctx, NessaContext};
+use crate::docs::generate_all_function_overload_docs;
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
-use crate::parser::*;
+use crate::{nessa_error, parser::*};
 use crate::regex_ext::replace_all_fallible;
 use crate::serialization::CompiledNessaModule;
 use crate::object::Object;
@@ -514,6 +515,17 @@ pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionMo
     module.ctx.precompile_module(&mut module.code)?;
 
     Ok((module.ctx, module.code))
+}
+
+pub fn generate_docs(path: &String) -> Result<(), NessaError> {
+    let project_path = &normalize_path(Path::new(path))?;
+
+    let (_, all_mods, files) = compute_project_hash(path, None, false)?;
+    let module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false)?;
+
+    generate_all_function_overload_docs(&project_path, &module);
+
+    Ok(())
 }
 
 pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize: bool) -> Result<(String, VersionModCache, FileCache), NessaError> {

@@ -1,3 +1,4 @@
+use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
 use crate::types::{Type, INT, BOOL, STR, T_0, FLOAT};
 use crate::{object::*, ARR_OF};
@@ -17,7 +18,7 @@ pub type UnaryFunction = Option<UnaryFunctionInner>;
 pub type BinaryFunction = Option<BinaryFunctionInner>;
 pub type NaryFunction = Option<NaryFunctionInner>;
 
-pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
+pub type UnaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
 pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
 

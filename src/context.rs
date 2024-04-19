@@ -249,23 +249,23 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(usize, Type, Type, UnaryFunction)> {
+    pub fn get_unary_operations(&self, id: usize, a: Type) -> Vec<&(Vec<Annotation>, usize, Type, Type, UnaryFunction)> {
         if let Operator::Unary{operations: o, ..} = &self.unary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| a.bindable_to(t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, _, t, _, _)| a.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
         vec!()
     }
 
     pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<usize, String> {
-        self.define_unary_operation(id, templates, a, ret, Some(f))
+        self.define_unary_operation(vec!(), id, templates, a, ret, Some(f))
     }
 
-    pub fn define_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<usize, String> {
+    pub fn define_unary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, ret: Type, f: UnaryFunction) -> Result<usize, String> {
         let op = &self.unary_ops[id];
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
-            for (_, t, _, _) in o { // Check subsumption
+            for (_, _, t, _, _) in o { // Check subsumption
                 if a.bindable_to(t, self) {
                     return Err(format!("Unary operation {}{} is subsumed by {}{}, so it cannot be defined", 
                                         r.green(), a.get_name(self), r.green(), t.get_name(self)));
@@ -279,7 +279,7 @@ impl NessaContext {
         }
 
         if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
-            o.push((templates, a, ret, f));
+            o.push((annot.clone(), templates, a, ret, f));
 
             Ok(o.len() - 1)
         

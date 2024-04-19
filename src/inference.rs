@@ -12,7 +12,7 @@ use crate::types::Type;
 impl NessaContext {
     pub fn get_first_unary_op(&self, id: usize, arg_type: Type, call_templates: Option<Vec<Type>>, sub_t: bool, l: &Location) -> Result<(usize, Type, bool, Vec<Type>), NessaError> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+            'outer: for (i, (_, t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = arg_type.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
@@ -54,7 +54,7 @@ impl NessaContext {
     pub fn is_unary_op_ambiguous(&self, id: usize, arg_type: Type) -> Option<Vec<(Type, Type)>> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             let overloads = operations.iter()
-                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
+                            .map(|(_, _, a, r, _)| (a.clone(), r.clone()))
                             .filter(|(a, _)| arg_type.bindable_to(a, self)).collect::<Vec<_>>();
 
             // Return Some(overloads) if the call is ambiguous, else return None
@@ -379,8 +379,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(l, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(l, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(l, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |

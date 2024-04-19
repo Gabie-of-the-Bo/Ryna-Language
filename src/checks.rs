@@ -20,8 +20,8 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, body) |
+            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
@@ -109,8 +109,8 @@ impl NessaContext {
             },
 
             (NessaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
-            (NessaExpr::PrefixOperationDefinition(_, _, t, _, _, ret, body), None) |
-            (NessaExpr::PostfixOperationDefinition(_, _, t, _, _, ret, body), None) |
+            (NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
             (NessaExpr::BinaryOperationDefinition(_, _, t, _, _, ret, body), None) |
             (NessaExpr::NaryOperationDefinition(_, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
@@ -416,8 +416,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
             NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
             NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
@@ -558,7 +558,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(_, _, tm, _, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;
@@ -568,7 +568,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(_, _, tm, _, _, _, b) => {
+            NessaExpr::PostfixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -780,7 +780,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, tm, _, a, ret, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;
@@ -799,7 +799,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, tm, _, a, ret, b) => {
+            NessaExpr::PostfixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -1088,13 +1088,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].1 != templates.len() {
                         if *prefix {
                             Err(NessaError::compiler_error(format!(
                                 "Unary operator overload for {}({}) expected {} type arguments (got {})",
                                 representation,
                                 t.get_name(self),
-                                operations[ov_id].0, templates.len()
+                                operations[ov_id].1, templates.len()
                             ), l, vec!()))
 
                         } else {
@@ -1102,7 +1102,7 @@ impl NessaContext {
                                 "Unary operator overload for ({}){} expected {} type arguments (got {})",
                                 t.get_name(self),
                                 representation,
-                                operations[ov_id].0, templates.len()
+                                operations[ov_id].1, templates.len()
                             ), l, vec!()))
                         }
 
@@ -1282,8 +1282,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(l, _, t, _, arg, r, b) |
-            NessaExpr::PostfixOperationDefinition(l, _, t, _, arg, r, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, _, t, _, arg, r, b) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, t, _, arg, r, b) => {
                 self.check_type_well_formed(arg, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -2072,8 +2072,8 @@ impl NessaContext {
 
     pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
-            NessaExpr::PostfixOperationDefinition(l, _, t, n, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(l, _, t, n, _, _, _) => {
+            NessaExpr::PostfixOperationDefinition(l, _, _, t, n, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(l, _, _, t, n, _, _, _) => {
                 let err = self.repeated_args(&vec!(n), "Parameter");
 
                 if let Err(msg) = err {
@@ -2208,6 +2208,20 @@ impl NessaContext {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, args, r),
                         "doc" => self.check_doc_annotation(a, args),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::PrefixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) |
+            NessaExpr::PostfixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &vec!((arg_n.clone(), arg_t.clone())), r),
+                        "doc" => self.check_doc_annotation(a, &vec!((arg_n.clone(), arg_t.clone()))),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

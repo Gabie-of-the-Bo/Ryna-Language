@@ -585,7 +585,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, tm, n, t, r, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, _, tm, n, t, r, b) => {
                 if tm.is_empty() {
                     self.compile(b, &vec!((n.clone(), t.clone())))?;
                 }
@@ -597,7 +597,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, tm, n, t, r, b) => {
+            NessaExpr::PostfixOperationDefinition(l, _, _, tm, n, t, r, b) => {
                 if tm.is_empty() {
                     self.compile(b, &vec!((n.clone(), t.clone())))?;
                 }
@@ -1176,7 +1176,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::PrefixOperationDefinition(_, id, _, _, t1, t2, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, id, _, _, t1, t2, b) => {
                 self.get_inner_dep_graph_body(b, &(ImportType::Prefix, *id), deps);
 
                 for td in t1.type_dependencies() {
@@ -1196,7 +1196,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::PostfixOperationDefinition(_, id, _, _, t1, t2, b) => {
+            NessaExpr::PostfixOperationDefinition(_, _, id, _, _, t1, t2, b) => {
                 self.get_inner_dep_graph_body(b, &(ImportType::Postfix, *id), deps);
 
                 for td in t1.type_dependencies() {
@@ -1496,8 +1496,8 @@ impl NessaContext{
                 Ok(())
             }
 
-            NessaExpr::PostfixOperationDefinition(_, id, _, n, tp, r, b) |
-            NessaExpr::PrefixOperationDefinition(_, id, _, n, tp, r, b) => {
+            NessaExpr::PostfixOperationDefinition(_, _, id, _, n, tp, r, b) |
+            NessaExpr::PrefixOperationDefinition(_, _, id, _, n, tp, r, b) => {
                 if let Some(usages) = self.cache.usages.unary.get_checked(id) {
                     for (arg, ov) in usages {
                         if arg[0].bindable_to(tp, self) {
@@ -1855,8 +1855,8 @@ impl NessaContext{
                     }
                 },
 
-                NessaExpr::PrefixOperationDefinition(_, id, _, _, tp, _, _) |
-                NessaExpr::PostfixOperationDefinition(_, id, _, _, tp, _, _) => {
+                NessaExpr::PrefixOperationDefinition(_, _, id, _, _, tp, _, _) |
+                NessaExpr::PostfixOperationDefinition(_, _, id, _, _, tp, _, _) => {
                     if let Some(usages) = self.cache.usages.unary.get_checked(id) {
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(tp, self) {
@@ -1962,8 +1962,8 @@ impl NessaContext{
                     }
                 },
                 
-                NessaExpr::PrefixOperationDefinition(_, id, t, _, tp, ret, _) |
-                NessaExpr::PostfixOperationDefinition(_, id, t, _, tp, ret, _) => {
+                NessaExpr::PrefixOperationDefinition(_, _, id, t, _, tp, ret, _) |
+                NessaExpr::PostfixOperationDefinition(_, _, id, t, _, tp, ret, _) => {
                     if let Some(usages) = self.cache.usages.unary.get_checked(id) {
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(tp, self) {                                
@@ -2173,8 +2173,8 @@ impl NessaContext{
                     }
                 },
 
-                NessaExpr::PrefixOperationDefinition(_, id, _, _, tp, r, _) |
-                NessaExpr::PostfixOperationDefinition(_, id, _, _, tp, r, _) => {
+                NessaExpr::PrefixOperationDefinition(_, _, id, _, _, tp, r, _) |
+                NessaExpr::PostfixOperationDefinition(_, _, id, _, _, tp, r, _) => {
                     if let Some(usages) = self.cache.usages.unary.get_checked(id) {
                         for (args, ov) in usages {
                             if Type::And(args.clone()).bindable_to(tp, self) {
@@ -3358,8 +3358,8 @@ impl NessaContext{
 
         for i in ops.unwrap().1 {
             let (l, err) = match &i {
-                NessaExpr::PrefixOperationDefinition(l, id, tm, _a, t, r, _) |
-                NessaExpr::PostfixOperationDefinition(l, id, tm, _a, t, r, _) => (l, self.define_unary_operation(*id, tm.len(), t.clone(), r.clone(), None)),
+                NessaExpr::PrefixOperationDefinition(l, an, id, tm, _a, t, r, _) |
+                NessaExpr::PostfixOperationDefinition(l, an, id, tm, _a, t, r, _) => (l, self.define_unary_operation(an.clone(), *id, tm.len(), t.clone(), r.clone(), None)),
                 NessaExpr::BinaryOperationDefinition(l, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(*id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
                 NessaExpr::NaryOperationDefinition(l, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(*id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
 
@@ -3851,8 +3851,8 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::PrefixOperationDefinition(l, id, t, arg, arg_t, r, body) |
-                NessaExpr::PostfixOperationDefinition(l, id, t, arg, arg_t, r, body) => {
+                NessaExpr::PrefixOperationDefinition(l, an, id, t, arg, arg_t, r, body) |
+                NessaExpr::PostfixOperationDefinition(l, an, id, t, arg, arg_t, r, body) => {
                     let rep;
                     let op_prefix;
                     let op_import_type;
@@ -3879,16 +3879,16 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut id_mapper)?;
                         }
 
-                        if let Err(err) = self.define_unary_operation(*id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None) {
+                        if let Err(err) = self.define_unary_operation(an.clone(), *id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 
                         // Add the mapped function to the list of new expressions
                         if *op_prefix {
-                            res.push(NessaExpr::PrefixOperationDefinition(l.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
+                            res.push(NessaExpr::PrefixOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
 
                         } else {
-                            res.push(NessaExpr::PostfixOperationDefinition(l.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
+                            res.push(NessaExpr::PostfixOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
                         }
 
                         new_source.push(module.clone());

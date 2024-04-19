@@ -100,8 +100,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -221,8 +221,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -502,8 +502,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -605,8 +605,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -713,8 +713,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -944,8 +944,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -1166,8 +1166,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -1260,8 +1260,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
@@ -1336,8 +1336,8 @@ impl NessaContext {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 

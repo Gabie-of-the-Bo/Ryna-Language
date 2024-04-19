@@ -224,8 +224,8 @@ pub enum NessaExpr {
     InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
-    PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    PostfixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    PostfixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     BinaryOperationDefinition(Location, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
     NaryOperationDefinition(Location, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
@@ -247,8 +247,8 @@ impl NessaExpr {
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => true,
 
@@ -293,8 +293,8 @@ impl NessaExpr {
             NessaExpr::ClassDefinition(_, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
@@ -1458,12 +1458,19 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.macro_header_parser(input),
                     empty0,
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
-            |(l, ((t, n, p), _, m))| NessaExpr::Macro(l, n, t, p, m)
+            |(l, (an, (t, n, p), _, m))| NessaExpr::Macro(l, n, t, p, m)
         )(input);
     }
     
@@ -2141,17 +2148,24 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.prefix_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
+            |(l, (an, (id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PrefixOperationDefinition(l, id, tm, n, t, r, b)
+                NessaExpr::PrefixOperationDefinition(l, an, id, tm, n, t, r, b)
             }
         )(input);
     }
@@ -2160,17 +2174,24 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.postfix_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
+            |(l, (an, (id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PostfixOperationDefinition(l, id, tm, n, t, r, b)
+                NessaExpr::PostfixOperationDefinition(l, an, id, tm, n, t, r, b)
             }
         )(input);
     }
@@ -2179,12 +2200,19 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.binary_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
+            |(l, (an, (id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.1.compile_templates(&tm);
                 r.compile_templates(&tm);
@@ -2199,12 +2227,19 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.nary_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
+            |(l, (an, (id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.iter_mut().for_each(|(_, i)| i.compile_templates(&tm));
                 r.compile_templates(&tm);
@@ -2361,6 +2396,13 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     tag("class"),
                     empty1,
                     context("Invalid class identifier", cut(identifier_parser)),
@@ -2418,7 +2460,7 @@ impl NessaContext {
                     tag("}")
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, p, _, mut f, _, _))| {
+            |(l, (an, _, _, n, _, t, _, _, p, _, mut f, _, _))| {
                 let u_t = t.unwrap_or_default();
 
                 f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
@@ -3848,6 +3890,7 @@ mod tests {
         assert_eq!(
             test_1,
             NessaExpr::PrefixOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!(),
                 "arg".into(),
@@ -3869,7 +3912,8 @@ mod tests {
 
         assert_eq!(
             test,
-            NessaExpr::PostfixOperationDefinition(Location::none(), 
+            NessaExpr::PostfixOperationDefinition(Location::none(),
+                vec!(),
                 3,
                 vec!(),
                 "arg".into(),
@@ -4017,6 +4061,7 @@ mod tests {
         assert_eq!(
             test_template_1,
             NessaExpr::PrefixOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!("T".into()),
                 "arg".into(),
@@ -4039,6 +4084,7 @@ mod tests {
         assert_eq!(
             test_template,
             NessaExpr::PostfixOperationDefinition(Location::none(), 
+                vec!(),
                 3,
                 vec!("T".into()),
                 "arg".into(),

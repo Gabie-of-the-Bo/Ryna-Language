@@ -2,7 +2,7 @@ use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{
 
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
-        for (ov_id, (_, arg, _, _)) in operations.iter().enumerate() {
+        for (ov_id, (_, _, arg, _, _)) in operations.iter().enumerate() {
             if let Some(opcode) = f(arg) {
                 let mut offset = arg.is_ref() as usize;
 

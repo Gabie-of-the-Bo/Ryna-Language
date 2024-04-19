@@ -14,7 +14,7 @@ use directories::ProjectDirs;
 
 use crate::compilation::NessaError;
 use crate::context::{standard_ctx, NessaContext};
-use crate::docs::generate_all_function_overload_docs;
+use crate::docs::{generate_all_function_overload_docs, generate_all_operation_docs};
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
 use crate::{nessa_error, parser::*};
@@ -524,6 +524,7 @@ pub fn generate_docs(path: &String) -> Result<(), NessaError> {
     let module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false)?;
 
     generate_all_function_overload_docs(&project_path, &module);
+    generate_all_operation_docs(&project_path, &module);
 
     Ok(())
 }

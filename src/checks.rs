@@ -2190,18 +2190,11 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn check_doc_annotation(&self, annot: &Annotation, t: &Vec<String>, args: &Vec<(String, Type)>) -> Result<(), String> {
-        for (arg, _) in args {
-            if t.contains(arg) {
-                return Err(format!("Function parameter {} has the same name as a template parameter and this creates ambiguous docs", arg.green()));
-            }
-        }
-
+    pub fn check_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
         annot.check_args(
             &["0", "1"], 
             args.iter()
                 .map(|(n, _)| n.as_str())
-                .chain(t.iter().map(String::as_str))
                 .collect::<Vec<_>>().as_slice()
         )?;
         
@@ -2214,7 +2207,7 @@ impl NessaContext {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, args, r),
-                        "doc" => self.check_doc_annotation(a, t, args),
+                        "doc" => self.check_doc_annotation(a, args),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

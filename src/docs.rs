@@ -41,7 +41,8 @@ pub fn create_markdown_file(base: &String, name: &str) -> File {
 pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
     write!(
         file, 
-        "## {}{}{} -> {}\n\n", 
+        "## {} {}{}{} -> {}\n\n", 
+        "fn".html_magenta(),
         f.html_yellow(), if t > 0 { 
             format!("&lt;{}&gt;", (0..t).into_iter()
                                         .map(|i| format!("T_{}", i).html_blue())

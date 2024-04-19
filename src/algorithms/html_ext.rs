@@ -18,7 +18,7 @@ pub trait HTMLColorable {
     }
     
     fn html_magenta(&self) -> String {
-        self.html_rgb(255, 0, 255)
+        self.html_rgb(197, 134, 192)
     }
     
     fn html_yellow(&self) -> String {

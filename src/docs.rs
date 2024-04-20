@@ -39,21 +39,7 @@ pub fn create_markdown_file(base: &String, name: &str) -> File {
     file
 }
 
-pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
-    write!(
-        file, 
-        "## {} {}{}{} -> {}\n\n", 
-        "fn".html_magenta(),
-        f.html_yellow(), if t > 0 { 
-            format!("&lt;{}&gt;", (0..t).into_iter()
-                                        .map(|i| format!("T_{}", i).html_blue())
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
-            ) 
-        } else { "".into() },
-        args.get_name_html(&module.ctx), ret.get_name_html(&module.ctx)
-    ).expect("Error while writing to docs file");
-
+pub fn write_args_and_ret(file: &mut File, annot: &Annotation) {
     write!(
         file,
         "### Parameters\n\n",
@@ -79,6 +65,24 @@ pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &s
         "### Return\n{}\n\n",
         annot.args.get("1").unwrap()
     ).expect("Error while writing to docs file");
+}
+
+pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
+    write!(
+        file, 
+        "## {} {}{}{} -> {}\n\n", 
+        "fn".html_magenta(),
+        f.html_yellow(), if t > 0 { 
+            format!("&lt;{}&gt;", (0..t).into_iter()
+                                        .map(|i| format!("T_{}", i).html_blue())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+            ) 
+        } else { "".into() },
+        args.get_name_html(&module.ctx), ret.get_name_html(&module.ctx)
+    ).expect("Error while writing to docs file");
+
+    write_args_and_ret(file, annot);
 }
 
 pub fn write_unary_operation_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation, prefix: bool) {
@@ -114,31 +118,32 @@ pub fn write_unary_operation_docs(file: &mut File, module: &NessaModule, f: &str
         ).expect("Error while writing to docs file");    
     }
 
-    write!(
-        file,
-        "### Parameters\n\n",
-    ).expect("Error while writing to docs file");
+    write_args_and_ret(file, annot);
+}
 
-    for arg in &annot.args {
-        if arg.0.parse::<usize>().is_err() {
-            write!(
-                file, 
-                "* `{}`: {}\n", arg.0, arg.1
-            ).expect("Error while writing to docs file");
-        }
+pub fn write_binary_operation_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
+    if let Type::And(args_t) = args {
+        write!(
+            file, 
+            "## {} ({}) {}{} ({}) -> {}\n\n", 
+            "op".html_magenta(),
+            args_t[0].get_name_html(&module.ctx),
+            f.html_yellow(), if t > 0 { 
+                format!("&lt;{}&gt;", (0..t).into_iter()
+                                            .map(|i| format!("T_{}", i).html_blue())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                ) 
+            } else { "".into() },
+            args_t[1].get_name_html(&module.ctx),
+            ret.get_name_html(&module.ctx)
+        ).expect("Error while writing to docs file");    
+    
+    } else {
+        unreachable!()
     }
 
-    write!(
-        file,
-        "\n### Description\n{}\n\n",
-        annot.args.get("0").unwrap()
-    ).expect("Error while writing to docs file");
-
-    write!(
-        file,
-        "### Return\n{}\n\n",
-        annot.args.get("1").unwrap()
-    ).expect("Error while writing to docs file");
+    write_args_and_ret(file, annot);
 }
 
 pub fn generate_all_function_overload_docs(project_path: &String, module: &NessaModule) {
@@ -165,6 +170,19 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
                 for annot in &ov.0 {
                     if annot.name == "doc" {
                         write_unary_operation_docs(&mut operations_file, &module, representation, ov.1, &ov.2, &ov.3, annot, *prefix);
+                        break;
+                    }    
+                }
+            }    
+        }
+    }
+
+    for o in &module.ctx.binary_ops {
+        if let Operator::Binary { representation, operations, .. } = o {
+            for ov in operations {
+                for annot in &ov.0 {
+                    if annot.name == "doc" {
+                        write_binary_operation_docs(&mut operations_file, &module, representation, ov.1, &ov.2, &ov.3, annot);
                         break;
                     }    
                 }

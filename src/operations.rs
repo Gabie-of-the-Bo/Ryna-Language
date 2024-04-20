@@ -19,7 +19,7 @@ pub type BinaryFunction = Option<BinaryFunctionInner>;
 pub type NaryFunction = Option<NaryFunctionInner>;
 
 pub type UnaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, UnaryFunction)>;
-pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
+pub type BinaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, BinaryFunction)>;
 pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
 
 const EMPTY_UN_FUNC: UnaryFunctionInner = |_, _, _| Ok(Object::empty());
@@ -307,14 +307,14 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator(":=".into(), false, 100000).unwrap();
 
-    ctx.define_binary_operation(
+    ctx.define_native_binary_operation(
         14, 1, 
         T_0.to_mut(), T_0, Type::Empty, 
-        Some(|_, _, a, b, ctx| {
+        |_, _, a, b, ctx| {
             a.assign(b, ctx)?;
             Ok(Object::empty())
         }
-    )).unwrap();
+    ).unwrap();
 
     ctx.define_binary_operator(">>".into(), false, 350).unwrap();
 

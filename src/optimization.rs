@@ -102,7 +102,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -223,7 +223,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -504,7 +504,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -607,7 +607,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -715,7 +715,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -946,7 +946,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -1168,7 +1168,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -1262,7 +1262,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)
@@ -1338,7 +1338,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => { },
 
             e => unreachable!("{:?}", e)

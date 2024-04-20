@@ -661,7 +661,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        match ov.3.unwrap()(type_args, &ov.2, a, b, self) {
+                        match ov.4.unwrap()(type_args, &ov.2, a, b, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };
@@ -680,7 +680,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        if let Err(msg) = ov.3.unwrap()(type_args, &ov.2, a, b, self) {
+                        if let Err(msg) = ov.4.unwrap()(type_args, &ov.2, a, b, self) {
                             return Err(NessaError::execution_error(msg));
                         };
                         

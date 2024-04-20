@@ -18,7 +18,7 @@ fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaC
 
 fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Binary { operations, .. } = &ctx.binary_ops[id] {
-        for (ov_id, (_, args, _, _)) in operations.iter().enumerate() {
+        for (ov_id, (_, _, args, _, _)) in operations.iter().enumerate() {
             if let Type::And(types) = args {
                 if let Some(opcode) = f(&types[0], &types[1]) {
                     let mut offset = (types[0].is_ref() as usize) + (types[1].is_ref() as usize);

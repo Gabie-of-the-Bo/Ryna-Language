@@ -22,7 +22,7 @@ impl NessaContext {
         match expr {
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
-            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
+            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, body) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
             NessaExpr::CompiledLambda(l, _, _, _, _, body) |
@@ -111,7 +111,7 @@ impl NessaContext {
             (NessaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
             (NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
             (NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
-            (NessaExpr::BinaryOperationDefinition(_, _, t, _, _, ret, body), None) |
+            (NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, ret, body), None) |
             (NessaExpr::NaryOperationDefinition(_, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
@@ -418,7 +418,7 @@ impl NessaContext {
 
             NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
             NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
                 if t.is_empty() {
@@ -578,7 +578,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(_, _, tm, (_, _), (_, _), _, b) => {
+            NessaExpr::BinaryOperationDefinition(_, _, _, tm, (_, _), (_, _), _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -818,7 +818,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(l, _, tm, (_, a_1), (_, a_2), ret, b) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, tm, (_, a_1), (_, a_2), ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -1133,13 +1133,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].1 != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
                             t1.get_name(self),
                             representation,
                             t2.get_name(self),
-                            operations[ov_id].0, templates.len()
+                            operations[ov_id].1, templates.len()
                         ), l, vec!()))    
 
                     } else {
@@ -1307,7 +1307,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, t, (_, ta), (_, tb), r, b) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, t, (_, ta), (_, tb), r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(tb, l)?;
                 self.check_type_well_formed(r, l)?;
@@ -2089,7 +2089,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, t, (n1, _), (n2, _), _, _) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, t, (n1, _), (n2, _), _, _) => {
                 let err = self.repeated_args(&vec!(n1, n2), "Parameter");
 
                 if let Err(msg) = err {
@@ -2222,6 +2222,19 @@ impl NessaContext {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!((arg_n.clone(), arg_t.clone())), r),
                         "doc" => self.check_doc_annotation(a, &vec!((arg_n.clone(), arg_t.clone()))),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::BinaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &vec!(arg_a.clone(), arg_b.clone()), r),
+                        "doc" => self.check_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

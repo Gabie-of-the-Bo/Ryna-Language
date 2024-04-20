@@ -322,26 +322,26 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(usize, Type, Type, BinaryFunction)> {
+    pub fn get_binary_operations(&self, id: usize, a: Type, b: Type) -> Vec<&(Vec<Annotation>, usize, Type, Type, BinaryFunction)> {
         let and = Type::And(vec!(a, b));
 
         if let Operator::Binary{operations: o, ..} = &self.binary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, _, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
         vec!()
     }
 
     pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunctionInner) -> Result<usize, String> {
-        self.define_binary_operation(id, templates, a, b, ret, Some(f))
+        self.define_binary_operation(vec!(), id, templates, a, b, ret, Some(f))
     }
 
-    pub fn define_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<usize, String> {
+    pub fn define_binary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunction) -> Result<usize, String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
         if let Operator::Binary{operations: o, representation: r, ..} = op {
-            for (_, t, _, _) in o { // Check subsumption
+            for (_, _, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
                     if and.bindable_to(t, self) {
                         return Err(format!("Binary operation {} {} {} is subsumed by {} {} {}, so it cannot be defined", 
@@ -359,7 +359,7 @@ impl NessaContext {
         }
 
         if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
-            o.push((templates, and, ret, f));
+            o.push((annot, templates, and, ret, f));
 
             Ok(o.len() - 1)
 

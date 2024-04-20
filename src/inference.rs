@@ -73,7 +73,7 @@ impl NessaContext {
         let t = Type::And(vec!(a_type.clone(), b_type.clone()));
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+            'outer: for (i, (_, t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
@@ -109,8 +109,8 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
-                            .map(|(_, a, r, _)| {
+                            .filter(|(_, _, a, _, _)| t.bindable_to(a, self))
+                            .map(|(_, _, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1].clone(), r.clone())
 
@@ -381,7 +381,7 @@ impl NessaContext {
             NessaExpr::InterfaceImplementation(l, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
             NessaExpr::Break(l) |

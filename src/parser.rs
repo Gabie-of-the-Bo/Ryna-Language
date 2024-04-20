@@ -226,7 +226,7 @@ pub enum NessaExpr {
 
     PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    BinaryOperationDefinition(Location, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
+    BinaryOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
     NaryOperationDefinition(Location, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Location, Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
@@ -249,7 +249,7 @@ impl NessaExpr {
             NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => true,
 
             NessaExpr::VariableDefinition(_, _, _, _) |
@@ -295,7 +295,7 @@ impl NessaExpr {
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
@@ -2218,7 +2218,7 @@ impl NessaContext {
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::BinaryOperationDefinition(l, id, tm, a1, a2, r, b)
+                NessaExpr::BinaryOperationDefinition(l, an, id, tm, a1, a2, r, b)
             }
         )(input);
     }
@@ -3946,6 +3946,7 @@ mod tests {
         assert_eq!(
             test_3,
             NessaExpr::BinaryOperationDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 ("a".into(), BOOL),
@@ -4117,6 +4118,7 @@ mod tests {
         assert_eq!(
             test_template_3,
             NessaExpr::BinaryOperationDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!("T".into(), "G".into()),
                 ("a".into(), T_0),

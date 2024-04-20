@@ -609,7 +609,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperationDefinition(l, _, tm, a1, a2, r, b) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, tm, a1, a2, r, b) => {
                 if tm.is_empty() {
                     self.compile(b, &vec!(a1.clone(), a2.clone()))?;
                 }
@@ -1216,7 +1216,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::BinaryOperationDefinition(_, id, _, (_, t1), (_, t2), ret, b) => {
+            NessaExpr::BinaryOperationDefinition(_, _, id, _, (_, t1), (_, t2), ret, b) => {
                 self.get_inner_dep_graph_body(b, &(ImportType::Binary, *id), deps);
 
                 for td in t1.type_dependencies() {
@@ -1532,7 +1532,7 @@ impl NessaContext{
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(_, id, _, (n1, t1), (n2, t2), r, b) => {
+            NessaExpr::BinaryOperationDefinition(_, _, id, _, (n1, t1), (n2, t2), r, b) => {
                 if let Some(usages) = self.cache.usages.binary.get_checked(id) {
                     for (arg, ov) in usages {
                         if arg[0].bindable_to(t1, self) && arg[1].bindable_to(t2, self) {
@@ -1867,7 +1867,7 @@ impl NessaContext{
                     }
                 },
 
-                NessaExpr::BinaryOperationDefinition(_, id, _, (_, t1), (_, t2), _, _) => {
+                NessaExpr::BinaryOperationDefinition(_, _, id, _, (_, t1), (_, t2), _, _) => {
                     let and = Type::And(vec!(t1.clone(), t2.clone()));
 
                     if let Some(usages) = self.cache.usages.binary.get_checked(id) {
@@ -2012,7 +2012,7 @@ impl NessaContext{
                     }
                 }
                 
-                NessaExpr::BinaryOperationDefinition(_, id, t, (_, t1), (_, t2), ret, _) => {
+                NessaExpr::BinaryOperationDefinition(_, _, id, t, (_, t1), (_, t2), ret, _) => {
                     let and = Type::And(vec!(t1.clone(), t2.clone()));
 
                     if let Some(usages) = self.cache.usages.binary.get_checked(id) {
@@ -2207,7 +2207,7 @@ impl NessaContext{
                     }
                 },
 
-                NessaExpr::BinaryOperationDefinition(_, id, _, (_, t1), (_, t2), r, _) => {
+                NessaExpr::BinaryOperationDefinition(_, _, id, _, (_, t1), (_, t2), r, _) => {
                     let and = Type::And(vec!(t1.clone(), t2.clone()));
 
                     if let Some(usages) = self.cache.usages.binary.get_checked(id) {
@@ -3360,7 +3360,7 @@ impl NessaContext{
             let (l, err) = match &i {
                 NessaExpr::PrefixOperationDefinition(l, an, id, tm, _a, t, r, _) |
                 NessaExpr::PostfixOperationDefinition(l, an, id, tm, _a, t, r, _) => (l, self.define_unary_operation(an.clone(), *id, tm.len(), t.clone(), r.clone(), None)),
-                NessaExpr::BinaryOperationDefinition(l, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(*id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
+                NessaExpr::BinaryOperationDefinition(l, an, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(an.clone(), *id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
                 NessaExpr::NaryOperationDefinition(l, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(*id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
 
                 _ => unreachable!()
@@ -3895,7 +3895,7 @@ impl NessaContext{
                     }
                 },
 
-                NessaExpr::BinaryOperationDefinition(l, id, t, a, b, r, body) => {
+                NessaExpr::BinaryOperationDefinition(l, an, id, t, a, b, r, body) => {
                     let rep = ctx.binary_ops[*id].get_repr();
 
                     let op_id = self.map_nessa_binary_operator(ctx, *id, &mut id_mapper, l)?;
@@ -3912,12 +3912,12 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut id_mapper)?;
                         }
 
-                        if let Err(err) = self.define_binary_operation(*id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None) {
+                        if let Err(err) = self.define_binary_operation(an.clone(), *id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 
                         // Add the mapped function to the list of new expressions
-                        res.push(NessaExpr::BinaryOperationDefinition(l.clone(), op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
+                        res.push(NessaExpr::BinaryOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
                         new_source.push(module.clone());
                     }
                 },

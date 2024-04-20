@@ -23,7 +23,7 @@ impl NessaContext {
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, body) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
+            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
             NessaExpr::CompiledLambda(l, _, _, _, _, body) |
             NessaExpr::FunctionDefinition(l, _, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
@@ -112,7 +112,7 @@ impl NessaContext {
             (NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
             (NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
             (NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, ret, body), None) |
-            (NessaExpr::NaryOperationDefinition(_, _, t, _, _, ret, body), None) => {
+            (NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
 
@@ -419,7 +419,7 @@ impl NessaContext {
             NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
+            NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, _, b) |
             NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
@@ -588,7 +588,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(_, _, tm, (_, _), _, _, b) => {
+            NessaExpr::NaryOperationDefinition(_, _, _, tm, (_, _), _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -837,7 +837,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(l, _, tm, (_, a), args, ret, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, tm, (_, a), args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -1333,7 +1333,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, t, (_, ta), args, r, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, t, (_, ta), args, r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -2105,7 +2105,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, t, (n1, _), n, _, _) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, t, (n1, _), n, _, _) => {
                 let mut args = vec!(n1);
                 args.extend(n.iter().map(|(i, _)| i));
 
@@ -2235,6 +2235,22 @@ impl NessaContext {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!(arg_a.clone(), arg_b.clone()), r),
                         "doc" => self.check_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::NaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+                let mut all_args = vec!(arg_a.clone());
+                all_args.extend(arg_b.iter().cloned());
+
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &all_args, r),
+                        "doc" => self.check_doc_annotation(a, &all_args),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

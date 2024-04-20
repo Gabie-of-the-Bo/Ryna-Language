@@ -382,7 +382,7 @@ impl NessaContext {
             NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, _) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
             NessaExpr::Break(l) |
             NessaExpr::Continue(l) |

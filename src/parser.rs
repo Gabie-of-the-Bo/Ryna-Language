@@ -227,7 +227,7 @@ pub enum NessaExpr {
     PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     PostfixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
     BinaryOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
-    NaryOperationDefinition(Location, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    NaryOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Location, Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
     While(Location, Box<NessaExpr>, Vec<NessaExpr>),
@@ -250,7 +250,7 @@ impl NessaExpr {
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) => true,
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) => true,
 
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
@@ -296,7 +296,7 @@ impl NessaExpr {
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
             NessaExpr::Break(_) |
@@ -2245,7 +2245,7 @@ impl NessaContext {
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::NaryOperationDefinition(l, id, tm, a1, a2, r, b)
+                NessaExpr::NaryOperationDefinition(l, an, id, tm, a1, a2, r, b)
             }
         )(input);
     }
@@ -3985,6 +3985,7 @@ mod tests {
         assert_eq!(
             test_4,
             NessaExpr::NaryOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!(),
                 ("a".into(), INT),
@@ -4157,6 +4158,7 @@ mod tests {
         assert_eq!(
             test_template_4,
             NessaExpr::NaryOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!("T".into(), "G".into()),
                 ("a".into(), T_0),

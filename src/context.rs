@@ -402,24 +402,24 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(usize, Type, Type, NaryFunction)> {
+    pub fn get_nary_operations(&self, id: usize, from: Type, args: &[Type]) -> Vec<&(Vec<Annotation>, usize, Type, Type, NaryFunction)> {
         let mut subtypes = vec!(from);
         subtypes.extend(args.iter().cloned());
 
         let and = Type::And(subtypes);
 
         if let Operator::Nary{operations: o, ..} = &self.nary_ops[id] {
-            return o.iter().filter(|(_, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
+            return o.iter().filter(|(_, _, t, _, _)| and.bindable_to(t, self)).collect::<Vec<_>>();
         }
 
         vec!()
     }
 
     pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunctionInner) -> Result<usize, String> {
-        self.define_nary_operation(id, templates, from, args, ret, Some(f))
+        self.define_nary_operation(vec!(), id, templates, from, args, ret, Some(f))
     }
 
-    pub fn define_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<usize, String> {
+    pub fn define_nary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunction) -> Result<usize, String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.iter().cloned());
 
@@ -427,7 +427,7 @@ impl NessaContext {
         let op = &self.nary_ops[id];
 
         if let Operator::Nary{operations: o, open_rep: or, close_rep: cr, ..} = op {
-            for (_, t, _, _) in o { // Check subsumption
+            for (_, _, t, _, _) in o { // Check subsumption
                 if let Type::And(v) = t {
                     if and.bindable_to(t, self) {
                         return Err(format!("N-ary operation {}{}{}{} is subsumed by {}{}{}{}, so it cannot be defined", 
@@ -445,7 +445,7 @@ impl NessaContext {
         }
 
         if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
-            o.push((templates, and, ret, f));
+            o.push((annot, templates, and, ret, f));
 
             Ok(o.len() - 1)
 

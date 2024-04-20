@@ -3361,7 +3361,7 @@ impl NessaContext{
                 NessaExpr::PrefixOperationDefinition(l, an, id, tm, _a, t, r, _) |
                 NessaExpr::PostfixOperationDefinition(l, an, id, tm, _a, t, r, _) => (l, self.define_unary_operation(an.clone(), *id, tm.len(), t.clone(), r.clone(), None)),
                 NessaExpr::BinaryOperationDefinition(l, an, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(an.clone(), *id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
-                NessaExpr::NaryOperationDefinition(l, an, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(*id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
+                NessaExpr::NaryOperationDefinition(l, an, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(an.clone(), *id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
 
                 _ => unreachable!()
             };
@@ -3941,7 +3941,7 @@ impl NessaContext{
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                        if let Err(err) = self.define_nary_operation(*id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None) {
+                        if let Err(err) = self.define_nary_operation(an.clone(), *id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 

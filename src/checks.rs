@@ -1173,14 +1173,14 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].1 != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
                             t.get_name(self),
                             open_rep,
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                             close_rep,
-                            operations[ov_id].0, templates.len()
+                            operations[ov_id].1, templates.len()
                         ), l, vec!()))
 
                     } else {

@@ -693,7 +693,7 @@ impl NessaContext {
 
                 NaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("NaryOperatorCall", {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
-                        if let (_, _, r, Some(f)) = &operations[*ov_id] {
+                        if let (_, _, _, r, Some(f)) = &operations[*ov_id] {
                             let res = f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r);
 
                             if let Err(msg) = res {

@@ -20,7 +20,7 @@ pub type NaryFunction = Option<NaryFunctionInner>;
 
 pub type UnaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, UnaryFunction)>;
 pub type BinaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, BinaryFunction)>;
-pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
+pub type NaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, NaryFunction)>;
 
 const EMPTY_UN_FUNC: UnaryFunctionInner = |_, _, _| Ok(Object::empty());
 const EMPTY_BIN_FUNC: BinaryFunctionInner = |_, _, _, _, _| Ok(Object::empty());

@@ -139,7 +139,7 @@ impl NessaContext {
         let t = Type::And(arg_types.clone());
 
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
+            'outer: for (i, (_, t_len, a, r, f)) in operations.iter().enumerate() {
                 if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
@@ -179,8 +179,8 @@ impl NessaContext {
         
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
-                            .map(|(_, a, r, _)| {
+                            .filter(|(_, _, a, _, _)| t.bindable_to(a, self))
+                            .map(|(_, _, a, r, _)| {
                                 if let Type::And(t) = a {
                                     (t[0].clone(), t[1..].to_vec(), r.clone())
 

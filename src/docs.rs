@@ -196,6 +196,8 @@ pub fn generate_all_function_overload_docs(project_path: &String, module: &Nessa
 pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) {
     let mut operations_file = create_markdown_file(project_path, "operations.md");
 
+    write!(operations_file, "# Unary operations\n\n").expect("Error while writing to docs file");
+
     for o in &module.ctx.unary_ops {
         if let Operator::Unary { representation, prefix, operations, .. } = o {
             for ov in operations {
@@ -209,6 +211,8 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
         }
     }
 
+    write!(operations_file, "# Binary operations\n\n").expect("Error while writing to docs file");
+
     for o in &module.ctx.binary_ops {
         if let Operator::Binary { representation, operations, .. } = o {
             for ov in operations {
@@ -221,6 +225,8 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
             }    
         }
     }
+
+    write!(operations_file, "# N-ary operations\n\n").expect("Error while writing to docs file");
 
     for o in &module.ctx.nary_ops {
         if let Operator::Nary { open_rep, close_rep, operations, .. } = o {

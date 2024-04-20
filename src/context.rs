@@ -71,13 +71,14 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
-    pub fn redefine_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+    pub fn redefine_type(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in self.type_templates.iter_mut() {
             if t.name == representation {
                 *t = TypeTemplate {
                     id: t.id,
                     name: representation,
                     params,
+                    annotations,
                     attributes,
                     alias,
                     patterns,
@@ -91,7 +92,7 @@ impl NessaContext {
         Err(format!("Class {} was not defined", representation))
     }
 
-    pub fn define_type(&mut self, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+    pub fn define_type(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
                 return Err(format!("Type \"{}\" is already defined", representation))
@@ -104,6 +105,7 @@ impl NessaContext {
             id: self.type_templates.len(),
             name: representation,
             params,
+            annotations,
             attributes,
             alias,
             patterns,
@@ -628,8 +630,8 @@ mod tests {
     fn type_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_type("Matrix".into(), vec!(), vec!(), None, vec!(), None);
-        let def_2 = ctx.define_type("Int".into(), vec!(), vec!(), None, vec!(), None);
+        let def_1 = ctx.define_type(vec!(), "Matrix".into(), vec!(), vec!(), None, vec!(), None);
+        let def_2 = ctx.define_type(vec!(), "Int".into(), vec!(), vec!(), None, vec!(), None);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

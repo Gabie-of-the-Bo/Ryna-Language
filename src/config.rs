@@ -521,7 +521,8 @@ pub fn generate_docs(path: &String) -> Result<(), NessaError> {
     let project_path = &normalize_path(Path::new(path))?;
 
     let (_, all_mods, files) = compute_project_hash(path, None, false)?;
-    let module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false)?;
+    let mut module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false)?;
+    module.ctx.precompile_module(&mut module.code)?;
 
     generate_all_function_overload_docs(&project_path, &module);
     generate_all_operation_docs(&project_path, &module);

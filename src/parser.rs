@@ -220,7 +220,7 @@ pub enum NessaExpr {
     PostfixOperatorDefinition(Location, String, usize),
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
-    ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
+    ClassDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
     InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
@@ -243,7 +243,7 @@ impl NessaExpr {
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
-            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
@@ -290,7 +290,7 @@ impl NessaExpr {
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
-            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -2358,7 +2358,7 @@ impl NessaContext {
 
                 t.compile_templates(&u_t);
 
-                NessaExpr::ClassDefinition(l, n, u_t, vec!(), Some(t), vec!())
+                NessaExpr::ClassDefinition(l, vec!(), n, u_t, vec!(), Some(t), vec!())
             }
         )(input);
     }
@@ -2465,7 +2465,7 @@ impl NessaContext {
 
                 f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
 
-                NessaExpr::ClassDefinition(l, n, u_t, f, None, p)
+                NessaExpr::ClassDefinition(l, an, n, u_t, f, None, p)
             }
         )(input);
     }
@@ -3032,7 +3032,7 @@ mod tests {
     fn type_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let wildcard_str = "*";
@@ -3139,7 +3139,7 @@ mod tests {
         assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));
 
-        ctx.define_type("Dice".into(), vec!(), vec!(
+        ctx.define_type(vec!(), "Dice".into(), vec!(), vec!(
             ("rolls".into(), INT),
             ("sides".into(), INT)
         ), 
@@ -3185,7 +3185,7 @@ mod tests {
             )
         })));
 
-        ctx.define_type("InnerDice".into(), vec!(), vec!(
+        ctx.define_type(vec!(), "InnerDice".into(), vec!(), vec!(
             ("inner_dice".into(), Type::Basic(id))
         ),
         None,
@@ -3599,7 +3599,7 @@ mod tests {
     fn function_header_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let number_header_str = "fn test(a: Int) -> Int";
@@ -3662,7 +3662,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let test_1_str = "fn inc() -> Int {
@@ -4211,6 +4211,7 @@ mod tests {
         let (_, sync_lists) = ctx.class_definition_parser(Span::new(sync_lists_str)).unwrap();
 
         assert_eq!(dice_roll, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "DiceRoll".into(),
             vec!(),
             vec!(
@@ -4222,6 +4223,7 @@ mod tests {
         ));
 
         assert_eq!(sync_lists, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "SyncLists".into(),
             vec!("K".into(), "V".into()),
             vec!(
@@ -4279,6 +4281,7 @@ mod tests {
         let (_, number) = ctx.alias_definition_parser(Span::new(number_str)).unwrap();
 
         assert_eq!(number, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "Number".into(),
             vec!(),
             vec!(),

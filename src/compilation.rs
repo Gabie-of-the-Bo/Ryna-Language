@@ -1417,7 +1417,7 @@ impl NessaContext{
                 }
             }
 
-            NessaExpr::ClassDefinition(_, n, _, _, _, _) => {
+            NessaExpr::ClassDefinition(_, _, n, _, _, _, _) => {
                 if let Some(t) = self.get_type_template(n) {
                     deps.connect(parent.clone(), (ImportType::Class, t.id), ());
 
@@ -3040,7 +3040,7 @@ impl NessaContext{
 
     pub fn define_module_class(&mut self, definition: NessaExpr) -> Result<(), NessaError> {
         match definition {
-            NessaExpr::ClassDefinition(l, n, t, a, al, p) => {
+            NessaExpr::ClassDefinition(l, an, n, t, a, al, p) => {
                 let err = self.implicit_syntax_check(&n, &t, &a, &p);
 
                 if let Err(msg) = err {
@@ -3051,7 +3051,7 @@ impl NessaContext{
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
                 let err = if self.get_type_template(&n).is_some() {
-                    self.redefine_type(n.clone(), t, a.clone(), al, p, Some(
+                    self.redefine_type(an.clone(), n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
                             if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
@@ -3062,7 +3062,7 @@ impl NessaContext{
                     ))
 
                 } else {
-                    self.define_type(n.clone(), t, a.clone(), al, p, Some(
+                    self.define_type(an.clone(), n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
                             if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
@@ -3280,7 +3280,7 @@ impl NessaContext{
 
             if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
                 for name in names {
-                    self.define_type(name, vec!(), vec!(), None, vec!(), None).unwrap();
+                    self.define_type(vec!(), name, vec!(), vec!(), None, vec!(), None).unwrap();
                 }
     
                 let interfaces = self.nessa_interface_definition_parser(Span::new(code))?;
@@ -3481,7 +3481,7 @@ impl NessaContext{
                 let mapped_attrs = other_cl.attributes.iter().map(|(n, t)| (n.clone(), t.map_type(self, other, id_mapper, l))).collect();
                 let mapped_alias = other_cl.alias.as_ref().map(|i| i.map_type(self, other, id_mapper, l));
 
-                self.define_type(c_name.clone(), other_cl.params.clone(), mapped_attrs, mapped_alias, other_cl.patterns.clone(), other_cl.parser)?;
+                self.define_type(other_cl.annotations.clone(), c_name.clone(), other_cl.params.clone(), mapped_attrs, mapped_alias, other_cl.patterns.clone(), other_cl.parser)?;
             }
 
             return Ok(class_id);
@@ -3811,11 +3811,11 @@ impl NessaContext{
                     }
                 }
 
-                NessaExpr::ClassDefinition(l, n, t, atts, al, p) => {
+                NessaExpr::ClassDefinition(l, an, n, t, atts, al, p) => {
                     if needs_import(module, ImportType::Class, n, imports, &mut self.cache.imports.classes, (n.clone(), t.clone())) {
                         let mapped_atts = atts.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut id_mapper, l))).collect();
                         let mapped_al = al.clone().map(|i| i.map_type(self, ctx, &mut id_mapper, l));
-                        let mapped_expr = NessaExpr::ClassDefinition(l.clone(), n.clone(), t.clone(), mapped_atts, mapped_al, p.clone());
+                        let mapped_expr = NessaExpr::ClassDefinition(l.clone(), an.clone(), n.clone(), t.clone(), mapped_atts, mapped_al, p.clone());
 
                         self.define_module_class(mapped_expr.clone())?;
                         

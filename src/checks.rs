@@ -876,7 +876,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::ClassDefinition(l, _, _, args, alias, _) => {
+            NessaExpr::ClassDefinition(l, _, _, _, args, alias, _) => {
                 if let Some(t) = alias {
                     if t.has_self() {
                         return Err(NessaError::compiler_error(
@@ -1506,7 +1506,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::ClassDefinition(l, _, t, attrs, alias, _) => {
+            NessaExpr::ClassDefinition(l, _, _, t, attrs, alias, _) => {
                 let mut templates = HashSet::new();
 
                 if let Some(a) = alias {
@@ -1560,7 +1560,7 @@ impl NessaContext {
 
     pub fn class_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::ClassDefinition(l, n, _, attributes, _, _) => {
+            NessaExpr::ClassDefinition(l, _, n, _, attributes, _, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
                         return Err(NessaError::compiler_error(format!("Repeated attribute \"{}\" in class {}", att, n), l, vec!()));
@@ -2190,7 +2190,7 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn check_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
+    pub fn check_fn_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
         annot.check_args(
             &["0", "1"], 
             args.iter()
@@ -2201,13 +2201,37 @@ impl NessaContext {
         Ok(())
     }
 
+    pub fn check_class_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
+        annot.check_args(
+            &["0"], 
+            args.iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>().as_slice()
+        )?;
+        
+        Ok(())
+    }
+
     pub fn annotation_checks(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
+            NessaExpr::ClassDefinition(l, an, _, _, atts, _, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Classes cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_class_doc_annotation(a, atts),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
             NessaExpr::FunctionDefinition(l, an, _, t, args, r, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, args, r),
-                        "doc" => self.check_doc_annotation(a, args),
+                        "doc" => self.check_fn_doc_annotation(a, args),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
@@ -2221,7 +2245,7 @@ impl NessaContext {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!((arg_n.clone(), arg_t.clone())), r),
-                        "doc" => self.check_doc_annotation(a, &vec!((arg_n.clone(), arg_t.clone()))),
+                        "doc" => self.check_fn_doc_annotation(a, &vec!((arg_n.clone(), arg_t.clone()))),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
@@ -2234,7 +2258,7 @@ impl NessaContext {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!(arg_a.clone(), arg_b.clone()), r),
-                        "doc" => self.check_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
+                        "doc" => self.check_fn_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
@@ -2250,7 +2274,7 @@ impl NessaContext {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &all_args, r),
-                        "doc" => self.check_doc_annotation(a, &all_args),
+                        "doc" => self.check_fn_doc_annotation(a, &all_args),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

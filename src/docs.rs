@@ -3,6 +3,7 @@ use std::{fs::File, path::Path};
 use std::io::Write;
 
 use crate::operations::Operator;
+use crate::types::TypeTemplate;
 use crate::{annotations::Annotation, config::NessaModule, html_ext::HTMLColorable, types::Type};
 
 pub fn default_markdown_style() -> String {
@@ -178,6 +179,36 @@ pub fn write_nary_operation_docs(file: &mut File, module: &NessaModule, op_open:
     write_args_and_ret(file, annot);
 }
 
+pub fn write_class_docs(file: &mut File, template: &TypeTemplate, annot: &Annotation) {
+    write!(
+        file,
+        "## {} {}{}",
+        "class".html_magenta(),
+        template.name.html_green(),
+        if template.params.len() > 0 { 
+            format!("&lt;{}&gt;", template.params.iter()
+                                                 .map(|i| format!("T_{}", i).html_blue())
+                                                 .collect::<Vec<_>>()
+                                                 .join(", ")
+            ) 
+        } else { "".into() }
+    ).expect("Error while writing to docs file");
+
+    write!(
+        file,
+        "\n\n### Attributes\n\n",
+    ).expect("Error while writing to docs file");
+
+    for arg in &annot.args {
+        if arg.0.parse::<usize>().is_err() {
+            write!(
+                file, 
+                "* `{}`: {}\n", arg.0, arg.1
+            ).expect("Error while writing to docs file");
+        }
+    }
+}
+
 pub fn generate_all_function_overload_docs(project_path: &String, module: &NessaModule) {
     let mut functions_file = create_markdown_file(project_path, "functions.md");
 
@@ -238,6 +269,19 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
                     }    
                 }
             }    
+        }
+    }
+}
+
+pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
+    let mut classes_file = create_markdown_file(project_path, "classes.md");
+
+    for c in &module.ctx.type_templates {
+        for annot in &c.annotations {
+            if annot.name == "doc" {
+                write_class_docs(&mut classes_file, c, annot);
+                break;
+            }
         }
     }
 }

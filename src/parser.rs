@@ -46,12 +46,17 @@ type BinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type)
 type NaryOpHeader = (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
 type FunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 
+type AnnotUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, Type, Type);
+type AnnotBinaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type);
+type AnnotNaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
+type AnnotFunctionHeader = (Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type);
+
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum InterfaceHeader {
-    UnaryOpHeader(usize, Vec<String>, String, Type, Type),
-    BinaryOpHeader(usize, Vec<String>, (String, Type), (String, Type), Type),
-    NaryOpHeader(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type),
-    FunctionHeader(String, Option<Vec<String>>, Vec<(String, Type)>, Type)
+    UnaryOpHeader(Vec<Annotation>, usize, Vec<String>, String, Type, Type),
+    BinaryOpHeader(Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type),
+    NaryOpHeader(Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type),
+    FunctionHeader(Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type)
 }
 
 pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<VerboseError<Span<'a>>> {
@@ -221,7 +226,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
+    InterfaceDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<AnnotFunctionHeader>, Vec<AnnotUnaryOpHeader>, Vec<AnnotBinaryOpHeader>, Vec<AnnotNaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -2538,24 +2543,69 @@ impl NessaContext {
                             empty0, 
                             alt((
                                 map(
-                                    |input| self.function_header_parser(input),
-                                    |(a, b, c, d)| InterfaceHeader::FunctionHeader(a, b, c, d)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.function_header_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d))| InterfaceHeader::FunctionHeader(an, a, b, c, d)
                                 ),
                                 map(
-                                    |input| self.prefix_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.prefix_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::UnaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.postfix_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.postfix_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::UnaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.binary_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::BinaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.binary_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::BinaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.nary_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::NaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.nary_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::NaryOpHeader(an, a, b, c, d, e)
                                 )
                             )),
                             context("Expected ';' at the end of interface function signature", cut(tag(";")))
@@ -2568,14 +2618,14 @@ impl NessaContext {
             |(l, (an, _, _, n, _, t, _, _, p, _, _))| {
                 let u_t = t.unwrap_or_default();
 
-                let mut fns: Vec<FunctionHeader> = vec!();
-                let mut unary: Vec<UnaryOpHeader> = vec!();
-                let mut binary: Vec<BinaryOpHeader> = vec!();
-                let mut nary: Vec<NaryOpHeader> = vec!();
+                let mut fns: Vec<AnnotFunctionHeader> = vec!();
+                let mut unary: Vec<AnnotUnaryOpHeader> = vec!();
+                let mut binary: Vec<AnnotBinaryOpHeader> = vec!();
+                let mut nary: Vec<AnnotNaryOpHeader> = vec!();
 
                 p.into_iter().for_each(|h| {
                     match h {
-                        InterfaceHeader::FunctionHeader(n, tm, mut args, mut ret) => {
+                        InterfaceHeader::FunctionHeader(an, n, tm, mut args, mut ret) => {
                             let u_tm = tm.clone().unwrap_or_default();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
         
@@ -2585,20 +2635,20 @@ impl NessaContext {
         
                             ret.compile_templates(&all_tm);
 
-                            fns.push((n, tm, args, ret));
+                            fns.push((an, n, tm, args, ret));
                         },
 
-                        InterfaceHeader::UnaryOpHeader(id, tm, a, mut at, mut ret) => {
+                        InterfaceHeader::UnaryOpHeader(an, id, tm, a, mut at, mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
                             at.compile_templates(&all_tm);
                             ret.compile_templates(&all_tm);
 
-                            unary.push((id, tm, a, at, ret));
+                            unary.push((an, id, tm, a, at, ret));
                         },
 
-                        InterfaceHeader::BinaryOpHeader(id, tm, (a0, mut a0t), (a1, mut a1t), mut ret) => {
+                        InterfaceHeader::BinaryOpHeader(an, id, tm, (a0, mut a0t), (a1, mut a1t), mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
@@ -2606,10 +2656,10 @@ impl NessaContext {
                             a1t.compile_templates(&all_tm);
                             ret.compile_templates(&all_tm);
 
-                            binary.push((id, tm, (a0, a0t), (a1, a1t), ret));
+                            binary.push((an, id, tm, (a0, a0t), (a1, a1t), ret));
                         }
 
-                        InterfaceHeader::NaryOpHeader(id, tm, (a0, mut a0t), mut args, mut ret) => {
+                        InterfaceHeader::NaryOpHeader(an, id, tm, (a0, mut a0t), mut args, mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
@@ -2621,7 +2671,7 @@ impl NessaContext {
 
                             ret.compile_templates(&all_tm);
 
-                            nary.push((id, tm, (a0, a0t), args, ret));
+                            nary.push((an, id, tm, (a0, a0t), args, ret));
                         }
                     }
                 });

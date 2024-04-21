@@ -1398,7 +1398,7 @@ impl NessaContext {
             NessaExpr::InterfaceDefinition(l, _, _, t, fns, uns, bin, nary) => {
                 let mut templates = HashSet::new();
 
-                for (_, f_t, args, r) in fns {
+                for (_, _, f_t, args, r) in fns {
                     let mut templates_f = HashSet::new();
 
                     self.check_type_well_formed(r, l)?;
@@ -1423,7 +1423,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, _, at, r) in uns {
+                for (_, _, f_t, _, at, r) in uns {
                     self.check_type_well_formed(at, l)?;
                     self.check_type_well_formed(r, l)?;
 
@@ -1439,7 +1439,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, (_, a0t), (_, a1t), r) in bin {
+                for (_, _, f_t, (_, a0t), (_, a1t), r) in bin {
                     self.check_type_well_formed(a0t, l)?;
                     self.check_type_well_formed(a1t, l)?;
                     self.check_type_well_formed(r, l)?;
@@ -1457,7 +1457,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, (_, a0t), args, r) in nary {
+                for (_, _, f_t, (_, a0t), args, r) in nary {
                     self.check_type_well_formed(a0t, l)?;
                     self.check_type_well_formed(r, l)?;
 
@@ -1615,10 +1615,10 @@ impl NessaContext {
                         let bin = &self.interfaces[int_id].bin;
                         let nary = &self.interfaces[int_id].nary;
 
-                        let max_tms = fns.iter().map(|i| i.1.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap_or(0) + 
-                                      uns.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
-                                      bin.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
-                                      nary.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
+                        let max_tms = fns.iter().map(|i| i.2.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap_or(0) + 
+                                      uns.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
+                                      bin.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
+                                      nary.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
                                       self.interfaces[int_id].params.len();
 
                         let mut offset_t = t.clone();
@@ -1628,7 +1628,7 @@ impl NessaContext {
 
                         let t_subs = (0..offset_ts.len()).zip(offset_ts.clone()).collect::<HashMap<_, _>>();
                         
-                        for (f_n, _, args, ret) in fns {
+                        for (_, f_n, _, args, ret) in fns {
                             match self.get_function_id(f_n.clone()) {
                                 Ok(fn_id) => {
                                     let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
@@ -1685,7 +1685,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, _, at, ret) in uns {
+                        for (_, op_id, _, _, at, ret) in uns {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg_sub = at.sub_self(&offset_t).sub_templates(&t_subs);
 
@@ -1780,7 +1780,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, (_, a0t), (_, a1t), ret) in bin {
+                        for (_, op_id, _, (_, a0t), (_, a1t), ret) in bin {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg1_sub = a1t.sub_self(&offset_t).sub_templates(&t_subs);
@@ -1838,7 +1838,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, (_, a0t), args, ret) in nary {
+                        for (_, op_id, _, (_, a0t), args, ret) in nary {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
                             let args_sub = args.iter().map(|(_, tp)| tp.sub_self(&offset_t).sub_templates(&t_subs)).collect::<Vec<_>>();

@@ -1306,7 +1306,7 @@ impl NessaContext{
 
             NessaExpr::InterfaceDefinition(_, _, n, _, fns, uns, bin, nary) => {
                 if let Some(t) = self.get_interface(n) {
-                    for (f_n, _, a, r) in fns {
+                    for (_, f_n, _, a, r) in fns {
                         if let Some(f) = self.get_function(f_n) {
                             deps.connect((ImportType::Interface, t.id), (ImportType::Fn, f.id), ());                        
                         }
@@ -1330,7 +1330,7 @@ impl NessaContext{
                         }
                     }
 
-                    for (op_id, _, _, at, r) in uns {
+                    for (_, op_id, _, _, at, r) in uns {
                         if let Operator::Unary { prefix, .. } = &self.unary_ops[*op_id] {
                             if *prefix {
                                 deps.connect((ImportType::Interface, t.id), (ImportType::Prefix, *op_id), ());
@@ -1357,7 +1357,7 @@ impl NessaContext{
                         }
                     }
 
-                    for (op_id, _, (_, a0t), (_, a1t), r) in bin {
+                    for (_, op_id, _, (_, a0t), (_, a1t), r) in bin {
                         deps.connect((ImportType::Interface, t.id), (ImportType::Binary, *op_id), ());
 
                         for t_dep in a0t.type_dependencies() {
@@ -1385,7 +1385,7 @@ impl NessaContext{
                         }
                     }
 
-                    for (op_id, _, (_, a0t), a, r) in nary {
+                    for (_, op_id, _, (_, a0t), a, r) in nary {
                         deps.connect((ImportType::Interface, t.id), (ImportType::Nary, *op_id), ());
 
                         for t_dep in a0t.type_dependencies() {
@@ -3415,8 +3415,9 @@ impl NessaContext{
                 interface_id = self.interfaces.len();
                 id_mapper.interfaces.entry(id).or_insert(interface_id);
 
-                let mapped_fns = other_i.fns.iter().map(|(n, t, a, r)| {
+                let mapped_fns = other_i.fns.iter().map(|(an, n, t, a, r)| {
                     (
+                        an.clone(),
                         n.clone(),
                         t.clone(),
                         a.iter().map(|(n, t)| (n.clone(), t.map_type(self, other, id_mapper, l))).collect(),
@@ -3424,8 +3425,9 @@ impl NessaContext{
                     )
                 }).collect::<Vec<_>>();
 
-                let mapped_uns = other_i.uns.iter().map(|(id, tm, a, at, ret)| {
+                let mapped_uns = other_i.uns.iter().map(|(an, id, tm, a, at, ret)| {
                     Result::<_, NessaError>::Ok((
+                        an.clone(),
                         self.map_nessa_unary_operator(other, *id, id_mapper, l)?,
                         tm.clone(),
                         a.clone(),
@@ -3434,8 +3436,9 @@ impl NessaContext{
                     ))
                 }).collect::<Result<Vec<_>, _>>().unwrap();
 
-                let mapped_bin = other_i.bin.iter().map(|(id, tm, (a0, a0t), (a1, a1t), ret)| {
+                let mapped_bin = other_i.bin.iter().map(|(an, id, tm, (a0, a0t), (a1, a1t), ret)| {
                     Result::<_, NessaError>::Ok((
+                        an.clone(),
                         self.map_nessa_binary_operator(other, *id, id_mapper, l)?,
                         tm.clone(),
                         (a0.clone(), a0t.map_type(self, other, id_mapper, l)),
@@ -3444,8 +3447,9 @@ impl NessaContext{
                     ))
                 }).collect::<Result<Vec<_>, _>>().unwrap();
 
-                let mapped_nary = other_i.nary.iter().map(|(id, tm, (a0, a0t), a, ret)| {
+                let mapped_nary = other_i.nary.iter().map(|(an, id, tm, (a0, a0t), a, ret)| {
                     Result::<_, NessaError>::Ok((
+                        an.clone(),
                         self.map_nessa_binary_operator(other, *id, id_mapper, l)?,
                         tm.clone(),
                         (a0.clone(), a0t.map_type(self, other, id_mapper, l)),
@@ -3765,8 +3769,9 @@ impl NessaContext{
                     if needs_import(module, ImportType::Interface, n, imports, &mut self.cache.imports.interface_def, (n.clone(), t.clone())) {
                         self.map_nessa_interface(ctx, ctx.get_interface_id(n.clone()).unwrap(), &mut id_mapper, l).unwrap();
 
-                        let mapped_fns = fns.iter().map(|(n, t, a, r)| {
+                        let mapped_fns = fns.iter().map(|(an, n, t, a, r)| {
                             (
+                                an.clone(),
                                 n.clone(),
                                 t.clone(),
                                 a.iter().map(|(n, t)| (n.clone(), t.map_type(self, ctx, &mut id_mapper, l))).collect(),
@@ -3774,8 +3779,9 @@ impl NessaContext{
                             )
                         }).collect();
 
-                        let mapped_uns = uns.iter().map(|(id, tm, a, at, ret)| {
+                        let mapped_uns = uns.iter().map(|(an, id, tm, a, at, ret)| {
                             Result::<_, NessaError>::Ok((
+                                an.clone(),
                                 self.map_nessa_unary_operator(ctx, *id, &mut id_mapper, l)?,
                                 tm.clone(),
                                 a.clone(),
@@ -3784,8 +3790,9 @@ impl NessaContext{
                             ))
                         }).collect::<Result<Vec<_>, _>>()?;
 
-                        let mapped_bin = bin.iter().map(|(id, tm, (a0, a0t), (a1, a1t), ret)| {
+                        let mapped_bin = bin.iter().map(|(an, id, tm, (a0, a0t), (a1, a1t), ret)| {
                             Result::<_, NessaError>::Ok((
+                                an.clone(),
                                 self.map_nessa_binary_operator(ctx, *id, &mut id_mapper, l)?,
                                 tm.clone(),
                                 (a0.clone(), a0t.map_type(self, ctx, &mut id_mapper, l)),
@@ -3794,8 +3801,9 @@ impl NessaContext{
                             ))
                         }).collect::<Result<Vec<_>, _>>().unwrap();
 
-                        let mapped_nary = nary.iter().map(|(id, tm, (a0, a0t), a, ret)| {
+                        let mapped_nary = nary.iter().map(|(an, id, tm, (a0, a0t), a, ret)| {
                             Result::<_, NessaError>::Ok((
+                                an.clone(),
                                 self.map_nessa_binary_operator(ctx, *id, &mut id_mapper, l)?,
                                 tm.clone(),
                                 (a0.clone(), a0t.map_type(self, ctx, &mut id_mapper, l)),

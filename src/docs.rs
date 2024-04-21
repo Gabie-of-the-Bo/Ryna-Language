@@ -2,6 +2,7 @@ use std::fs::OpenOptions;
 use std::{fs::File, path::Path};
 use std::io::Write;
 
+use crate::interfaces::Interface;
 use crate::operations::Operator;
 use crate::types::TypeTemplate;
 use crate::{annotations::Annotation, config::NessaModule, html_ext::HTMLColorable, types::Type};
@@ -224,6 +225,70 @@ pub fn write_syntax_docs(file: &mut File, name: &String, annot: &Annotation) {
     ).expect("Error while writing to docs file");
 }
 
+pub fn write_interface_docs(file: &mut File, module: &NessaModule, interface: &Interface, annot: &Annotation) {
+    write!(
+        file,
+        "# {} {}",
+        "interface".html_magenta(),
+        interface.name.html_green(),
+    ).expect("Error while writing to docs file");
+
+    write!(
+        file,
+        "\n\n## Description\n{}\n\n",
+        annot.args.get("0").unwrap()
+    ).expect("Error while writing to docs file");
+
+    for f in &interface.fns {
+        for a in &f.0 {
+            if a.name == "doc" {
+                let args = Type::And(f.3.iter().map(|(_, i)| i).cloned().collect());
+                let templates = f.2.as_ref().map(Vec::len).unwrap_or_default();
+
+                write_function_overload_docs(file, module, &f.1, templates, &args, &f.4, a);
+                break;
+            }
+        }
+    }
+
+    for u in &interface.uns {
+        for a in &u.0 {
+            if a.name == "doc" {
+                if let Operator::Unary { representation, prefix, .. } = &module.ctx.unary_ops[u.1] {
+                    write_unary_operation_docs(file, module, &representation, u.2.len(), &u.4, &u.5, a, *prefix);
+                    break;    
+                }
+            }
+        }
+    }
+
+    for b in &interface.bin {
+        for a in &b.0 {
+            if a.name == "doc" {
+                if let Operator::Binary { representation, .. } = &module.ctx.binary_ops[b.1] {
+                    let args = Type::And(vec!(b.3.1.clone(), b.4.1.clone()));
+                    write_binary_operation_docs(file, module, &representation, b.2.len(), &args, &b.5, a);
+                    break;    
+                }
+            }
+        }
+    }
+
+    for n in &interface.nary {
+        for a in &n.0 {
+            if a.name == "doc" {
+                if let Operator::Nary { open_rep, close_rep, .. } = &module.ctx.nary_ops[n.1] {
+                    let mut args = vec!(n.3.1.clone());
+                    args.extend(n.4.iter().map(|(_, i)| i).cloned());
+                    
+                    write_nary_operation_docs(file, module, &open_rep, &close_rep, n.2.len(), &Type::And(args), &n.5, a);
+                    break;    
+                }
+            }
+        }
+    }
+}
+
 pub fn generate_all_function_overload_docs(project_path: &String, module: &NessaModule) {
     let mut functions_file = create_markdown_file(project_path, "functions.md");
 
@@ -308,6 +373,19 @@ pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
         for annot in &c.0 {
             if annot.name == "doc" {
                 write_syntax_docs(&mut syntaxes_file, &c.1, annot);
+                break;
+            }
+        }
+    }
+}
+
+pub fn generate_all_interface_docs(project_path: &String, module: &NessaModule) {
+    let mut interfaces_file = create_markdown_file(project_path, "interfaces.md");
+
+    for c in &module.ctx.interfaces {
+        for annot in &c.annotations {
+            if annot.name == "doc" {
+                write_interface_docs(&mut interfaces_file, module, c, annot);
                 break;
             }
         }

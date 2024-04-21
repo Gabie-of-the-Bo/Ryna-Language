@@ -201,7 +201,7 @@ pub enum NessaExpr {
     CompiledLambda(Location, usize, Vec<(String, NessaExpr)>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Macro
-    Macro(Location, String, NessaMacroType, Pattern, NessaMacro),
+    Macro(Location, Vec<Annotation>, String, NessaMacroType, Pattern, NessaMacro),
 
     // Uncompiled
     Literal(Location, Object),
@@ -238,7 +238,7 @@ pub enum NessaExpr {
 impl NessaExpr {
     pub fn is_definition(&self) -> bool {
         match self {
-            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -283,7 +283,7 @@ impl NessaExpr {
             NessaExpr::FunctionName(_, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
-            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
@@ -993,7 +993,7 @@ impl NessaContext {
     }
     
     fn custom_syntax_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
-        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 != NessaMacroType::Block) {
+        for (_, _, mt, p, m) in self.macros.iter().filter(|i| i.2 != NessaMacroType::Block) {
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string(), self.module_name.clone());
@@ -1091,7 +1091,7 @@ impl NessaContext {
     fn custom_syntax_block_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let prev_input = input;
 
-        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
+        for (_, _, mt, p, m) in self.macros.iter().filter(|i| i.2 == NessaMacroType::Block) {            
             if let Ok((new_input, args)) = p.extract(input, self, cache) {
                 input = new_input;
 
@@ -1470,7 +1470,7 @@ impl NessaContext {
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
-            |(l, (an, (t, n, p), _, m))| NessaExpr::Macro(l, n, t, p, m)
+            |(l, (an, (t, n, p), _, m))| NessaExpr::Macro(l, an, n, t, p, m)
         )(input);
     }
     

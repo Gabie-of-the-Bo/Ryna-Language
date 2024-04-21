@@ -44,7 +44,7 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<(String, NessaMacroType, Pattern, NessaMacro)>,
+    pub macros: Vec<(Vec<Annotation>, String, NessaMacroType, Pattern, NessaMacro)>,
 
     pub variables: Vec<Object>,
 

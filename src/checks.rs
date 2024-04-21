@@ -1576,7 +1576,7 @@ impl NessaContext {
 
     pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::Macro(l, n, _, p, b) => {
+            NessaExpr::Macro(l, _, n, _, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
                 
@@ -2201,7 +2201,7 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn check_class_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
+    pub fn check_noret_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
         annot.check_args(
             &["0"], 
             args.iter()
@@ -2214,11 +2214,24 @@ impl NessaContext {
 
     pub fn annotation_checks(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
+            NessaExpr::Macro(l, an, _, _, _, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Macros cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_noret_doc_annotation(a, &vec!()),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
             NessaExpr::ClassDefinition(l, an, _, _, atts, _, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Classes cannot have the {} annotation", "test".cyan())),
-                        "doc" => self.check_class_doc_annotation(a, atts),
+                        "doc" => self.check_noret_doc_annotation(a, atts),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

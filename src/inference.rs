@@ -366,7 +366,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |
-            NessaExpr::Macro(l, _, _, _, _) |
+            NessaExpr::Macro(l, _, _, _, _, _) |
             NessaExpr::Lambda(l, _, _, _, _) |
             NessaExpr::NameReference(l, _) |
             NessaExpr::VariableDefinition(l, _, _, _) |

@@ -2240,7 +2240,7 @@ impl NessaContext {
                 }
             }
 
-            NessaExpr::InterfaceDefinition(l, an, _, _, _, _, _, _) => {
+            NessaExpr::InterfaceDefinition(l, an, _, _, fns, unops, binops, naryops) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Interfaces cannot have the {} annotation", "test".cyan())),
@@ -2250,6 +2250,61 @@ impl NessaContext {
                     };
                     
                     res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+
+                for (inner_an, _, _, args, _) in fns {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface function headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, args),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, n, t, _) in unops {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &vec!((n.clone(), t.clone()))),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, arg_a, arg_b, _) in binops {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, arg_a, arg_b, _) in naryops {
+                    let mut all_args = vec!(arg_a.clone());
+                    all_args.extend(arg_b.iter().cloned());
+    
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &all_args),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
                 }
             }
 

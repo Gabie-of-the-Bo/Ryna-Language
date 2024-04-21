@@ -209,6 +209,21 @@ pub fn write_class_docs(file: &mut File, template: &TypeTemplate, annot: &Annota
     }
 }
 
+pub fn write_syntax_docs(file: &mut File, name: &String, annot: &Annotation) {
+    write!(
+        file,
+        "## {} {}",
+        "syntax".html_magenta(),
+        name.html_green(),
+    ).expect("Error while writing to docs file");
+
+    write!(
+        file,
+        "\n\n### Description\n{}\n\n",
+        annot.args.get("0").unwrap()
+    ).expect("Error while writing to docs file");
+}
+
 pub fn generate_all_function_overload_docs(project_path: &String, module: &NessaModule) {
     let mut functions_file = create_markdown_file(project_path, "functions.md");
 
@@ -280,6 +295,19 @@ pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
         for annot in &c.annotations {
             if annot.name == "doc" {
                 write_class_docs(&mut classes_file, c, annot);
+                break;
+            }
+        }
+    }
+}
+
+pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
+    let mut syntaxes_file = create_markdown_file(project_path, "syntaxes.md");
+
+    for c in &module.ctx.macros {
+        for annot in &c.0 {
+            if annot.name == "doc" {
+                write_syntax_docs(&mut syntaxes_file, &c.1, annot);
                 break;
             }
         }

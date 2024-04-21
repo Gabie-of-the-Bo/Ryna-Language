@@ -1395,7 +1395,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::InterfaceDefinition(l, _, t, fns, uns, bin, nary) => {
+            NessaExpr::InterfaceDefinition(l, _, _, t, fns, uns, bin, nary) => {
                 let mut templates = HashSet::new();
 
                 for (_, f_t, args, r) in fns {
@@ -2232,6 +2232,19 @@ impl NessaContext {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Classes cannot have the {} annotation", "test".cyan())),
                         "doc" => self.check_noret_doc_annotation(a, atts),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::InterfaceDefinition(l, an, _, _, _, _, _, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Interfaces cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_noret_doc_annotation(a, &vec!()),
 
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };

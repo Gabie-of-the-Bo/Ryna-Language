@@ -115,13 +115,14 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn redefine_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
+    pub fn redefine_interface(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in self.interfaces.iter_mut() {
             if i.name == representation {
                 *i = Interface {
                     id: i.id,
                     name: representation,
                     params,
+                    annotations,
                     fns,
                     uns,
                     bin,
@@ -135,7 +136,7 @@ impl NessaContext {
         Err(format!("Interface {} was not defined", representation))
     }
 
-    pub fn define_interface(&mut self, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
+    pub fn define_interface(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in &self.interfaces {
             if i.name == representation {
                 return Err(format!("Interface \"{}\" is already defined", representation))
@@ -148,6 +149,7 @@ impl NessaContext {
             id: self.interfaces.len(),
             name: representation,
             params,
+            annotations,
             fns,
             uns,
             bin,

@@ -221,7 +221,7 @@ pub enum NessaExpr {
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
     ClassDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
+    InterfaceDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
     PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
@@ -244,7 +244,7 @@ impl NessaExpr {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -291,7 +291,7 @@ impl NessaExpr {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -2503,6 +2503,13 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     tag("interface"),
                     empty1,
                     context("Invalid interface identifier", cut(identifier_parser)),
@@ -2558,7 +2565,7 @@ impl NessaContext {
                     tag("}")
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, p, _, _))| {
+            |(l, (an, _, _, n, _, t, _, _, p, _, _))| {
                 let u_t = t.unwrap_or_default();
 
                 let mut fns: Vec<FunctionHeader> = vec!();
@@ -2619,7 +2626,7 @@ impl NessaContext {
                     }
                 });
 
-                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary, binary, nary)
+                NessaExpr::InterfaceDefinition(l, an, n, u_t, fns, unary, binary, nary)
             }
         )(input);
     }

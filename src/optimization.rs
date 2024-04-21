@@ -98,7 +98,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -219,7 +219,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -500,7 +500,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -603,7 +603,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -711,7 +711,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -942,7 +942,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -1164,7 +1164,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -1258,7 +1258,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
@@ -1334,7 +1334,7 @@ impl NessaContext {
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
             NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
             NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |

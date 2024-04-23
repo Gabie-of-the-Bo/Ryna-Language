@@ -40,6 +40,10 @@ nav:
         - NDL Macros: 'pages/tutorial/steps/ndl_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
       - Importing Modules: 'pages/tutorial/steps/imports.md'
+      - Annotations:
+        - Syntax and usage: 'pages/tutorial/steps/annot.md'
+        - Testing your modules: 'pages/tutorial/steps/annot_test.md'
+        - Documenting your modules: 'pages/tutorial/steps/annot_docs.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'

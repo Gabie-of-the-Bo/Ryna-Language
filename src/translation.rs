@@ -2,12 +2,12 @@ use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{
 
 fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
-        for (ov_id, (_, _, arg, _, _)) in operations.iter().enumerate() {
-            if let Some(opcode) = f(arg) {
-                let mut offset = arg.is_ref() as usize;
+        for (ov_id, op_ov) in operations.iter().enumerate() {
+            if let Some(opcode) = f(&op_ov.args) {
+                let mut offset = op_ov.args.is_ref() as usize;
 
                 if opcode.needs_float() {
-                    offset += (*arg.deref_type() == INT) as usize;
+                    offset += (*op_ov.args.deref_type() == INT) as usize;
                 }
 
                 ctx.cache.opcodes.unary.insert((id, ov_id), (opcode, offset));
@@ -18,8 +18,8 @@ fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaC
 
 fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
     if let Operator::Binary { operations, .. } = &ctx.binary_ops[id] {
-        for (ov_id, (_, _, args, _, _)) in operations.iter().enumerate() {
-            if let Type::And(types) = args {
+        for (ov_id, op_ov) in operations.iter().enumerate() {
+            if let Type::And(types) = &op_ov.args {
                 if let Some(opcode) = f(&types[0], &types[1]) {
                     let mut offset = (types[0].is_ref() as usize) + (types[1].is_ref() as usize);
 

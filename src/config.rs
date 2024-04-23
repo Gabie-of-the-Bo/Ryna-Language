@@ -451,7 +451,7 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
 
     for f in &module.ctx.functions {
         for ov in &f.overloads {
-            if ov.0.iter().any(|i| i.name == "test") {
+            if ov.annotations.iter().any(|i| i.name == "test") {
                 test_functions.push((&f.name, f.id));
                 break; // Only one overload per function
             }

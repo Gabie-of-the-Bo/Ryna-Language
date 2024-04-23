@@ -2997,7 +2997,7 @@ impl NessaContext{
                     res.push(NessaInstruction::new_with_type(
                         opcode,
                         "".into(),
-                        self.functions[*id].overloads[ov_id].2.clone()
+                        self.functions[*id].overloads[ov_id].ret.clone()
                     ).set_loc(l));
 
                 } else {

@@ -1059,13 +1059,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 //Invalid number of template arguments
-                if self.functions[*id].overloads[ov_id].1 != templates.len() {
+                if self.functions[*id].overloads[ov_id].templates != templates.len() {
                     Err(NessaError::compiler_error(format!(
                         "Function overload for {}{}({}) expected {} type arguments (got {})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                        self.functions[*id].overloads[ov_id].1, templates.len()
+                        self.functions[*id].overloads[ov_id].templates, templates.len()
                     ), l, vec!()))
                 
                 } else {
@@ -1088,13 +1088,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
-                    if operations[ov_id].1 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         if *prefix {
                             Err(NessaError::compiler_error(format!(
                                 "Unary operator overload for {}({}) expected {} type arguments (got {})",
                                 representation,
                                 t.get_name(self),
-                                operations[ov_id].1, templates.len()
+                                operations[ov_id].templates, templates.len()
                             ), l, vec!()))
 
                         } else {
@@ -1102,7 +1102,7 @@ impl NessaContext {
                                 "Unary operator overload for ({}){} expected {} type arguments (got {})",
                                 t.get_name(self),
                                 representation,
-                                operations[ov_id].1, templates.len()
+                                operations[ov_id].templates, templates.len()
                             ), l, vec!()))
                         }
 
@@ -1133,13 +1133,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
-                    if operations[ov_id].1 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
                             t1.get_name(self),
                             representation,
                             t2.get_name(self),
-                            operations[ov_id].1, templates.len()
+                            operations[ov_id].templates, templates.len()
                         ), l, vec!()))    
 
                     } else {
@@ -1173,14 +1173,14 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
-                    if operations[ov_id].1 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
                             t.get_name(self),
                             open_rep,
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                             close_rep,
-                            operations[ov_id].1, templates.len()
+                            operations[ov_id].templates, templates.len()
                         ), l, vec!()))
 
                     } else {

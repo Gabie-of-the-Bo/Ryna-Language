@@ -24,12 +24,21 @@ use crate::context::NessaContext;
 */
 
 // Takes type parameters, return type and arguments
-pub type FunctionOverloadInner = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
-pub type FunctionOverload = Option<FunctionOverloadInner>;
+pub type FunctionOverloadFn = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
+pub type OptFunctionOverloadFn = Option<FunctionOverloadFn>;
 
-pub type FunctionOverloads = Vec<(Vec<Annotation>, usize, Type, Type, FunctionOverload)>;
+#[derive(Clone)]
+pub struct FunctionOverload {
+    pub annotations: Vec<Annotation>,
+    pub templates: usize,
+    pub args: Type,
+    pub ret: Type,
+    pub function: OptFunctionOverloadFn
+}
 
-const EMPTY_FUNC: FunctionOverloadInner = |_, _, _, _| Ok(Object::empty());
+pub type FunctionOverloads = Vec<FunctionOverload>;
+
+const EMPTY_FUNC: FunctionOverloadFn = |_, _, _, _| Ok(Object::empty());
 
 #[derive(Clone)]
 pub struct Function {

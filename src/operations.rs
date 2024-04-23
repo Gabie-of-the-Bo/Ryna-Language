@@ -10,21 +10,30 @@ use crate::context::NessaContext;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunctionInner = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
-pub type BinaryFunctionInner = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
-pub type NaryFunctionInner = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
+pub type UnaryFunctionFn = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
+pub type BinaryFunctionFn = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
+pub type NaryFunctionFn = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
 
-pub type UnaryFunction = Option<UnaryFunctionInner>;
-pub type BinaryFunction = Option<BinaryFunctionInner>;
-pub type NaryFunction = Option<NaryFunctionInner>;
+pub type OptUnaryFunctionFn = Option<UnaryFunctionFn>;
+pub type OptBinaryFunctionFn = Option<BinaryFunctionFn>;
+pub type OptNaryFunctionFn = Option<NaryFunctionFn>;
 
-pub type UnaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, UnaryFunction)>;
-pub type BinaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, BinaryFunction)>;
-pub type NaryOperations = Vec<(Vec<Annotation>, usize, Type, Type, NaryFunction)>;
+#[derive(Clone)]
+pub struct Operation<T> {
+    pub annotations: Vec<Annotation>,
+    pub templates: usize,
+    pub args: Type,
+    pub ret: Type,
+    pub operation: Option<T>
+}
 
-const EMPTY_UN_FUNC: UnaryFunctionInner = |_, _, _| Ok(Object::empty());
-const EMPTY_BIN_FUNC: BinaryFunctionInner = |_, _, _, _, _| Ok(Object::empty());
-const EMPTY_NARY_FUNC: NaryFunctionInner = |_, _, _| Ok(());
+pub type UnaryOperations = Vec<Operation<UnaryFunctionFn>>;
+pub type BinaryOperations = Vec<Operation<BinaryFunctionFn>>;
+pub type NaryOperations = Vec<Operation<NaryFunctionFn>>;
+
+const EMPTY_UN_FUNC: UnaryFunctionFn = |_, _, _| Ok(Object::empty());
+const EMPTY_BIN_FUNC: BinaryFunctionFn = |_, _, _, _, _| Ok(Object::empty());
+const EMPTY_NARY_FUNC: NaryFunctionFn = |_, _, _| Ok(());
 
 #[derive(Clone)]
 pub enum Operator {

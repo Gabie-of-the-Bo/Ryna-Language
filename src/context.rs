@@ -18,6 +18,7 @@ use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
 use crate::macros::NessaMacroType;
+use crate::parser::Location;
 use crate::translation::load_optimized_opcodes;
 use crate::types::*;
 use crate::operations::*;
@@ -262,10 +263,10 @@ impl NessaContext {
     }
 
     pub fn define_native_unary_operation(&mut self, id: usize, templates: usize, a: Type, ret: Type, f: fn(&Vec<Type>, &Type, Object) -> Result<Object, String>) -> Result<usize, String> {
-        self.define_unary_operation(vec!(), id, templates, a, ret, Some(f))
+        self.define_unary_operation(Location::none(), vec!(), id, templates, a, ret, Some(f))
     }
 
-    pub fn define_unary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, ret: Type, f: OptUnaryFunctionFn) -> Result<usize, String> {
+    pub fn define_unary_operation(&mut self, l: Location, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, ret: Type, f: OptUnaryFunctionFn) -> Result<usize, String> {
         let op = &self.unary_ops[id];
 
         if let Operator::Unary{operations: o, representation: r, ..} = op {
@@ -284,6 +285,7 @@ impl NessaContext {
 
         if let Operator::Unary{operations: o, ..} = &mut self.unary_ops[id] {
             o.push(Operation { 
+                location: l,
                 annotations: annot, 
                 templates: templates, 
                 args: a, 
@@ -343,10 +345,10 @@ impl NessaContext {
     }
 
     pub fn define_native_binary_operation(&mut self, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: BinaryFunctionFn) -> Result<usize, String> {
-        self.define_binary_operation(vec!(), id, templates, a, b, ret, Some(f))
+        self.define_binary_operation(Location::none(), vec!(), id, templates, a, b, ret, Some(f))
     }
 
-    pub fn define_binary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: OptBinaryFunctionFn) -> Result<usize, String> {
+    pub fn define_binary_operation(&mut self, l: Location, annot: Vec<Annotation>, id: usize, templates: usize, a: Type, b: Type, ret: Type, f: OptBinaryFunctionFn) -> Result<usize, String> {
         let and = Type::And(vec!(a.clone(), b.clone()));
         let op = &self.binary_ops[id];
 
@@ -370,6 +372,7 @@ impl NessaContext {
 
         if let Operator::Binary{operations: o, ..} = &mut self.binary_ops[id] {
             o.push(Operation { 
+                location: l,
                 annotations: annot, 
                 templates: templates, 
                 args: and, 
@@ -432,10 +435,10 @@ impl NessaContext {
     }
 
     pub fn define_native_nary_operation(&mut self, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: NaryFunctionFn) -> Result<usize, String> {
-        self.define_nary_operation(vec!(), id, templates, from, args, ret, Some(f))
+        self.define_nary_operation(Location::none(), vec!(), id, templates, from, args, ret, Some(f))
     }
 
-    pub fn define_nary_operation(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: OptNaryFunctionFn) -> Result<usize, String> {
+    pub fn define_nary_operation(&mut self, l: Location, annot: Vec<Annotation>, id: usize, templates: usize, from: Type, args: &[Type], ret: Type, f: OptNaryFunctionFn) -> Result<usize, String> {
         let mut subtypes = vec!(from.clone());
         subtypes.extend(args.iter().cloned());
 
@@ -462,6 +465,7 @@ impl NessaContext {
 
         if let Operator::Nary{operations: o, ..} = &mut self.nary_ops[id] {
             o.push(Operation { 
+                location: l,
                 annotations: annot, 
                 templates: templates, 
                 args: and, 
@@ -507,10 +511,10 @@ impl NessaContext {
     }
 
     pub fn define_native_function_overload(&mut self, id: usize, templates: usize, args: &[Type], ret: Type, f: FunctionOverloadFn) -> Result<usize, String> {
-        self.define_function_overload(vec!(), id, templates, args, ret, Some(f))
+        self.define_function_overload(Location::none(), vec!(), id, templates, args, ret, Some(f))
     }
 
-    pub fn define_function_overload(&mut self, annot: Vec<Annotation>, id: usize, templates: usize, args: &[Type], ret: Type, f: OptFunctionOverloadFn) -> Result<usize, String> {
+    pub fn define_function_overload(&mut self, l: Location, annot: Vec<Annotation>, id: usize, templates: usize, args: &[Type], ret: Type, f: OptFunctionOverloadFn) -> Result<usize, String> {
         let and = Type::And(args.to_vec());
         let func = &self.functions[id];
 
@@ -531,6 +535,7 @@ impl NessaContext {
         }
 
         self.functions[id].overloads.push(FunctionOverload { 
+            location: l,
             annotations: annot, 
             templates: templates, 
             args: Type::And(args.to_vec()), 

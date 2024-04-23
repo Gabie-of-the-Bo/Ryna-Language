@@ -3359,9 +3359,9 @@ impl NessaContext{
         for i in ops.unwrap().1 {
             let (l, err) = match &i {
                 NessaExpr::PrefixOperationDefinition(l, an, id, tm, _a, t, r, _) |
-                NessaExpr::PostfixOperationDefinition(l, an, id, tm, _a, t, r, _) => (l, self.define_unary_operation(an.clone(), *id, tm.len(), t.clone(), r.clone(), None)),
-                NessaExpr::BinaryOperationDefinition(l, an, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(an.clone(), *id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
-                NessaExpr::NaryOperationDefinition(l, an, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(an.clone(), *id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
+                NessaExpr::PostfixOperationDefinition(l, an, id, tm, _a, t, r, _) => (l, self.define_unary_operation(l.clone(), an.clone(), *id, tm.len(), t.clone(), r.clone(), None)),
+                NessaExpr::BinaryOperationDefinition(l, an, id, tm, (_a, ta), (_b, tb), r, _) => (l, self.define_binary_operation(l.clone(), an.clone(), *id, tm.len(), ta.clone(), tb.clone(), r.clone(), None)),
+                NessaExpr::NaryOperationDefinition(l, an, id, tm, (_a, ta), v, r, _) => (l, self.define_nary_operation(l.clone(), an.clone(), *id, tm.len(), ta.clone(), &v.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>(), r.clone(), None)),
 
                 _ => unreachable!()
             };
@@ -3378,7 +3378,7 @@ impl NessaContext{
         for i in lines {
             if let NessaExpr::FunctionDefinition(l, an, id, t, a, r, _)  = i {
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
-                let err = self.define_function_overload(an.clone(), *id, t.len(), &arg_types, r.clone(), None);
+                let err = self.define_function_overload(l.clone(), an.clone(), *id, t.len(), &arg_types, r.clone(), None);
 
                 if let Err(msg) = err {
                     return Err(NessaError::compiler_error(msg, l, vec!()));
@@ -3849,7 +3849,7 @@ impl NessaContext{
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                        if let Err(err) = self.define_function_overload(an.clone(), fn_id, t.len(), &arg_types, mapped_return.clone(), None) {
+                        if let Err(err) = self.define_function_overload(l.clone(), an.clone(), fn_id, t.len(), &arg_types, mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 
@@ -3887,7 +3887,7 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut id_mapper)?;
                         }
 
-                        if let Err(err) = self.define_unary_operation(an.clone(), *id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None) {
+                        if let Err(err) = self.define_unary_operation(l.clone(), an.clone(), *id, t.len(), mapped_arg_t.clone(), mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 
@@ -3920,7 +3920,7 @@ impl NessaContext{
                             self.map_nessa_expression(line, ctx, &mut id_mapper)?;
                         }
 
-                        if let Err(err) = self.define_binary_operation(an.clone(), *id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None) {
+                        if let Err(err) = self.define_binary_operation(l.clone(), an.clone(), *id, t.len(), mapped_arg1.1.clone(), mapped_arg2.1.clone(), mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 
@@ -3949,7 +3949,7 @@ impl NessaContext{
 
                         let arg_types = mapped_args.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
-                        if let Err(err) = self.define_nary_operation(an.clone(), *id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None) {
+                        if let Err(err) = self.define_nary_operation(l.clone(), an.clone(), *id, t.len(), mapped_arg.1.clone(), &arg_types, mapped_return.clone(), None) {
                             return Err(NessaError::compiler_error(err, l, vec!()));
                         }
 

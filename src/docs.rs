@@ -294,11 +294,13 @@ pub fn generate_all_function_overload_docs(project_path: &String, module: &Nessa
 
     for f in &module.ctx.functions {
         for ov in &f.overloads {
-            for annot in &ov.annotations {
-                if annot.name == "doc" {
-                    write_function_overload_docs(&mut functions_file, &module, &f.name, ov.templates, &ov.args, &ov.ret, annot);
-                    break;
-                }    
+            if ov.location.module == module.ctx.module_name {
+                for annot in &ov.annotations {
+                    if annot.name == "doc" {
+                        write_function_overload_docs(&mut functions_file, &module, &f.name, ov.templates, &ov.args, &ov.ret, annot);
+                        break;
+                    }    
+                }
             }
         }
     }
@@ -312,11 +314,13 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
     for o in &module.ctx.unary_ops {
         if let Operator::Unary { representation, prefix, operations, .. } = o {
             for ov in operations {
-                for annot in &ov.annotations {
-                    if annot.name == "doc" {
-                        write_unary_operation_docs(&mut operations_file, &module, representation, ov.templates, &ov.args, &ov.ret, annot, *prefix);
-                        break;
-                    }    
+                if ov.location.module == module.ctx.module_name {
+                    for annot in &ov.annotations {
+                        if annot.name == "doc" {
+                            write_unary_operation_docs(&mut operations_file, &module, representation, ov.templates, &ov.args, &ov.ret, annot, *prefix);
+                            break;
+                        }    
+                    }
                 }
             }    
         }
@@ -327,11 +331,13 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
     for o in &module.ctx.binary_ops {
         if let Operator::Binary { representation, operations, .. } = o {
             for ov in operations {
-                for annot in &ov.annotations {
-                    if annot.name == "doc" {
-                        write_binary_operation_docs(&mut operations_file, &module, representation, ov.templates, &ov.args, &ov.ret, annot);
-                        break;
-                    }    
+                if ov.location.module == module.ctx.module_name {
+                    for annot in &ov.annotations {
+                        if annot.name == "doc" {
+                            write_binary_operation_docs(&mut operations_file, &module, representation, ov.templates, &ov.args, &ov.ret, annot);
+                            break;
+                        }    
+                    }
                 }
             }    
         }
@@ -342,11 +348,13 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
     for o in &module.ctx.nary_ops {
         if let Operator::Nary { open_rep, close_rep, operations, .. } = o {
             for ov in operations {
-                for annot in &ov.annotations {
-                    if annot.name == "doc" {
-                        write_nary_operation_docs(&mut operations_file, &module, &open_rep, &close_rep, ov.templates, &ov.args, &ov.ret, annot);
-                        break;
-                    }    
+                if ov.location.module == module.ctx.module_name {
+                    for annot in &ov.annotations {
+                        if annot.name == "doc" {
+                            write_nary_operation_docs(&mut operations_file, &module, &open_rep, &close_rep, ov.templates, &ov.args, &ov.ret, annot);
+                            break;
+                        }    
+                    }
                 }
             }    
         }

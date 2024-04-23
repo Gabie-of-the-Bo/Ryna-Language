@@ -11,6 +11,7 @@ use malachite::num::arithmetic::traits::Abs;
 use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
 use crate::integer_ext::*;
+use crate::parser::Location;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
 use crate::types::*;
@@ -29,6 +30,7 @@ pub type OptFunctionOverloadFn = Option<FunctionOverloadFn>;
 
 #[derive(Clone)]
 pub struct FunctionOverload {
+    pub location: Location,
     pub annotations: Vec<Annotation>,
     pub templates: usize,
     pub args: Type,

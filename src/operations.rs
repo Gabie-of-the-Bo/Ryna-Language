@@ -1,5 +1,6 @@
 use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
+use crate::parser::Location;
 use crate::types::{Type, INT, BOOL, STR, T_0, FLOAT};
 use crate::{object::*, ARR_OF};
 use crate::context::NessaContext;
@@ -20,6 +21,7 @@ pub type OptNaryFunctionFn = Option<NaryFunctionFn>;
 
 #[derive(Clone)]
 pub struct Operation<T> {
+    pub location: Location,
     pub annotations: Vec<Annotation>,
     pub templates: usize,
     pub args: Type,

@@ -1,5 +1,5 @@
 use colored::Colorize;
-use nom::{branch::alt, bytes::complete::tag, combinator::{map, opt}, multi::separated_list0, sequence::{delimited, preceded, terminated, tuple}};
+use nom::{bytes::complete::tag, combinator::{map, opt}, multi::separated_list0, sequence::{delimited, preceded, terminated, tuple}};
 use rustc_hash::FxHashMap;
 
 use crate::parser::{empty0, identifier_parser, string_parser, PResult, Span};
@@ -22,10 +22,7 @@ pub fn parse_annotation<'a>(input: Span<'a>) -> PResult<'a, Annotation> {
                         tuple((empty0, tag(","), empty0)), 
                         tuple((
                             opt(terminated(identifier_parser, tuple((empty0, tag(":"), empty0)))),
-                            alt((
-                                identifier_parser,
-                                string_parser
-                            ))
+                            string_parser
                         ))
                     ),
                     tuple((empty0, opt(tuple((tag(","), empty0))), tag(")")))
@@ -96,7 +93,7 @@ mod tests {
         let empty_noargs_str = "@example()";
         let simple_str = "@doc(\"this is some doc\")";
         let named_str = "@arg(arg_name: \"doc1\", arg_name_2: \"doc2\")";
-        let mixed_str = "@test(named_arg_1: \"doc1\", pos_arg_1, named_arg_2: \"doc2\", \"pos_arg_2\")";
+        let mixed_str = "@test(named_arg_1: \"doc1\", \"pos_arg_1\", named_arg_2: \"doc2\", \"pos_arg_2\")";
 
         let empty = parse_annotation(empty_str.into()).unwrap().1;
         let empty_noargs = parse_annotation(empty_noargs_str.into()).unwrap().1;

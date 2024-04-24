@@ -21,6 +21,7 @@ use crate::debug::DebugInfoBuilder;
 use crate::graph::DirectedGraph;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::ITERABLE_ID;
+use crate::macros::NessaMacro;
 use crate::object::TypeInstance;
 use crate::parser::*;
 use crate::object::NessaArray;
@@ -3024,11 +3025,19 @@ impl NessaContext{
     pub fn define_module_macro(&mut self, definition: NessaExpr, defined_macros: &mut FxHashSet<Location>) -> Result<bool, NessaError> {
         if let NessaExpr::Macro(l, an, n, t, p, m) = definition {
             if !defined_macros.contains(&l) {
-                if self.macros.iter().any(|i| i.1 == n) {
+                if self.macros.iter().any(|i| i.name == n) {
                     return Err(NessaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
                 }
     
-                self.macros.push((an, n, t, p, m));
+                self.macros.push(NessaMacro {
+                    location: l.clone(),
+                    annotations: an,
+                    name: n,
+                    m_type: t,
+                    pattern: p,
+                    generator: m,
+                });
+
                 defined_macros.insert(l.clone());
 
                 return Ok(true);
@@ -3051,7 +3060,7 @@ impl NessaContext{
                 let arg_types = a.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>();
 
                 let err = if self.get_type_template(&n).is_some() {
-                    self.redefine_type(an.clone(), n.clone(), t, a.clone(), al, p, Some(
+                    self.redefine_type(l.clone(), an.clone(), n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
                             if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
@@ -3062,7 +3071,7 @@ impl NessaContext{
                     ))
 
                 } else {
-                    self.define_type(an.clone(), n.clone(), t, a.clone(), al, p, Some(
+                    self.define_type(l.clone(), an.clone(), n.clone(), t, a.clone(), al, p, Some(
                         |ctx, c_type, s| {
                             if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                                 return Ok(o);
@@ -3275,19 +3284,19 @@ impl NessaContext{
     pub fn define_module_classes(&mut self, code: &String) -> Result<(), NessaError> {
         if let Ok((_, i_names)) = self.nessa_interface_definition_names_parser(Span::new(code)) {
             for i_name in i_names {
-                self.define_interface(vec!(), i_name, vec!(), vec!(), vec!(), vec!(), vec!()).unwrap();
+                self.define_interface(Location::none(), vec!(), i_name, vec!(), vec!(), vec!(), vec!(), vec!()).unwrap();
             }
 
             if let Ok((_, names)) = self.nessa_class_names_parser(Span::new(code)) {
                 for name in names {
-                    self.define_type(vec!(), name, vec!(), vec!(), None, vec!(), None).unwrap();
+                    self.define_type(Location::none(), vec!(), name, vec!(), vec!(), None, vec!(), None).unwrap();
                 }
     
                 let interfaces = self.nessa_interface_definition_parser(Span::new(code))?;
 
                 for i in interfaces.1 {
-                    if let NessaExpr::InterfaceDefinition(_, an, n, t, v, u, b, nr) = i {
-                        self.redefine_interface(an, n, t, v, u, b, nr).unwrap();
+                    if let NessaExpr::InterfaceDefinition(l, an, n, t, v, u, b, nr) = i {
+                        self.redefine_interface(l, an, n, t, v, u, b, nr).unwrap();
                     }
                 }
 
@@ -3458,7 +3467,7 @@ impl NessaContext{
                     ))
                 }).collect::<Result<Vec<_>, _>>().unwrap();
 
-                self.define_interface(other_i.annotations.clone(), i_name.clone(), other_i.params.clone(), mapped_fns, mapped_uns, mapped_bin, mapped_nary)?;
+                self.define_interface(other_i.location.clone(), other_i.annotations.clone(), i_name.clone(), other_i.params.clone(), mapped_fns, mapped_uns, mapped_bin, mapped_nary)?;
             }
 
             return Ok(interface_id);
@@ -3485,7 +3494,7 @@ impl NessaContext{
                 let mapped_attrs = other_cl.attributes.iter().map(|(n, t)| (n.clone(), t.map_type(self, other, id_mapper, l))).collect();
                 let mapped_alias = other_cl.alias.as_ref().map(|i| i.map_type(self, other, id_mapper, l));
 
-                self.define_type(other_cl.annotations.clone(), c_name.clone(), other_cl.params.clone(), mapped_attrs, mapped_alias, other_cl.patterns.clone(), other_cl.parser)?;
+                self.define_type(other_cl.location.clone(), other_cl.annotations.clone(), c_name.clone(), other_cl.params.clone(), mapped_attrs, mapped_alias, other_cl.patterns.clone(), other_cl.parser)?;
             }
 
             return Ok(class_id);

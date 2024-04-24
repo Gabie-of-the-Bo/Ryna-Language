@@ -17,7 +17,6 @@ use crate::interfaces::InterfaceNaryOpHeader;
 use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
 use crate::macros::NessaMacro;
-use crate::macros::NessaMacroType;
 use crate::parser::Location;
 use crate::translation::load_optimized_opcodes;
 use crate::types::*;
@@ -45,7 +44,7 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<(Vec<Annotation>, String, NessaMacroType, Pattern, NessaMacro)>,
+    pub macros: Vec<NessaMacro>,
 
     pub variables: Vec<Object>,
 
@@ -72,13 +71,14 @@ impl NessaContext {
         ╘════════════════════════════╛
     */
 
-    pub fn redefine_type(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+    pub fn redefine_type(&mut self, l: Location, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in self.type_templates.iter_mut() {
             if t.name == representation {
                 *t = TypeTemplate {
                     id: t.id,
                     name: representation,
                     params,
+                    location: l,
                     annotations,
                     attributes,
                     alias,
@@ -93,7 +93,7 @@ impl NessaContext {
         Err(format!("Class {} was not defined", representation))
     }
 
-    pub fn define_type(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
+    pub fn define_type(&mut self, l: Location, annotations: Vec<Annotation>, representation: String, params: Vec<String>, attributes: Vec<(String, Type)>, alias: Option<Type>, patterns: Vec<Pattern>, parser: Option<ParsingFunction>) -> Result<(), String> {
         for t in &self.type_templates {
             if t.name == representation {
                 return Err(format!("Type \"{}\" is already defined", representation))
@@ -106,6 +106,7 @@ impl NessaContext {
             id: self.type_templates.len(),
             name: representation,
             params,
+            location: l,
             annotations,
             attributes,
             alias,
@@ -116,13 +117,14 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn redefine_interface(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
+    pub fn redefine_interface(&mut self, l: Location, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in self.interfaces.iter_mut() {
             if i.name == representation {
                 *i = Interface {
                     id: i.id,
                     name: representation,
                     params,
+                    location: l,
                     annotations,
                     fns,
                     uns,
@@ -137,7 +139,7 @@ impl NessaContext {
         Err(format!("Interface {} was not defined", representation))
     }
 
-    pub fn define_interface(&mut self, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
+    pub fn define_interface(&mut self, l: Location, annotations: Vec<Annotation>, representation: String, params: Vec<String>, fns: Vec<InterfaceFunctionHeader>, uns: Vec<InterfaceUnaryOpHeader>, bin: Vec<InterfaceBinaryOpHeader>, nary: Vec<InterfaceNaryOpHeader>) -> Result<(), String> {
         for i in &self.interfaces {
             if i.name == representation {
                 return Err(format!("Interface \"{}\" is already defined", representation))
@@ -150,6 +152,7 @@ impl NessaContext {
             id: self.interfaces.len(),
             name: representation,
             params,
+            location: l,
             annotations,
             fns,
             uns,
@@ -661,8 +664,8 @@ mod tests {
     fn type_redefinition() {
         let mut ctx = standard_ctx();
 
-        let def_1 = ctx.define_type(vec!(), "Matrix".into(), vec!(), vec!(), None, vec!(), None);
-        let def_2 = ctx.define_type(vec!(), "Int".into(), vec!(), vec!(), None, vec!(), None);
+        let def_1 = ctx.define_type(Location::none(), vec!(), "Matrix".into(), vec!(), vec!(), None, vec!(), None);
+        let def_2 = ctx.define_type(Location::none(), vec!(), "Int".into(), vec!(), vec!(), None, vec!(), None);
 
         assert!(def_1.is_ok());
         assert!(def_2.is_err());

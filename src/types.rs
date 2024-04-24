@@ -30,6 +30,9 @@ pub struct TypeTemplate {
     pub params: Vec<String>,
 
     #[serde(skip)]
+    pub location: Location,
+    
+    #[serde(skip)]
     pub annotations: Vec<Annotation>,
 
     #[serde(skip)]
@@ -770,11 +773,11 @@ pub const T_2: Type = Type::TemplateParam(2, vec!());
 
 // Standard context
 pub fn standard_types(ctx: &mut NessaContext) {
-    ctx.define_type(vec!(), "Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new).map_err(|_| "Invalid Int format".into()))).unwrap();
-    ctx.define_type(vec!(), "Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
-    ctx.define_type(vec!(), "String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new).map_err(|_| "Invalid Int format".into()))).unwrap();
+    ctx.define_type(Location::none(), vec!(), "Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
+    ctx.define_type(Location::none(), vec!(), "String".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 
-    ctx.define_type(vec!(), "Bool".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| 
+    ctx.define_type(Location::none(), vec!(), "Bool".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| 
         if s == "true" || s == "false" {
             Ok(Object::new(s.starts_with('t')))
 
@@ -783,10 +786,10 @@ pub fn standard_types(ctx: &mut NessaContext) {
         }
     )).unwrap();
 
-    ctx.define_type(vec!(), "Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-    ctx.define_type(vec!(), "ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
 
-    ctx.define_type(vec!(), "File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 }
 
 /*
@@ -807,6 +810,7 @@ mod tests {
             id: 0,
             name: "Int".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -818,6 +822,7 @@ mod tests {
             id: 1,
             name: "String".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -829,6 +834,7 @@ mod tests {
             id: 2,
             name: "Bool".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -840,6 +846,7 @@ mod tests {
             id: 3,
             name: "Vector".into(),
             params: vec!("T".into()),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -927,6 +934,7 @@ mod tests {
             id: 0,
             name: "Int".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -938,6 +946,7 @@ mod tests {
             id: 1,
             name: "String".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -949,6 +958,7 @@ mod tests {
             id: 2,
             name: "Bool".into(),
             params: vec!(),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -960,6 +970,7 @@ mod tests {
             id: 3,
             name: "Vector".into(),
             params: vec!("T".into()),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -971,6 +982,7 @@ mod tests {
             id: 3,
             name: "Map".into(),
             params: vec!("T".into(), "G".into()),
+            location: Location::none(),
             annotations: vec!(),
             attributes: vec!(),
             alias: None,
@@ -1066,7 +1078,7 @@ mod tests {
         let number_id = ctx.type_templates.len();
         let number = Type::Basic(number_id);
 
-        ctx.define_type(vec!(), "Number".into(), vec!(), vec!(), Some(Type::Or(vec!(INT, FLOAT))), vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Number".into(), vec!(), vec!(), Some(Type::Or(vec!(INT, FLOAT))), vec!(), None).unwrap();
 
         assert!(INT.bindable_to(&number, &ctx));
         assert!(FLOAT.bindable_to(&number, &ctx));
@@ -1079,7 +1091,7 @@ mod tests {
         let list_id = ctx.type_templates.len();
         let list = Type::Basic(list_id);
 
-        ctx.define_type(vec!(), "List".into(), vec!(), vec!(), Some(Type::Or(vec!(
+        ctx.define_type(Location::none(), vec!(), "List".into(), vec!(), vec!(), Some(Type::Or(vec!(
             INT,
             Type::And(vec!(INT, list.clone()))
         ))), vec!(), None).unwrap();
@@ -1108,8 +1120,8 @@ mod tests {
         let nil = Type::Basic(nil_id);
         let list = Type::Template(list_id, vec!(T_0));
 
-        ctx.define_type(vec!(), "Nil".into(), vec!(), vec!(), None, vec!(), None).unwrap();
-        ctx.define_type(vec!(), "List".into(), vec!(), vec!(), Some(Type::Or(vec!(
+        ctx.define_type(Location::none(), vec!(), "Nil".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "List".into(), vec!(), vec!(), Some(Type::Or(vec!(
             nil.clone(),
             Type::And(vec!(T_0, list.clone()))
         ))), vec!(), None).unwrap();

@@ -178,11 +178,11 @@ fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &'a NessaContext) -> PResult<'a, 
 fn custom_ndl_pattern_parser<'a>(ctx: &'a NessaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
     let prev_input = input;
 
-    for (_, _, mt, p, m) in ctx.macros.iter().filter(|i| i.2 == NessaMacroType::Ndl) {            
-        if let Ok((new_input, args)) = p.extract(input, ctx, cache) {
+    for m in ctx.macros.iter().filter(|i| i.m_type == NessaMacroType::Ndl) {            
+        if let Ok((new_input, args)) = m.pattern.extract(input, ctx, cache) {
             input = new_input;
 
-            match m.expand(&args, ctx) {
+            match m.generator.expand(&args, ctx) {
                 Ok(code) => {                    
                     let parsed_code = cut(
                         |input| parse_ndl_pattern(input, true, true, ctx)
@@ -190,7 +190,7 @@ fn custom_ndl_pattern_parser<'a>(ctx: &'a NessaContext, mut input: Span<'a>, cac
 
                     match parsed_code {
                         Ok((rest, pattern)) if rest.trim().is_empty() => {
-                            return match mt {
+                            return match m.m_type {
                                 NessaMacroType::Ndl => Ok((input, pattern)),
                                 _ => unreachable!(),
                             }

@@ -365,10 +365,12 @@ pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
     let mut classes_file = create_markdown_file(project_path, "classes.md");
 
     for c in &module.ctx.type_templates {
-        for annot in &c.annotations {
-            if annot.name == "doc" {
-                write_class_docs(&mut classes_file, c, annot);
-                break;
+        if c.location.module == module.ctx.module_name {
+            for annot in &c.annotations {
+                if annot.name == "doc" {
+                    write_class_docs(&mut classes_file, c, annot);
+                    break;
+                }
             }
         }
     }
@@ -377,11 +379,13 @@ pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
 pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
     let mut syntaxes_file = create_markdown_file(project_path, "syntaxes.md");
 
-    for c in &module.ctx.macros {
-        for annot in &c.0 {
-            if annot.name == "doc" {
-                write_syntax_docs(&mut syntaxes_file, &c.1, annot);
-                break;
+    for m in &module.ctx.macros {
+        if m.location.module == module.ctx.module_name {
+            for annot in &m.annotations {
+                if annot.name == "doc" {
+                    write_syntax_docs(&mut syntaxes_file, &m.name, annot);
+                    break;
+                }
             }
         }
     }
@@ -390,11 +394,13 @@ pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
 pub fn generate_all_interface_docs(project_path: &String, module: &NessaModule) {
     let mut interfaces_file = create_markdown_file(project_path, "interfaces.md");
 
-    for c in &module.ctx.interfaces {
-        for annot in &c.annotations {
-            if annot.name == "doc" {
-                write_interface_docs(&mut interfaces_file, module, c, annot);
-                break;
+    for i in &module.ctx.interfaces {
+        if i.location.module == module.ctx.module_name {
+            for annot in &i.annotations {
+                if annot.name == "doc" {
+                    write_interface_docs(&mut interfaces_file, module, i, annot);
+                    break;
+                }
             }
         }
     }

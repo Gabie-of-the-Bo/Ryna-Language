@@ -28,7 +28,7 @@ use crate::annotations::{parse_annotation, Annotation};
 use crate::config::ImportMap;
 use crate::functions::Function;
 use crate::interfaces::{InterfaceConstraint, Interface};
-use crate::macros::{parse_nessa_macro, NessaMacro, NessaMacroType};
+use crate::macros::{parse_nessa_macro, NdlMacro, NessaMacroType};
 use crate::operations::Operator;
 use crate::object::{Object, TypeInstance};
 use crate::precedence_cache::PrecedenceCache;
@@ -68,7 +68,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash, Default)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -206,7 +206,7 @@ pub enum NessaExpr {
     CompiledLambda(Location, usize, Vec<(String, NessaExpr)>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Macro
-    Macro(Location, Vec<Annotation>, String, NessaMacroType, Pattern, NessaMacro),
+    Macro(Location, Vec<Annotation>, String, NessaMacroType, Pattern, NdlMacro),
 
     // Uncompiled
     Literal(Location, Object),
@@ -998,16 +998,16 @@ impl NessaContext {
     }
     
     fn custom_syntax_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
-        for (_, _, mt, p, m) in self.macros.iter().filter(|i| i.2 != NessaMacroType::Block) {
-            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+        for m in self.macros.iter().filter(|i| i.m_type != NessaMacroType::Block) {
+            if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string(), self.module_name.clone());
 
                 input = new_input;
 
-                match m.expand(&args, self) {
+                match m.generator.expand(&args, self) {
                     Ok(code) => {
-                        let parsed_code = match mt {
+                        let parsed_code = match m.m_type {
                             NessaMacroType::Function => {
                                 cut(
                                     map(
@@ -1035,7 +1035,7 @@ impl NessaContext {
                         
                         match parsed_code {
                             Ok((rest, mut lines)) if rest.trim().is_empty() => {
-                                return match mt {
+                                return match m.m_type {
                                     NessaMacroType::Function => {
                                         Ok((
                                             input, 
@@ -1096,11 +1096,11 @@ impl NessaContext {
     fn custom_syntax_block_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let prev_input = input;
 
-        for (_, _, mt, p, m) in self.macros.iter().filter(|i| i.2 == NessaMacroType::Block) {            
-            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+        for m in self.macros.iter().filter(|i| i.m_type == NessaMacroType::Block) {            
+            if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 input = new_input;
 
-                match m.expand(&args, self) {
+                match m.generator.expand(&args, self) {
                     Ok(code) => {
                         let parsed_code = cut(
                             map(
@@ -1114,7 +1114,7 @@ impl NessaContext {
 
                         match parsed_code {
                             Ok((rest, lines)) if rest.trim().is_empty() => {
-                                return match mt {
+                                return match m.m_type {
                                     NessaMacroType::Block => Ok((input, lines)),
                                     _ => unreachable!(),
                                 }
@@ -2275,7 +2275,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn macro_body_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaMacro> {
+    fn macro_body_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NdlMacro> {
         delimited(
             tuple((tag("{"), empty0)),
             parse_nessa_macro,
@@ -3089,7 +3089,7 @@ mod tests {
     fn type_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let wildcard_str = "*";
@@ -3196,7 +3196,7 @@ mod tests {
         assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));
 
-        ctx.define_type(vec!(), "Dice".into(), vec!(), vec!(
+        ctx.define_type(Location::none(), vec!(), "Dice".into(), vec!(), vec!(
             ("rolls".into(), INT),
             ("sides".into(), INT)
         ), 
@@ -3242,7 +3242,7 @@ mod tests {
             )
         })));
 
-        ctx.define_type(vec!(), "InnerDice".into(), vec!(), vec!(
+        ctx.define_type(Location::none(), vec!(), "InnerDice".into(), vec!(), vec!(
             ("inner_dice".into(), Type::Basic(id))
         ),
         None,
@@ -3656,7 +3656,7 @@ mod tests {
     fn function_header_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let number_header_str = "fn test(a: Int) -> Int";
@@ -3719,7 +3719,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type(vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let test_1_str = "fn inc() -> Int {

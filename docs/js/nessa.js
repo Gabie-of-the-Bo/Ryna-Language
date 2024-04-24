@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', _ => {
                 },
 
                 {
+                    className: 'literal',
+                    begin: '@[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')'
+                },
+
+                {
                     className: 'title',
                     begin: '[a-zA-Z_][a-zA-Z_0-9]*(?=\\s*:)'
                 },

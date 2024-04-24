@@ -1,3 +1,8 @@
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 extern crate nom;
 
 #[macro_use]
@@ -10,7 +15,9 @@ pub mod operations;
 pub mod functions;
 pub mod types;
 pub mod interfaces;
+pub mod annotations;
 pub mod context;
+pub mod docs;
 
 pub mod debug;
 pub mod parser;
@@ -28,11 +35,17 @@ pub mod config;
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
 
+#[path = "algorithms/html_ext.rs"]
+pub mod html_ext;
+
 #[path = "algorithms/integer_ext.rs"]
 pub mod integer_ext;
 
 #[path = "algorithms/git.rs"]
 pub mod git;
+
+#[path = "algorithms/profiling.rs"]
+pub mod profiling;
 
 #[path = "structures/graph.rs"]
 pub mod graph;
@@ -45,6 +58,9 @@ pub mod id_mapper;
 
 #[path = "structures/precedence_cache.rs"]
 pub mod precedence_cache;
+
+#[path = "structures/mut_cell.rs"]
+pub mod mut_cell;
 
 #[cfg(test)]
 mod integration {
@@ -115,7 +131,7 @@ mod integration {
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
         let (_, all_mods, files) = compute_project_hash(path_str, None, true).unwrap();
-        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true);
+        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true, false);
 
         if let Err(err) = &err {
             err.emit();
@@ -308,6 +324,11 @@ mod integration {
     #[test]
     fn macros() {
         integration_test_batch("test/batches/macros/*.nessa");
+    }
+
+    #[test]
+    fn stack() {
+        integration_test_batch("test/batches/stack/*.nessa");
     }
 
     #[test]

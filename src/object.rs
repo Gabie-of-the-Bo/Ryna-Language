@@ -1,9 +1,10 @@
-use std::{cell::{Ref, RefCell, RefMut}, fs::File, path::PathBuf, rc::Rc};
+use std::{cell::RefCell, fs::File, path::PathBuf};
 
-use crate::{compilation::message_and_exit, context::NessaContext, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use crate::{compilation::message_and_exit, context::NessaContext, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 use malachite::Integer;
+use rclite::Rc;
 
-type DataBlock = Rc<RefCell<ObjectBlock>>;
+type DataBlock = Rc<MutCell<ObjectBlock>>;
 
 /*
                                                   ╒══════════════════╕
@@ -148,8 +149,9 @@ pub enum ObjectBlock {
 impl Eq for ObjectBlock {}
 
 impl ObjectBlock {
+    #[inline(always)]
     pub fn to_obj(self) -> Object {
-        Object { inner: Rc::new(RefCell::new(self)) }
+        Object { inner: Rc::new(MutCell::new(self)) }
     } 
 
     pub fn get_type_id(&self) -> usize {
@@ -210,10 +212,14 @@ impl ObjectBlock {
         unreachable!();
     }
 
+    pub fn assign_ref(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
+        self.dereference().borrow_mut().assign(other, ctx)
+    }
+
     pub fn assign(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
         use ObjectBlock::*;
 
-        match (&mut *self.dereference().borrow_mut(), other) {
+        match (self, other) {
             (Int(a), Int(b)) => *a = b,
             (Float(a), Float(b)) => *a = b,
             (Str(a), Str(b)) => *a = b,
@@ -285,7 +291,7 @@ impl Object {
     }
 
     pub fn get_ptr(&self) -> *mut ObjectBlock {
-        self.inner.as_ptr()
+        (*self.inner).as_ptr()
     }
 
     pub fn arr(elements: Vec<Object>, elem_type: Type) -> Self {
@@ -312,21 +318,13 @@ impl Object {
         ObjectBlock::Instance(TypeInstance { params, attributes, id }).to_obj()
     }
 
-    pub fn get<T>(&self) -> Ref<T> where ObjectBlock: Get<T> {
-        return Ref::map(self.inner.borrow(), |i| Get::<T>::get(i));
+    pub fn get<T>(&self) -> &T where ObjectBlock: Get<T> {
+        Get::<T>::get(self.inner.borrow())
     }
 
-    pub fn deref<T>(&self) -> RefMut<T> where ObjectBlock: Deref<T> + GetMut<T> {
-        return RefMut::map(self.inner.borrow_mut(), |i| {
-            let ptr = match i {
-                ObjectBlock::Ref(i) |
-                ObjectBlock::Mut(i) => i.as_ptr(),
-    
-                _ => unreachable!()
-            };
-
-            GetMut::<T>::get(unsafe { &mut *ptr })
-        });
+    #[allow(clippy::should_implement_trait)]
+    pub fn deref<T>(&self) -> &mut T where ObjectBlock: Deref<T> + GetMut<T> {
+        Deref::<T>::deref(self.inner.borrow())
     }
 
     pub fn ref_count(&self) -> usize {
@@ -370,12 +368,22 @@ impl Object {
     }
 
     pub fn drop_contents(&self) {
-        self.move_contents();
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) => std::mem::take(&mut *i.borrow_mut()),
+            _ => unreachable!()
+        };
     }
     
     pub fn assign(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
         match Rc::try_unwrap(other_obj.inner) {
-            Ok(inner) => self.inner.borrow_mut().assign(RefCell::take(&inner), ctx),
+            Ok(inner) => self.inner.borrow_mut().assign_ref(inner.take(), ctx),
+            Err(inner) => self.inner.borrow_mut().assign_ref(inner.borrow().clone(), ctx)
+        }
+    }
+    
+    pub fn assign_direct(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
+        match Rc::try_unwrap(other_obj.inner) {
+            Ok(inner) => self.inner.borrow_mut().assign(inner.take(), ctx),
             Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone(), ctx)
         }
     }
@@ -393,7 +401,7 @@ impl Object {
     }
 
     pub fn get_ref(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => ObjectBlock::Ref(i.clone()).to_obj(),
 
@@ -402,7 +410,7 @@ impl Object {
     }
 
     pub fn get_mut(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => ObjectBlock::Mut(i.clone()).to_obj(),
 
@@ -423,7 +431,7 @@ impl Object {
     }
 
     pub fn deref_if_ref(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => Object::from_inner(i.clone()),
 
@@ -432,7 +440,7 @@ impl Object {
     }
 
     pub fn deref_deep_clone(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(i) |
             ObjectBlock::Mut(i) => i.borrow().deep_clone().to_obj(),
 
@@ -453,7 +461,7 @@ impl Object {
     }
 
     pub fn deref_obj(&self) -> Object {
-        return match &*self.inner.borrow() {
+        return match self.inner.borrow() {
             ObjectBlock::Ref(r) | ObjectBlock::Mut(r) => Object::from_inner(r.clone()),
             _ => unreachable!()
         };
@@ -473,18 +481,21 @@ pub trait GetMut<T> {
 }
 
 pub trait Deref<T> {
-    fn deref(&self) -> Ref<T>;
+    #[allow(clippy::mut_from_ref)]
+    fn deref(&self) -> &mut T;
 }
 
 macro_rules! impl_nessa_data {
     ($t: ty, $v: tt) => {
         impl NessaData for $t {
+            #[inline(always)]
             fn data(self) -> ObjectBlock {
                 return ObjectBlock::$v(self)
             }
         }
 
         impl Get<$t> for ObjectBlock {
+            #[inline(always)]
             fn get(&self) -> &$t {
                 if let ObjectBlock::$v(n) = self {
                     return n;
@@ -495,6 +506,7 @@ macro_rules! impl_nessa_data {
         }
 
         impl GetMut<$t> for ObjectBlock {
+            #[inline(always)]
             fn get(&mut self) -> &mut $t {
                 if let ObjectBlock::$v(n) = self {
                     return n;
@@ -505,8 +517,9 @@ macro_rules! impl_nessa_data {
         }
 
         impl Deref<$t> for ObjectBlock {
-            fn deref(&self) -> Ref<$t> {
-                return Ref::map(self.dereference().borrow(), |i| Get::<$t>::get(i));
+            #[inline(always)]
+            fn deref(&self) -> &mut $t {
+                return GetMut::<$t>::get(self.dereference().borrow_mut());
             }
         }
     };
@@ -565,12 +578,11 @@ mod tests {
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
         assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
-        assert_eq!(number.get_ptr(), reference.inner.borrow().dereference().as_ptr());
-        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().dereference().as_ptr());
+        assert_eq!(number.get_ptr(), (**reference.inner.borrow().dereference()).as_ptr());
+        assert_eq!(number.get_ptr(), (**ref_of_ref.inner.borrow().dereference()).as_ptr());
 
         {
-            let mut struct_ref = reference.deref::<Integer>();
-            *struct_ref += Integer::from(5);    
+            *reference.deref::<Integer>() += Integer::from(5);    
         }
 
         assert_eq!(*number.get::<Integer>(), Integer::from(15));
@@ -596,8 +608,8 @@ mod tests {
         assert_ne!(number.get_ptr(), reference.get_ptr());
         assert_ne!(number.get_ptr(), ref_of_ref.get_ptr());
         assert_ne!(reference.get_ptr(), ref_of_ref.get_ptr());
-        assert_eq!(number.get_ptr(), reference.inner.borrow().dereference().as_ptr());
-        assert_eq!(number.get_ptr(), ref_of_ref.inner.borrow().dereference().as_ptr());
+        assert_eq!(number.get_ptr(), (**reference.inner.borrow().dereference()).as_ptr());
+        assert_eq!(number.get_ptr(), (**ref_of_ref.inner.borrow().dereference()).as_ptr());
 
         assert_eq!(number.ref_count(), 3);
 

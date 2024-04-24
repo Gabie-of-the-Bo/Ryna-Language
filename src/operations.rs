@@ -1,4 +1,6 @@
+use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
+use crate::parser::Location;
 use crate::types::{Type, INT, BOOL, STR, T_0, FLOAT};
 use crate::{object::*, ARR_OF};
 use crate::context::NessaContext;
@@ -9,21 +11,31 @@ use crate::context::NessaContext;
                                                   ╘══════════════════╛
 */
 
-pub type UnaryFunctionInner = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
-pub type BinaryFunctionInner = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
-pub type NaryFunctionInner = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
+pub type UnaryFunctionFn = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
+pub type BinaryFunctionFn = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
+pub type NaryFunctionFn = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
 
-pub type UnaryFunction = Option<UnaryFunctionInner>;
-pub type BinaryFunction = Option<BinaryFunctionInner>;
-pub type NaryFunction = Option<NaryFunctionInner>;
+pub type OptUnaryFunctionFn = Option<UnaryFunctionFn>;
+pub type OptBinaryFunctionFn = Option<BinaryFunctionFn>;
+pub type OptNaryFunctionFn = Option<NaryFunctionFn>;
 
-pub type UnaryOperations = Vec<(usize, Type, Type, UnaryFunction)>;
-pub type BinaryOperations = Vec<(usize, Type, Type, BinaryFunction)>;
-pub type NaryOperations = Vec<(usize, Type, Type, NaryFunction)>;
+#[derive(Clone)]
+pub struct Operation<T> {
+    pub location: Location,
+    pub annotations: Vec<Annotation>,
+    pub templates: usize,
+    pub args: Type,
+    pub ret: Type,
+    pub operation: Option<T>
+}
 
-const EMPTY_UN_FUNC: UnaryFunctionInner = |_, _, _| Ok(Object::empty());
-const EMPTY_BIN_FUNC: BinaryFunctionInner = |_, _, _, _, _| Ok(Object::empty());
-const EMPTY_NARY_FUNC: NaryFunctionInner = |_, _, _| Ok(());
+pub type UnaryOperations = Vec<Operation<UnaryFunctionFn>>;
+pub type BinaryOperations = Vec<Operation<BinaryFunctionFn>>;
+pub type NaryOperations = Vec<Operation<NaryFunctionFn>>;
+
+const EMPTY_UN_FUNC: UnaryFunctionFn = |_, _, _| Ok(Object::empty());
+const EMPTY_BIN_FUNC: BinaryFunctionFn = |_, _, _, _, _| Ok(Object::empty());
+const EMPTY_NARY_FUNC: NaryFunctionFn = |_, _, _| Ok(());
 
 #[derive(Clone)]
 pub enum Operator {
@@ -306,14 +318,14 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     ctx.define_binary_operator(":=".into(), false, 100000).unwrap();
 
-    ctx.define_binary_operation(
+    ctx.define_native_binary_operation(
         14, 1, 
         T_0.to_mut(), T_0, Type::Empty, 
-        Some(|_, _, a, b, ctx| {
+        |_, _, a, b, ctx| {
             a.assign(b, ctx)?;
             Ok(Object::empty())
         }
-    )).unwrap();
+    ).unwrap();
 
     ctx.define_binary_operator(">>".into(), false, 350).unwrap();
 

@@ -6,10 +6,21 @@ categories = ["command-line-utilities", "compilers"]
 documentation = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 homepage = "https://gabie-of-the-bo.github.io/Nessa-Language/"
 repository = "https://github.com/Gabie-of-the-Bo/Nessa-Language"
-version = "0.7.4"
+version = "0.8.0"
 authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 license = "MIT"
+
+[profile.release] 
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+
+[profile.release-debug] 
+inherits = "release"
+codegen-units = 16
+lto = false
+panic = "unwind"
 
 [lib]
 name = "nessa"
@@ -42,6 +53,9 @@ lazy_static = "1.4.0"
 git2 = "0.18.2"
 malachite = { version = "0.4.5", features = ["enable_serde", "random"] }
 derive_builder = "0.20.0"
+mimalloc = "0.1.39"
+rclite = "0.2.4"
+tabled = "0.15.0"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

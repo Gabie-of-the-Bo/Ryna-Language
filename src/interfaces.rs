@@ -1,18 +1,20 @@
 use colored::Colorize;
 use serde::{Serialize, Deserialize};
 
-use crate::{types::{Type, INT, FLOAT, STR, BOOL, T_1, T_0, T_2}, context::NessaContext, ARR_OF, ARR_IT_OF};
+use crate::{annotations::Annotation, context::NessaContext, parser::Location, types::{Type, BOOL, FLOAT, INT, STR, T_0, T_1, T_2}, ARR_IT_OF, ARR_OF};
 
-pub type InterfaceFunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
-pub type InterfaceUnaryOpHeader = (usize, Vec<String>, String, Type, Type);
-pub type InterfaceBinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type);
-pub type InterfaceNaryOpHeader = (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
+pub type InterfaceFunctionHeader = (Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type);
+pub type InterfaceUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, Type, Type);
+pub type InterfaceBinaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type);
+pub type InterfaceNaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
 
 #[derive(Clone)]
 pub struct Interface {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
+    pub location: Location,
+    pub annotations: Vec<Annotation>,
     pub fns: Vec<InterfaceFunctionHeader>,
     pub uns: Vec<InterfaceUnaryOpHeader>,
     pub bin: Vec<InterfaceBinaryOpHeader>,
@@ -55,6 +57,19 @@ impl InterfaceConstraint {
         }
     }
 
+    pub fn get_name_html(&self, ctx: &NessaContext) -> String {
+        if !self.args.is_empty() {
+            format!(
+                "{}&lt;{}&gt;", 
+                ctx.interfaces[self.id].name.green(),
+                self.args.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")
+            )
+
+        } else {
+            format!("{}", ctx.interfaces[self.id].name.green())
+        }
+    }
+
     pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
         if !self.args.is_empty() {
             format!(
@@ -88,14 +103,14 @@ macro_rules! ITERABLE_OF { ($t: expr) => { InterfaceConstraint::new($t) }; }
 pub fn standard_interfaces(ctx: &mut NessaContext) {
     
     // Definitions
-    ctx.define_interface("Iterable".into(), vec!("Iter".into(), "Elem".into()), vec!(
-        ("iterator".into(), None, vec!(("".into(), Type::SelfType)), T_0),
-        ("next".into(), None, vec!(("".into(), T_0.to_mut())), T_1),
-        ("is_consumed".into(), None, vec!(("".into(), T_0.to_mut())), BOOL)        
+    ctx.define_interface(Location::none(), vec!(), "Iterable".into(), vec!("Iter".into(), "Elem".into()), vec!(
+        (vec!(), "iterator".into(), None, vec!(("".into(), Type::SelfType)), T_0),
+        (vec!(), "next".into(), None, vec!(("".into(), T_0.to_mut())), T_1),
+        (vec!(), "is_consumed".into(), None, vec!(("".into(), T_0.to_mut())), BOOL)        
     ), vec!(), vec!(), vec!()).unwrap();
 
-    ctx.define_interface("Printable".into(), vec!(), vec!(
-        ("print".into(), None, vec!(("".into(), Type::SelfType)), Type::Empty)
+    ctx.define_interface(Location::none(), vec!(), "Printable".into(), vec!(), vec!(
+        (vec!(), "print".into(), None, vec!(("".into(), Type::SelfType)), Type::Empty)
     ), vec!(), vec!(), vec!()).unwrap();
 
     // Implementations

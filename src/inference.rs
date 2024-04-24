@@ -12,8 +12,8 @@ use crate::types::Type;
 impl NessaContext {
     pub fn get_first_unary_op(&self, id: usize, arg_type: Type, call_templates: Option<Vec<Type>>, sub_t: bool, l: &Location) -> Result<(usize, Type, bool, Vec<Type>), NessaError> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = arg_type.bindable_to_subtitutions(a, self) { // Take first that matches
+            'outer: for (i, op_ov) in operations.iter().enumerate() {
+                if let (true, subs) = arg_type.bindable_to_subtitutions(&op_ov.args, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -24,8 +24,8 @@ impl NessaContext {
                         }
                     }
                     
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
-                    return Ok((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
+                    let t_args = (0..op_ov.templates).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
+                    return Ok((i, if sub_t { op_ov.ret.sub_templates(&subs) } else { op_ov.ret.clone() }, op_ov.operation.is_some(), t_args));
                 }
             }
         }
@@ -54,7 +54,7 @@ impl NessaContext {
     pub fn is_unary_op_ambiguous(&self, id: usize, arg_type: Type) -> Option<Vec<(Type, Type)>> {
         if let Operator::Unary{operations, ..} = &self.unary_ops[id] {
             let overloads = operations.iter()
-                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
+                            .map(|op_ov| (op_ov.args.clone(), op_ov.ret.clone()))
                             .filter(|(a, _)| arg_type.bindable_to(a, self)).collect::<Vec<_>>();
 
             // Return Some(overloads) if the call is ambiguous, else return None
@@ -73,8 +73,8 @@ impl NessaContext {
         let t = Type::And(vec!(a_type.clone(), b_type.clone()));
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
+            'outer: for (i, op_ov) in operations.iter().enumerate() {
+                if let (true, subs) = t.bindable_to_subtitutions(&op_ov.args, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -85,8 +85,8 @@ impl NessaContext {
                         }
                     }
 
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
-                    return Ok((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
+                    let t_args = (0..op_ov.templates).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
+                    return Ok((i, if sub_t { op_ov.ret.sub_templates(&subs) } else { op_ov.ret.clone() }, op_ov.operation.is_some(), t_args));
                 }
             }
         }
@@ -109,10 +109,10 @@ impl NessaContext {
 
         if let Operator::Binary{operations, ..} = &self.binary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
-                            .map(|(_, a, r, _)| {
-                                if let Type::And(t) = a {
-                                    (t[0].clone(), t[1].clone(), r.clone())
+                            .filter(|op_ov| t.bindable_to(&op_ov.args, self))
+                            .map(|op_ov| {
+                                if let Type::And(t) = &op_ov.args {
+                                    (t[0].clone(), t[1].clone(), op_ov.ret.clone())
 
                                 } else {
                                     unreachable!()
@@ -139,8 +139,8 @@ impl NessaContext {
         let t = Type::And(arg_types.clone());
 
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
-            'outer: for (i, (t_len, a, r, f)) in operations.iter().enumerate() {
-                if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
+            'outer: for (i, op_ov) in operations.iter().enumerate() {
+                if let (true, subs) = t.bindable_to_subtitutions(&op_ov.args, self) { // Take first that matches
                     if let Some(call_t) = call_templates {
                         for (i, t) in call_t.iter().enumerate() {
                             if let Some(s_t) = subs.get(&i) {
@@ -151,8 +151,8 @@ impl NessaContext {
                         }
                     }
 
-                    let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
-                    return Ok((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
+                    let t_args = (0..op_ov.templates).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
+                    return Ok((i, if sub_t { op_ov.ret.sub_templates(&subs) } else { op_ov.ret.clone() }, op_ov.operation.is_some(), t_args));
                 }
             }
         }
@@ -179,10 +179,10 @@ impl NessaContext {
         
         if let Operator::Nary{operations, ..} = &self.nary_ops[id] {
             let overloads = operations.iter()
-                            .filter(|(_, a, _, _)| t.bindable_to(a, self))
-                            .map(|(_, a, r, _)| {
-                                if let Type::And(t) = a {
-                                    (t[0].clone(), t[1..].to_vec(), r.clone())
+                            .filter(|op_ov| t.bindable_to(&op_ov.args, self))
+                            .map(|op_ov| {
+                                if let Type::And(t) = &op_ov.args {
+                                    (t[0].clone(), t[1..].to_vec(), op_ov.ret.clone())
 
                                 } else {
                                     unreachable!()
@@ -205,8 +205,8 @@ impl NessaContext {
     pub fn get_first_function_overload(&self, id: usize, arg_type: Vec<Type>, call_templates: Option<Vec<Type>>, sub_t: bool, l: &Location) -> Result<(usize, Type, bool, Vec<Type>), NessaError> {
         let t = Type::And(arg_type.clone());
 
-        'outer: for (i, (t_len, a, r, f)) in self.functions[id].overloads.iter().enumerate() {
-            if let (true, subs) = t.bindable_to_subtitutions(a, self) { // Take first that matches
+        'outer: for (i, f_ov) in self.functions[id].overloads.iter().enumerate() {
+            if let (true, subs) = t.bindable_to_subtitutions(&f_ov.args, self) { // Take first that matches
                 if let Some(call_t) = &call_templates {
                     for (i, t) in call_t.iter().enumerate() {
                         if let Some(s_t) = subs.get(&i) {
@@ -217,8 +217,8 @@ impl NessaContext {
                     }
                 }
                 
-                let t_args = (0..*t_len).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
-                return Ok((i, if sub_t { r.sub_templates(&subs) } else { r.clone() }, f.is_some(), t_args));
+                let t_args = (0..f_ov.templates).map(|i| subs.get(&i).cloned().unwrap_or(Type::TemplateParam(i, vec!()))).collect();
+                return Ok((i, if sub_t { f_ov.ret.sub_templates(&subs) } else { f_ov.ret.clone() }, f_ov.function.is_some(), t_args));
             }
         }
 
@@ -238,7 +238,7 @@ impl NessaContext {
         let t = Type::And(arg_type);
 
         let overloads = self.functions[id].overloads.iter()
-                            .map(|(_, a, r, _)| (a.clone(), r.clone()))
+                            .map(|f_ov| (f_ov.args.clone(), f_ov.ret.clone()))
                             .filter(|(a, _)| t.bindable_to(a, self)).collect::<Vec<_>>();
 
         // Return Some(overloads) if the call is ambiguous, else return None
@@ -366,23 +366,23 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |
-            NessaExpr::Macro(l, _, _, _, _) |
+            NessaExpr::Macro(l, _, _, _, _, _) |
             NessaExpr::Lambda(l, _, _, _, _) |
             NessaExpr::NameReference(l, _) |
             NessaExpr::VariableDefinition(l, _, _, _) |
             NessaExpr::VariableAssignment(l, _, _) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(l, _, _, _, _, _, _) |
             NessaExpr::PrefixOperatorDefinition(l, _, _) |
             NessaExpr::PostfixOperatorDefinition(l, _, _) |
             NessaExpr::BinaryOperatorDefinition(l, _, _, _) |
             NessaExpr::NaryOperatorDefinition(l, _, _, _) |
-            NessaExpr::ClassDefinition(l, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::ClassDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(l, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, _) |
             NessaExpr::If(l, _, _, _, _) |
             NessaExpr::Break(l) |
             NessaExpr::Continue(l) |

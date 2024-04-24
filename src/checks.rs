@@ -3,6 +3,7 @@ use std::collections::{HashSet, HashMap};
 use colored::Colorize;
 use rustc_hash::FxHashSet;
 
+use crate::annotations::Annotation;
 use crate::compilation::NessaError;
 use crate::context::NessaContext;
 use crate::parser::{NessaExpr, Location};
@@ -19,13 +20,13 @@ use crate::patterns::Pattern;
 impl NessaContext {
     pub fn ensured_return_check(expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, body) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
+            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
+            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, body) |
+            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
 
             NessaExpr::CompiledLambda(l, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
+            NessaExpr::FunctionDefinition(l, _, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
 
             NessaExpr::DoBlock(l, body, _) => NessaContext::ensured_return_check_body(body, l, "Do block"),
 
@@ -107,11 +108,11 @@ impl NessaContext {
                 }
             },
 
-            (NessaExpr::FunctionDefinition(_, _, t, _, ret, body), None) |
-            (NessaExpr::PrefixOperationDefinition(_, _, t, _, _, ret, body), None) |
-            (NessaExpr::PostfixOperationDefinition(_, _, t, _, _, ret, body), None) |
-            (NessaExpr::BinaryOperationDefinition(_, _, t, _, _, ret, body), None) |
-            (NessaExpr::NaryOperationDefinition(_, _, t, _, _, ret, body), None) => {
+            (NessaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
+            (NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
 
@@ -415,11 +416,11 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, _, t, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, _, b) |
+            NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, _, b) |
+            NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.ambiguity_check(line)?;
@@ -557,7 +558,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(_, _, tm, _, _, _, b) => {
+            NessaExpr::PrefixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;
@@ -567,7 +568,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(_, _, tm, _, _, _, b) => {
+            NessaExpr::PostfixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -577,7 +578,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(_, _, tm, (_, _), (_, _), _, b) => {
+            NessaExpr::BinaryOperationDefinition(_, _, _, tm, (_, _), (_, _), _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -587,7 +588,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(_, _, tm, (_, _), _, _, b) => {
+            NessaExpr::NaryOperationDefinition(_, _, _, tm, (_, _), _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -598,7 +599,7 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(_, _, tm, _, _, b) => {
+            NessaExpr::FunctionDefinition(_, _, _, tm, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
                         NessaContext::break_continue_check(i, false)?;    
@@ -779,7 +780,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, tm, _, a, ret, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;
@@ -798,7 +799,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, tm, _, a, ret, b) => {
+            NessaExpr::PostfixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -817,7 +818,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(l, _, tm, (_, a_1), (_, a_2), ret, b) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, tm, (_, a_1), (_, a_2), ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -836,7 +837,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(l, _, tm, (_, a), args, ret, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, tm, (_, a), args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -856,7 +857,7 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(l, _, tm, args, ret, b) => {
+            NessaExpr::FunctionDefinition(l, _, _, tm, args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -875,7 +876,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::ClassDefinition(l, _, _, args, alias, _) => {
+            NessaExpr::ClassDefinition(l, _, _, _, args, alias, _) => {
                 if let Some(t) = alias {
                     if t.has_self() {
                         return Err(NessaError::compiler_error(
@@ -1058,13 +1059,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_function_overload(*id, arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 //Invalid number of template arguments
-                if self.functions[*id].overloads[ov_id].0 != templates.len() {
+                if self.functions[*id].overloads[ov_id].templates != templates.len() {
                     Err(NessaError::compiler_error(format!(
                         "Function overload for {}{}({}) expected {} type arguments (got {})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
                         arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
-                        self.functions[*id].overloads[ov_id].0, templates.len()
+                        self.functions[*id].overloads[ov_id].templates, templates.len()
                     ), l, vec!()))
                 
                 } else {
@@ -1087,13 +1088,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_unary_op(*id, t.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         if *prefix {
                             Err(NessaError::compiler_error(format!(
                                 "Unary operator overload for {}({}) expected {} type arguments (got {})",
                                 representation,
                                 t.get_name(self),
-                                operations[ov_id].0, templates.len()
+                                operations[ov_id].templates, templates.len()
                             ), l, vec!()))
 
                         } else {
@@ -1101,7 +1102,7 @@ impl NessaContext {
                                 "Unary operator overload for ({}){} expected {} type arguments (got {})",
                                 t.get_name(self),
                                 representation,
-                                operations[ov_id].0, templates.len()
+                                operations[ov_id].templates, templates.len()
                             ), l, vec!()))
                         }
 
@@ -1132,13 +1133,13 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_binary_op(*id, t1.clone(), t2.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
                             t1.get_name(self),
                             representation,
                             t2.get_name(self),
-                            operations[ov_id].0, templates.len()
+                            operations[ov_id].templates, templates.len()
                         ), l, vec!()))    
 
                     } else {
@@ -1172,14 +1173,14 @@ impl NessaContext {
                 let (ov_id, _, _, _) = self.get_first_nary_op(*id, t.clone(), arg_types.clone(), Some(templates.clone()), false, l)?;
 
                 if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
-                    if operations[ov_id].0 != templates.len() {
+                    if operations[ov_id].templates != templates.len() {
                         Err(NessaError::compiler_error(format!(
                             "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
                             t.get_name(self),
                             open_rep,
                             arg_types.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
                             close_rep,
-                            operations[ov_id].0, templates.len()
+                            operations[ov_id].templates, templates.len()
                         ), l, vec!()))
 
                     } else {
@@ -1281,8 +1282,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(l, _, t, _, arg, r, b) |
-            NessaExpr::PostfixOperationDefinition(l, _, t, _, arg, r, b) => {
+            NessaExpr::PrefixOperationDefinition(l, _, _, t, _, arg, r, b) |
+            NessaExpr::PostfixOperationDefinition(l, _, _, t, _, arg, r, b) => {
                 self.check_type_well_formed(arg, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -1306,7 +1307,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, t, (_, ta), (_, tb), r, b) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, t, (_, ta), (_, tb), r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(tb, l)?;
                 self.check_type_well_formed(r, l)?;
@@ -1332,7 +1333,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, t, (_, ta), args, r, b) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, t, (_, ta), args, r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -1364,7 +1365,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::FunctionDefinition(l, _, t, args, r, b) => {
+            NessaExpr::FunctionDefinition(l, _, _, t, args, r, b) => {
                 self.check_type_well_formed(r, l)?;
 
                 for (_, t) in args {
@@ -1394,10 +1395,10 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::InterfaceDefinition(l, _, t, fns, uns, bin, nary) => {
+            NessaExpr::InterfaceDefinition(l, _, _, t, fns, uns, bin, nary) => {
                 let mut templates = HashSet::new();
 
-                for (_, f_t, args, r) in fns {
+                for (_, _, f_t, args, r) in fns {
                     let mut templates_f = HashSet::new();
 
                     self.check_type_well_formed(r, l)?;
@@ -1422,7 +1423,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, _, at, r) in uns {
+                for (_, _, f_t, _, at, r) in uns {
                     self.check_type_well_formed(at, l)?;
                     self.check_type_well_formed(r, l)?;
 
@@ -1438,7 +1439,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, (_, a0t), (_, a1t), r) in bin {
+                for (_, _, f_t, (_, a0t), (_, a1t), r) in bin {
                     self.check_type_well_formed(a0t, l)?;
                     self.check_type_well_formed(a1t, l)?;
                     self.check_type_well_formed(r, l)?;
@@ -1456,7 +1457,7 @@ impl NessaContext {
                     }
                 }
 
-                for (_, f_t, (_, a0t), args, r) in nary {
+                for (_, _, f_t, (_, a0t), args, r) in nary {
                     self.check_type_well_formed(a0t, l)?;
                     self.check_type_well_formed(r, l)?;
 
@@ -1505,7 +1506,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::ClassDefinition(l, _, t, attrs, alias, _) => {
+            NessaExpr::ClassDefinition(l, _, _, t, attrs, alias, _) => {
                 let mut templates = HashSet::new();
 
                 if let Some(a) = alias {
@@ -1559,7 +1560,7 @@ impl NessaContext {
 
     pub fn class_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::ClassDefinition(l, n, _, attributes, _, _) => {
+            NessaExpr::ClassDefinition(l, _, n, _, attributes, _, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
                         return Err(NessaError::compiler_error(format!("Repeated attribute \"{}\" in class {}", att, n), l, vec!()));
@@ -1575,7 +1576,7 @@ impl NessaContext {
 
     pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         match expr {
-            NessaExpr::Macro(l, n, _, p, b) => {
+            NessaExpr::Macro(l, _, n, _, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
                 
@@ -1614,10 +1615,10 @@ impl NessaContext {
                         let bin = &self.interfaces[int_id].bin;
                         let nary = &self.interfaces[int_id].nary;
 
-                        let max_tms = fns.iter().map(|i| i.1.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap_or(0) + 
-                                      uns.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
-                                      bin.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
-                                      nary.iter().map(|i| i.1.len()).max().unwrap_or(0) + 
+                        let max_tms = fns.iter().map(|i| i.2.as_ref().map(|i| i.len()).unwrap_or(0)).max().unwrap_or(0) + 
+                                      uns.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
+                                      bin.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
+                                      nary.iter().map(|i| i.2.len()).max().unwrap_or(0) + 
                                       self.interfaces[int_id].params.len();
 
                         let mut offset_t = t.clone();
@@ -1627,7 +1628,7 @@ impl NessaContext {
 
                         let t_subs = (0..offset_ts.len()).zip(offset_ts.clone()).collect::<HashMap<_, _>>();
                         
-                        for (f_n, _, args, ret) in fns {
+                        for (_, f_n, _, args, ret) in fns {
                             match self.get_function_id(f_n.clone()) {
                                 Ok(fn_id) => {
                                     let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
@@ -1684,7 +1685,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, _, at, ret) in uns {
+                        for (_, op_id, _, _, at, ret) in uns {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg_sub = at.sub_self(&offset_t).sub_templates(&t_subs);
 
@@ -1779,7 +1780,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, (_, a0t), (_, a1t), ret) in bin {
+                        for (_, op_id, _, (_, a0t), (_, a1t), ret) in bin {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg1_sub = a1t.sub_self(&offset_t).sub_templates(&t_subs);
@@ -1837,7 +1838,7 @@ impl NessaContext {
                             }
                         }
 
-                        for (op_id, _, (_, a0t), args, ret) in nary {
+                        for (_, op_id, _, (_, a0t), args, ret) in nary {
                             let ret_sub = ret.sub_self(&offset_t).sub_templates(&t_subs);
                             let arg0_sub = a0t.sub_self(&offset_t).sub_templates(&t_subs);
                             let args_sub = args.iter().map(|(_, tp)| tp.sub_self(&offset_t).sub_templates(&t_subs)).collect::<Vec<_>>();
@@ -2071,8 +2072,8 @@ impl NessaContext {
 
     pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
         return match expr {
-            NessaExpr::PostfixOperationDefinition(l, _, t, n, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(l, _, t, n, _, _, _) => {
+            NessaExpr::PostfixOperationDefinition(l, _, _, t, n, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(l, _, _, t, n, _, _, _) => {
                 let err = self.repeated_args(&vec!(n), "Parameter");
 
                 if let Err(msg) = err {
@@ -2088,7 +2089,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, t, (n1, _), (n2, _), _, _) => {
+            NessaExpr::BinaryOperationDefinition(l, _, _, t, (n1, _), (n2, _), _, _) => {
                 let err = self.repeated_args(&vec!(n1, n2), "Parameter");
 
                 if let Err(msg) = err {
@@ -2104,7 +2105,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, t, (n1, _), n, _, _) => {
+            NessaExpr::NaryOperationDefinition(l, _, _, t, (n1, _), n, _, _) => {
                 let mut args = vec!(n1);
                 args.extend(n.iter().map(|(i, _)| i));
 
@@ -2123,7 +2124,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::FunctionDefinition(l, _, t, a, _, _) => {
+            NessaExpr::FunctionDefinition(l, _, _, t, a, _, _) => {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {
@@ -2168,6 +2169,207 @@ impl NessaContext {
         };
     }
 
+    pub fn check_test_annotation(&self, annot: &Annotation, t: &Vec<String>, args: &Vec<(String, Type)>, ret: &Type) -> Result<(), String> {
+        annot.check_args(&[], &[])?;
+
+        if t.len() > 0 {
+            return Err(format!("Functions annotated with {} cannot be generic", "test".cyan()));
+        }
+
+        if args.len() > 0 {
+            return Err(format!("Functions annotated with {} cannot take any parameters", "test".cyan()));
+        }
+
+        if ret.deref_type() != &BOOL {
+            return Err(format!(
+                "Functions annotated with {} must return {}, {} or {}", 
+                "test".cyan(), BOOL.get_name(self), BOOL.to_ref().get_name(self), BOOL.to_mut().get_name(self)
+            ));
+        }
+        
+        Ok(())
+    }
+
+    pub fn check_fn_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
+        annot.check_args(
+            &["0", "1"], 
+            args.iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>().as_slice()
+        )?;
+        
+        Ok(())
+    }
+
+    pub fn check_noret_doc_annotation(&self, annot: &Annotation, args: &Vec<(String, Type)>) -> Result<(), String> {
+        annot.check_args(
+            &["0"], 
+            args.iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>().as_slice()
+        )?;
+        
+        Ok(())
+    }
+
+    pub fn annotation_checks(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+        match expr {
+            NessaExpr::Macro(l, an, _, _, _, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Macros cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_noret_doc_annotation(a, &vec!()),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::ClassDefinition(l, an, _, _, atts, _, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Classes cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_noret_doc_annotation(a, atts),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::InterfaceDefinition(l, an, _, _, fns, unops, binops, naryops) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => Err(format!("Interfaces cannot have the {} annotation", "test".cyan())),
+                        "doc" => self.check_noret_doc_annotation(a, &vec!()),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+
+                for (inner_an, _, _, args, _) in fns {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface function headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, args),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, n, t, _) in unops {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &vec!((n.clone(), t.clone()))),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, arg_a, arg_b, _) in binops {
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+
+                for (inner_an, _, _, arg_a, arg_b, _) in naryops {
+                    let mut all_args = vec!(arg_a.clone());
+                    all_args.extend(arg_b.iter().cloned());
+    
+                    for a in inner_an {
+                        let res = match a.name.as_str() {
+                            "test" => Err(format!("Interface operation headers cannot have the {} annotation", "test".cyan())),
+                            "doc" => self.check_fn_doc_annotation(a, &all_args),
+    
+                            n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                        };
+                        
+                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    }    
+                }
+            }
+
+            NessaExpr::FunctionDefinition(l, an, _, t, args, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, args, r),
+                        "doc" => self.check_fn_doc_annotation(a, args),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::PrefixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) |
+            NessaExpr::PostfixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &vec!((arg_n.clone(), arg_t.clone())), r),
+                        "doc" => self.check_fn_doc_annotation(a, &vec!((arg_n.clone(), arg_t.clone()))),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::BinaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &vec!(arg_a.clone(), arg_b.clone()), r),
+                        "doc" => self.check_fn_doc_annotation(a, &vec!(arg_a.clone(), arg_b.clone())),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            NessaExpr::NaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+                let mut all_args = vec!(arg_a.clone());
+                all_args.extend(arg_b.iter().cloned());
+
+                for a in an {
+                    let res = match a.name.as_str() {
+                        "test" => self.check_test_annotation(a, t, &all_args, r),
+                        "doc" => self.check_fn_doc_annotation(a, &all_args),
+
+                        n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
+                    };
+                    
+                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                }
+            }
+
+            _ => { }
+        }
+
+        Ok(())
+    }
+
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), NessaError> {
         self.repeated_arguments_check(expr)?;
         self.invalid_type_check(expr)?;
@@ -2178,6 +2380,7 @@ impl NessaContext {
         self.class_check(expr)?;
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;
+        self.annotation_checks(expr)?;
 
         Ok(())
     }

@@ -24,10 +24,11 @@ use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
 use malachite::Integer;
 
+use crate::annotations::{parse_annotation, Annotation};
 use crate::config::ImportMap;
 use crate::functions::Function;
 use crate::interfaces::{InterfaceConstraint, Interface};
-use crate::macros::{parse_nessa_macro, NessaMacro, NessaMacroType};
+use crate::macros::{parse_nessa_macro, NdlMacro, NessaMacroType};
 use crate::operations::Operator;
 use crate::object::{Object, TypeInstance};
 use crate::precedence_cache::PrecedenceCache;
@@ -45,12 +46,17 @@ type BinaryOpHeader = (usize, Vec<String>, (String, Type), (String, Type), Type)
 type NaryOpHeader = (usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
 type FunctionHeader = (String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 
+type AnnotUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, Type, Type);
+type AnnotBinaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type);
+type AnnotNaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
+type AnnotFunctionHeader = (Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type);
+
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum InterfaceHeader {
-    UnaryOpHeader(usize, Vec<String>, String, Type, Type),
-    BinaryOpHeader(usize, Vec<String>, (String, Type), (String, Type), Type),
-    NaryOpHeader(usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type),
-    FunctionHeader(String, Option<Vec<String>>, Vec<(String, Type)>, Type)
+    UnaryOpHeader(Vec<Annotation>, usize, Vec<String>, String, Type, Type),
+    BinaryOpHeader(Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type),
+    NaryOpHeader(Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type),
+    FunctionHeader(Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type)
 }
 
 pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<VerboseError<Span<'a>>> {
@@ -62,7 +68,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash, Default)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -200,7 +206,7 @@ pub enum NessaExpr {
     CompiledLambda(Location, usize, Vec<(String, NessaExpr)>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     // Macro
-    Macro(Location, String, NessaMacroType, Pattern, NessaMacro),
+    Macro(Location, Vec<Annotation>, String, NessaMacroType, Pattern, NdlMacro),
 
     // Uncompiled
     Literal(Location, Object),
@@ -214,19 +220,19 @@ pub enum NessaExpr {
 
     VariableDefinition(Location, String, Type, Box<NessaExpr>),
     VariableAssignment(Location, String, Box<NessaExpr>),
-    FunctionDefinition(Location, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    FunctionDefinition(Location, Vec<Annotation>, usize, Vec<String>, Vec<(String, Type)>, Type, Vec<NessaExpr>),
     PrefixOperatorDefinition(Location, String, usize),
     PostfixOperatorDefinition(Location, String, usize),
     BinaryOperatorDefinition(Location, String, bool, usize),
     NaryOperatorDefinition(Location, String, String, usize),
-    ClassDefinition(Location, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
-    InterfaceDefinition(Location, String, Vec<String>, Vec<FunctionHeader>, Vec<UnaryOpHeader>, Vec<BinaryOpHeader>, Vec<NaryOpHeader>),
+    ClassDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<(String, Type)>, Option<Type>, Vec<Pattern>),
+    InterfaceDefinition(Location, Vec<Annotation>, String, Vec<String>, Vec<AnnotFunctionHeader>, Vec<AnnotUnaryOpHeader>, Vec<AnnotBinaryOpHeader>, Vec<AnnotNaryOpHeader>),
     InterfaceImplementation(Location, Vec<String>, Type, String, Vec<Type>),
 
-    PrefixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    PostfixOperationDefinition(Location, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
-    BinaryOperationDefinition(Location, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
-    NaryOperationDefinition(Location, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
+    PrefixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    PostfixOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, String, Type, Type, Vec<NessaExpr>),
+    BinaryOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type, Vec<NessaExpr>),
+    NaryOperationDefinition(Location, Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type, Vec<NessaExpr>),
 
     If(Location, Box<NessaExpr>, Vec<NessaExpr>, Vec<(NessaExpr, Vec<NessaExpr>)>, Option<Vec<NessaExpr>>),
     While(Location, Box<NessaExpr>, Vec<NessaExpr>),
@@ -235,25 +241,67 @@ pub enum NessaExpr {
 }
 
 impl NessaExpr {
+    pub fn is_definition(&self) -> bool {
+        match self {
+            NessaExpr::Macro(_, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) => true,
+
+            NessaExpr::VariableDefinition(_, _, _, _) |
+            NessaExpr::VariableAssignment(_, _, _) |
+            NessaExpr::FunctionName(_, _) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
+            NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::FunctionCall(_, _, _, _) |
+            NessaExpr::CompiledFor(_, _, _, _, _, _) |
+            NessaExpr::CompiledLambda(_, _, _, _, _, _) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Tuple(_, _) |
+            NessaExpr::Lambda(_, _, _, _, _) |
+            NessaExpr::NameReference(_, _) |
+            NessaExpr::UnaryOperation(_, _, _, _) |
+            NessaExpr::BinaryOperation(_, _, _, _, _) |
+            NessaExpr::NaryOperation(_, _, _, _, _) |
+            NessaExpr::If(_, _, _, _, _) |
+            NessaExpr::While(_, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::For(_, _, _, _) |
+            NessaExpr::Return(_, _) => false,
+        }
+    }
+
     pub fn is_expr(&self) -> bool {
         match self {
             NessaExpr::FunctionName(_, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
-            NessaExpr::Macro(_, _, _, _, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
             NessaExpr::PrefixOperatorDefinition(_, _, _) |
             NessaExpr::PostfixOperatorDefinition(_, _, _) |
             NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
             NessaExpr::NaryOperatorDefinition(_, _, _, _) |
-            NessaExpr::ClassDefinition(_, _, _, _, _, _) |
-            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::InterfaceImplementation(_, _, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _) |
-            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) |
             NessaExpr::If(_, _, _, _, _) |
             NessaExpr::While(_, _, _) |
             NessaExpr::Break(_) |
@@ -273,7 +321,7 @@ impl NessaExpr {
             NessaExpr::UnaryOperation(_, _, _, _) |
             NessaExpr::BinaryOperation(_, _, _, _, _) |
             NessaExpr::NaryOperation(_, _, _, _, _) |
-            NessaExpr::FunctionDefinition(_, _, _, _, _, _) => true,
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) => true,
         }
     }
 }
@@ -353,7 +401,7 @@ pub fn string_parser(input: Span<'_>) -> PResult<'_, String> {
     )(input)
 }
 
-fn parse_import_location(input: Span<'_>) -> PResult<String> {
+fn parse_import_location(input: Span<'_>, module: Arc<String>) -> PResult<String> {
     alt((
         identifier_parser,
         map(
@@ -361,12 +409,16 @@ fn parse_import_location(input: Span<'_>) -> PResult<String> {
                 tag("/"),
                 separated_list1(tag("/"), identifier_parser)
             ),
-            |s| format!("/{}", s.join("/"))
+            |s| format!(
+                "{}/{}", 
+                module.split('/').next().unwrap(), // Append parent module's name
+                s.join("/")
+            )
         )
     ))(input)
 }
 
-fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
+fn module_import_parser(input: Span<'_>, module: Arc<String>) -> PResult<'_, (String, ImportType, HashSet<String>)> {
     map(
         tuple((
             tag("import"),
@@ -431,7 +483,7 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
             )),
             context("Expected 'from' after import type", cut(tag("from"))),
             empty1,
-            context("Expected identifier after 'from' in import statement", cut(parse_import_location)),
+            context("Expected identifier after 'from' in import statement", cut(|i| parse_import_location(i, module.clone()))),
             empty0,
             context("Expected ';' at the end of import statement", cut(tag(";")))
         )),
@@ -439,19 +491,19 @@ fn module_import_parser(input: Span<'_>) -> PResult<'_, (String, ImportType, Has
     )(input)
 }
 
-pub fn nessa_info_parser(input: Span<'_>) -> PResult<'_, ()> {
+pub fn nessa_info_parser(input: Span<'_>, module: Arc<String>) -> PResult<'_, ()> {
     delimited(
         empty0,
-        value((), module_import_parser),
+        value((), |i| module_import_parser(i, module.clone())),
         empty0
     )(input)
 }
 
-pub fn nessa_module_imports_parser(mut input: Span<'_>) -> PResult<'_, ImportMap> {
+pub fn nessa_module_imports_parser(mut input: Span<'_>, module: Arc<String>) -> PResult<'_, ImportMap> {
     let mut ops: HashMap<String, HashMap<ImportType, HashSet<String>>> = HashMap::new();
 
     while input.len() > 0 {
-        if let Ok((i, (n, t, v))) = module_import_parser(input) {
+        if let Ok((i, (n, t, v))) = module_import_parser(input, module.clone()) {
             input = i;
             ops.entry(n).or_default().entry(t).or_default().extend(v);
         
@@ -946,16 +998,16 @@ impl NessaContext {
     }
     
     fn custom_syntax_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, NessaExpr> {
-        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 != NessaMacroType::Block) {
-            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+        for m in self.macros.iter().filter(|i| i.m_type != NessaMacroType::Block) {
+            if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string(), self.module_name.clone());
 
                 input = new_input;
 
-                match m.expand(&args, self) {
+                match m.generator.expand(&args, self) {
                     Ok(code) => {
-                        let parsed_code = match mt {
+                        let parsed_code = match m.m_type {
                             NessaMacroType::Function => {
                                 cut(
                                     map(
@@ -983,7 +1035,7 @@ impl NessaContext {
                         
                         match parsed_code {
                             Ok((rest, mut lines)) if rest.trim().is_empty() => {
-                                return match mt {
+                                return match m.m_type {
                                     NessaMacroType::Function => {
                                         Ok((
                                             input, 
@@ -1044,11 +1096,11 @@ impl NessaContext {
     fn custom_syntax_block_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<NessaExpr>> {
         let prev_input = input;
 
-        for (_, mt, p, m) in self.macros.iter().filter(|i| i.1 == NessaMacroType::Block) {            
-            if let Ok((new_input, args)) = p.extract(input, self, cache) {
+        for m in self.macros.iter().filter(|i| i.m_type == NessaMacroType::Block) {            
+            if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 input = new_input;
 
-                match m.expand(&args, self) {
+                match m.generator.expand(&args, self) {
                     Ok(code) => {
                         let parsed_code = cut(
                             map(
@@ -1062,7 +1114,7 @@ impl NessaContext {
 
                         match parsed_code {
                             Ok((rest, lines)) if rest.trim().is_empty() => {
-                                return match mt {
+                                return match m.m_type {
                                     NessaMacroType::Block => Ok((input, lines)),
                                     _ => unreachable!(),
                                 }
@@ -1411,12 +1463,19 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.macro_header_parser(input),
                     empty0,
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
-            |(l, ((t, n, p), _, m))| NessaExpr::Macro(l, n, t, p, m)
+            |(l, (an, (t, n, p), _, m))| NessaExpr::Macro(l, an, n, t, p, m)
         )(input);
     }
     
@@ -1589,19 +1648,26 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.function_header_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((n, t, mut a, mut r), _, mut b))| {
+            |(l, (an, (n, t, mut a, mut r), _, mut b))| {
                 let u_t = t.unwrap_or_default();
 
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));
                 r.compile_templates(&u_t);
                 b.iter_mut().for_each(|e| e.compile_types(&u_t));
 
-                NessaExpr::FunctionDefinition(l, self.get_function_id(n).unwrap(), u_t, a, r, b)
+                NessaExpr::FunctionDefinition(l, an, self.get_function_id(n).unwrap(), u_t, a, r, b)
             }
         )(input);
     }
@@ -2087,17 +2153,24 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.prefix_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
+            |(l, (an, (id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PrefixOperationDefinition(l, id, tm, n, t, r, b)
+                NessaExpr::PrefixOperationDefinition(l, an, id, tm, n, t, r, b)
             }
         )(input);
     }
@@ -2106,17 +2179,24 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.postfix_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, n, mut t, mut r), _, mut b))| {
+            |(l, (an, (id, tm, n, mut t, mut r), _, mut b))| {
                 t.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::PostfixOperationDefinition(l, id, tm, n, t, r, b)
+                NessaExpr::PostfixOperationDefinition(l, an, id, tm, n, t, r, b)
             }
         )(input);
     }
@@ -2125,18 +2205,25 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.binary_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
+            |(l, (an, (id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.1.compile_templates(&tm);
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::BinaryOperationDefinition(l, id, tm, a1, a2, r, b)
+                NessaExpr::BinaryOperationDefinition(l, an, id, tm, a1, a2, r, b)
             }
         )(input);
     }
@@ -2145,18 +2232,25 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     |input| self.nary_operation_header_definition_parser(input),
                     empty0,
                     cut(|input| self.code_block_parser(input, cache)),
                 ))
             ),
-            |(l, ((id, tm, mut a1, mut a2, mut r), _, mut b))| {
+            |(l, (an, (id, tm, mut a1, mut a2, mut r), _, mut b))| {
                 a1.1.compile_templates(&tm);
                 a2.iter_mut().for_each(|(_, i)| i.compile_templates(&tm));
                 r.compile_templates(&tm);
                 b.iter_mut().for_each(|e| e.compile_types(&tm));
 
-                NessaExpr::NaryOperationDefinition(l, id, tm, a1, a2, r, b)
+                NessaExpr::NaryOperationDefinition(l, an, id, tm, a1, a2, r, b)
             }
         )(input);
     }
@@ -2181,7 +2275,7 @@ impl NessaContext {
         )(input);
     }
 
-    fn macro_body_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NessaMacro> {
+    fn macro_body_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, NdlMacro> {
         delimited(
             tuple((tag("{"), empty0)),
             parse_nessa_macro,
@@ -2269,7 +2363,7 @@ impl NessaContext {
 
                 t.compile_templates(&u_t);
 
-                NessaExpr::ClassDefinition(l, n, u_t, vec!(), Some(t), vec!())
+                NessaExpr::ClassDefinition(l, vec!(), n, u_t, vec!(), Some(t), vec!())
             }
         )(input);
     }
@@ -2307,6 +2401,13 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     tag("class"),
                     empty1,
                     context("Invalid class identifier", cut(identifier_parser)),
@@ -2364,12 +2465,12 @@ impl NessaContext {
                     tag("}")
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, p, _, mut f, _, _))| {
+            |(l, (an, _, _, n, _, t, _, _, p, _, mut f, _, _))| {
                 let u_t = t.unwrap_or_default();
 
                 f.iter_mut().for_each(|(_, tp)| tp.compile_templates(&u_t));
 
-                NessaExpr::ClassDefinition(l, n, u_t, f, None, p)
+                NessaExpr::ClassDefinition(l, an, n, u_t, f, None, p)
             }
         )(input);
     }
@@ -2407,6 +2508,13 @@ impl NessaContext {
         return map(
             self.located(
                 tuple((
+                    terminated(
+                        separated_list0(
+                            empty0, 
+                            parse_annotation
+                        ),
+                        empty0
+                    ),
                     tag("interface"),
                     empty1,
                     context("Invalid interface identifier", cut(identifier_parser)),
@@ -2435,24 +2543,69 @@ impl NessaContext {
                             empty0, 
                             alt((
                                 map(
-                                    |input| self.function_header_parser(input),
-                                    |(a, b, c, d)| InterfaceHeader::FunctionHeader(a, b, c, d)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.function_header_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d))| InterfaceHeader::FunctionHeader(an, a, b, c, d)
                                 ),
                                 map(
-                                    |input| self.prefix_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.prefix_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::UnaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.postfix_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::UnaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.postfix_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::UnaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.binary_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::BinaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.binary_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::BinaryOpHeader(an, a, b, c, d, e)
                                 ),
                                 map(
-                                    |input| self.nary_operation_header_definition_parser(input),
-                                    |(a, b, c, d, e)| InterfaceHeader::NaryOpHeader(a, b, c, d, e)
+                                    tuple((
+                                        terminated(
+                                            separated_list0(
+                                                empty0, 
+                                                parse_annotation
+                                            ),
+                                            empty0
+                                        ),
+                                        |input| self.nary_operation_header_definition_parser(input),
+                                    )),
+                                    |(an, (a, b, c, d, e))| InterfaceHeader::NaryOpHeader(an, a, b, c, d, e)
                                 )
                             )),
                             context("Expected ';' at the end of interface function signature", cut(tag(";")))
@@ -2462,17 +2615,17 @@ impl NessaContext {
                     tag("}")
                 ))
             ),
-            |(l, (_, _, n, _, t, _, _, p, _, _))| {
+            |(l, (an, _, _, n, _, t, _, _, p, _, _))| {
                 let u_t = t.unwrap_or_default();
 
-                let mut fns: Vec<FunctionHeader> = vec!();
-                let mut unary: Vec<UnaryOpHeader> = vec!();
-                let mut binary: Vec<BinaryOpHeader> = vec!();
-                let mut nary: Vec<NaryOpHeader> = vec!();
+                let mut fns: Vec<AnnotFunctionHeader> = vec!();
+                let mut unary: Vec<AnnotUnaryOpHeader> = vec!();
+                let mut binary: Vec<AnnotBinaryOpHeader> = vec!();
+                let mut nary: Vec<AnnotNaryOpHeader> = vec!();
 
                 p.into_iter().for_each(|h| {
                     match h {
-                        InterfaceHeader::FunctionHeader(n, tm, mut args, mut ret) => {
+                        InterfaceHeader::FunctionHeader(an, n, tm, mut args, mut ret) => {
                             let u_tm = tm.clone().unwrap_or_default();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
         
@@ -2482,20 +2635,20 @@ impl NessaContext {
         
                             ret.compile_templates(&all_tm);
 
-                            fns.push((n, tm, args, ret));
+                            fns.push((an, n, tm, args, ret));
                         },
 
-                        InterfaceHeader::UnaryOpHeader(id, tm, a, mut at, mut ret) => {
+                        InterfaceHeader::UnaryOpHeader(an, id, tm, a, mut at, mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
                             at.compile_templates(&all_tm);
                             ret.compile_templates(&all_tm);
 
-                            unary.push((id, tm, a, at, ret));
+                            unary.push((an, id, tm, a, at, ret));
                         },
 
-                        InterfaceHeader::BinaryOpHeader(id, tm, (a0, mut a0t), (a1, mut a1t), mut ret) => {
+                        InterfaceHeader::BinaryOpHeader(an, id, tm, (a0, mut a0t), (a1, mut a1t), mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
@@ -2503,10 +2656,10 @@ impl NessaContext {
                             a1t.compile_templates(&all_tm);
                             ret.compile_templates(&all_tm);
 
-                            binary.push((id, tm, (a0, a0t), (a1, a1t), ret));
+                            binary.push((an, id, tm, (a0, a0t), (a1, a1t), ret));
                         }
 
-                        InterfaceHeader::NaryOpHeader(id, tm, (a0, mut a0t), mut args, mut ret) => {
+                        InterfaceHeader::NaryOpHeader(an, id, tm, (a0, mut a0t), mut args, mut ret) => {
                             let u_tm = tm.clone();
                             let all_tm = u_t.iter().cloned().chain(u_tm).collect::<Vec<_>>();
 
@@ -2518,12 +2671,12 @@ impl NessaContext {
 
                             ret.compile_templates(&all_tm);
 
-                            nary.push((id, tm, (a0, a0t), args, ret));
+                            nary.push((an, id, tm, (a0, a0t), args, ret));
                         }
                     }
                 });
 
-                NessaExpr::InterfaceDefinition(l, n, u_t, fns, unary, binary, nary)
+                NessaExpr::InterfaceDefinition(l, an, n, u_t, fns, unary, binary, nary)
             }
         )(input);
     }
@@ -2900,7 +3053,7 @@ impl NessaContext {
     }
 
     pub fn nessa_parser<'a>(&'a self, mut input: Span<'a>) -> PResult<'a, Vec<NessaExpr>> {
-        while let Ok((i, _)) = nessa_info_parser(input) {
+        while let Ok((i, _)) = nessa_info_parser(input, self.module_name.clone()) {
             input = i;
         }
 
@@ -2936,7 +3089,7 @@ mod tests {
     fn type_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let wildcard_str = "*";
@@ -3043,7 +3196,7 @@ mod tests {
         assert_eq!(string, NessaExpr::Literal(Location::none(), Object::new("test".to_string())));
         assert_eq!(escaped_string, NessaExpr::Literal(Location::none(), Object::new("test\ntest2\ttest3\"\\".to_string())));
 
-        ctx.define_type("Dice".into(), vec!(), vec!(
+        ctx.define_type(Location::none(), vec!(), "Dice".into(), vec!(), vec!(
             ("rolls".into(), INT),
             ("sides".into(), INT)
         ), 
@@ -3089,7 +3242,7 @@ mod tests {
             )
         })));
 
-        ctx.define_type("InnerDice".into(), vec!(), vec!(
+        ctx.define_type(Location::none(), vec!(), "InnerDice".into(), vec!(), vec!(
             ("inner_dice".into(), Type::Basic(id))
         ),
         None,
@@ -3139,18 +3292,21 @@ mod tests {
         let import_prefix_str = "import prefix op \"**\" from module;";
         let import_all_classes_str = "import class * from module;";
         let import_everything_str = "import * from module;";
+        let import_everything_local_str = "import * from /module;";
 
-        let (_, import_fns) = module_import_parser(Span::new(import_fns_str)).unwrap();
-        let (_, import_fns_2) = module_import_parser(Span::new(import_fns_2_str)).unwrap();
-        let (_, import_prefix) = module_import_parser(Span::new(import_prefix_str)).unwrap();
-        let (_, import_all_classes) = module_import_parser(Span::new(import_all_classes_str)).unwrap();
-        let (_, import_everything) = module_import_parser(Span::new(import_everything_str)).unwrap();
+        let (_, import_fns) = module_import_parser(Span::new(import_fns_str), Arc::new("test".into())).unwrap();
+        let (_, import_fns_2) = module_import_parser(Span::new(import_fns_2_str), Arc::new("test".into())).unwrap();
+        let (_, import_prefix) = module_import_parser(Span::new(import_prefix_str), Arc::new("test".into())).unwrap();
+        let (_, import_all_classes) = module_import_parser(Span::new(import_all_classes_str), Arc::new("test".into())).unwrap();
+        let (_, import_everything) = module_import_parser(Span::new(import_everything_str), Arc::new("test".into())).unwrap();
+        let (_, import_everything_local) = module_import_parser(Span::new(import_everything_local_str), Arc::new("test/test2".into())).unwrap();
 
         assert_eq!(import_fns, ("module".into(), ImportType::Fn, ["test".into()].iter().cloned().collect()));
         assert_eq!(import_fns_2, ("module".into(), ImportType::Fn, ["test".into(), "test2".into()].iter().cloned().collect()));
         assert_eq!(import_prefix, ("module".into(), ImportType::Prefix, ["**".into()].iter().cloned().collect()));
         assert_eq!(import_all_classes, ("module".into(), ImportType::Class, ["*".into()].iter().cloned().collect()));
         assert_eq!(import_everything, ("module".into(), ImportType::All, ["*".into()].iter().cloned().collect()));
+        assert_eq!(import_everything_local, ("test/module".into(), ImportType::All, ["*".into()].iter().cloned().collect()));
     }
 
     #[test]
@@ -3500,7 +3656,7 @@ mod tests {
     fn function_header_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let number_header_str = "fn test(a: Int) -> Int";
@@ -3563,7 +3719,7 @@ mod tests {
     fn function_definition_and_flow_control_parsing() {
         let mut ctx = standard_ctx();
 
-        ctx.define_type("Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Map".into(), vec!("Key".into(), "Value".into()), vec!(), None, vec!(), None).unwrap();
         let map_id = ctx.get_type_id("Map".into()).unwrap();
 
         let test_1_str = "fn inc() -> Int {
@@ -3604,6 +3760,7 @@ mod tests {
         assert_eq!(
             test_1,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 vec!(),
@@ -3625,6 +3782,7 @@ mod tests {
         assert_eq!(
             test,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 vec!(
@@ -3690,6 +3848,7 @@ mod tests {
         assert_eq!(
             test_3,
             NessaExpr::FunctionDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!("K".into(), "V".into()),
                 vec!(
@@ -3788,6 +3947,7 @@ mod tests {
         assert_eq!(
             test_1,
             NessaExpr::PrefixOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!(),
                 "arg".into(),
@@ -3809,7 +3969,8 @@ mod tests {
 
         assert_eq!(
             test,
-            NessaExpr::PostfixOperationDefinition(Location::none(), 
+            NessaExpr::PostfixOperationDefinition(Location::none(),
+                vec!(),
                 3,
                 vec!(),
                 "arg".into(),
@@ -3842,6 +4003,7 @@ mod tests {
         assert_eq!(
             test_3,
             NessaExpr::BinaryOperationDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!(),
                 ("a".into(), BOOL),
@@ -3880,6 +4042,7 @@ mod tests {
         assert_eq!(
             test_4,
             NessaExpr::NaryOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!(),
                 ("a".into(), INT),
@@ -3957,6 +4120,7 @@ mod tests {
         assert_eq!(
             test_template_1,
             NessaExpr::PrefixOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!("T".into()),
                 "arg".into(),
@@ -3979,6 +4143,7 @@ mod tests {
         assert_eq!(
             test_template,
             NessaExpr::PostfixOperationDefinition(Location::none(), 
+                vec!(),
                 3,
                 vec!("T".into()),
                 "arg".into(),
@@ -4011,6 +4176,7 @@ mod tests {
         assert_eq!(
             test_template_3,
             NessaExpr::BinaryOperationDefinition(Location::none(), 
+                vec!(),
                 0,
                 vec!("T".into(), "G".into()),
                 ("a".into(), T_0),
@@ -4049,6 +4215,7 @@ mod tests {
         assert_eq!(
             test_template_4,
             NessaExpr::NaryOperationDefinition(Location::none(), 
+                vec!(),
                 1,
                 vec!("T".into(), "G".into()),
                 ("a".into(), T_0),
@@ -4101,6 +4268,7 @@ mod tests {
         let (_, sync_lists) = ctx.class_definition_parser(Span::new(sync_lists_str)).unwrap();
 
         assert_eq!(dice_roll, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "DiceRoll".into(),
             vec!(),
             vec!(
@@ -4112,6 +4280,7 @@ mod tests {
         ));
 
         assert_eq!(sync_lists, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "SyncLists".into(),
             vec!("K".into(), "V".into()),
             vec!(
@@ -4169,6 +4338,7 @@ mod tests {
         let (_, number) = ctx.alias_definition_parser(Span::new(number_str)).unwrap();
 
         assert_eq!(number, NessaExpr::ClassDefinition(Location::none(), 
+            vec!(),
             "Number".into(),
             vec!(),
             vec!(),

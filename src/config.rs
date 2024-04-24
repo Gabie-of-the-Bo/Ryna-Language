@@ -22,7 +22,7 @@ use crate::regex_ext::replace_all_fallible;
 use crate::serialization::CompiledNessaModule;
 use crate::object::Object;
 use crate::types::INT;
-use crate::operations::{SUB_BINOP_ID, DIV_BINOP_ID};
+use crate::operations::{DIV_BINOP_ID, NEQ_BINOP_ID, SUB_BINOP_ID};
 
 const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
 
@@ -444,6 +444,7 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
     let print_id = module.ctx.get_function_id("print".into()).unwrap();
     let time_id = module.ctx.get_function_id("time".into()).unwrap();
     let inc_id = module.ctx.get_function_id("inc".into()).unwrap();
+    let panic_id = module.ctx.get_function_id("panic".into()).unwrap();
 
     let mut var_idx = 0;
 
@@ -497,8 +498,16 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
     }
     
     new_code.push(fn_call_1!(print_id, literal!(format!("{}", "\nResults: "))));
-    new_code.push(fn_call_1!(print_id, var!(succ_tests_var)));
+    new_code.push(fn_call_1!(print_id, var!(succ_tests_var.clone())));
     new_code.push(fn_call_1!(print_id, literal!(format!("/{} tests succeeded\n", test_functions.len()))));
+
+    new_code.push(if_else!(
+        binop!(NEQ_BINOP_ID, var!(succ_tests_var.clone()), literal!(Integer::from(test_functions.len()))),
+        vec!(
+            fn_call_1!(panic_id, literal!(format!("Some tests failed"))),
+        ),
+        vec!()
+    ));
 
     module.code = new_code;
 

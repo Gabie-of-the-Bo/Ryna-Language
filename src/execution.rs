@@ -10,6 +10,7 @@ use malachite::rounding_modes::RoundingMode;
 
 use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::debug::DebugInfo;
+use crate::functions::FunctionOverload;
 use crate::integer_ext::{is_valid_index, to_usize, ONE};
 use crate::nessa_warning;
 use crate::types::Type;
@@ -39,7 +40,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[])
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -71,9 +72,9 @@ impl NessaContext {
             Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize) {
+        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize, test) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
-                Ok(mut instr) => {     
+                Ok(mut instr) => {
                     if optimize {
                         ctx.optimize_instructions(&mut instr);
                     }
@@ -106,8 +107,8 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {        
-        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, program_input)
+    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {        
+        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, test, program_input)
     }
 }
 
@@ -581,7 +582,7 @@ impl NessaContext {
                 }), 
 
                 NativeFunctionCall(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCall", {
-                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let FunctionOverload { args: Type::And(v), ret: r, function: Some(f), .. } = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {
@@ -601,7 +602,7 @@ impl NessaContext {
                 }),
 
                 NativeFunctionCallNoRet(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCallNoRet", {
-                    if let (_, Type::And(v), r, Some(f)) = &self.functions[*func_id].overloads[*ov_id] {
+                    if let FunctionOverload { args: Type::And(v), ret: r, function: Some(f), .. } = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
                         for _ in v {
@@ -625,7 +626,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        match ov.3.unwrap()(type_args, &ov.2, obj) {
+                        match ov.operation.unwrap()(type_args, &ov.ret, obj) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };
@@ -643,7 +644,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        if let Err(msg) = ov.3.unwrap()(type_args, &ov.2, obj) {
+                        if let Err(msg) = ov.operation.unwrap()(type_args, &ov.ret, obj) {
                             return Err(NessaError::execution_error(msg));
                         };
 
@@ -661,7 +662,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        match ov.3.unwrap()(type_args, &ov.2, a, b, self) {
+                        match ov.operation.unwrap()(type_args, &ov.ret, a, b, self) {
                             Ok(obj) => stack.push(obj),
                             Err(msg) => return Err(NessaError::execution_error(msg))
                         };
@@ -680,7 +681,7 @@ impl NessaContext {
 
                         let ov = &operations[*ov_id];
 
-                        if let Err(msg) = ov.3.unwrap()(type_args, &ov.2, a, b, self) {
+                        if let Err(msg) = ov.operation.unwrap()(type_args, &ov.ret, a, b, self) {
                             return Err(NessaError::execution_error(msg));
                         };
                         
@@ -693,15 +694,11 @@ impl NessaContext {
 
                 NaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("NaryOperatorCall", {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
-                        if let (_, _, r, Some(f)) = &operations[*ov_id] {
-                            let res = f((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, r);
+                        let op_ov = &operations[*ov_id];
+                        let res = op_ov.operation.unwrap()((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, &op_ov.ret);
 
-                            if let Err(msg) = res {
-                                return Err(NessaError::execution_error(msg));
-                            }
-
-                        } else {
-                            unreachable!();
+                        if let Err(msg) = res {
+                            return Err(NessaError::execution_error(msg));
                         }
 
                     } else {

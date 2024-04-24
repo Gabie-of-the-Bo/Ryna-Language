@@ -15,7 +15,9 @@ pub mod operations;
 pub mod functions;
 pub mod types;
 pub mod interfaces;
+pub mod annotations;
 pub mod context;
+pub mod docs;
 
 pub mod debug;
 pub mod parser;
@@ -32,6 +34,9 @@ pub mod config;
 
 #[path = "algorithms/regex_ext.rs"]
 pub mod regex_ext;
+
+#[path = "algorithms/html_ext.rs"]
+pub mod html_ext;
 
 #[path = "algorithms/integer_ext.rs"]
 pub mod integer_ext;
@@ -126,7 +131,7 @@ mod integration {
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
         let (_, all_mods, files) = compute_project_hash(path_str, None, true).unwrap();
-        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true);
+        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true, false);
 
         if let Err(err) = &err {
             err.emit();

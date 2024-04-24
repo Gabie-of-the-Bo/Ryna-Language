@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{config::{ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
+use nessa::{config::{generate_docs, ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -130,6 +130,14 @@ fn main() {
                     .action(ArgAction::SetTrue)
                     .default_value("false")
                 )
+                .arg(
+                    Arg::new("test")
+                    .help("Run tests")
+                    .long("test")
+                    .short('t')
+                    .action(ArgAction::SetTrue)
+                    .default_value("false")
+                )
         )
         .subcommand(
             Command::new("new")
@@ -213,6 +221,17 @@ fn main() {
             )
         )
         .subcommand(
+            Command::new("docs")
+            .about("Generate documentation")
+            .arg(
+                Arg::new("INPUT")
+                .help("Specifies the project for which you want to generate documentation")
+                .required(false)
+                .default_value(".")
+                .index(1)
+            )
+        )
+        .subcommand(
             Command::new("save-deps")
             .about("Create project requirements file")
         )
@@ -242,6 +261,7 @@ fn main() {
             let force_recompile = *run_args.get_one::<bool>("recompile").expect("Invalid recompilation flag");
             let optimize = *run_args.get_one::<bool>("optimize").unwrap_or(&false);
             let profile = *run_args.get_one::<bool>("profile").unwrap_or(&false);
+            let test = *run_args.get_one::<bool>("test").unwrap_or(&false);
 
             let program_input = match run_args.get_many::<String>("PROGRAM_INPUT") {
                 Some(i) => i.cloned().collect::<Vec<_>>(),
@@ -249,10 +269,10 @@ fn main() {
             };
 
             let res = if profile {
-                NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, &program_input)
+                NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, test, &program_input)
 
             } else {
-                NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, &program_input)
+                NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, test, &program_input)
             };
             
             match res {
@@ -358,6 +378,14 @@ fn main() {
 
             if gitignore {
                 fs::write(module_path.join(Path::new(".gitignore")), DEFAULT_GITIGNORE).expect("Unable to write .gitignore");
+            }
+        }
+
+        Some(("docs", run_args)) => {
+            let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
+
+            if let Err(err) = generate_docs(path) {
+                err.emit();
             }
         }
 

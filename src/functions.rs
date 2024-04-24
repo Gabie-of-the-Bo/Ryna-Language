@@ -8,8 +8,10 @@ use seq_macro::seq;
 use malachite::Integer;
 use malachite::num::arithmetic::traits::Abs;
 
+use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
 use crate::integer_ext::*;
+use crate::parser::Location;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
 use crate::types::*;
@@ -23,12 +25,22 @@ use crate::context::NessaContext;
 */
 
 // Takes type parameters, return type and arguments
-pub type FunctionOverloadInner = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
-pub type FunctionOverload = Option<FunctionOverloadInner>;
+pub type FunctionOverloadFn = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
+pub type OptFunctionOverloadFn = Option<FunctionOverloadFn>;
 
-pub type FunctionOverloads = Vec<(usize, Type, Type, FunctionOverload)>;
+#[derive(Clone)]
+pub struct FunctionOverload {
+    pub location: Location,
+    pub annotations: Vec<Annotation>,
+    pub templates: usize,
+    pub args: Type,
+    pub ret: Type,
+    pub function: OptFunctionOverloadFn
+}
 
-const EMPTY_FUNC: FunctionOverloadInner = |_, _, _, _| Ok(Object::empty());
+pub type FunctionOverloads = Vec<FunctionOverload>;
+
+const EMPTY_FUNC: FunctionOverloadFn = |_, _, _, _| Ok(Object::empty());
 
 #[derive(Clone)]
 pub struct Function {
@@ -1053,12 +1065,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
 pub fn define_macro_emit_fn(ctx: &mut NessaContext, name: String) {
     let idx = ctx.define_function(name).unwrap();
 
-    ctx.define_function_overload(idx, 0, &[STR], crate::types::Type::Empty, Some(|_, _, mut args, ctx| {
+    ctx.define_native_function_overload(idx, 0, &[STR], crate::types::Type::Empty, |_, _, mut args, ctx| {
         let obj = args.pop().unwrap();
         let string = obj.get::<String>();
 
         *ctx.captured_output.borrow_mut() += string;
 
         Ok(Object::empty())
-    })).unwrap();
+    }).unwrap();
 }

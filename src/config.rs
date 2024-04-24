@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use colored::Colorize;
 use glob::glob;
+use malachite::Integer;
 use md5::compute;
 use regex::{Regex, Captures};
 use serde::{Serialize, Deserialize};
@@ -12,12 +13,16 @@ use serde_yaml::{from_str, to_string};
 use directories::ProjectDirs;
 
 use crate::compilation::NessaError;
-use crate::{context::*, nessa_error};
+use crate::context::{standard_ctx, NessaContext};
+use crate::docs::{generate_all_class_docs, generate_all_function_overload_docs, generate_all_interface_docs, generate_all_operation_docs, generate_all_syntax_docs};
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
-use crate::parser::*;
+use crate::{nessa_error, parser::*};
 use crate::regex_ext::replace_all_fallible;
 use crate::serialization::CompiledNessaModule;
+use crate::object::Object;
+use crate::types::INT;
+use crate::operations::{DIV_BINOP_ID, NEQ_BINOP_ID, SUB_BINOP_ID};
 
 const ENV_VAR_REGEX: &str = r"\$\{\s*([a-zA-Z0-9_]+)\s*\}";
 
@@ -364,12 +369,177 @@ pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -
     Ok((res, file_cache))
 }
 
-pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
+fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
+    // Add definitions
+    let mut new_code = module.code.iter()
+                                  .cloned()
+                                  .filter(NessaExpr::is_definition)
+                                  .collect::<Vec<_>>();
+
+    macro_rules! fn_call {
+        ($id: expr) => {
+            NessaExpr::FunctionCall(
+                Location::none(), $id, vec!(), vec!()
+            )
+        };
+    }
+
+    macro_rules! fn_call_1 {
+        ($id: expr, $arg: expr) => {
+            NessaExpr::FunctionCall(
+                Location::none(), $id, vec!(), vec!($arg)
+            )
+        };
+    }
+
+    macro_rules! literal {
+        ($obj: expr) => {
+            NessaExpr::Literal(Location::none(), Object::new($obj))
+        };
+    }
+
+    macro_rules! if_else {
+        ($cond: expr, $ib: expr, $eb: expr) => {
+            NessaExpr::If(
+                Location::none(),
+                Box::new($cond),
+                $ib,
+                vec!(),
+                Some($eb),
+            )
+        };
+    }
+
+    macro_rules! var_def {
+        ($name: expr, $obj: expr) => {
+            NessaExpr::VariableDefinition(Location::none(), $name, INT, Box::new($obj))
+        };
+    }
+
+    macro_rules! var {
+        ($obj: expr) => {
+            NessaExpr::NameReference(Location::none(), $obj)
+        };
+    }
+
+    macro_rules! binop {
+        ($id: expr, $a: expr, $b: expr) => {
+            NessaExpr::BinaryOperation(Location::none(), $id, vec!(), Box::new($a), Box::new($b))
+        };
+    }
+
+    macro_rules! subtract {
+        ($a: expr, $b: expr) => {
+            binop!(SUB_BINOP_ID, $a, $b)
+        };
+    }
+
+    macro_rules! divide {
+        ($a: expr, $b: expr) => {
+            binop!(DIV_BINOP_ID, $a, $b)
+        };
+    }
+
+    // Add test function calls and boilerplate
+    let print_id = module.ctx.get_function_id("print".into()).unwrap();
+    let time_id = module.ctx.get_function_id("time".into()).unwrap();
+    let inc_id = module.ctx.get_function_id("inc".into()).unwrap();
+    let panic_id = module.ctx.get_function_id("panic".into()).unwrap();
+
+    let mut var_idx = 0;
+
+    let mut test_functions = vec!();
+
+    for f in &module.ctx.functions {
+        for ov in &f.overloads {
+            if ov.location.module == module.ctx.module_name && ov.annotations.iter().any(|i| i.name == "test") {
+                test_functions.push((&f.name, f.id));
+                break; // Only one overload per function
+            }
+        }
+    }
+
+    const TEST_LOG_RPAD: usize = 7;
+    let max_test_name_len = test_functions.iter().map(|(n, _)| n.len()).max().unwrap_or_default() + TEST_LOG_RPAD;
+
+    new_code.push(fn_call_1!(print_id, literal!(format!("\n*** Executing {} tests ***\n\n", test_functions.len()))));
+
+    let succ_tests_var = "successful_tests".to_string();
+
+    new_code.push(var_def!(succ_tests_var.clone(), literal!(Integer::from(0))));
+
+    for (name, id) in &test_functions {
+        let time_var = format!("start_{}", var_idx);
+
+        new_code.push(var_def!(time_var.clone(), fn_call!(time_id)));
+
+        new_code.push(fn_call_1!(print_id, literal!(format!(
+            "Testing {}{} ", 
+            name.cyan(),
+            ".".repeat(max_test_name_len - name.len())
+        ))));
+
+        new_code.push(if_else!(
+            fn_call!(*id),
+            vec!(
+                fn_call_1!(print_id, literal!(format!("{}", "Ok!".green()))),
+                fn_call_1!(inc_id, var!(succ_tests_var.clone()))
+            ),
+            vec!(fn_call_1!(print_id, literal!(format!("{}", "Failed".red()))))
+        ));
+
+        new_code.push(fn_call_1!(print_id, literal!(format!(" ["))));
+
+        new_code.push(fn_call_1!(print_id, divide!(subtract!(fn_call!(time_id), var!(time_var)), literal!(1000000.0))));
+
+        new_code.push(fn_call_1!(print_id, literal!(format!(" ms]\n"))));
+
+        var_idx += 1; // Increase variable counter
+    }
+    
+    new_code.push(fn_call_1!(print_id, literal!(format!("{}", "\nResults: "))));
+    new_code.push(fn_call_1!(print_id, var!(succ_tests_var.clone())));
+    new_code.push(fn_call_1!(print_id, literal!(format!("/{} tests succeeded\n", test_functions.len()))));
+
+    new_code.push(if_else!(
+        binop!(NEQ_BINOP_ID, var!(succ_tests_var.clone()), literal!(Integer::from(test_functions.len()))),
+        vec!(
+            fn_call_1!(panic_id, literal!(format!("Some tests failed"))),
+        ),
+        vec!()
+    ));
+
+    module.code = new_code;
+
+    Ok(())
+}
+
+pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool, test: bool) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
     let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache, optimize)?;
+
+    if test {
+        generate_test_file(&mut module)?;
+    }
 
     module.ctx.precompile_module(&mut module.code)?;
 
     Ok((module.ctx, module.code))
+}
+
+pub fn generate_docs(path: &String) -> Result<(), NessaError> {
+    let project_path = &normalize_path(Path::new(path))?;
+
+    let (_, all_mods, files) = compute_project_hash(path, None, false)?;
+    let mut module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false)?;
+    module.ctx.precompile_module(&mut module.code)?;
+
+    generate_all_function_overload_docs(&project_path, &module);
+    generate_all_operation_docs(&project_path, &module);
+    generate_all_class_docs(&project_path, &module);
+    generate_all_syntax_docs(&project_path, &module);
+    generate_all_interface_docs(&project_path, &module);
+
+    Ok(())
 }
 
 pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize: bool) -> Result<(String, VersionModCache, FileCache), NessaError> {

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use nom::{branch::alt, bytes::complete::tag, character::complete::satisfy, combinator::{eof, map, map_opt, peek, value}, multi::{many0, many_till}, sequence::{delimited, preceded, tuple}};
 
-use crate::{context::NessaContext, parser::{empty0, identifier_parser, PResult, Span}};
+use crate::{annotations::Annotation, context::NessaContext, parser::{empty0, identifier_parser, Location, PResult, Span}, patterns::Pattern};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NessaMacroType {
@@ -10,13 +10,23 @@ pub enum NessaMacroType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NessaMacro {
+pub enum NdlMacro {
     Text(String),
     Var(String),
     IndexedVar(String, String),
-    Loop(String, String, Box<NessaMacro>),
-    Seq(Vec<NessaMacro>),
-    Code(Box<NessaMacro>)
+    Loop(String, String, Box<NdlMacro>),
+    Seq(Vec<NdlMacro>),
+    Code(Box<NdlMacro>)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NessaMacro {
+    pub location: Location,
+    pub annotations: Vec<Annotation>,
+    pub name: String,
+    pub m_type: NessaMacroType,
+    pub pattern: Pattern,
+    pub generator: NdlMacro
 }
 
 pub fn text_pattern_char(input: Span<'_>) -> PResult<char> {
@@ -52,24 +62,24 @@ pub fn text_pattern_end(input: Span<'_>) -> PResult<()> {
     ))(input)
 }
 
-pub fn parse_text(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_text(input: Span<'_>) -> PResult<NdlMacro> {
     map_opt(
         many_till(text_pattern_char, peek(text_pattern_end)),
-        |(i, _)| if !i.is_empty() { Some(NessaMacro::Text(i.iter().collect())) } else { None }
+        |(i, _)| if !i.is_empty() { Some(NdlMacro::Text(i.iter().collect())) } else { None }
     )(input)
 }
 
-pub fn parse_var(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_var(input: Span<'_>) -> PResult<NdlMacro> {
     map(
         preceded(
             tag("$"),
             identifier_parser
         ),
-        NessaMacro::Var
+        NdlMacro::Var
     )(input)
 }
 
-pub fn parse_index(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_index(input: Span<'_>) -> PResult<NdlMacro> {
     map(
         tuple((
             tag("$"),
@@ -77,7 +87,7 @@ pub fn parse_index(input: Span<'_>) -> PResult<NessaMacro> {
             tag("."),
             identifier_parser
         )),
-        |(_, c, _, i)| NessaMacro::IndexedVar(c, i)
+        |(_, c, _, i)| NdlMacro::IndexedVar(c, i)
     )(input)
 }
 
@@ -93,7 +103,7 @@ pub fn parse_loop_header(input: Span<'_>) -> PResult<(String, String)> {
     )(input)
 }
 
-pub fn parse_loop(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_loop(input: Span<'_>) -> PResult<NdlMacro> {
     map(
         tuple((
             parse_loop_header,
@@ -104,22 +114,22 @@ pub fn parse_loop(input: Span<'_>) -> PResult<NessaMacro> {
                 tag("}")                
             )
         )),
-        |(h, _, b)| NessaMacro::Loop(h.0, h.1, Box::new(b))
+        |(h, _, b)| NdlMacro::Loop(h.0, h.1, Box::new(b))
     )(input)
 }
 
-pub fn parse_code(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_code(input: Span<'_>) -> PResult<NdlMacro> {
     map(
         delimited(
             tag("{|"),
             parse_nessa_macro,
             tag("|}")
         ),
-        |i| NessaMacro::Code(Box::new(i))
+        |i| NdlMacro::Code(Box::new(i))
     )(input)
 }
 
-pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NdlMacro> {
     alt((
         parse_index,
         parse_var,
@@ -129,17 +139,17 @@ pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NessaMacro> {
     ))(input)
 }
 
-pub fn parse_nessa_macro(input: Span<'_>) -> PResult<NessaMacro> {
+pub fn parse_nessa_macro(input: Span<'_>) -> PResult<NdlMacro> {
     map(
         many0(parse_nessa_macro_line),
-        NessaMacro::Seq
+        NdlMacro::Seq
     )(input)
 }
 
-impl NessaMacro {
+impl NdlMacro {
     pub fn get_markers(&self) -> HashSet<(bool, String)> {
         return match self {
-            NessaMacro::Loop(v, i, b) => {
+            NdlMacro::Loop(v, i, b) => {
                 let mut res = b.get_markers().into_iter().chain(vec!((false, v.clone()), (true, i.clone()))).collect::<HashSet<_>>();
                 let repeated = res.iter().filter(|(it, _)| *it).cloned().collect::<Vec<_>>();
 
@@ -151,11 +161,11 @@ impl NessaMacro {
                 res
             },
             
-            NessaMacro::Seq(b) => b.iter().flat_map(NessaMacro::get_markers).collect(),
-            NessaMacro::Var(v) => vec!((false, v.clone())).into_iter().collect(),
-            NessaMacro::IndexedVar(v, i) => vec!((false, v.clone()), (true, i.clone())).into_iter().collect(),
+            NdlMacro::Seq(b) => b.iter().flat_map(NdlMacro::get_markers).collect(),
+            NdlMacro::Var(v) => vec!((false, v.clone())).into_iter().collect(),
+            NdlMacro::IndexedVar(v, i) => vec!((false, v.clone()), (true, i.clone())).into_iter().collect(),
 
-            NessaMacro::Code(c) => c.get_markers(),
+            NdlMacro::Code(c) => c.get_markers(),
 
             _ => HashSet::new(),
         };
@@ -180,16 +190,16 @@ impl NessaMacro {
         }
 
         match self {
-            NessaMacro::Text(s) => Ok(s.clone()),
+            NdlMacro::Text(s) => Ok(s.clone()),
             
-            NessaMacro::Var(v) => {
+            NdlMacro::Var(v) => {
                 let var = extract_var!(v)?;
                 assert_single!(var, v);
 
                 Ok(var[0].clone())
             },
             
-            NessaMacro::IndexedVar(c, i) => {
+            NdlMacro::IndexedVar(c, i) => {
                 let cs = extract_var!(c)?;
                 let idx = extract_var!(i)?;
                 assert_single!(idx, i);
@@ -200,7 +210,7 @@ impl NessaMacro {
                 }
             },
 
-            NessaMacro::Loop(c, i, b) => {
+            NdlMacro::Loop(c, i, b) => {
                 let cont = extract_var!(c)?;
 
                 let mut args_cpy = args.clone();
@@ -215,11 +225,11 @@ impl NessaMacro {
                 Ok(iters.join(""))
             },
             
-            NessaMacro::Seq(b) => {
+            NdlMacro::Seq(b) => {
                 Ok(b.iter().map(|i| i.expand(args, ctx)).collect::<Result<Vec<_>, _>>()?.join(""))
             },
 
-            NessaMacro::Code(p) => {
+            NdlMacro::Code(p) => {
                 let sub_code = p.expand(args, ctx)?;
 
                 let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(
@@ -227,6 +237,7 @@ impl NessaMacro {
                     Some(sub_code), 
                     true, 
                     ctx.optimize,
+                    false,
                     &[]
                 ).unwrap();
 
@@ -242,7 +253,7 @@ mod tests {
     #[allow(unused)] 
     use crate::context::standard_ctx;
     #[allow(unused)] 
-    use crate::macros::NessaMacro;
+    use crate::macros::NdlMacro;
     #[allow(unused)] 
     use super::parse_nessa_macro;
 
@@ -260,38 +271,38 @@ mod tests {
         let example_4_macro = parse_nessa_macro(example_4.into()).unwrap().1;
         let example_5_macro = parse_nessa_macro(example_5.into()).unwrap().1;
 
-        assert_eq!(example_1_macro, NessaMacro::Seq(vec!(
-            NessaMacro::Text("let test = arr<".into()),
-            NessaMacro::Var("type".into()),
-            NessaMacro::Text(">();".into())
+        assert_eq!(example_1_macro, NdlMacro::Seq(vec!(
+            NdlMacro::Text("let test = arr<".into()),
+            NdlMacro::Var("type".into()),
+            NdlMacro::Text(">();".into())
         )));
         
-        assert_eq!(example_2_macro, NessaMacro::Seq(vec!(
-            NessaMacro::Text("let $var = arr<".into()),
-            NessaMacro::Var("type".into()),
-            NessaMacro::Text(">();".into())
+        assert_eq!(example_2_macro, NdlMacro::Seq(vec!(
+            NdlMacro::Text("let $var = arr<".into()),
+            NdlMacro::Var("type".into()),
+            NdlMacro::Text(">();".into())
         )));
         
-        assert_eq!(example_3_macro, NessaMacro::Seq(vec!(
-            NessaMacro::Text("if ".into()),
-            NessaMacro::Var("cond".into()),
-            NessaMacro::Text(" { ".into()),
-            NessaMacro::Var("expr".into()),
-            NessaMacro::Text(" }".into()),
+        assert_eq!(example_3_macro, NdlMacro::Seq(vec!(
+            NdlMacro::Text("if ".into()),
+            NdlMacro::Var("cond".into()),
+            NdlMacro::Text(" { ".into()),
+            NdlMacro::Var("expr".into()),
+            NdlMacro::Text(" }".into()),
         )));
         
-        assert_eq!(example_4_macro, NessaMacro::Seq(vec!(
-            NessaMacro::Loop("list".into(), "i".into(), Box::new(NessaMacro::Seq(vec!(
-                NessaMacro::Text(" let i = ".into()),
-                NessaMacro::IndexedVar("list".into(), "i".into()),
-                NessaMacro::Text("; ".into())
+        assert_eq!(example_4_macro, NdlMacro::Seq(vec!(
+            NdlMacro::Loop("list".into(), "i".into(), Box::new(NdlMacro::Seq(vec!(
+                NdlMacro::Text(" let i = ".into()),
+                NdlMacro::IndexedVar("list".into(), "i".into()),
+                NdlMacro::Text("; ".into())
             ))))
         )));
         
-        assert_eq!(example_5_macro, NessaMacro::Seq(vec!(
-            NessaMacro::Text("let res = ".into()),
-            NessaMacro::Code(Box::new(NessaMacro::Seq(vec!(NessaMacro::Var("expr".into()))))),
-            NessaMacro::Text(";".into()),
+        assert_eq!(example_5_macro, NdlMacro::Seq(vec!(
+            NdlMacro::Text("let res = ".into()),
+            NdlMacro::Code(Box::new(NdlMacro::Seq(vec!(NdlMacro::Var("expr".into()))))),
+            NdlMacro::Text(";".into()),
         )));
     }
 

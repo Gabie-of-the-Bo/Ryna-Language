@@ -57,11 +57,11 @@ These are some of the things you can do with Nessa:
 
   ```
   fn this_is_a_test(a: Int) -> Bool {
-    return true;
+      return true;
   }
 
   fn this_is_a_test(a: String) -> Bool {
-    return false;
+      return false;
   }
 
   // Both valid
@@ -73,7 +73,7 @@ These are some of the things you can do with Nessa:
 
   ```
   fn<T> is_number(a: 'T) -> Bool {
-    return a.is<Int>();
+      return a.is<Int>();
   }
 
   // Template arguments are automatically inferred from the parameters if possible
@@ -86,11 +86,11 @@ These are some of the things you can do with Nessa:
 
   ```
   class Dice {
-    // Syntax definition
-    syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, faces)
+      // Syntax definition
+      syntax from Arg(1{d}, rolls) 'D' Arg(1{d}, faces)
 
-    faces: Int
-    rolls: Int
+      faces: Int
+      rolls: Int
   }
 
   //Usage
@@ -124,23 +124,59 @@ These are some of the things you can do with Nessa:
   // Operation definition for each operator
   // These can be overloaded and templated just the same as functions
   op (a: &Int) ++ -> Int {
-    return a + 1;
+      return a + 1;
   }
   
   op (a: &Int) <=> (b: &Int) -> Int {
-    if a < b {
-      return -1;
-    }
+      if a < b {
+          return -1;
+      }
+      
+      if a > b {
+          return 1;
+      }
     
-    if a > b {
-      return 1;
-    }
-    
-    return 0;
+      return 0;
   }
   
   op (a: &Int) `(b: &Int, c: &Int)´ -> Int {
-    return a + b * c;
+      return a + b * c;
+  }
+  ```
+
+* **Built-in testing framework**: you can use the `@test` annotation to build unit tests without external libraries:
+
+  ```
+  @test
+  fn fill_test() -> Bool {
+      let res = arr_with_capacity<Int>(3);
+      res.fill(100);
+
+      for i in res {
+          if i != 100 {
+              return false;
+          }
+      }
+
+      return true;
+  }
+  ```
+
+* **Built-in documentation generator**: you can use the `@doc` annotation document your project and the `nessa docs` command to generate human-readable markdown files with the documentation of your project:
+
+  ```
+  @doc(
+      "Fills every available position in an array with a given value. The filling starts in the current `len`.",
+      array: "the array to fill.",
+      value: "the value to fill the available positions with.",
+      "An array where every position starting from the previous `len` is `value`"
+  )
+  fn<T> fill(array: @Array<'T>, value: 'T) -> @Array<'T> {
+      while array.capacity() > array.len() {
+          array.push(*value);
+      }
+
+      return array;
   }
   ```
 
@@ -151,6 +187,10 @@ These are some of the things you can do with Nessa:
 ## Chessa engine
 
 [Chessa](https://github.com/Gabie-of-the-Bo/Chessa/) (pun intended) is a simple chess engine written in _Nessa_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
+
+## Genessa
+
+[Genessa](https://github.com/Gabie-of-the-Bo/Genessa/) (again, pun intended) is a genetic algorithms library written in _Nessa_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
 
 # Contribute
 

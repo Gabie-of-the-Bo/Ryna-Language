@@ -47,7 +47,7 @@ impl NessaContext {
 
         let no_macro = macro_code.is_none();
 
-        match compute_project_hash(&path, macro_code, optimize) {
+        match compute_project_hash(&path, macro_code, optimize, test) {
             Ok((hash, all_mods, files)) => {
                 combined_hash = hash.clone();
                 all_modules = all_mods;

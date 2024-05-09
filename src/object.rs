@@ -144,8 +144,6 @@ pub enum ObjectBlock {
     Mut(DataBlock),
 }
 
-
-
 impl Eq for ObjectBlock {}
 
 impl ObjectBlock {

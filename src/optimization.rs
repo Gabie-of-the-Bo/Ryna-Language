@@ -798,6 +798,9 @@ impl NessaContext {
                         }
 
                         *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+
+                        // Sanity check
+                        self.static_check(expr).unwrap();
                     }
                 }
             }
@@ -833,6 +836,9 @@ impl NessaContext {
                         }
 
                         *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+
+                        // Sanity check
+                        self.static_check(expr).unwrap();
                     }
                 }
             }
@@ -873,6 +879,9 @@ impl NessaContext {
                         }
 
                         *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+
+                        // Sanity check
+                        self.static_check(expr).unwrap();
                     }
                 }
             }
@@ -907,6 +916,9 @@ impl NessaContext {
                         }
 
                         *expr = NessaExpr::DoBlock(Location::none(), inlined_body, return_type);
+
+                        // Sanity check
+                        self.static_check(expr).unwrap();
                     }
                 }
             }
@@ -1192,16 +1204,30 @@ impl NessaContext {
 
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
-            NessaExpr::UnaryOperation(_, _, _, e) |
             NessaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
-            
+
+            NessaExpr::UnaryOperation(_, _, _, e) => {
+                self.sub_variables(e, assigned_exprs);
+
+                // Static check and overload resolution
+                self.static_check(&expr).unwrap();
+            }
+
             NessaExpr::DoBlock(_, exprs, _) |
-            NessaExpr::FunctionCall(_, _, _, exprs) |
             NessaExpr::Tuple(_, exprs) => {
                 for e in exprs {
                     self.sub_variables(e, assigned_exprs);
                 }
             },
+
+            NessaExpr::FunctionCall(_, _, _, exprs) => {
+                for e in exprs {
+                    self.sub_variables(e, assigned_exprs);
+                }
+
+                // Static check and overload resolution
+                self.static_check(&expr).unwrap();
+            }
 
             NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
             NessaExpr::While(_, c, exprs) => {
@@ -1218,11 +1244,17 @@ impl NessaContext {
                 for e in exprs {
                     self.sub_variables(e, assigned_exprs);
                 }
+
+                // Static check and overload resolution
+                self.static_check(&expr).unwrap();
             },
 
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.sub_variables(a, assigned_exprs);
                 self.sub_variables(b, assigned_exprs);
+
+                // Static check and overload resolution
+                self.static_check(&expr).unwrap();
             },
 
             NessaExpr::If(_, ic, ib, ei, eb) => {

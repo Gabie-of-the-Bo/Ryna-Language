@@ -1,0 +1,19 @@
+type ℕ = Int;
+
+fn Σ(a: ℕ, b: ℕ) -> ℕ {
+    return a + b;
+} 
+
+if Σ(4, 5) != 9 {
+    panic("This should not happen");
+}
+
+binary op "⊕" (5);
+
+op (a: ℕ) ⊕ (b: ℕ) -> ℕ {
+    return a * 2 + b * 2;
+}
+
+if 4 ⊕ 5 != 18 {
+    panic("This should not happen");
+}

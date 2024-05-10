@@ -312,6 +312,11 @@ mod integration {
     }
 
     #[test]
+    fn unicode() {
+        integration_test("test/unicode.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

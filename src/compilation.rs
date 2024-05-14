@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
@@ -51,14 +52,20 @@ pub struct NessaError {
     pub has_location: bool,
     pub line: usize,
     pub column: usize,
+    pub module: Arc<String>,
     pub fragment: String,
 
     pub suggestions: Vec<String>
 }
 
 impl NessaError {
-    pub fn syntax_error(message: String, line: usize, column: usize, fragment: String, suggestions: Vec<String>) -> Self {
-        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, fragment, suggestions }
+    pub fn in_module(mut self, module: Arc<String>) -> Self {
+        self.module = module;
+        self
+    } 
+
+    pub fn syntax_error(message: String, line: usize, column: usize, module: Arc<String>, fragment: String, suggestions: Vec<String>) -> Self {
+        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, module, fragment, suggestions }
     }
 
     #[cold]
@@ -69,6 +76,7 @@ impl NessaError {
             message, 
             line: location.line, 
             column: location.column, 
+            module: location.module.clone(),
             fragment: location.span.clone(), 
             suggestions 
         }
@@ -82,6 +90,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -95,6 +104,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -116,8 +126,9 @@ impl NessaError {
             frag = frag.trim();
     
             eprintln!(
-                "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
+                "\n[{} in module {}, line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
                 self.err_type.red().bold(), 
+                self.module.green(),
                 self.line.to_string().yellow(), self.column.to_string().yellow(), 
                 self.message, frag,
                 "^".repeat(frag.len()).red()
@@ -157,7 +168,7 @@ impl<'a> From<VerboseError<Span<'a>>> for NessaError {
 
         NessaError::syntax_error(
             error_msg.into(), 
-            fragment.location_line() as usize, fragment.get_column(), 
+            fragment.location_line() as usize, fragment.get_column(), Arc::default(),
             fragment.to_string(), 
             vec!()
         )
@@ -3448,7 +3459,7 @@ impl NessaContext{
             let ops = self.nessa_macros_parser(Span::new(code));
         
             if let Err(err) = ops {
-                return Err(NessaError::from(err));
+                return Err(NessaError::from(err).in_module(self.module_name.clone()));
             }
             
             for i in ops.unwrap().1 {
@@ -3501,7 +3512,7 @@ impl NessaContext{
         let ops = self.nessa_operators_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3526,7 +3537,7 @@ impl NessaContext{
         let ops = self.nessa_function_headers_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3540,7 +3551,7 @@ impl NessaContext{
         let ops = self.nessa_operations_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3581,7 +3592,7 @@ impl NessaContext{
             Ok((_, lines)) => Ok(lines),
 
             Err(nom::Err::Error(error)) |
-            Err(nom::Err::Failure(error)) => Err(NessaError::from(error)),
+            Err(nom::Err::Failure(error)) => Err(NessaError::from(error).in_module(self.module_name.clone())),
 
             _ => unreachable!()
         };

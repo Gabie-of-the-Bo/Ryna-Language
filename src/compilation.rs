@@ -669,12 +669,190 @@ impl NessaContext {
         Ok(max_var)
     }
 
+    pub fn transform_term(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
+        match expr {
+            NessaExpr::FunctionName(l, id) => {
+                let func = &self.functions[*id];
+
+                if func.overloads.len() > 1 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} is ambiguous (found {} overloads)",
+                            func.name.green(),
+                            func.overloads.len()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                if func.overloads[0].templates != 0 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} cannot be formed from generic overload",
+                            func.name.green()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                let ov = &func.overloads[0];
+                let mut args = vec!();
+
+                if let Type::And(a) = &ov.args {
+                    if a.len() == 1 {
+                        args.push(a[0].clone());
+
+                    } else {
+                        args.extend(a.iter().cloned());
+                    }
+
+                } else {
+                    args.push(ov.args.clone());
+                }
+
+                let move_id = self.get_function_id("move".into()).unwrap();
+
+                // Generate implicit function call
+                let fn_call = NessaExpr::FunctionCall(
+                    Location::none(), *id, vec!(), 
+                    args.iter().enumerate()
+                        .map(|(i, t)| {
+                            let v = NessaExpr::Variable(Location::none(), i, format!("arg_{i}"), t.clone());
+
+                            // Move if it is a direct value
+                            if t.is_ref() {
+                                v
+                            
+                            } else {
+                                NessaExpr::FunctionCall(
+                                    Location::none(), move_id, vec!(t.clone()), vec!(v) 
+                                )
+                            }
+                        })
+                        .collect()
+                );
+
+                // Generate implicit lambda
+                *expr = NessaExpr::CompiledLambda(
+                    l.clone(), self.lambdas, vec!(), 
+                    args.into_iter().enumerate().map(|(i, t)| (format!("arg_{i}"), t)).collect(), 
+                    ov.ret.clone(), 
+                    vec!(NessaExpr::Return(Location::none(), Box::new(fn_call)))
+                );
+
+                self.lambdas += 1;
+
+                Ok(())
+            } 
+
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.transform_term(e),
+
+            NessaExpr::CompiledLambda(_, _, c, _, _, _) => {
+                for (_, e) in c {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.transform_term(a)?;
+                self.transform_term(b)?;
+
+                Ok(())
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.transform_term(ic)?;
+                
+                for e in ib {
+                    self.transform_term(e)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.transform_term(ei_h)?;
+                    
+                    for e in ei_b {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                Ok(())
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) => { Ok(()) },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
     pub fn compile_vars_and_infer(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
         self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut VariableMap::new(), args)
     }
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_vars_and_infer(body, args)?;
+
+        // Second pass to transform some terms if needed
+        for expr in body.iter_mut() {
+            self.transform_term(expr)?;
+        }
 
         Ok(())
     }

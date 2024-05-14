@@ -317,6 +317,11 @@ mod integration {
     }
 
     #[test]
+    fn implicit_lambda() {
+        integration_test("test/implicit_lambda.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

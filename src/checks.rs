@@ -6,6 +6,8 @@ use rustc_hash::FxHashSet;
 use crate::annotations::Annotation;
 use crate::compilation::NessaError;
 use crate::context::NessaContext;
+use crate::formats::{check_class_name, check_fn_name, check_interface_name, check_template_name};
+use crate::located_nessa_warning;
 use crate::parser::{NessaExpr, Location};
 use crate::operations::Operator;
 use crate::types::{Type, BOOL};
@@ -2370,6 +2372,60 @@ impl NessaContext {
         Ok(())
     }
 
+    pub fn check_formats(&self, expr: &NessaExpr) {
+        match expr {
+            NessaExpr::ClassDefinition(l, _, n, ts, _, _, _) => {
+                if let Err(warn) = check_class_name(n) {
+                    located_nessa_warning!(l, "{}", warn);
+                }
+
+                for t in ts {
+                    if let Err(warn) = check_template_name(t) {
+                        located_nessa_warning!(l, "{}", warn);
+                    }
+                }
+            }
+
+            NessaExpr::FunctionDefinition(l, _, id, ts, _, _, _) => {
+                if let Err(warn) = check_fn_name(&self.functions[*id].name) {
+                    located_nessa_warning!(l, "{}", warn);
+                }
+
+                for t in ts {
+                    if let Err(warn) = check_template_name(t) {
+                        located_nessa_warning!(l, "{}", warn);
+                    }
+                }
+            }
+
+            NessaExpr::InterfaceDefinition(l, _, n, ts, fns, _, _, _) => {
+                if let Err(warn) = check_interface_name(n) {
+                    located_nessa_warning!(l, "{}", warn);
+                }
+
+                for t in ts {
+                    if let Err(warn) = check_template_name(t) {
+                        located_nessa_warning!(l, "{}", warn);
+                    }
+                }
+
+                for f in fns {
+                    if let Err(warn) = check_fn_name(&f.1) {
+                        located_nessa_warning!(l, "{}", warn);
+                    }
+
+                    for t in f.2.as_ref().unwrap_or(&vec!()) {
+                        if let Err(warn) = check_template_name(t) {
+                            located_nessa_warning!(l, "{}", warn);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
     pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), NessaError> {
         self.repeated_arguments_check(expr)?;
         self.invalid_type_check(expr)?;
@@ -2381,6 +2437,7 @@ impl NessaContext {
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;
         self.annotation_checks(expr)?;
+        self.check_formats(expr);
 
         Ok(())
     }

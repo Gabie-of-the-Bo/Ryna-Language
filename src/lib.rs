@@ -47,6 +47,9 @@ pub mod git;
 #[path = "algorithms/profiling.rs"]
 pub mod profiling;
 
+#[path = "algorithms/formats.rs"]
+pub mod formats;
+
 #[path = "structures/graph.rs"]
 pub mod graph;
 

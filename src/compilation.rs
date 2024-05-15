@@ -222,6 +222,23 @@ macro_rules! nessa_warning {
 }
 
 #[macro_export]
+macro_rules! located_nessa_warning {
+    ($l: expr, $pat: expr $( , $more: expr)*) => {
+        use colored::Colorize;
+        
+        let loc = $l;
+
+        println!(
+            "[{} in module {}, line {}, column {}] {}",
+            "Warning".yellow(),
+            loc.module.green(),
+            loc.line.to_string().yellow(), loc.column.to_string().yellow(),
+            format!($pat, $($more,)*)
+        );
+    };
+}
+
+#[macro_export]
 macro_rules! nessa_error {
     ($pat: expr $( , $more: expr)*) => {
         {

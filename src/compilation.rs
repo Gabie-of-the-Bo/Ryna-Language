@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
@@ -51,14 +52,20 @@ pub struct NessaError {
     pub has_location: bool,
     pub line: usize,
     pub column: usize,
+    pub module: Arc<String>,
     pub fragment: String,
 
     pub suggestions: Vec<String>
 }
 
 impl NessaError {
-    pub fn syntax_error(message: String, line: usize, column: usize, fragment: String, suggestions: Vec<String>) -> Self {
-        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, fragment, suggestions }
+    pub fn in_module(mut self, module: Arc<String>) -> Self {
+        self.module = module;
+        self
+    } 
+
+    pub fn syntax_error(message: String, line: usize, column: usize, module: Arc<String>, fragment: String, suggestions: Vec<String>) -> Self {
+        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, module, fragment, suggestions }
     }
 
     #[cold]
@@ -69,6 +76,7 @@ impl NessaError {
             message, 
             line: location.line, 
             column: location.column, 
+            module: location.module.clone(),
             fragment: location.span.clone(), 
             suggestions 
         }
@@ -82,6 +90,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -95,6 +104,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -116,8 +126,9 @@ impl NessaError {
             frag = frag.trim();
     
             eprintln!(
-                "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
+                "\n[{} in module {}, line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
                 self.err_type.red().bold(), 
+                self.module.green(),
                 self.line.to_string().yellow(), self.column.to_string().yellow(), 
                 self.message, frag,
                 "^".repeat(frag.len()).red()
@@ -157,7 +168,7 @@ impl<'a> From<VerboseError<Span<'a>>> for NessaError {
 
         NessaError::syntax_error(
             error_msg.into(), 
-            fragment.location_line() as usize, fragment.get_column(), 
+            fragment.location_line() as usize, fragment.get_column(), Arc::default(),
             fragment.to_string(), 
             vec!()
         )
@@ -669,12 +680,190 @@ impl NessaContext {
         Ok(max_var)
     }
 
+    pub fn transform_term(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
+        match expr {
+            NessaExpr::FunctionName(l, id) => {
+                let func = &self.functions[*id];
+
+                if func.overloads.len() > 1 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} is ambiguous (found {} overloads)",
+                            func.name.green(),
+                            func.overloads.len()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                if func.overloads[0].templates != 0 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} cannot be formed from generic overload",
+                            func.name.green()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                let ov = &func.overloads[0];
+                let mut args = vec!();
+
+                if let Type::And(a) = &ov.args {
+                    if a.len() == 1 {
+                        args.push(a[0].clone());
+
+                    } else {
+                        args.extend(a.iter().cloned());
+                    }
+
+                } else {
+                    args.push(ov.args.clone());
+                }
+
+                let move_id = self.get_function_id("move".into()).unwrap();
+
+                // Generate implicit function call
+                let fn_call = NessaExpr::FunctionCall(
+                    Location::none(), *id, vec!(), 
+                    args.iter().enumerate()
+                        .map(|(i, t)| {
+                            let v = NessaExpr::Variable(Location::none(), i, format!("arg_{i}"), t.clone());
+
+                            // Move if it is a direct value
+                            if t.is_ref() {
+                                v
+                            
+                            } else {
+                                NessaExpr::FunctionCall(
+                                    Location::none(), move_id, vec!(t.clone()), vec!(v) 
+                                )
+                            }
+                        })
+                        .collect()
+                );
+
+                // Generate implicit lambda
+                *expr = NessaExpr::CompiledLambda(
+                    l.clone(), self.lambdas, vec!(), 
+                    args.into_iter().enumerate().map(|(i, t)| (format!("arg_{i}"), t)).collect(), 
+                    ov.ret.clone(), 
+                    vec!(NessaExpr::Return(Location::none(), Box::new(fn_call)))
+                );
+
+                self.lambdas += 1;
+
+                Ok(())
+            } 
+
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.transform_term(e),
+
+            NessaExpr::CompiledLambda(_, _, c, _, _, _) => {
+                for (_, e) in c {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.transform_term(a)?;
+                self.transform_term(b)?;
+
+                Ok(())
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.transform_term(ic)?;
+                
+                for e in ib {
+                    self.transform_term(e)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.transform_term(ei_h)?;
+                    
+                    for e in ei_b {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                Ok(())
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) => { Ok(()) },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
     pub fn compile_vars_and_infer(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
         self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut VariableMap::new(), args)
     }
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_vars_and_infer(body, args)?;
+
+        // Second pass to transform some terms if needed
+        for expr in body.iter_mut() {
+            self.transform_term(expr)?;
+        }
 
         Ok(())
     }
@@ -3270,7 +3459,7 @@ impl NessaContext{
             let ops = self.nessa_macros_parser(Span::new(code));
         
             if let Err(err) = ops {
-                return Err(NessaError::from(err));
+                return Err(NessaError::from(err).in_module(self.module_name.clone()));
             }
             
             for i in ops.unwrap().1 {
@@ -3323,7 +3512,7 @@ impl NessaContext{
         let ops = self.nessa_operators_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3348,7 +3537,7 @@ impl NessaContext{
         let ops = self.nessa_function_headers_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3362,7 +3551,7 @@ impl NessaContext{
         let ops = self.nessa_operations_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3403,7 +3592,7 @@ impl NessaContext{
             Ok((_, lines)) => Ok(lines),
 
             Err(nom::Err::Error(error)) |
-            Err(nom::Err::Failure(error)) => Err(NessaError::from(error)),
+            Err(nom::Err::Failure(error)) => Err(NessaError::from(error).in_module(self.module_name.clone())),
 
             _ => unreachable!()
         };

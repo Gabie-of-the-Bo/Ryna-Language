@@ -362,7 +362,53 @@ impl NessaContext {
                 return Ok(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             }
 
-            NessaExpr::FunctionName(l, _) |
+            NessaExpr::FunctionName(l, id) => {
+                let func = &self.functions[*id];
+
+                if func.overloads.len() == 1 {
+                    let ov = &func.overloads[0];
+
+                    if ov.templates != 0 {
+                        return Err(NessaError::compiler_error(
+                            format!(
+                                "Implicit lambda for function with name {} cannot be formed from generic overload",
+                                func.name.green()
+                            ), 
+                            l, vec!()
+                        ));
+                    }
+                    
+                    if let Type::And(a) = &ov.args {
+                        if a.len() == 1 {
+                            return Ok(Type::Function(
+                                Box::new(a[0].clone()),
+                                Box::new(ov.ret.clone())
+                            ))
+        
+                        } else {
+                            return Ok(Type::Function(
+                                Box::new(Type::And(a.clone())),
+                                Box::new(ov.ret.clone())
+                            ))
+                        }
+                    }
+
+                    return Ok(Type::Function(
+                        Box::new(ov.args.clone()),
+                        Box::new(ov.ret.clone())
+                    ))
+                }
+
+                return Err(NessaError::compiler_error(
+                    format!(
+                        "Implicit lambda for function with name {} is ambiguous (found {} overloads)",
+                        func.name.green(),
+                        func.overloads.len()
+                    ), 
+                    l, vec!()
+                ));
+            }
+
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |

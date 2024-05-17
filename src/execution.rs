@@ -72,7 +72,7 @@ impl NessaContext {
             Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize, test) {
+        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize, test, force_recompile) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
                 Ok(mut instr) => {
                     if optimize {

@@ -1,9 +1,10 @@
 use std::{cell::{RefCell, RefMut}, hash::Hash};
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 
 use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports, compilation::CompiledNessaExpr};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Cache<K: Hash + PartialEq + Eq + Clone, V: Clone> {
     inner: RefCell<FxHashMap<K, V>>
 }
@@ -75,7 +76,7 @@ impl UsageCache {
 // Full Nessa cache
 
 #[allow(clippy::type_complexity)]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct NessaImportCache {
     pub functions: ImportCache<(usize, Vec<String>, Vec<(String, Type)>, Type)>,
     pub unary: ImportCache<(usize, Vec<String>, Type, Type)>,
@@ -92,7 +93,7 @@ pub struct NessaImportCache {
     pub lines: ImportCache<usize>
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct NessaDividedCache<T> {
     pub functions: T,
     pub unary: T,
@@ -100,7 +101,7 @@ pub struct NessaDividedCache<T> {
     pub nary: T
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct NessaCache {
     pub class_id: IdCache,
     pub function_id: IdCache,

@@ -23,6 +23,7 @@ use nom::{
 use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
 use malachite::Integer;
+use serde::{Deserialize, Serialize};
 
 use crate::annotations::{parse_annotation, Annotation};
 use crate::config::ImportMap;
@@ -68,7 +69,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Debug, Clone, Eq, Hash, Default)]
+#[derive(Debug, Clone, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -190,7 +191,7 @@ pub fn many_separated0<
                                                   ╘══════════════════╛
 */
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq, Serialize, Deserialize)]
 pub enum NessaExpr {
     // Compiled
     FunctionName(Location, usize),
@@ -326,7 +327,7 @@ impl NessaExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ImportType {
     Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Line(usize), All
 }

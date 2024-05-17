@@ -7,6 +7,8 @@ use rand::Rng;
 use seq_macro::seq;
 use malachite::Integer;
 use malachite::num::arithmetic::traits::Abs;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
@@ -28,13 +30,15 @@ use crate::context::NessaContext;
 pub type FunctionOverloadFn = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
 pub type OptFunctionOverloadFn = Option<FunctionOverloadFn>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FunctionOverload {
     pub location: Location,
     pub annotations: Vec<Annotation>,
     pub templates: usize,
     pub args: Type,
     pub ret: Type,
+
+    #[serde(skip)]
     pub function: OptFunctionOverloadFn
 }
 
@@ -42,7 +46,7 @@ pub type FunctionOverloads = Vec<FunctionOverload>;
 
 const EMPTY_FUNC: FunctionOverloadFn = |_, _, _, _| Ok(Object::empty());
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Function {
     pub id: usize,
     pub name: String,

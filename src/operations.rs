@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
 use crate::parser::Location;
@@ -19,13 +21,16 @@ pub type OptUnaryFunctionFn = Option<UnaryFunctionFn>;
 pub type OptBinaryFunctionFn = Option<BinaryFunctionFn>;
 pub type OptNaryFunctionFn = Option<NaryFunctionFn>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Operation<T> {
     pub location: Location,
     pub annotations: Vec<Annotation>,
     pub templates: usize,
     pub args: Type,
     pub ret: Type,
+
+    #[serde(skip)]
     pub operation: Option<T>
 }
 
@@ -37,7 +42,7 @@ const EMPTY_UN_FUNC: UnaryFunctionFn = |_, _, _| Ok(Object::empty());
 const EMPTY_BIN_FUNC: BinaryFunctionFn = |_, _, _, _, _| Ok(Object::empty());
 const EMPTY_NARY_FUNC: NaryFunctionFn = |_, _, _| Ok(());
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Operator {
     Unary {
         id: usize,

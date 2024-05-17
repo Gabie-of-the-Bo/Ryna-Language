@@ -1141,7 +1141,7 @@ impl CompiledNessaExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
     pub debug_info: DebugInfo

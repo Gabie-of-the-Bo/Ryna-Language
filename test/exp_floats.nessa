@@ -1,0 +1,15 @@
+if 5e3 != 5000.0 {
+    panic("This should not happen");
+}
+
+if 5e-1 != 0.5 {
+    panic("This should not happen");
+}
+
+if 5E3 != 5000.0 {
+    panic("This should not happen");
+}
+
+if 5E-1 != 0.5 {
+    panic("This should not happen");
+}

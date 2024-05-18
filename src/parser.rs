@@ -918,9 +918,24 @@ impl NessaContext {
             tuple((
                 opt(tag("-")),
                 take_while1(|c: char| c.is_ascii_digit()),
-                tuple((
-                    tag("."),
-                    take_while1(|c: char| c.is_ascii_digit())
+                alt((
+                    tuple((
+                        tag("."),
+                        map(
+                            take_while1(|c: char| c.is_ascii_digit()),
+                            |s: Span<'a>| s.to_string()
+                        )
+                    )),
+                    tuple((
+                        alt((tag("e"), tag("E"))),
+                        map(
+                            tuple((
+                                opt(tag("-")),
+                                take_while1(|c: char| c.is_ascii_digit())                
+                            )),
+                            |(s, n)| format!("{}{}", s.unwrap_or_else(|| "".into()), n)
+                        )
+                    ))
                 ))
             )),
             |(s, n, d)| format!("{}{}{}{}", s.unwrap_or(Span::new("")), n, d.0, d.1).parse().unwrap()

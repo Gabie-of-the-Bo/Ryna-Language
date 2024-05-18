@@ -3,6 +3,7 @@ use std::{cell::RefCell, fs::File, path::PathBuf};
 use crate::{compilation::message_and_exit, context::NessaContext, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 use malachite::Integer;
 use rclite::Rc;
+use serde::{Deserialize, Serialize};
 
 type DataBlock = Rc<MutCell<ObjectBlock>>;
 
@@ -12,13 +13,13 @@ type DataBlock = Rc<MutCell<ObjectBlock>>;
                                                   ╘══════════════════╛
 */
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct NessaArray {
     pub elements: Vec<Object>,
     pub elem_type: Box<Type>
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct NessaTuple {
     pub elements: Vec<Object>,
     pub elem_types: Vec<Type>
@@ -31,7 +32,7 @@ pub struct NessaArrayIt {
     pub it_type: Box<Type>
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct NessaLambda {
     pub loc: usize,
     pub captures: Vec<Object>,
@@ -112,14 +113,14 @@ impl NessaFile {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct TypeInstance {
     pub id: usize,
     pub params: Vec<Type>,
     pub attributes: Vec<Object>
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub enum ObjectBlock {
     #[default]
     NoValue, //  Empty is a type, this represents no value at all
@@ -132,15 +133,20 @@ pub enum ObjectBlock {
 
     Tuple(NessaTuple),
     Array(NessaArray),
+
+    #[serde(skip)]
     ArrayIter(NessaArrayIt),
 
     Lambda(NessaLambda),
 
+    #[serde(skip)]
     File(NessaFile),
 
     Instance(TypeInstance),
 
+    #[serde(skip)]
     Ref(DataBlock),
+    #[serde(skip)]
     Mut(DataBlock),
 }
 
@@ -281,6 +287,23 @@ impl ObjectBlock {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Object {
     pub inner: DataBlock
+}
+
+impl Serialize for Object {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        self.inner.borrow().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Object {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de> {
+        let inner = ObjectBlock::deserialize(deserializer)?;
+        Ok(inner.to_obj())
+    }
 }
 
 impl Object {

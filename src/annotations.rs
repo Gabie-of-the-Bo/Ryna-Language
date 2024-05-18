@@ -1,10 +1,11 @@
 use colored::Colorize;
 use nom::{bytes::complete::tag, combinator::{map, opt}, multi::separated_list0, sequence::{delimited, preceded, terminated, tuple}};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::parser::{empty0, identifier_parser, string_parser, PResult, Span};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Annotation {
     pub name: String,
     pub args: FxHashMap<String, String>

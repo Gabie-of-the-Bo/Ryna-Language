@@ -1,6 +1,8 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-#[derive(Debug, Clone, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DirectedGraph<Vertex: Eq + Hash + Clone, Edge: Eq + Hash> {
     vertices: HashMap<Vertex, usize>,
     idxs: HashMap<usize, Vertex>,

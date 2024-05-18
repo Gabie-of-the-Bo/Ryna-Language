@@ -2,8 +2,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use colored::Colorize;
+use rustc_hash::FxHashMap;
 
 use crate::annotations::Annotation;
 use crate::cache::NessaCache;
@@ -556,12 +558,24 @@ impl NessaContext {
                                                   ╘════════════════╛
 */
 
-pub const NUM_STD_TYPES: usize = 6;
-pub const NUM_STD_INT_IMPL: usize = 8;
+lazy_static! {
+    pub static ref NUM_STD_TYPES: Mutex<RefCell<usize>> = Mutex::default();
+    
+    pub static ref NUM_STD_INTS: Mutex<RefCell<usize>> = Mutex::default();    
+    pub static ref NUM_STD_INT_IMPL: Mutex<RefCell<usize>> = Mutex::default();    
+    
+    pub static ref NUM_STD_FNS: Mutex<RefCell<FxHashMap<usize, usize>>> = Mutex::default(); 
+    pub static ref NUM_STD_UNOPS: Mutex<RefCell<FxHashMap<usize, usize>>> = Mutex::default(); 
+    pub static ref NUM_STD_BINOPS: Mutex<RefCell<FxHashMap<usize, usize>>> = Mutex::default(); 
+    pub static ref NUM_STD_NARYOPS: Mutex<RefCell<FxHashMap<usize, usize>>> = Mutex::default(); 
+
+    pub static ref NUM_STD_MACROS: Mutex<RefCell<usize>> = Mutex::default();    
+}
 
 pub fn standard_ctx() -> NessaContext {
     let mut ctx = NessaContext::default();
 
+    // Define std context contents
     standard_types(&mut ctx);
     standard_interfaces(&mut ctx);
 
@@ -572,6 +586,37 @@ pub fn standard_ctx() -> NessaContext {
     standard_functions(&mut ctx);
 
     load_optimized_opcodes(&mut ctx);
+
+    // Update std sizes
+    *NUM_STD_TYPES.lock().unwrap().borrow_mut() = ctx.type_templates.len();
+    *NUM_STD_INTS.lock().unwrap().borrow_mut() = ctx.interfaces.len();
+    *NUM_STD_INT_IMPL.lock().unwrap().borrow_mut() = ctx.interface_impls.len();
+    *NUM_STD_MACROS.lock().unwrap().borrow_mut() = ctx.macros.len();
+    *NUM_STD_FNS.lock().unwrap().borrow_mut() = ctx.functions.iter().map(|f| (f.id, f.overloads.len())).collect();
+
+    *NUM_STD_UNOPS.lock().unwrap().borrow_mut() = ctx.unary_ops.iter().map(|o| {
+        if let Operator::Unary { id, operations, .. } = o {
+            return (*id, operations.len());
+        }
+
+        unreachable!()
+    }).collect();
+
+    *NUM_STD_BINOPS.lock().unwrap().borrow_mut() = ctx.binary_ops.iter().map(|o| {
+        if let Operator::Binary { id, operations, .. } = o {
+            return (*id, operations.len());
+        }
+
+        unreachable!()
+    }).collect();
+
+    *NUM_STD_NARYOPS.lock().unwrap().borrow_mut() = ctx.nary_ops.iter().map(|o| {
+        if let Operator::Nary { id, operations, .. } = o {
+            return (*id, operations.len());
+        }
+
+        unreachable!()
+    }).collect();
 
     ctx.variables = vec!(Object::no_value(); 10000); // 10000 variables by default
 

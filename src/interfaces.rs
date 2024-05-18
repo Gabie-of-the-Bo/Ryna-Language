@@ -8,7 +8,7 @@ pub type InterfaceUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, 
 pub type InterfaceBinaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), (String, Type), Type);
 pub type InterfaceNaryOpHeader = (Vec<Annotation>, usize, Vec<String>, (String, Type), Vec<(String, Type)>, Type);
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Interface {
     pub id: usize,
     pub name: String,

@@ -13,3 +13,19 @@ if 5E3 != 5000.0 {
 if 5E-1 != 0.5 {
     panic("This should not happen");
 }
+
+if 5.1e3 != 5100.0 {
+    panic("This should not happen");
+}
+
+if 5.1e-1 != 0.51 {
+    panic("This should not happen");
+}
+
+if 5.1E3 != 5100.0 {
+    panic("This should not happen");
+}
+
+if 5.1E-1 != 0.51 {
+    panic("This should not happen");
+}

@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'number',
-                    begin: '\\b\\d+(.\\d+)?\\b',
+                    begin: '\\b\\d+(.\\d+)?((E|e)-?\\d+)?\\b',
                     relevance: 0
                 },
 

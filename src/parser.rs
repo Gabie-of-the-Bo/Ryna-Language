@@ -7,7 +7,7 @@ use malachite::num::conversion::string::options::FromSciStringOptions;
 use malachite::num::conversion::traits::FromSciString;
 use nom::AsChar;
 use nom::bytes::complete::{tag, take_till, take_until};
-use nom::combinator::cut;
+use nom::combinator::{cut, map_opt};
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::sequence::preceded;
 use nom::{
@@ -918,27 +918,41 @@ impl NessaContext {
             tuple((
                 opt(tag("-")),
                 take_while1(|c: char| c.is_ascii_digit()),
-                alt((
+                map_opt(
                     tuple((
-                        tag("."),
-                        map(
-                            take_while1(|c: char| c.is_ascii_digit()),
-                            |s: Span<'a>| s.to_string()
+                        opt(
+                            map(
+                                preceded(
+                                    tag("."),
+                                    take_while1(|c: char| c.is_ascii_digit()),        
+                                ),
+                                |s| format!(".{s}")
+                            )
+                        ),
+                        opt(
+                            preceded(
+                                alt((tag("e"), tag("E"))),
+                                map(
+                                    tuple((
+                                        opt(tag("-")),
+                                        take_while1(|c: char| c.is_ascii_digit())                
+                                    )),
+                                    |(s, n)| format!("e{}{}", s.unwrap_or_else(|| "".into()), n)
+                                )
+                            )
                         )
                     )),
-                    tuple((
-                        alt((tag("e"), tag("E"))),
-                        map(
-                            tuple((
-                                opt(tag("-")),
-                                take_while1(|c: char| c.is_ascii_digit())                
-                            )),
-                            |(s, n)| format!("{}{}", s.unwrap_or_else(|| "".into()), n)
-                        )
-                    ))
-                ))
+                    |r| {
+                        match r {
+                            (None, None) => None,
+                            (None, Some(a)) => Some(a),
+                            (Some(a), None) => Some(a),
+                            (Some(a), Some(b)) => Some(format!("{a}{b}")),
+                        }
+                    }
+                )
             )),
-            |(s, n, d)| format!("{}{}{}{}", s.unwrap_or(Span::new("")), n, d.0, d.1).parse().unwrap()
+            |(s, n, d)| format!("{}{}{}", s.unwrap_or(Span::new("")), n, d).parse().unwrap()
         )(input)
     }
 

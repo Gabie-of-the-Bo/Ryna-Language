@@ -23,13 +23,15 @@ All these values are compiled to `Int` values.
 
 ### Floating Point numbers
 
-Floating point numbers are more or less the same as in other languages, but only these syntaxes are allowed.
-
-> **Note:** exponential syntaxes might be supported in future versions
+Floating point numbers are more or less the same as in other languages:
 
 ```
 1.56        // Basic float
 -67.2       // Negative floats are also literals
+1e10        // Scientific notation is allowed
+2E-5
+1.5e2
+-2.2E-8
 ```
 
 All these values are compiled to `Float` values.

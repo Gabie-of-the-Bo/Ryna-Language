@@ -325,6 +325,11 @@ mod integration {
     }
 
     #[test]
+    fn exp_floats() {
+        integration_test("test/exp_floats.nessa");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.nessa");
     }

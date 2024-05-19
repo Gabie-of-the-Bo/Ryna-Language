@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'literal',
-                    begin: '@[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')'
+                    begin: '@[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')(?=\\s*(\n|\\())'
                 },
 
                 {

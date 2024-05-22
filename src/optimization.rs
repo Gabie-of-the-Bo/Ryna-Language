@@ -26,6 +26,7 @@ impl NessaContext {
             },
 
             NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => NessaContext::count_usages_expr(e, var_usages, offset),
@@ -112,6 +113,7 @@ impl NessaContext {
     pub fn insert_moves_expr(&self, expr: &mut NessaExpr, var_usages: &mut FxHashMap<usize, usize>) {
         match expr {
             NessaExpr::Return(_, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.insert_moves_expr(e, var_usages),
 
@@ -248,6 +250,7 @@ impl NessaContext {
         match expr {
             NessaExpr::UnaryOperation(_, _, _, e) |
             NessaExpr::Return(_, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
 
@@ -528,6 +531,7 @@ impl NessaContext {
             },
 
             NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => NessaContext::max_variable(e, offset),
 
             NessaExpr::DoBlock(_, exprs, _) |
@@ -627,6 +631,7 @@ impl NessaContext {
             },
 
             NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => NessaContext::offset_variables(e, offset),
 
             NessaExpr::CompiledLambda(_, _, c, _, _, exprs) => {
@@ -760,6 +765,7 @@ impl NessaContext {
     pub fn inline_functions_expr(&self, expr: &mut NessaExpr, offset: &mut usize) {
         match expr {
             NessaExpr::Return(_, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
 
@@ -1102,6 +1108,7 @@ impl NessaContext {
     pub fn get_constants(&self, expr: &NessaExpr, consts: &mut FxHashMap<usize, bool>, const_exprs: &mut FxHashMap<usize, NessaExpr>) {
         match expr {
             NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e)  => self.get_constants(e, consts, const_exprs),
             
             NessaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
@@ -1204,6 +1211,7 @@ impl NessaContext {
 
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
 
             NessaExpr::UnaryOperation(_, _, _, e) => {
@@ -1318,6 +1326,7 @@ impl NessaContext {
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
             NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e)  => self.remove_assignments_expr(e, assigned_exprs),
             
             NessaExpr::DoBlock(_, exprs, _) |

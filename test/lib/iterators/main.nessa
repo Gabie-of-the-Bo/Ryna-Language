@@ -12,12 +12,12 @@ fn<It, Elem, Trf> iterator(it: MapIterator<'It, 'Elem, 'Trf>) -> MapIterator<'It
 }
 
 fn<It, Elem, Trf> next(it: @MapIterator<'It, 'Elem, 'Trf>) -> 'Trf {
-    let fnc = it.f();
-    return fnc(it.iter().next());
+    let fnc = it.f;
+    return fnc(it.iter.next());
 }
 
 fn<It, Elem, Trf> is_consumed(it: @MapIterator<'It, 'Elem, 'Trf>) -> Bool {
-    return it.iter().is_consumed();
+    return it.iter.is_consumed();
 }
 
 fn<Cont, It, Elem, Trf> map(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => 'Trf) -> MapIterator<'It, 'Elem, 'Trf> {
@@ -38,18 +38,18 @@ class FilterIterator<It, Elem> {
 }
 
 fn<It, Elem> advance_till_true(it: @FilterIterator<'It, 'Elem>) {
-    let fnc = it.f();
-    let iter_i = it.iter();
+    let fnc = it.f;
+    let iter_i = it.iter;
 
     while !iter_i.is_consumed() {
-        it.curr() := iter_i.next();
+        it.curr := iter_i.next();
 
-        if fnc(*it.curr()) {
+        if fnc(*it.curr) {
             return;
         }
     }
     
-    it.consumed() := true;
+    it.consumed := true;
 }
 
 fn<It, Elem> iterator(it: FilterIterator<'It, 'Elem>) -> FilterIterator<'It, 'Elem> {
@@ -57,10 +57,10 @@ fn<It, Elem> iterator(it: FilterIterator<'It, 'Elem>) -> FilterIterator<'It, 'El
 }
 
 fn<It, Elem> next(it: @FilterIterator<'It, 'Elem>) -> 'Elem {    
-    let res = *it.curr();
+    let res = *it.curr;
 
-    if it.iter().is_consumed() {
-        it.consumed() := true;
+    if it.iter.is_consumed() {
+        it.consumed := true;
     }
 
     it.advance_till_true();
@@ -69,14 +69,14 @@ fn<It, Elem> next(it: @FilterIterator<'It, 'Elem>) -> 'Elem {
 }
 
 fn<It, Elem> is_consumed(it: @FilterIterator<'It, 'Elem>) -> Bool {
-    return it.iter().is_consumed() && it.consumed();
+    return it.iter.is_consumed() && it.consumed;
 }
 
 fn<Cont, It, Elem> filter(it: 'Cont [Iterable<'It, 'Elem>], f: 'Elem => Bool) -> FilterIterator<'It, 'Elem> {
     let iter_i = iterator(move(it));
     let res = FilterIterator(move(iter_i), *f, iter_i.next(), false);
 
-    if !f(*res.curr()) {
+    if !f(*res.curr) {
         res.advance_till_true();
     }
 

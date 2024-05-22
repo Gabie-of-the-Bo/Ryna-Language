@@ -194,13 +194,14 @@ pub fn many_separated0<
 #[derive(Debug, PartialEq, Clone, Eq, Serialize, Deserialize)]
 pub enum NessaExpr {
     // Compiled
-    FunctionName(Location, usize),
+    QualifiedName(Location, String, Option<usize>), // In this order, function id, attribute name
     Variable(Location, usize, String, Type),
     CompiledVariableDefinition(Location, usize, String, Type, Box<NessaExpr>),
     CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
+    AttributeAccess(Location, Box<NessaExpr>, usize),
     Break(Location),
     Continue(Location),
 
@@ -260,10 +261,11 @@ impl NessaExpr {
 
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -286,7 +288,7 @@ impl NessaExpr {
 
     pub fn is_expr(&self) -> bool {
         match self {
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::Macro(_, _, _, _, _, _) |
@@ -311,6 +313,7 @@ impl NessaExpr {
             NessaExpr::Return(_, _) => false,
 
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |

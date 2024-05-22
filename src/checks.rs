@@ -77,6 +77,7 @@ impl NessaContext {
             (NessaExpr::BinaryOperation(..), _) |
             (NessaExpr::NaryOperation(..), _) |
             (NessaExpr::FunctionCall(..), _) |
+            (NessaExpr::AttributeAccess(..), _) |
             (NessaExpr::PrefixOperatorDefinition(..), _) |
             (NessaExpr::PostfixOperatorDefinition(..), _) |
             (NessaExpr::BinaryOperatorDefinition(..), _) |
@@ -411,6 +412,7 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
                 self.infer_type(e)?;
@@ -550,6 +552,7 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => NessaContext::break_continue_check(e, allowed),
 
             NessaExpr::CompiledLambda(_, _, _, _, _, b) => {
@@ -759,6 +762,7 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => self.invalid_type_check(e),
 
             NessaExpr::CompiledLambda(l, _, c, args, ret, b) => {
@@ -1261,6 +1265,7 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => {
                 self.type_check(e)?;
                 self.infer_type(e)?;

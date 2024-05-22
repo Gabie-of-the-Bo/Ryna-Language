@@ -1,7 +1,7 @@
 ---
 module_name: range
 version: 0.1.0
-hash: 2e54edd75dd0d0be995fa2cdd49afd2e
+hash: 9f1284c931d5f154f39139f6b7415c62
 module_paths:
   - test/lib
 modules: {}

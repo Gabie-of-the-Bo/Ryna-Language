@@ -8,15 +8,15 @@ fn iterator(it: CodePointIterator) -> CodePointIterator {
 }
 
 fn next(it: @CodePointIterator) -> Int {
-    let res = it.str().code_point_at(*it.pos());
+    let res = it.str.code_point_at(*it.pos);
 
-    it.pos() := it.pos() + res.deref().code_point_length();
+    it.pos := it.pos + res.deref().code_point_length();
 
     return move(res);
 }
 
 fn is_consumed(it: @CodePointIterator) -> Bool {
-    return it.pos() >= it.str().len();
+    return it.pos >= it.str.len();
 }
 
 implement Iterable<CodePointIterator, Int> for CodePointIterator;

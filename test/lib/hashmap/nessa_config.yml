@@ -1,7 +1,7 @@
 ---
 module_name: hashmap
 version: 0.1.0
-hash: a2ee528aa57e5931fb0b9086e66ef0b2
+hash: 759fb770a5593b914e3cdd8d9b442311
 module_paths:
   - test/lib
 modules:

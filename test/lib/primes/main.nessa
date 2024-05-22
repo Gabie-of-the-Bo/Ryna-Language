@@ -28,7 +28,7 @@ fn iterator(it: Primes) -> Primes {
 }
 
 fn next(it: @Primes) -> Int {
-    let curr: @Int = it.current();
+    let curr: @Int = it.current;
     curr.inc();
 
     while !is_prime(*curr) {

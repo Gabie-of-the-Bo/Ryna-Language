@@ -1847,7 +1847,10 @@ impl NessaContext {
     }
 
     fn prefix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if *prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1863,7 +1866,10 @@ impl NessaContext {
     }
 
     fn postfix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if !*prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1879,7 +1885,10 @@ impl NessaContext {
     }
 
     fn binary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.binary_ops {
+        let mut sorted_ops = self.binary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Binary{id, representation, ..} = o {
                 let res = map(tag(representation.as_str()), |_| *id)(input);
 
@@ -1893,7 +1902,16 @@ impl NessaContext {
     }
 
     fn nary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (usize, Vec<(String, Type)>)> {
-        for o in &self.nary_ops {
+        let mut sorted_ops = self.nary_ops.clone();
+        sorted_ops.sort_by_key(|op| {
+            if let Operator::Nary { open_rep, .. } = op {
+                return -(open_rep.len() as i64);
+            }
+
+            unreachable!()
+        });
+
+        for o in &sorted_ops {
             if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                 let res = map(
                     tuple((

@@ -401,7 +401,17 @@ impl NessaContext {
 
                 let is_func = matches!(b.as_ref(), NessaExpr::FunctionCall(..));
                 let is_name = matches!(b.as_ref(), NessaExpr::QualifiedName(..));
+                let is_attr = matches!(a.as_ref(), NessaExpr::AttributeAccess(..));
                                 
+                // Attribute assignments
+                if *id == DEFINE_BINOP_ID && is_attr {
+                    if let NessaExpr::AttributeAccess(_, e, att_idx) = a.as_ref() {
+                        *expr = NessaExpr::AttributeAssignment(l.clone(), e.clone(), b.clone(), *att_idx);
+                        
+                        return Ok(());
+                    }
+                }
+
                 // Member function calls
                 if *id == DOT_BINOP_ID && is_func {
                     if let NessaExpr::FunctionCall(_, f_id, t, args) = b.as_ref() {
@@ -852,6 +862,7 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.transform_term(a)?;
                 self.transform_term(b)?;
@@ -943,6 +954,7 @@ pub enum CompiledNessaExpr {
     Lambda(usize, usize, Type, Type),
 
     Construct(usize, usize, Vec<Type>),
+    AttributeAssign(usize),
     AttributeMove(usize),
     AttributeRef(usize),
     AttributeMut(usize),
@@ -1913,6 +1925,11 @@ impl NessaContext{
                 NessaContext::subtitute_type_params_expr(a, templates);
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                NessaContext::subtitute_type_params_expr(a, templates);
+                NessaContext::subtitute_type_params_expr(b, templates);
+            }
+
             NessaExpr::BinaryOperation(_, _, t, a, b) => {
                 t.iter_mut().for_each(|i| *i = i.sub_templates(templates));
 
@@ -2022,6 +2039,7 @@ impl NessaContext{
             NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, only_length),
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.compile_lambda_expr(a, only_length)?;
                 self.compile_lambda_expr(b, only_length)?;
@@ -2585,6 +2603,10 @@ impl NessaContext{
                 
                 Ok(self.compiled_form_size(e, false, root_counter)? + 1)
             }
+
+            AttributeAssignment(_, a, b, _) => {                
+                Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1)
+            }
             
             CompiledLambda(_, _, c, ..) => {
                 *root_counter += root as usize; // Add drop instruction
@@ -2909,6 +2931,15 @@ impl NessaContext{
 
                 Ok(res)
             }, 
+
+            NessaExpr::AttributeAssignment(l, a, b, att_idx) => {
+                let mut res = self.compiled_form_expr(a, false)?;
+                res.append(&mut self.compiled_form_expr(b, false)?);
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::AttributeAssign(*att_idx)).set_loc(l));
+
+                Ok(res)
+            }
 
             NessaExpr::CompiledVariableDefinition(l, id, _, t, e) | NessaExpr::CompiledVariableAssignment(l, id, _, t, e) => {
                 let mut res = self.compiled_form_expr(e, false)?;

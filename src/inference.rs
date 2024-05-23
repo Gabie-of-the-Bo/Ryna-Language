@@ -439,6 +439,7 @@ impl NessaContext {
             }
 
             NessaExpr::QualifiedName(l, _, _) |
+            NessaExpr::AttributeAssignment(l, _, _, _) |
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |

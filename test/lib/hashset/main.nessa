@@ -35,7 +35,7 @@ fn<T> rehash(set: @HashSet<'T [Hashable]>) {
         }
     }
 
-    set.buckets := move(aux.buckets);
+    set.buckets = move(aux.buckets);
 }
 
 fn<T> add(set: @HashSet<'T [Hashable]>, elem: 'T) {

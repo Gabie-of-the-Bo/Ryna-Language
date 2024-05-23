@@ -10,7 +10,7 @@ fn iterator(it: CodePointIterator) -> CodePointIterator {
 fn next(it: @CodePointIterator) -> Int {
     let res = it.str.code_point_at(*it.pos);
 
-    it.pos := it.pos + res.deref().code_point_length();
+    it.pos = it.pos + res.deref().code_point_length();
 
     return move(res);
 }

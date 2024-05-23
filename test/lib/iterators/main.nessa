@@ -42,14 +42,14 @@ fn<It, Elem> advance_till_true(it: @FilterIterator<'It, 'Elem>) {
     let iter_i = it.iter;
 
     while !iter_i.is_consumed() {
-        it.curr := iter_i.next();
+        it.curr = iter_i.next();
 
         if fnc(*it.curr) {
             return;
         }
     }
     
-    it.consumed := true;
+    it.consumed = true;
 }
 
 fn<It, Elem> iterator(it: FilterIterator<'It, 'Elem>) -> FilterIterator<'It, 'Elem> {
@@ -60,7 +60,7 @@ fn<It, Elem> next(it: @FilterIterator<'It, 'Elem>) -> 'Elem {
     let res = *it.curr;
 
     if it.iter.is_consumed() {
-        it.consumed := true;
+        it.consumed = true;
     }
 
     it.advance_till_true();

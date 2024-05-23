@@ -78,6 +78,7 @@ impl NessaContext {
             (NessaExpr::NaryOperation(..), _) |
             (NessaExpr::FunctionCall(..), _) |
             (NessaExpr::AttributeAccess(..), _) |
+            (NessaExpr::AttributeAssignment(..), _) |
             (NessaExpr::PrefixOperatorDefinition(..), _) |
             (NessaExpr::PostfixOperatorDefinition(..), _) |
             (NessaExpr::BinaryOperatorDefinition(..), _) |
@@ -213,24 +214,6 @@ impl NessaContext {
 
                 Ok(())
             }
-
-            NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
-            NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
-                self.ambiguity_check(e)?;
-                let it = self.infer_type(e)?;
-
-                if it.bindable_to(t, self) {
-                    Ok(())
-
-                } else{
-                    Err(NessaError::compiler_error(format!(
-                        "Unable to bind value of type {} to variable \"{}\", which is of type {}",
-                        it.get_name(self),
-                        n,
-                        t.get_name(self)
-                    ), l, vec!()))
-                }
-            },
 
             NessaExpr::FunctionCall(l, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
@@ -412,6 +395,13 @@ impl NessaContext {
                 Ok(())
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.ambiguity_check(a)?;
+                self.ambiguity_check(b)
+            }
+
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
             NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
@@ -527,6 +517,7 @@ impl NessaContext {
                 Ok(())
             }
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 NessaContext::break_continue_check(a, allowed)?;
                 NessaContext::break_continue_check(b, allowed)?;
@@ -641,6 +632,11 @@ impl NessaContext {
                 }
 
                 self.invalid_type_check(e)
+            }
+
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.invalid_type_check(a)?;
+                self.invalid_type_check(b)
             }
 
             NessaExpr::Tuple(_, args) => args.iter().try_for_each(|i| self.invalid_type_check(i)),
@@ -1042,11 +1038,52 @@ impl NessaContext {
 
                 } else{
                     Err(NessaError::compiler_error(format!(
-                        "Unable to bind value of type {} to variable \"{}\", which is of type {}",
+                        "Unable to bind value of type {} to variable {}, which is of type {}",
                         it.get_name(self),
-                        n,
+                        n.cyan(),
                         t.get_name(self)
                     ), l, vec!()))
+                }
+            },
+
+            NessaExpr::AttributeAssignment(l, a, b, attr_idx) => {
+                self.type_check(a)?;
+                self.type_check(b)?;
+
+                let lhs_attr = self.infer_type(a)?;
+
+                let (attr_name, lhs) = if let Type::Basic(id) | Type::Template(id, _) = lhs_attr.deref_type() {
+                    self.type_templates[*id].attributes[*attr_idx].clone()
+                } else {
+                    unreachable!()
+                };
+
+                if let Type::Ref(_) = lhs_attr {
+                    return Err(NessaError::compiler_error(format!(
+                        "Unable assign value to attribute {} because it is accessed from a constant reference",
+                        attr_name.cyan()
+                    ), l, vec!()));
+                }
+
+                if !matches!(lhs_attr, Type::MutRef(_)) {
+                    return Err(NessaError::compiler_error(format!(
+                        "Unable assign value to attribute {} because it is not accesed from a mutable reference",
+                        attr_name.cyan()
+                    ), l, vec!()));
+                }
+
+                let rhs = self.infer_type(b)?;
+
+                if rhs.bindable_to(&lhs, self) {
+                    Ok(())
+
+                } else {
+                    return Err(NessaError::compiler_error(format!(
+                        "Unable to bind value of type {} to attribute {}, which is of type {}",
+                        rhs.get_name(self),
+                        attr_name.cyan(),
+                        lhs.get_name(self)
+                    ), l, vec!()));
                 }
             },
 
@@ -1949,6 +1986,15 @@ impl NessaContext {
             NessaExpr::CompiledLambda(..) => Ok(()),
 
             NessaExpr::Variable(l, _, _, t) => self.no_template_check_type(t, l),
+
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.no_template_check(a)?;
+                self.no_template_check(b)
+            }
+
+            NessaExpr::AttributeAccess(_, e, _) => {
+                self.no_template_check(e)
+            }
 
             NessaExpr::CompiledVariableAssignment(l, _, _, t, e) |
             NessaExpr::CompiledVariableDefinition(l, _, _, t, e) => {

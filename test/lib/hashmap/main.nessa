@@ -35,7 +35,7 @@ fn<K, V> rehash(map: @HashMap<'K [Hashable], 'V>) {
         }
     }
 
-    map.buckets := move(aux.buckets);
+    map.buckets = move(aux.buckets);
 }
 
 fn<K, V> add(map: @HashMap<'K [Hashable], 'V>, key: 'K, value: 'V) {

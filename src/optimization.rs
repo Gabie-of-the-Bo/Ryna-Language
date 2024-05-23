@@ -62,6 +62,7 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 NessaContext::count_usages_expr(a, var_usages, offset);
                 NessaContext::count_usages_expr(b, var_usages, offset);
@@ -183,6 +184,7 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.insert_moves_expr(a, var_usages);
                 self.insert_moves_expr(b, var_usages);
@@ -253,6 +255,11 @@ impl NessaContext {
             NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
+
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.strength_reduction_expr(a);
+                self.strength_reduction_expr(b);
+            }
 
             NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
@@ -570,6 +577,7 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 NessaContext::max_variable(a, offset);
                 NessaContext::max_variable(b, offset);
@@ -679,6 +687,7 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 NessaContext::offset_variables(a, offset);
                 NessaContext::offset_variables(b, offset);
@@ -768,6 +777,11 @@ impl NessaContext {
             NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
+
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.inline_functions_expr(a, offset);
+                self.inline_functions_expr(b, offset);
+            }
 
             NessaExpr::DoBlock(_, exprs, _) |
             NessaExpr::CompiledLambda(_, _, _, _, _, exprs) |
@@ -1144,6 +1158,7 @@ impl NessaContext {
                 }
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.get_constants(a, consts, const_exprs);
                 self.get_constants(b, consts, const_exprs);
@@ -1257,6 +1272,11 @@ impl NessaContext {
                 self.static_check(&expr).unwrap();
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                self.sub_variables(a, assigned_exprs);
+                self.sub_variables(b, assigned_exprs);
+            }
+
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.sub_variables(a, assigned_exprs);
                 self.sub_variables(b, assigned_exprs);
@@ -1344,6 +1364,7 @@ impl NessaContext {
                 self.remove_assignments(exprs, assigned_exprs);
             },
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.remove_assignments_expr(a, assigned_exprs);
                 self.remove_assignments_expr(b, assigned_exprs);

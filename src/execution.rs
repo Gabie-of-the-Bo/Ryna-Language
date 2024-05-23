@@ -354,6 +354,15 @@ impl NessaContext {
                     ip += 1;
                 }),
 
+                AttributeAssign(attr_idx) => nessa_instruction!("AttributeAssign", {
+                    let a = tos!();
+                    let b = tos!();
+
+                    b.deref::<TypeInstance>().attributes[*attr_idx] = a;
+
+                    ip += 1;
+                }),
+
                 AttributeMove(idx) => nessa_instruction!("AttributeMove", {
                     let elem = tos!();
                     stack.push(elem.get::<TypeInstance>().attributes[*idx].move_contents_if_ref());

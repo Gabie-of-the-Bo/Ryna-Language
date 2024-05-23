@@ -202,6 +202,7 @@ pub enum NessaExpr {
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
     AttributeAccess(Location, Box<NessaExpr>, usize),
+    AttributeAssignment(Location, Box<NessaExpr>, Box<NessaExpr>, usize),
     Break(Location),
     Continue(Location),
 
@@ -266,6 +267,7 @@ impl NessaExpr {
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::DoBlock(_, _, _) |
             NessaExpr::AttributeAccess(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -289,6 +291,7 @@ impl NessaExpr {
     pub fn is_expr(&self) -> bool {
         match self {
             NessaExpr::QualifiedName(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::Macro(_, _, _, _, _, _) |

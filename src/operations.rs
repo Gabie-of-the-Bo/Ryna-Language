@@ -206,6 +206,8 @@ pub const ASSIGN_BINOP_ID: usize = 14;
 
 pub const LT_BINOP_PREC: usize = 900;
 
+pub const DEFINE_BINOP_ID: usize = 20;
+
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     
     /*
@@ -352,6 +354,8 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 19, BOOL, BOOL);
     define_binary_native_op_combinations!(ctx, 19, INT, INT);
+
+    ctx.define_binary_operator("=".into(), false, 200000).unwrap();
 }
 
 pub const CALL_OP: usize = 0;

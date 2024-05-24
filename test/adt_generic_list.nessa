@@ -16,7 +16,7 @@ fn<T> size(list: @List<'T>) -> Int {
         return 0;
     }
 
-    return 1 + list.as<@ListNode<'T>>().rest().size();
+    return 1 + list.as<@ListNode<'T>>().rest.size();
 }
 
 let list: List<Int> = Nil();

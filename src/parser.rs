@@ -194,13 +194,15 @@ pub fn many_separated0<
 #[derive(Debug, PartialEq, Clone, Eq, Serialize, Deserialize)]
 pub enum NessaExpr {
     // Compiled
-    FunctionName(Location, usize),
+    QualifiedName(Location, String, Option<usize>), // In this order, function id, attribute name
     Variable(Location, usize, String, Type),
     CompiledVariableDefinition(Location, usize, String, Type, Box<NessaExpr>),
     CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
+    AttributeAccess(Location, Box<NessaExpr>, usize),
+    AttributeAssignment(Location, Box<NessaExpr>, Box<NessaExpr>, usize),
     Break(Location),
     Continue(Location),
 
@@ -260,10 +262,12 @@ impl NessaExpr {
 
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -286,7 +290,8 @@ impl NessaExpr {
 
     pub fn is_expr(&self) -> bool {
         match self {
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::Macro(_, _, _, _, _, _) |
@@ -311,6 +316,7 @@ impl NessaExpr {
             NessaExpr::Return(_, _) => false,
 
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -1844,7 +1850,10 @@ impl NessaContext {
     }
 
     fn prefix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if *prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1860,7 +1869,10 @@ impl NessaContext {
     }
 
     fn postfix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if !*prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1876,7 +1888,10 @@ impl NessaContext {
     }
 
     fn binary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.binary_ops {
+        let mut sorted_ops = self.binary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Binary{id, representation, ..} = o {
                 let res = map(tag(representation.as_str()), |_| *id)(input);
 
@@ -1890,7 +1905,16 @@ impl NessaContext {
     }
 
     fn nary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (usize, Vec<(String, Type)>)> {
-        for o in &self.nary_ops {
+        let mut sorted_ops = self.nary_ops.clone();
+        sorted_ops.sort_by_key(|op| {
+            if let Operator::Nary { open_rep, .. } = op {
+                return -(open_rep.len() as i64);
+            }
+
+            unreachable!()
+        });
+
+        for o in &sorted_ops {
             if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                 let res = map(
                     tuple((

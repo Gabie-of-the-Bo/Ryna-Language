@@ -354,6 +354,15 @@ impl NessaContext {
                     ip += 1;
                 }),
 
+                AttributeAssign(attr_idx) => nessa_instruction!("AttributeAssign", {
+                    let a = tos!();
+                    let b = tos!();
+
+                    b.deref::<TypeInstance>().attributes[*attr_idx] = a;
+
+                    ip += 1;
+                }),
+
                 AttributeMove(idx) => nessa_instruction!("AttributeMove", {
                     let elem = tos!();
                     stack.push(elem.get::<TypeInstance>().attributes[*idx].move_contents_if_ref());
@@ -1329,14 +1338,14 @@ mod tests {
         }
 
         fn next(it: @Range) -> Int {
-            let curr: @Int = it.current();
+            let curr: @Int = it.current;
             curr.inc();
 
             return curr.deref<Int>();
         }
 
         fn is_consumed(it: @Range) -> Bool {
-            return it.current() >= it.end();
+            return it.current >= it.end;
         }
 
         implement Iterable<Range, Int> for Range;
@@ -1366,9 +1375,9 @@ mod tests {
 
         let r: Range = Range(0, 2, 10);
 
-        let a = r.start();
-        let b = r.current();
-        let c = r.end();
+        let a = r.start;
+        let b = r.current;
+        let c = r.end;
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();
@@ -1399,8 +1408,8 @@ mod tests {
 
         let a: Option<Int> = Option<Int>(true, 5);
 
-        let b = a.present<Int>();
-        let c = a.obj<Int>();
+        let b = a.present;
+        let c = a.obj;
         ".to_string();
 
         ctx.parse_and_execute_nessa_module(&code_str).unwrap();

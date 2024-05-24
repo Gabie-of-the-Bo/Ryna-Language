@@ -276,6 +276,35 @@ impl NessaContext {
 
             NessaExpr::DoBlock(_, _, t) => Ok(t.clone()),
 
+            NessaExpr::AttributeAccess(_, e, att_idx) => {
+                use Type::*;
+
+                let arg_type = self.infer_type(e)?;
+
+                if let Basic(id) | Template(id, _) = arg_type.deref_type() {
+                    let mut att_type = self.type_templates[*id].attributes[*att_idx].1.clone();
+
+                    // Subtitute template parameters if needed
+                    if let Template(_, ts) = arg_type.deref_type() {
+                        att_type = att_type.sub_templates(&ts.iter().cloned().enumerate().collect());
+                    }
+                    
+                    return match (&arg_type, &att_type) {
+                        (MutRef(_), Ref(_) | MutRef(_)) => Ok(att_type.clone()),
+                        (MutRef(_), _) => Ok(MutRef(Box::new(att_type.clone()))),
+
+                        (Ref(_), MutRef(i)) => Ok(Ref(i.clone())),
+                        (Ref(_), Ref(_)) => Ok(att_type.clone()),
+                        (Ref(_), _) => Ok(Ref(Box::new(att_type.clone()))),
+
+                        (_, _) => Ok(att_type.clone())
+                    };
+
+                } else {
+                    unreachable!()
+                }
+            }
+
             NessaExpr::CompiledLambda(_, _, _, a, r, _) => Ok(
                 if a.len() == 1 {
                     Type::Function(
@@ -362,7 +391,7 @@ impl NessaContext {
                 return Ok(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             }
 
-            NessaExpr::FunctionName(l, id) => {
+            NessaExpr::QualifiedName(l, _, Some(id)) => {
                 let func = &self.functions[*id];
 
                 if func.overloads.len() == 1 {
@@ -409,6 +438,8 @@ impl NessaContext {
                 ));
             }
 
+            NessaExpr::QualifiedName(l, _, _) |
+            NessaExpr::AttributeAssignment(l, _, _, _) |
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |

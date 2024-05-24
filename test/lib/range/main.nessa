@@ -9,14 +9,14 @@ fn iterator(it: Range) -> Range {
 }
 
 fn next(it: @Range) -> Int {
-    let curr: @Int = it.current();
+    let curr: @Int = it.current;
     curr.inc();
 
     return *curr - 1;
 }
 
 fn is_consumed(it: @Range) -> Bool {
-    return it.current() >= it.end();
+    return it.current >= it.end;
 }
 
 implement Iterable<Range, Int> for Range;

@@ -100,8 +100,8 @@ fn<K, V> serialize_map_field(serializer: @JSONSerializer, key: 'K [Serializable<
 }
 
 fn serialize(serializer: @JSONSerializer, obj: Test) -> String {
-    let a = serializer.serialize_map_field("att_a", move(obj.att_a()));
-    let b = serializer.serialize_map_field("att_b", move(obj.att_b()));
+    let a = serializer.serialize_map_field("att_a", move(obj.att_a));
+    let b = serializer.serialize_map_field("att_b", move(obj.att_b));
 
     return "{" + a + ", " + b + "}";
 }

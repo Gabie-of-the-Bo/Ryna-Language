@@ -51,11 +51,17 @@ let ex = ExampleClass(1, a.demut(), b);
 
 ### Accessors
 
-Each attribute creates a function with the same name that takes an instance of the created class and returns the value of the attribute. Attributes are 
-returned as references to allow modifications. Following the previous example, you could access `ExampleClass`'s attributes like this:
+Each attribute can be accessed and modified using the syntax you would expect. Attributes are returned as references to allow modifications. 
+Following the previous example, you could access and modify `ExampleClass`'s attributes like this:
 
 ```
-ex.attrib_1(); // Returns @Int
-ex.attrib_2(); // Returns &Int
-ex.attrib_3(); // Returns @Int
+ex.attrib_1; // Returns @Int
+ex.attrib_2; // Returns &Int
+ex.attrib_3; // Returns @Int
+
+let a = 10;
+
+ex.attrib_1 = 5;         // Can be assigned an Int
+ex.attrib_2 = a.demut(); // Can be assigned an &Int
+ex.attrib_3 = a;         // Can be assigned an @Int
 ```

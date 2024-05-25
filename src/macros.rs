@@ -1,15 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
 use nom::{branch::alt, bytes::complete::tag, character::complete::satisfy, combinator::{eof, map, map_opt, peek, value}, multi::{many0, many_till}, sequence::{delimited, preceded, tuple}};
+use serde::{Deserialize, Serialize};
 
 use crate::{annotations::Annotation, context::NessaContext, parser::{empty0, identifier_parser, Location, PResult, Span}, patterns::Pattern};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NessaMacroType {
     Function, Expression, Block, Ndl
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NdlMacro {
     Text(String),
     Var(String),
@@ -19,7 +20,7 @@ pub enum NdlMacro {
     Code(Box<NdlMacro>)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NessaMacro {
     pub location: Location,
     pub annotations: Vec<Annotation>,

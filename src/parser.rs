@@ -7,7 +7,7 @@ use malachite::num::conversion::string::options::FromSciStringOptions;
 use malachite::num::conversion::traits::FromSciString;
 use nom::AsChar;
 use nom::bytes::complete::{tag, take_till, take_until};
-use nom::combinator::cut;
+use nom::combinator::{cut, map_opt};
 use nom::error::{VerboseError, VerboseErrorKind, context};
 use nom::sequence::preceded;
 use nom::{
@@ -23,6 +23,7 @@ use nom::{
 use nom_locate::LocatedSpan;
 use rustc_hash::FxHashSet;
 use malachite::Integer;
+use serde::{Deserialize, Serialize};
 
 use crate::annotations::{parse_annotation, Annotation};
 use crate::config::ImportMap;
@@ -68,7 +69,7 @@ pub fn verbose_error<'a>(input: Span<'a>, msg: &'static str) -> nom::Err<Verbose
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Debug, Clone, Eq, Hash, Default)]
+#[derive(Debug, Clone, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Location {
     pub line: usize,
     pub column: usize,
@@ -190,16 +191,18 @@ pub fn many_separated0<
                                                   ╘══════════════════╛
 */
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq, Serialize, Deserialize)]
 pub enum NessaExpr {
     // Compiled
-    FunctionName(Location, usize),
+    QualifiedName(Location, String, Option<usize>), // In this order, function id, attribute name
     Variable(Location, usize, String, Type),
     CompiledVariableDefinition(Location, usize, String, Type, Box<NessaExpr>),
     CompiledVariableAssignment(Location, usize, String, Type, Box<NessaExpr>),
     FunctionCall(Location, usize, Vec<Type>, Vec<NessaExpr>),
     CompiledFor(Location, usize, usize, String, Box<NessaExpr>, Vec<NessaExpr>),
     DoBlock(Location, Vec<NessaExpr>, Type),
+    AttributeAccess(Location, Box<NessaExpr>, usize),
+    AttributeAssignment(Location, Box<NessaExpr>, Box<NessaExpr>, usize),
     Break(Location),
     Continue(Location),
 
@@ -259,10 +262,12 @@ impl NessaExpr {
 
             NessaExpr::VariableDefinition(_, _, _, _) |
             NessaExpr::VariableAssignment(_, _, _) |
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -285,7 +290,8 @@ impl NessaExpr {
 
     pub fn is_expr(&self) -> bool {
         match self {
-            NessaExpr::FunctionName(_, _) |
+            NessaExpr::QualifiedName(_, _, _) |
+            NessaExpr::AttributeAssignment(_, _, _, _) |
             NessaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             NessaExpr::Macro(_, _, _, _, _, _) |
@@ -310,6 +316,7 @@ impl NessaExpr {
             NessaExpr::Return(_, _) => false,
 
             NessaExpr::DoBlock(_, _, _) |
+            NessaExpr::AttributeAccess(_, _, _) |
             NessaExpr::Variable(_, _, _, _) |
             NessaExpr::FunctionCall(_, _, _, _) |
             NessaExpr::CompiledFor(_, _, _, _, _, _) |
@@ -326,7 +333,7 @@ impl NessaExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ImportType {
     Interface, Class, Fn, Prefix, Postfix, Binary, Nary, Syntax, Line(usize), All
 }
@@ -917,12 +924,41 @@ impl NessaContext {
             tuple((
                 opt(tag("-")),
                 take_while1(|c: char| c.is_ascii_digit()),
-                tuple((
-                    tag("."),
-                    take_while1(|c: char| c.is_ascii_digit())
-                ))
+                map_opt(
+                    tuple((
+                        opt(
+                            map(
+                                preceded(
+                                    tag("."),
+                                    take_while1(|c: char| c.is_ascii_digit()),        
+                                ),
+                                |s| format!(".{s}")
+                            )
+                        ),
+                        opt(
+                            preceded(
+                                alt((tag("e"), tag("E"))),
+                                map(
+                                    tuple((
+                                        opt(tag("-")),
+                                        take_while1(|c: char| c.is_ascii_digit())                
+                                    )),
+                                    |(s, n)| format!("e{}{}", s.unwrap_or_else(|| "".into()), n)
+                                )
+                            )
+                        )
+                    )),
+                    |r| {
+                        match r {
+                            (None, None) => None,
+                            (None, Some(a)) => Some(a),
+                            (Some(a), None) => Some(a),
+                            (Some(a), Some(b)) => Some(format!("{a}{b}")),
+                        }
+                    }
+                )
             )),
-            |(s, n, d)| format!("{}{}{}{}", s.unwrap_or(Span::new("")), n, d.0, d.1).parse().unwrap()
+            |(s, n, d)| format!("{}{}{}", s.unwrap_or(Span::new("")), n, d).parse().unwrap()
         )(input)
     }
 
@@ -1814,7 +1850,10 @@ impl NessaContext {
     }
 
     fn prefix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if *prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1830,7 +1869,10 @@ impl NessaContext {
     }
 
     fn postfix_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.unary_ops {
+        let mut sorted_ops = self.unary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Unary{id, representation, prefix, ..} = o {
                 if !*prefix {
                     let res = map(tag(representation.as_str()), |_| *id)(input);
@@ -1846,7 +1888,10 @@ impl NessaContext {
     }
 
     fn binary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, usize> {
-        for o in &self.binary_ops {
+        let mut sorted_ops = self.binary_ops.clone();
+        sorted_ops.sort_by_key(|op| -(op.get_repr().len() as i64));
+
+        for o in &sorted_ops {
             if let Operator::Binary{id, representation, ..} = o {
                 let res = map(tag(representation.as_str()), |_| *id)(input);
 
@@ -1860,7 +1905,16 @@ impl NessaContext {
     }
 
     fn nary_operator_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (usize, Vec<(String, Type)>)> {
-        for o in &self.nary_ops {
+        let mut sorted_ops = self.nary_ops.clone();
+        sorted_ops.sort_by_key(|op| {
+            if let Operator::Nary { open_rep, .. } = op {
+                return -(open_rep.len() as i64);
+            }
+
+            unreachable!()
+        });
+
+        for o in &sorted_ops {
             if let Operator::Nary{id, open_rep, close_rep, ..} = o {
                 let res = map(
                     tuple((

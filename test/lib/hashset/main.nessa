@@ -7,7 +7,7 @@ class HashSet<V> {
 }
 
 fn<T> init(set: @HashSet<'T [Hashable]>, size: Int) {
-    let _buckets = set.buckets();
+    let _buckets = set.buckets;
     _buckets.reserve(*size);
 
     for i in range(0, *size) {
@@ -23,23 +23,23 @@ fn<T> hashset() -> HashSet<'T [Hashable]> {
 }
 
 fn<T> rehash(set: @HashSet<'T [Hashable]>) {
-    let b = set.buckets();
+    let b = set.buckets;
     let size = b.len();
 
     let aux = HashSet(arr<Array<'T>>());
     aux.init(size * 2);
 
-    for bucket in set.buckets() {
+    for bucket in set.buckets {
         for elem in bucket {
             aux.add(move(elem));
         }
     }
 
-    set.buckets() := move(aux.buckets());
+    set.buckets = move(aux.buckets);
 }
 
 fn<T> add(set: @HashSet<'T [Hashable]>, elem: 'T) {
-    let b = set.buckets();
+    let b = set.buckets;
     let size = b.len();
     let pos = hash(*elem) % size;
 
@@ -51,7 +51,7 @@ fn<T> add(set: @HashSet<'T [Hashable]>, elem: 'T) {
 }
 
 fn<T> contains(set: @HashSet<'T [Hashable]>, elem: @'T) -> Bool {
-    let b = set.buckets();
+    let b = set.buckets;
     let size = b.len();
     let pos = hash(*elem) % size;
 

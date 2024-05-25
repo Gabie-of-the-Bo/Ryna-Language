@@ -47,6 +47,9 @@ pub mod git;
 #[path = "algorithms/profiling.rs"]
 pub mod profiling;
 
+#[path = "algorithms/formats.rs"]
+pub mod formats;
+
 #[path = "structures/graph.rs"]
 pub mod graph;
 
@@ -131,7 +134,7 @@ mod integration {
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
         let (_, all_mods, files) = compute_project_hash(path_str, None, true, false).unwrap();
-        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true, false);
+        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true, false, true);
 
         if let Err(err) = &err {
             err.emit();
@@ -309,6 +312,21 @@ mod integration {
     #[test]
     fn lambda_capture() {
         integration_test("test/lambda_capture.nessa");
+    }
+
+    #[test]
+    fn unicode() {
+        integration_test("test/unicode.nessa");
+    }
+
+    #[test]
+    fn implicit_lambda() {
+        integration_test("test/implicit_lambda.nessa");
+    }
+
+    #[test]
+    fn exp_floats() {
+        integration_test("test/exp_floats.nessa");
     }
 
     #[test]

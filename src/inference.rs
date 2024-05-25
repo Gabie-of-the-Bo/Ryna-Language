@@ -276,6 +276,35 @@ impl NessaContext {
 
             NessaExpr::DoBlock(_, _, t) => Ok(t.clone()),
 
+            NessaExpr::AttributeAccess(_, e, att_idx) => {
+                use Type::*;
+
+                let arg_type = self.infer_type(e)?;
+
+                if let Basic(id) | Template(id, _) = arg_type.deref_type() {
+                    let mut att_type = self.type_templates[*id].attributes[*att_idx].1.clone();
+
+                    // Subtitute template parameters if needed
+                    if let Template(_, ts) = arg_type.deref_type() {
+                        att_type = att_type.sub_templates(&ts.iter().cloned().enumerate().collect());
+                    }
+                    
+                    return match (&arg_type, &att_type) {
+                        (MutRef(_), Ref(_) | MutRef(_)) => Ok(att_type.clone()),
+                        (MutRef(_), _) => Ok(MutRef(Box::new(att_type.clone()))),
+
+                        (Ref(_), MutRef(i)) => Ok(Ref(i.clone())),
+                        (Ref(_), Ref(_)) => Ok(att_type.clone()),
+                        (Ref(_), _) => Ok(Ref(Box::new(att_type.clone()))),
+
+                        (_, _) => Ok(att_type.clone())
+                    };
+
+                } else {
+                    unreachable!()
+                }
+            }
+
             NessaExpr::CompiledLambda(_, _, _, a, r, _) => Ok(
                 if a.len() == 1 {
                     Type::Function(
@@ -362,7 +391,55 @@ impl NessaContext {
                 return Ok(r.sub_templates(&t_sub_ov).sub_templates(&t_sub_call));
             }
 
-            NessaExpr::FunctionName(l, _) |
+            NessaExpr::QualifiedName(l, _, Some(id)) => {
+                let func = &self.functions[*id];
+
+                if func.overloads.len() == 1 {
+                    let ov = &func.overloads[0];
+
+                    if ov.templates != 0 {
+                        return Err(NessaError::compiler_error(
+                            format!(
+                                "Implicit lambda for function with name {} cannot be formed from generic overload",
+                                func.name.green()
+                            ), 
+                            l, vec!()
+                        ));
+                    }
+                    
+                    if let Type::And(a) = &ov.args {
+                        if a.len() == 1 {
+                            return Ok(Type::Function(
+                                Box::new(a[0].clone()),
+                                Box::new(ov.ret.clone())
+                            ))
+        
+                        } else {
+                            return Ok(Type::Function(
+                                Box::new(Type::And(a.clone())),
+                                Box::new(ov.ret.clone())
+                            ))
+                        }
+                    }
+
+                    return Ok(Type::Function(
+                        Box::new(ov.args.clone()),
+                        Box::new(ov.ret.clone())
+                    ))
+                }
+
+                return Err(NessaError::compiler_error(
+                    format!(
+                        "Implicit lambda for function with name {} is ambiguous (found {} overloads)",
+                        func.name.green(),
+                        func.overloads.len()
+                    ), 
+                    l, vec!()
+                ));
+            }
+
+            NessaExpr::QualifiedName(l, _, _) |
+            NessaExpr::AttributeAssignment(l, _, _, _) |
             NessaExpr::CompiledVariableDefinition(l, _, _, _, _) |
             NessaExpr::CompiledVariableAssignment(l, _, _, _, _) |
             NessaExpr::CompiledFor(l, _, _, _, _, _) |

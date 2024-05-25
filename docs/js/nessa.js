@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'literal',
-                    begin: '@[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')'
+                    begin: '@[a-zA-Z_0-9]+(?![a-zA-Z_0-9]*\')(?=\\s*(\n|\\())'
                 },
 
                 {
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', _ => {
 
                 {
                     className: 'number',
-                    begin: '\\b\\d+(.\\d+)?\\b',
+                    begin: '\\b\\d+(.\\d+)?((E|e)-?\\d+)?\\b',
                     relevance: 0
                 },
 

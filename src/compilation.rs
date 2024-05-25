@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use colored::Colorize;
 use levenshtein::levenshtein;
 use nom::error::{VerboseErrorKind, VerboseError};
 use rustc_hash::FxHashSet;
-use seq_macro::seq;
 use serde::{Serialize, Deserialize};
 use malachite::Integer;
 
@@ -51,14 +51,20 @@ pub struct NessaError {
     pub has_location: bool,
     pub line: usize,
     pub column: usize,
+    pub module: Arc<String>,
     pub fragment: String,
 
     pub suggestions: Vec<String>
 }
 
 impl NessaError {
-    pub fn syntax_error(message: String, line: usize, column: usize, fragment: String, suggestions: Vec<String>) -> Self {
-        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, fragment, suggestions }
+    pub fn in_module(mut self, module: Arc<String>) -> Self {
+        self.module = module;
+        self
+    } 
+
+    pub fn syntax_error(message: String, line: usize, column: usize, module: Arc<String>, fragment: String, suggestions: Vec<String>) -> Self {
+        NessaError { err_type: "Syntax error".into(), has_location: true, message, line, column, module, fragment, suggestions }
     }
 
     #[cold]
@@ -69,6 +75,7 @@ impl NessaError {
             message, 
             line: location.line, 
             column: location.column, 
+            module: location.module.clone(),
             fragment: location.span.clone(), 
             suggestions 
         }
@@ -82,6 +89,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -95,6 +103,7 @@ impl NessaError {
             message, 
             line: 0, 
             column: 0, 
+            module: Arc::default(),
             fragment: "".into(), 
             suggestions: vec!()
         }
@@ -116,8 +125,9 @@ impl NessaError {
             frag = frag.trim();
     
             eprintln!(
-                "\n[{} at line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
+                "\n[{} in module {}, line {}, column {}]\n\n • {}:\n\n\t[...] {} [...]\n\t      {}\n", 
                 self.err_type.red().bold(), 
+                self.module.green(),
                 self.line.to_string().yellow(), self.column.to_string().yellow(), 
                 self.message, frag,
                 "^".repeat(frag.len()).red()
@@ -157,7 +167,7 @@ impl<'a> From<VerboseError<Span<'a>>> for NessaError {
 
         NessaError::syntax_error(
             error_msg.into(), 
-            fragment.location_line() as usize, fragment.get_column(), 
+            fragment.location_line() as usize, fragment.get_column(), Arc::default(),
             fragment.to_string(), 
             vec!()
         )
@@ -205,6 +215,23 @@ macro_rules! nessa_warning {
         println!(
             "[{}] {}",
             "Warning".yellow(),
+            format!($pat, $($more,)*)
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! located_nessa_warning {
+    ($l: expr, $pat: expr $( , $more: expr)*) => {
+        use colored::Colorize;
+        
+        let loc = $l;
+
+        println!(
+            "[{} in module {}, line {}, column {}] {}",
+            "Warning".yellow(),
+            loc.module.green(),
+            loc.line.to_string().yellow(), loc.column.to_string().yellow(),
             format!($pat, $($more,)*)
         );
     };
@@ -300,25 +327,10 @@ impl NessaContext {
                 *expr = NessaExpr::Variable(l.clone(), *idx, n.clone(), t.clone());
             },
 
-            NessaExpr::NameReference(l, n) if self.get_function(n).is_some() => {
-                *expr = NessaExpr::FunctionName(l.clone(), self.get_function_id(n.clone()).unwrap());
-            },
-
             NessaExpr::NameReference(l, n) => {
-                let similar_vars = var_map.var_names().iter().filter(|name| levenshtein(n, name) < 3)
-                                                 .map(|i| format!("{} (Variable)", i.cyan()))
-                                                 .collect::<Vec<_>>();
-
-                let similar_func = self.functions.iter().map(|f| &f.name)
-                                                        .filter(|name| levenshtein(n, name) < 3)
-                                                        .map(|i| format!("{} (Function)", i.green()))
-                                                        .collect::<Vec<_>>();
-
-                return Err(NessaError::compiler_error(
-                    format!("Identifier with name {} is not defined", n), l, 
-                    similar_vars.into_iter().chain(similar_func).map(|i| format!("Similar: {}", i)).collect()
-                ));
-            }
+                let func = self.get_function_id(n.clone()).ok();
+                *expr = NessaExpr::QualifiedName(l.clone(), n.clone(), func);
+            },
 
             NessaExpr::VariableAssignment(l, n, e) if var_map.is_var_defined(n) => {
                 if var_map.is_var_defined(n) {
@@ -388,7 +400,18 @@ impl NessaContext {
                 self.compile_expr_variables(b, registers, var_map)?;
 
                 let is_func = matches!(b.as_ref(), NessaExpr::FunctionCall(..));
+                let is_name = matches!(b.as_ref(), NessaExpr::QualifiedName(..));
+                let is_attr = matches!(a.as_ref(), NessaExpr::AttributeAccess(..));
                                 
+                // Attribute assignments
+                if *id == DEFINE_BINOP_ID && is_attr {
+                    if let NessaExpr::AttributeAccess(_, e, att_idx) = a.as_ref() {
+                        *expr = NessaExpr::AttributeAssignment(l.clone(), e.clone(), b.clone(), *att_idx);
+                        
+                        return Ok(());
+                    }
+                }
+
                 // Member function calls
                 if *id == DOT_BINOP_ID && is_func {
                     if let NessaExpr::FunctionCall(_, f_id, t, args) = b.as_ref() {
@@ -402,6 +425,39 @@ impl NessaContext {
                         self.compile_expr_variables(expr, registers, var_map)?;
                     }
 
+                } else if *id == DOT_BINOP_ID && is_name {
+                    if let NessaExpr::QualifiedName(_, n, _) = b.as_ref() {
+                        let arg_type = self.infer_type(a)?;
+                        let mut changed = false;
+                        let l_cpy = l.clone();
+                        let n_cpy = n.clone();
+
+                        if let Type::Basic(id) | Type::Template(id, _) = arg_type.deref_type() {
+                            let attrs = &self.type_templates[*id].attributes;
+    
+                            for (i, att) in attrs.iter().enumerate() {
+                                if &att.0 == n {
+                                    *expr = NessaExpr::AttributeAccess(l.clone(), a.clone(), i);
+                                    changed = true;
+                                    break;
+                                }
+                            } 
+                        
+                        } else {
+                            return Err(NessaError::compiler_error(
+                                format!("Type {} has no attributes", arg_type.get_name(self)), 
+                                &l_cpy, vec!()
+                            ));
+                        }
+
+                        if !changed {
+                            return Err(NessaError::compiler_error(
+                                format!("Attribute with name {} was not found in class {}", n_cpy.cyan(), arg_type.deref_type().get_name(self)), 
+                                &l_cpy, vec!()
+                            ));
+                        }                
+                    }
+                    
                 } else if t.is_empty() {
                     let arg_type_1 = self.infer_type(a)?;
                     let arg_type_2 = self.infer_type(b)?;
@@ -423,10 +479,10 @@ impl NessaContext {
                     self.compile_expr_variables(i, registers, var_map)?;
                 }
 
-                let is_func = matches!(a.as_ref(), NessaExpr::FunctionName(..));
+                let is_func = matches!(a.as_ref(), NessaExpr::QualifiedName(_, _, Some(_)));
 
                 if *id == CALL_OP && is_func {
-                    if let NessaExpr::FunctionName(_, id) = a.as_ref() {                    
+                    if let NessaExpr::QualifiedName(_, _, Some(id)) = a.as_ref() {                    
                         *expr = NessaExpr::FunctionCall(l.clone(), *id, t.clone(), b.clone());
     
                         // Recompile after transformation
@@ -669,12 +725,208 @@ impl NessaContext {
         Ok(max_var)
     }
 
+    pub fn transform_term(&mut self, expr: &mut NessaExpr) -> Result<(), NessaError> {
+        match expr {
+            NessaExpr::QualifiedName(l, _, Some(id)) => {
+                let func = &self.functions[*id];
+
+                if func.overloads.len() > 1 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} is ambiguous (found {} overloads)",
+                            func.name.green(),
+                            func.overloads.len()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                if func.overloads[0].templates != 0 {
+                    return Err(NessaError::compiler_error(
+                        format!(
+                            "Implicit lambda for function with name {} cannot be formed from generic overload",
+                            func.name.green()
+                        ), 
+                        l, vec!()
+                    ));
+                }
+
+                let ov = &func.overloads[0];
+                let mut args = vec!();
+
+                if let Type::And(a) = &ov.args {
+                    if a.len() == 1 {
+                        args.push(a[0].clone());
+
+                    } else {
+                        args.extend(a.iter().cloned());
+                    }
+
+                } else {
+                    args.push(ov.args.clone());
+                }
+
+                let move_id = self.get_function_id("move".into()).unwrap();
+
+                // Generate implicit function call
+                let fn_call = NessaExpr::FunctionCall(
+                    Location::none(), *id, vec!(), 
+                    args.iter().enumerate()
+                        .map(|(i, t)| {
+                            let v = NessaExpr::Variable(Location::none(), i, format!("arg_{i}"), t.clone());
+
+                            // Move if it is a direct value
+                            if t.is_ref() {
+                                v
+                            
+                            } else {
+                                NessaExpr::FunctionCall(
+                                    Location::none(), move_id, vec!(t.clone()), vec!(v) 
+                                )
+                            }
+                        })
+                        .collect()
+                );
+
+                // Generate implicit lambda
+                *expr = NessaExpr::CompiledLambda(
+                    l.clone(), self.lambdas, vec!(), 
+                    args.into_iter().enumerate().map(|(i, t)| (format!("arg_{i}"), t)).collect(), 
+                    ov.ret.clone(), 
+                    vec!(NessaExpr::Return(Location::none(), Box::new(fn_call)))
+                );
+
+                self.lambdas += 1;
+
+                Ok(())
+            } 
+
+            NessaExpr::QualifiedName(l, n, func) => {
+                if func.is_none() {
+                    let similar_func = self.functions.iter().map(|f| &f.name)
+                                                     .filter(|name| levenshtein(n, name) < 3)
+                                                     .map(|i| format!("{} (Function)", i.green()))
+                                                     .collect::<Vec<_>>();
+
+                    return Err(NessaError::compiler_error(
+                        format!("Identifier with name {} is not defined", n), l, 
+                        similar_func.iter().map(|i| format!("Similar: {}", i)).collect()
+                    ));
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::AttributeAccess(_, e, _) |
+            NessaExpr::UnaryOperation(_, _, _, e) |
+            NessaExpr::Return(_, e) |
+            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.transform_term(e),
+
+            NessaExpr::CompiledLambda(_, _, c, _, _, _) => {
+                for (_, e) in c {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            }
+
+            NessaExpr::DoBlock(_, exprs, _) |
+            NessaExpr::FunctionCall(_, _, _, exprs) |
+            NessaExpr::Tuple(_, exprs) => {
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::CompiledFor(_, _, _, _, c, exprs) |
+            NessaExpr::While(_, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::NaryOperation(_, _, _, c, exprs) => {
+                self.transform_term(c)?;
+
+                for e in exprs {
+                    self.transform_term(e)?;
+                }
+
+                Ok(())
+            },
+
+            NessaExpr::AttributeAssignment(_, a, b, _) |
+            NessaExpr::BinaryOperation(_, _, _, a, b) => {
+                self.transform_term(a)?;
+                self.transform_term(b)?;
+
+                Ok(())
+            },
+
+            NessaExpr::If(_, ic, ib, ei, eb) => {
+                self.transform_term(ic)?;
+                
+                for e in ib {
+                    self.transform_term(e)?;
+                }
+
+                for (ei_h, ei_b) in ei {
+                    self.transform_term(ei_h)?;
+                    
+                    for e in ei_b {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                if let Some(inner) = eb {
+                    for e in inner {
+                        self.transform_term(e)?;
+                    }
+                }
+
+                Ok(())
+            },
+            
+            NessaExpr::Variable(_, _, _, _) |
+            NessaExpr::Break(_) |
+            NessaExpr::Continue(_) |
+            NessaExpr::Literal(_, _) |
+            NessaExpr::Macro(_, _, _, _, _, _) |
+            NessaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::PrefixOperatorDefinition(_, _, _) |
+            NessaExpr::PostfixOperatorDefinition(_, _, _) |
+            NessaExpr::BinaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::NaryOperatorDefinition(_, _, _, _) |
+            NessaExpr::ClassDefinition(_, _, _, _, _, _, _) |
+            NessaExpr::InterfaceDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::InterfaceImplementation(_, _, _, _, _) |
+            NessaExpr::PrefixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            NessaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) => { Ok(()) },
+
+            e => unreachable!("{:?}", e)
+        }
+    }
+
     pub fn compile_vars_and_infer(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<usize, NessaError> {
         self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut VariableMap::new(), args)
     }
 
     pub fn compile(&mut self, body: &mut Vec<NessaExpr>, args: &Vec<(String, Type)>) -> Result<(), NessaError> {
         self.compile_vars_and_infer(body, args)?;
+
+        // Second pass to transform some terms if needed
+        for expr in body.iter_mut() {
+            self.transform_term(expr)?;
+        }
 
         Ok(())
     }
@@ -702,6 +954,7 @@ pub enum CompiledNessaExpr {
     Lambda(usize, usize, Type, Type),
 
     Construct(usize, usize, Vec<Type>),
+    AttributeAssign(usize),
     AttributeMove(usize),
     AttributeRef(usize),
     AttributeMut(usize),
@@ -935,7 +1188,7 @@ impl CompiledNessaExpr {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NessaInstruction {
     pub instruction: CompiledNessaExpr,
     pub debug_info: DebugInfo
@@ -1655,6 +1908,7 @@ impl NessaContext{
             },
 
             NessaExpr::VariableAssignment(_, _, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::Return(_, e) => NessaContext::subtitute_type_params_expr(e, templates),
 
             NessaExpr::VariableDefinition(_, _, t, e) |
@@ -1670,6 +1924,11 @@ impl NessaContext{
 
                 NessaContext::subtitute_type_params_expr(a, templates);
             },
+
+            NessaExpr::AttributeAssignment(_, a, b, _) => {
+                NessaContext::subtitute_type_params_expr(a, templates);
+                NessaContext::subtitute_type_params_expr(b, templates);
+            }
 
             NessaExpr::BinaryOperation(_, _, t, a, b) => {
                 t.iter_mut().for_each(|i| *i = i.sub_templates(templates));
@@ -1777,8 +2036,10 @@ impl NessaContext{
             NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
             NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
             NessaExpr::Return(_, e) |
+            NessaExpr::AttributeAccess(_, e, _) |
             NessaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, only_length),
 
+            NessaExpr::AttributeAssignment(_, a, b, _) |
             NessaExpr::BinaryOperation(_, _, _, a, b) => {
                 self.compile_lambda_expr(a, only_length)?;
                 self.compile_lambda_expr(b, only_length)?;
@@ -2336,6 +2597,16 @@ impl NessaContext{
                 
                 Ok(NessaContext::compiled_literal_size(obj))
             },
+
+            AttributeAccess(_, e, _) => {
+                *root_counter += root as usize; // Add drop instruction
+                
+                Ok(self.compiled_form_size(e, false, root_counter)? + 1)
+            }
+
+            AttributeAssignment(_, a, b, _) => {                
+                Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_size(b, false, root_counter)? + 1)
+            }
             
             CompiledLambda(_, _, c, ..) => {
                 *root_counter += root as usize; // Add drop instruction
@@ -2548,6 +2819,38 @@ impl NessaContext{
                 Ok(res.into_iter().map(|i| i.set_loc(l)).collect())
             },
 
+            NessaExpr::AttributeAccess(l, e, att_idx) => {
+                let mut res = self.compiled_form_expr(e, root)?;
+                let arg_type = self.infer_type(e)?;
+
+                if let Type::Basic(id) | Type::Template(id, _) = arg_type.deref_type() {
+                    let mut att_type = self.type_templates[*id].attributes[*att_idx].1.clone();
+
+                    // Subtitute template parameters if needed
+                    if let Type::Template(_, ts) = arg_type.deref_type() {
+                        att_type = att_type.sub_templates(&ts.iter().cloned().enumerate().collect());
+                    }
+                    
+                    let opcode = match (&arg_type, &att_type) {
+                        (Type::MutRef(_), Type::Ref(_)) => CompiledNessaExpr::AttributeRef(*att_idx),
+                        (Type::MutRef(_), _) => CompiledNessaExpr::AttributeMut(*att_idx),
+                        (Type::Ref(_), _) => CompiledNessaExpr::AttributeRef(*att_idx),
+                        (_, _) => CompiledNessaExpr::AttributeMove(*att_idx)
+                    };
+
+                    res.push(NessaInstruction::from(opcode).set_loc(l));
+                
+                    if root { // Drop if the return value is unused
+                        res.push(NessaInstruction::from(CompiledNessaExpr::Drop).set_loc(l));
+                    }
+
+                    Ok(res)
+
+                } else {
+                    unreachable!()
+                }
+            }
+
             NessaExpr::CompiledLambda(l, i, c, a, r, _) => {
                 let mut res = vec!();
 
@@ -2628,6 +2931,15 @@ impl NessaContext{
 
                 Ok(res)
             }, 
+
+            NessaExpr::AttributeAssignment(l, a, b, att_idx) => {
+                let mut res = self.compiled_form_expr(a, false)?;
+                res.append(&mut self.compiled_form_expr(b, false)?);
+
+                res.push(NessaInstruction::from(CompiledNessaExpr::AttributeAssign(*att_idx)).set_loc(l));
+
+                Ok(res)
+            }
 
             NessaExpr::CompiledVariableDefinition(l, id, _, t, e) | NessaExpr::CompiledVariableAssignment(l, id, _, t, e) => {
                 let mut res = self.compiled_form_expr(e, false)?;
@@ -3109,66 +3421,6 @@ impl NessaContext{
                     } else {
                         self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, a.len(), vec!()), 0));
                     }
-                    
-                    // Define meber access
-                    for (i, (att_name, att_type)) in a.into_iter().enumerate() {
-                        self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                        let att_func_id = self.get_function_id(att_name).unwrap();
-
-                        let ref_type = match &att_type {
-                            Type::MutRef(t) => Type::Ref(t.clone()),
-                            Type::Ref(t) => Type::Ref(t.clone()),
-                            t => Type::Ref(Box::new(t.clone()))
-                        };
-
-                        let mut_type = match &att_type {
-                            Type::MutRef(t) => Type::MutRef(t.clone()),
-                            Type::Ref(t) => Type::Ref(t.clone()),
-                            t => Type::MutRef(Box::new(t.clone()))
-                        };
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, 0, &[Type::Basic(class_id)], att_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-                            
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMove(i), 0));
-                            }
-                        });
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, 0, &[Type::Ref(Box::new(Type::Basic(class_id)))], ref_type, match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-                            
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeRef(i), 0));
-                            }
-                        });
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, 0, &[Type::MutRef(Box::new(Type::Basic(class_id)))], mut_type, match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_mut()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-                            
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMut(i), 0));
-                            }
-                        });
-                    }
 
                 } else {
                     let templ = (0..n_templates).map(|i| Type::TemplateParam(i, vec!())).collect::<Vec<_>>();
@@ -3192,65 +3444,6 @@ impl NessaContext{
                     } else {
                         self.cache.opcodes.functions.insert((func_id, res.unwrap()), (CompiledNessaExpr::Construct(class_id, a.len(), vec!()), 0));
                     }
-
-                    for (i, (att_name, att_type)) in a.into_iter().enumerate() {
-                        self.define_function(att_name.clone()).unwrap_or_default(); // Define accesor function
-                        let att_func_id = self.get_function_id(att_name).unwrap();
-
-                        let ref_type = match &att_type {
-                            Type::MutRef(t) => Type::Ref(t.clone()),
-                            Type::Ref(t) => Type::Ref(t.clone()),
-                            t => Type::Ref(Box::new(t.clone()))
-                        };
-
-                        let mut_type = match &att_type {
-                            Type::MutRef(t) => Type::MutRef(t.clone()),
-                            Type::Ref(t) => Type::Ref(t.clone()),
-                            t => Type::MutRef(Box::new(t.clone()))
-                        };
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, n_templates, &[Type::Template(class_id, templ.clone())], att_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].get::<TypeInstance>().attributes[N].clone()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-                            
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMove(i), 0));
-                            }
-                        });
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, n_templates, &[Type::Ref(Box::new(Type::Template(class_id, templ.clone())))], ref_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_ref()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-                            
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeRef(i), 0));
-                            }
-                        });
-
-                        seq!(N in 0..100 {
-                            let res = self.define_native_function_overload(att_func_id, n_templates, &[Type::MutRef(Box::new(Type::Template(class_id, templ.clone())))], mut_type.clone(), match i {
-                                #( N => |_, _, a, _| Ok(a[0].deref::<TypeInstance>().attributes[N].get_mut()), )*
-                                _ => unimplemented!("Unable to define attribute with index {} (max is 100)", i)
-                            });
-                            
-                            if let Err(msg) = res {
-                                return Err(NessaError::compiler_error(msg, &l, vec!()));
-
-                            } else {
-                                self.cache.opcodes.functions.insert((att_func_id, res.unwrap()), (CompiledNessaExpr::AttributeMut(i), 0));
-                            }
-                        });
-                    }
                 }
             },
 
@@ -3270,7 +3463,7 @@ impl NessaContext{
             let ops = self.nessa_macros_parser(Span::new(code));
         
             if let Err(err) = ops {
-                return Err(NessaError::from(err));
+                return Err(NessaError::from(err).in_module(self.module_name.clone()));
             }
             
             for i in ops.unwrap().1 {
@@ -3323,7 +3516,7 @@ impl NessaContext{
         let ops = self.nessa_operators_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3348,7 +3541,7 @@ impl NessaContext{
         let ops = self.nessa_function_headers_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3362,7 +3555,7 @@ impl NessaContext{
         let ops = self.nessa_operations_parser(Span::new(code));
 
         if let Err(err) = ops {
-            return Err(NessaError::from(err));
+            return Err(NessaError::from(err).in_module(self.module_name.clone()));
         }
 
         for i in ops.unwrap().1 {
@@ -3403,7 +3596,7 @@ impl NessaContext{
             Ok((_, lines)) => Ok(lines),
 
             Err(nom::Err::Error(error)) |
-            Err(nom::Err::Failure(error)) => Err(NessaError::from(error)),
+            Err(nom::Err::Failure(error)) => Err(NessaError::from(error).in_module(self.module_name.clone())),
 
             _ => unreachable!()
         };

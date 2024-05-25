@@ -1,0 +1,37 @@
+fn increment(n: Int) -> Int {
+    return n + 1;
+}
+
+let increment_2 = increment;
+
+if increment(5) != increment_2(5) {
+    panic("This should not happen");
+}
+
+fn add(n: Int, m: Int) -> Int {
+    return n + m;
+}
+
+let add_2 = add;
+
+if add(7, 10) != add_2(7, 10) {
+    panic("This should not happen");
+}
+
+op<In1, In2, Out1, Out2> (f1: 'In1 => 'Out1) + (f2: 'In2 => 'Out2) -> 'In1 => 'Out2 {
+    return [f1, f2](arg: 'In1) f2(f1(fwd<'In1>(arg)));
+}
+
+fn stringify(n: Int) -> String {
+    return move(n).to_string();
+}
+
+fn double(n: Int) -> Int {
+    return n * 2;
+}
+
+let complex_composition = increment + increment + double + stringify;
+
+if complex_composition(3) != "10" {
+    panic("This should not happen");
+}

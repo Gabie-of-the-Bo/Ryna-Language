@@ -1,13 +1,13 @@
 ---
 module_name: hashmap
 version: 0.1.0
-hash: a2ee528aa57e5931fb0b9086e66ef0b2
+hash: 59782d9917bbff2009cbb34a2c997d73
 module_paths:
   - test/lib
 modules:
-  hash:
-    path: test/lib/hash
-    version: 0.1.0
   range:
     path: test/lib/range
+    version: 0.1.0
+  hash:
+    path: test/lib/hash
     version: 0.1.0

@@ -1,7 +1,7 @@
 ---
 module_name: hashset
 version: 0.1.0
-hash: e3bd019f074aa18063f3c488a09af4b0
+hash: dc28d8da3dc96613ce03ed2cdf8784bf
 module_paths:
   - test/lib
 modules:

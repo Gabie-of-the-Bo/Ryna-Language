@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::annotations::Annotation;
 use crate::compilation::CompiledNessaExpr;
 use crate::parser::Location;
@@ -19,13 +21,16 @@ pub type OptUnaryFunctionFn = Option<UnaryFunctionFn>;
 pub type OptBinaryFunctionFn = Option<BinaryFunctionFn>;
 pub type OptNaryFunctionFn = Option<NaryFunctionFn>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(bound = "")]
 pub struct Operation<T> {
     pub location: Location,
     pub annotations: Vec<Annotation>,
     pub templates: usize,
     pub args: Type,
     pub ret: Type,
+
+    #[serde(skip)]
     pub operation: Option<T>
 }
 
@@ -37,7 +42,7 @@ const EMPTY_UN_FUNC: UnaryFunctionFn = |_, _, _| Ok(Object::empty());
 const EMPTY_BIN_FUNC: BinaryFunctionFn = |_, _, _, _, _| Ok(Object::empty());
 const EMPTY_NARY_FUNC: NaryFunctionFn = |_, _, _| Ok(());
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Operator {
     Unary {
         id: usize,
@@ -201,6 +206,8 @@ pub const ASSIGN_BINOP_ID: usize = 14;
 
 pub const LT_BINOP_PREC: usize = 900;
 
+pub const DEFINE_BINOP_ID: usize = 20;
+
 pub fn standard_binary_operations(ctx: &mut NessaContext) {
     
     /*
@@ -347,6 +354,8 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
     define_binary_native_op_combinations!(ctx, 19, BOOL, BOOL);
     define_binary_native_op_combinations!(ctx, 19, INT, INT);
+
+    ctx.define_binary_operator("=".into(), false, 200000).unwrap();
 }
 
 pub const CALL_OP: usize = 0;

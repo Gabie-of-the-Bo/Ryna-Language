@@ -3,12 +3,13 @@ use std::sync::Arc;
 use colored::Colorize;
 use derive_builder::Builder;
 use rustc_hash::FxHashSet;
+use serde::{Deserialize, Serialize};
 
 use crate::{context::NessaContext, operations::Operator, parser::NessaExpr, types::Type};
 
 // Instruction-level debug information
 
-#[derive(Clone, Debug, Default, PartialEq, Builder)]
+#[derive(Clone, Debug, Default, PartialEq, Builder, Serialize, Deserialize)]
 pub struct DebugInfo {
     #[builder(default)]
     pub comment: String,

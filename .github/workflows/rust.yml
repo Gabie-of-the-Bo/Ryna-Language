@@ -23,7 +23,7 @@ jobs:
       run: cargo test --profile release-debug
     
     - name: Setup nessa
-      run: mkdir /nessa-libs && cargo run --profile release-debug -- setup -m "/nessa-libs"
+      run: mkdir -p ${{ github.workspace }}/nessa-libs && cargo run --profile release-debug -- setup -m "${{ github.workspace }}/nessa-libs"
 
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1

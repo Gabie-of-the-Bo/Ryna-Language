@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "nessa-language"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "bitcode",
  "clap",

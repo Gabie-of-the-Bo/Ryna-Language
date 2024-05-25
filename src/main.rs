@@ -193,6 +193,13 @@ fn main() {
         .subcommand(
             Command::new("setup")
             .about("Set up global configuration and install prelude")
+            .arg(
+                Arg::new("modules")
+                .help("Modules path")
+                .required(false)
+                .long("modules")
+                .short('m')
+            )
         )
         .subcommand(
             Command::new("install")
@@ -469,13 +476,20 @@ fn main() {
             fs::write(config_path, to_string(&config_yml).unwrap()).expect("Unable to update configuration file");
         }
 
-        Some(("setup", _)) => {
-            let value = Text::new("Libraries path:")
-                .with_default("libs")
-                .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
-                .with_placeholder("path/to/modules")
-                .with_help_message("The interpreter will install modules in this folder by default")
-                .prompt().unwrap();
+        Some(("setup", run_args)) => {
+            let value;
+
+            if let Some(v) = run_args.get_one::<String>("modules") {
+                value = v.clone();
+
+            } else {
+                value = Text::new("Libraries path:")
+                    .with_default("libs")
+                    .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
+                    .with_placeholder("path/to/modules")
+                    .with_help_message("The interpreter will install modules in this folder by default")
+                    .prompt().unwrap();
+            }
 
             println!("Updating global configuration...");
 

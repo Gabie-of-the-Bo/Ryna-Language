@@ -1,7 +1,7 @@
 use colored::Colorize;
 use serde::{Serialize, Deserialize};
 
-use crate::{annotations::Annotation, context::NessaContext, parser::Location, types::{Type, BOOL, FLOAT, INT, STR, T_0, T_1, T_2}, ARR_IT_OF, ARR_OF};
+use crate::{annotations::Annotation, context::NessaContext, html_ext::HTMLColorable, parser::Location, types::{Type, BOOL, FLOAT, INT, STR, T_0, T_1, T_2}, ARR_IT_OF, ARR_OF};
 
 pub type InterfaceFunctionHeader = (Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 pub type InterfaceUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, Type, Type);
@@ -61,7 +61,7 @@ impl InterfaceConstraint {
         if !self.args.is_empty() {
             format!(
                 "{}&lt;{}&gt;", 
-                ctx.interfaces[self.id].name.green(),
+                ctx.interfaces[self.id].name.html_green(),
                 self.args.iter().map(|i| i.get_name_html(ctx)).collect::<Vec<_>>().join(", ")
             )
 

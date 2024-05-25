@@ -22,7 +22,7 @@ jobs:
       run: mkdir -p ${{ github.workspace }}/nessa-libs && cargo run --profile release-debug -- setup -m "${{ github.workspace }}/nessa-libs"
 
     - name: Run prelude tests
-      run: ./nessa-libs/prelude/test_all.bash "cargo test --profile release-debug --"
+      run: chmod +x ./nessa-libs/prelude/test_all.bash && ./nessa-libs/prelude/test_all.bash "cargo test --profile release-debug --"
       
     - name: Run unit tests
       run: cargo test --profile release-debug

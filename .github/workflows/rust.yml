@@ -21,7 +21,10 @@ jobs:
       
     - name: Run tests
       run: cargo test --profile release-debug
-      
+    
+    - name: Setup nessa
+      run: mkdir /nessa-libs && cargo run --profile release-debug -- setup -m "/nessa-libs"
+
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1
       with:

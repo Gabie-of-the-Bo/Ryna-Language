@@ -23,24 +23,17 @@ use crate::patterns::Pattern;
 
 pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TypeTemplate {
     pub id: usize,
     pub name: String,
     pub params: Vec<String>,
 
-    #[serde(skip)]
     pub location: Location,
-    
-    #[serde(skip)]
     pub annotations: Vec<Annotation>,
-
-    #[serde(skip)]
     pub attributes: Vec<(String, Type)>,
 
     pub alias: Option<Type>,
-    
-    #[serde(skip)]
     pub patterns: Vec<Pattern>,
 
     #[serde(skip)]

@@ -1,6 +1,6 @@
-use std::{fs, path::Path};
+use std::{cell::RefCell, fs, path::Path};
 
-use crate::{cache::NessaCache, compilation::{CompiledNessaExpr, NessaError, NessaInstruction}, config::{ImportMap, InnerDepGraph, NessaModule}, context::{standard_ctx, NessaContext, NUM_STD_BINOPS, NUM_STD_FNS, NUM_STD_INTS, NUM_STD_INT_IMPL, NUM_STD_MACROS, NUM_STD_NARYOPS, NUM_STD_TYPES, NUM_STD_UNOPS}, execution::ExecutionInfo, functions::Function, interfaces::{Interface, InterfaceImpl}, macros::NessaMacro, operations::Operator, parser::NessaExpr, types::TypeTemplate};
+use crate::{cache::NessaCache, compilation::{CompiledNessaExpr, NessaError, NessaInstruction}, config::{ImportMap, InnerDepGraph, NessaModule}, context::{standard_ctx, NessaContext, NUM_STD_BINOPS, NUM_STD_FNS, NUM_STD_INTS, NUM_STD_INT_IMPL, NUM_STD_MACROS, NUM_STD_NARYOPS, NUM_STD_TYPES, NUM_STD_UNOPS}, execution::ExecutionInfo, functions::Function, interfaces::{Interface, InterfaceImpl}, macros::NessaMacro, operations::Operator, parser::{NessaExpr, Span}, types::TypeTemplate};
 
 use serde::{Serialize, Deserialize};
 use bitcode;
@@ -122,6 +122,16 @@ impl ReducedNessaModule {
         // Reconstruct original context
         std_ctx.cache = self.cache;
 
+        self.type_templates.iter_mut().for_each(|t| {
+            t.parser = Some(|ctx: &NessaContext, c_type, s: &String| {
+                if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
+                    return Ok(o);
+                }
+
+                Err(format!("Unable to parse {} from {}", c_type.name, s))
+            });
+        });
+
         std_ctx.type_templates.append(&mut self.type_templates);
         std_ctx.interfaces.append(&mut self.interfaces);
         std_ctx.interface_impls.append(&mut self.interface_impls);
@@ -223,9 +233,17 @@ pub struct CompiledNessaModule {
 
 impl NessaContext {
     pub fn get_serializable_module(&self, hash: String, instructions: &[NessaInstruction]) -> CompiledNessaModule {
+        let mut reduced_types = self.type_templates[*NUM_STD_TYPES.lock().unwrap().borrow()..].to_vec();
+
+        reduced_types.iter_mut().for_each(|t| {
+            t.attributes.clear();
+            t.annotations.clear();
+            t.patterns.clear();
+        });
+
         return CompiledNessaModule {
             hash, 
-            type_templates: self.type_templates[*NUM_STD_TYPES.lock().unwrap().borrow()..].to_vec(), 
+            type_templates: reduced_types, 
             interface_impls: self.interface_impls[*NUM_STD_INT_IMPL.lock().unwrap().borrow()..].to_vec(), 
             instructions: instructions.iter().map(|i| i.instruction.clone()).collect()
         };

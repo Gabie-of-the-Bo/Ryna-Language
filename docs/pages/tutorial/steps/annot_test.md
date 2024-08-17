@@ -1,4 +1,4 @@
-Nessa allows you to annotate functions in order to test your modules. Let's take a look at how.
+Ryna allows you to annotate functions in order to test your modules. Let's take a look at how.
 
 ## Creating tests
 
@@ -30,7 +30,7 @@ this can be useful when changing your code or when programming with *TDD*.
 In order to execute the tests inside your module you have to use the use the following command:
 
 ```
-nessa run <PATH> --test
+ryna run <PATH> --test
 ```
 
 You can also add optimization and recompilation flags, as seen in the *Getting Started* section.

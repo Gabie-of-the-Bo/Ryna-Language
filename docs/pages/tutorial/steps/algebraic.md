@@ -6,14 +6,14 @@ order to see some applications.
 The mechanics of these types are very simple, you have **sum types** and **product types**. The first ones allow you to define a 
 **tagged union** of data (i.e. data that can be from *any* of the types that conform the sum, but only one at a time). The second one
 is what we would understand as a **tuple**, which holds multiple elements in order. The interesting thing about these is that, when 
-you allow recursion (such as Nessa does), you can create complex data structures called **Algebraic Data Types**. These can be extremely
+you allow recursion (such as Ryna does), you can create complex data structures called **Algebraic Data Types**. These can be extremely
 useful in functional contexts, but simpler types can also be very useful when expressing complex algorithms.
 
-In Nessa, **sum types** are expressed using `|`, so a value that is either an `Int` or a `Float` would be expressed using `Int | Float`. Of course,
+In Ryna, **sum types** are expressed using `|`, so a value that is either an `Int` or a `Float` would be expressed using `Int | Float`. Of course,
 you can add as many **variants** (types in the sum) as you want. On the other hand, **product types** are expressed using tuple-like syntax, so
 `(Int, Float)` would be a tuple containing an `Int` and a `Float`, in that very same order. You can also add as many types as you want to a tuple.
 
-As you might expect, you can mix these with everything we have seen before. All these are valid Nessa types:
+As you might expect, you can mix these with everything we have seen before. All these are valid Ryna types:
 
 ```
 Int | &Float         // Either an Int or a constant reference to a Float
@@ -22,5 +22,5 @@ Int | &Float         // Either an Int or a constant reference to a Float
 Bool | &(Bool, Bool) // Either a Bool or a constant reference to a tuple of two Bools
 ```
 
-Even if these sound very expressive, this is not everything there is to know abot the Nessa type system. There are some special types that we need to talk about
+Even if these sound very expressive, this is not everything there is to know abot the Ryna type system. There are some special types that we need to talk about
 before we dive into generics.

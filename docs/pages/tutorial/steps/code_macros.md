@@ -1,4 +1,4 @@
-In the **Function Macros** section we mentioned that Nessa has a code generation pattern that executes code. Since its complexity is far
+In the **Function Macros** section we mentioned that Ryna has a code generation pattern that executes code. Since its complexity is far
 from the rest, we will dedicate this section to explaining how it works.
 
 ## Syntax
@@ -9,7 +9,7 @@ The syntax of this pattern is simple:
 {| inner_pattern |}
 ```
 
-You can put any macro pattern you want inside those braces and the resulting text will be interpreted as Nessa code. The generated code 
+You can put any macro pattern you want inside those braces and the resulting text will be interpreted as Ryna code. The generated code 
 will execute normally, even importing libraries if necessary, but you will have access to a special function
 not available otherwise: the `emit` function.
 
@@ -58,4 +58,4 @@ print(7 + 32);
 ```
 
 As you can imagine, this opens up possibilities a lot when using macros, since you can even **import libraries** inside them. You can see an extreme example where
-you embed an esoteric language inside Nessa using these macro patterns in the *Learn by example* section.
+you embed an esoteric language inside Ryna using these macro patterns in the *Learn by example* section.

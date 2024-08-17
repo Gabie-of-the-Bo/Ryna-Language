@@ -1,11 +1,11 @@
 The final feature that we will be taking a look at is one is arguably one of the most unique: **macros**.
-Be aware that a macro in Nessa is not the same as a macro in other languages such as C, C++ or even Rust, even though they are 
-close to Rust's. The main difference between Rust's macros and Nessa's is that there is no restriction on the syntax that you can match.
-Let's take a look at how they work by diving into the first kind of macros Nessa has: **function macros**.
+Be aware that a macro in Ryna is not the same as a macro in other languages such as C, C++ or even Rust, even though they are 
+close to Rust's. The main difference between Rust's macros and Ryna's is that there is no restriction on the syntax that you can match.
+Let's take a look at how they work by diving into the first kind of macros Ryna has: **function macros**.
 
 ## Syntax
 
-A function macro can be created in Nessa using this syntax:
+A function macro can be created in Ryna using this syntax:
 
 ```
 syntax macro_name from NDL_Pattern {

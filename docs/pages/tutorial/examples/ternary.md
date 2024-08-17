@@ -1,5 +1,5 @@
 A common construct in programming languages is the ternary operator. Contrary to what the name implies,
-it cannot be implemented easily in Nessa with operators, since they are **eager** and the ternary operator is **lazy**. Let's
+it cannot be implemented easily in Ryna with operators, since they are **eager** and the ternary operator is **lazy**. Let's
 take a look at how to implement it.
 
 ## Syntax

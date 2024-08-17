@@ -1,11 +1,11 @@
 Let's begin this tutorial by talking about something that might be overly thechnical and not necessary: **the memory model**.
-I'll provide a short answer for the more experienced readers so they can skip this and go to the next section: Nessa uses
+I'll provide a short answer for the more experienced readers so they can skip this and go to the next section: Ryna uses
 **reference counting** for every value without **cycle detection**. If you understood what that meant, you are safe to skip 
 this section, else you *should* keep reading, even though this can be very intuitive.
 
 ## Data storage
 
-Nessa stores data into **Data Blocks** that can be referenced by other data blocks:
+Ryna stores data into **Data Blocks** that can be referenced by other data blocks:
 
 ``` mermaid
 %% mermaid
@@ -42,7 +42,7 @@ This is easy, but things get a little more complicated when you start deleting t
 The rules used to delete blocks are the following:
 
 1. A block can only be **safely** deleted if no other blocks are referencing it.
-2. If you try to delete a block whose *RC* is not 0, it will become an *orphan*, which is a Block whose data can only be accessed by reference. This makes sense in the context of Nessa.
+2. If you try to delete a block whose *RC* is not 0, it will become an *orphan*, which is a Block whose data can only be accessed by reference. This makes sense in the context of Ryna.
 3. When you **safely** delete a block, the interpreter decreases the *RC* of every other block it references by 1. **Safely** delete any referenced *orphan* Blocks whose *RC* reaches 0.
 
 Let's illustrate this with an example. Picture what would happen if we tried to delete ```Data C```. Since its *RC* is 0, we can safely delete it and
@@ -100,7 +100,7 @@ graph LR;
 
 If this is the case, then ```Data A``` and ```Data B``` **cannot be deleted**. If we try to delete them in any order we only reach
 a configuration where both are orphan, but have an *RC* of 1. This is called a *cycle* and is not exactly easy to solve. Right now,
-Nessa allows the creation of these and no warning will be given, so a memory leak can indeed be caused.
+Ryna allows the creation of these and no warning will be given, so a memory leak can indeed be caused.
 
 Having said this, a cycle should not be common unless you are doing some strange coding. It's your choice if you want to abuse 
 the system, but be warned that this pattern should be avoided.

@@ -1,4 +1,4 @@
-One of the main features of any *Object Oriented Language* is the definition of **classes**. Nessa supports them, so let's take
+One of the main features of any *Object Oriented Language* is the definition of **classes**. Ryna supports them, so let's take
 a look at the syntax and semantics.
 
 ## Syntax

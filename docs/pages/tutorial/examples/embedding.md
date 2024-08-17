@@ -1,5 +1,5 @@
-Nessa's powerful macro system allows you to execute arbitrary code inside a macro in order to create new functionalities. In this page you
-will learn how to embed a simple esoteric language into Nessa, but be aware that this concept can be turned into something more interesting
+Ryna's powerful macro system allows you to execute arbitrary code inside a macro in order to create new functionalities. In this page you
+will learn how to embed a simple esoteric language into Ryna, but be aware that this concept can be turned into something more interesting
 very easily.
 
 ## About the language
@@ -124,7 +124,7 @@ create a variable inside the macro code pattern by using a variable pattern and 
 |}
 ```
 
-Now comes the hardest part: translating the instructions to valid Nessa code given our simple model. For this, we will translate the
+Now comes the hardest part: translating the instructions to valid Ryna code given our simple model. For this, we will translate the
 `>` and `<` operations as changing `pt`, `+` and `-` as changing the value in `mem[*pt]` and `.` as writing to an array **outside the macro**.
 Interestingly, `[` and `]` can be handled by being translated to `while mem[*pt] != 0 {` and `}`, respectively. We have to be careful
 because every closing brace must be escaped if it is not the one that closes the code pattern (including the ones inside strings).
@@ -164,7 +164,7 @@ The final code that handles the instructions is the following:
 |}
 ```
 
-After all this, we would have a functional macro that lets us embed Brainfuck code into Nessa! This would be the complete code 
+After all this, we would have a functional macro that lets us embed Brainfuck code into Ryna! This would be the complete code 
 and an example:
 
 ```

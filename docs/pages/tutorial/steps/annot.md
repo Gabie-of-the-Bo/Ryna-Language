@@ -1,9 +1,9 @@
 Many programming languages allow the user to add extra information to the structures they define by using **annotations**. 
-You can also use them in Nessa. Let's see how.
+You can also use them in Ryna. Let's see how.
 
 ## Syntax
 
-An annotation in Nessa consists on a **name**, some **positional arguments** and some **named arguments**. Depending on the 
+An annotation in Ryna consists on a **name**, some **positional arguments** and some **named arguments**. Depending on the 
 particular annotation, some arguments might be needed or optional. Also, you can use multiple annotations on a single definition. 
 Here is the syntax:
 
@@ -52,6 +52,6 @@ fn function_name() {
 
 ## Usage
 
-An annotation in Nessa can be put just before any **class**, **syntax**, **function**, **operation** or **interface** definition. Also, you can
+An annotation in Ryna can be put just before any **class**, **syntax**, **function**, **operation** or **interface** definition. Also, you can
 annotate any **function** or **operation** inside an interface definition. In later sections we will take a look at every 
 available annotations defined in the interpreter.

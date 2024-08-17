@@ -1,4 +1,4 @@
-Let's see how we can make use of Nessa's features to program a **Linked List**. This will guide you through all the design process
+Let's see how we can make use of Ryna's features to program a **Linked List**. This will guide you through all the design process
 and all the common pitfalls that you might face.
 
 ## What is a *Linked List*?

@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', _ => {
-    hljs.registerLanguage('nessa', function () {
+    hljs.registerLanguage('ryna', function () {
         return {
             case_insensitive: false, // language is case-insensitive
             keywords: {
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', _ => {
     })
 
     hljs.configure({
-        languages: ['nessa']
+        languages: ['ryna']
     })
 
     document.querySelectorAll('code').forEach((block) => {

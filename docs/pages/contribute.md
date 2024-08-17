@@ -1,10 +1,10 @@
 Here you have some questions that you may have about the development of the language.
 
-## How is Nessa being developed?
+## How is Ryna being developed?
 
-Nessa is a passion project being developed by only a single programmer. The development cycle is rather
+Ryna is a passion project being developed by only a single programmer. The development cycle is rather
 chaotic, adding features as I feel like it and in the order I think is to be expected. Right now, there is no
-community around Nessa and I expect it to stay like this for a long time (and maybe this will not ever change), so there is
+community around Ryna and I expect it to stay like this for a long time (and maybe this will not ever change), so there is
 no need to change my methodology.
 
 In the rare case that this message is no longer applicable, then I guess it would be time to use a more strict

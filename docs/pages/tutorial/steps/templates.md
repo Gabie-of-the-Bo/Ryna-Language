@@ -1,4 +1,4 @@
-One of the most important aspects of the Nessa type system are **templates**. These allow you
+One of the most important aspects of the Ryna type system are **templates**. These allow you
 to pass types as parameters in order to create other types. This is mainly used in function and class
 definitions to prevent code repetition. In this section, we will only explain the basic syntax and
 semantics of templates.
@@ -31,7 +31,7 @@ Array<*>                // Array of anything
 Array<'T>               // Array of 'T (only if 'T is in scope)
 ```
 
-Of course, we can define a class with an arbitrary amount of type parameters, but Nessa does not include any with more than one by default. If we had an
+Of course, we can define a class with an arbitrary amount of type parameters, but Ryna does not include any with more than one by default. If we had an
 hypotetical class called `HashMap` that had two parameters (the type of the key and the type of the value), we could refer to it like this:
 
 ```

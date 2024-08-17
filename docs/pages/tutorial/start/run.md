@@ -2,10 +2,10 @@ Once you have created a project, you will want to run it. For this, you can use 
 
 ## Running
 
-The command to run a Nessa module is as follows:
+The command to run a Ryna module is as follows:
 
 ```
-nessa run <input_path>
+ryna run <input_path>
 ```
 
 Here `input_path` is the folder of the project that you want to run and defaults to the current folder. You may pass the following
@@ -23,7 +23,7 @@ arguments to the command:
 You can automatically generate the documentation for your project by using the following command:
 
 ```
-nessa docs <input_path>
+ryna docs <input_path>
 ```
 
 Here `input_path` is the folder of the project that you want to document.

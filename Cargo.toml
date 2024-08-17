@@ -1,5 +1,5 @@
 [package]
-name = "nessa-language"
+name = "ryna-language"
 description = "An extensible programming language with a strong type system"
 keywords = ["programming-language", "interpreter"]
 categories = ["command-line-utilities", "compilers"]
@@ -23,11 +23,11 @@ lto = false
 panic = "unwind"
 
 [lib]
-name = "nessa"
+name = "ryna"
 path = "src/lib.rs"
 
 [[bin]]
-name = "nessa"
+name = "ryna"
 path = "src/main.rs"
 
 [dependencies]

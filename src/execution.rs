@@ -8,16 +8,16 @@ use malachite::Integer;
 use malachite::num::conversion::traits::{RoundingFrom, SaturatingInto};
 use malachite::rounding_modes::RoundingMode;
 
-use crate::config::{precompile_nessa_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
+use crate::config::{precompile_ryna_module_with_config, read_compiled_cache, save_compiled_cache, compute_project_hash};
 use crate::debug::DebugInfo;
 use crate::functions::FunctionOverload;
 use crate::integer_ext::{is_valid_index, to_usize, ONE};
-use crate::nessa_warning;
+use crate::ryna_warning;
 use crate::types::Type;
-use crate::object::{NessaArray, NessaLambda, NessaTuple, Object, TypeInstance};
-use crate::context::NessaContext;
+use crate::object::{RynaArray, RynaLambda, RynaTuple, Object, TypeInstance};
+use crate::context::RynaContext;
 use crate::operations::Operator;
-use crate::compilation::{CompiledNessaExpr, NessaError};
+use crate::compilation::{CompiledRynaExpr, RynaError};
 
 /*
                                                   ╒══════════════════╕
@@ -25,8 +25,8 @@ use crate::compilation::{CompiledNessaExpr, NessaError};
                                                   ╘══════════════════╛
 */
 
-impl NessaContext {
-    pub fn parse_and_execute_nessa_module(&mut self, code: &String) -> Result<ExecutionInfo, NessaError> {
+impl RynaContext {
+    pub fn parse_and_execute_ryna_module(&mut self, code: &String) -> Result<ExecutionInfo, RynaError> {
         let mut compiled_code = self.parse_and_compile(code)?;
 
         if self.optimize {
@@ -40,7 +40,7 @@ impl NessaContext {
         self.execute_compiled_code::<false>(&compiled_code.into_iter().map(|i| i.instruction).collect::<Vec<_>>(), &[])
     }
 
-    pub fn parse_and_execute_nessa_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+    pub fn parse_and_execute_ryna_project_inner<const DEBUG: bool>(path: String, macro_code: Option<String>, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, RynaError> {
         let combined_hash;
         let all_modules;
         let file_cache;
@@ -57,7 +57,7 @@ impl NessaContext {
                     if let Some(mut code) = read_compiled_cache(&path) {
                         if hash == code.hash {
                             if DEBUG {
-                                nessa_warning!(
+                                ryna_warning!(
                                     "Function timings will not be dumped when executing cached code (use {} to force recompilation)",
                                     "--recompile".green()
                                 );
@@ -72,7 +72,7 @@ impl NessaContext {
             Err(err) => err.emit()
         }
 
-        match precompile_nessa_module_with_config(&path, all_modules, file_cache, optimize, test, force_recompile) {
+        match precompile_ryna_module_with_config(&path, all_modules, file_cache, optimize, test, force_recompile) {
             Ok((mut ctx, code)) => match ctx.compiled_form(&code) {
                 Ok(mut instr) => {
                     if optimize {
@@ -107,8 +107,8 @@ impl NessaContext {
         }
     }
 
-    pub fn parse_and_execute_nessa_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {        
-        Self::parse_and_execute_nessa_project_inner::<DEBUG>(path, None, force_recompile, optimize, test, program_input)
+    pub fn parse_and_execute_ryna_project<const DEBUG: bool>(path: String, force_recompile: bool, optimize: bool, test: bool, program_input: &[String]) -> Result<ExecutionInfo, RynaError> {        
+        Self::parse_and_execute_ryna_project_inner::<DEBUG>(path, None, force_recompile, optimize, test, program_input)
     }
 }
 
@@ -125,9 +125,9 @@ pub struct ExecutionInfo {
     pub captured_output: String
 }
 
-impl NessaContext {
-    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledNessaExpr], debug_info: &[DebugInfo]) -> Result<ExecutionInfo, NessaError> {
-        use CompiledNessaExpr::*;
+impl RynaContext {
+    pub fn execute_compiled_code<const DEBUG: bool>(&mut self, program: &[CompiledRynaExpr], debug_info: &[DebugInfo]) -> Result<ExecutionInfo, RynaError> {
+        use CompiledRynaExpr::*;
 
         const MAX_STACK_FRAMES: usize = 100000;
 
@@ -156,7 +156,7 @@ impl NessaContext {
 
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
-                nessa_instruction!($name, {
+                ryna_instruction!($name, {
                     let _a = tos!();
                     let $a = &*_a.$get_a::<$t>();
     
@@ -168,7 +168,7 @@ impl NessaContext {
 
         macro_rules! bin_op {
             ($name: expr, $a: ident, $b: ident, $get_a: ident, $get_b: ident, $t: ty, $op: expr) => {
-                nessa_instruction!($name, {
+                ryna_instruction!($name, {
                     let _a = tos!();
                     let _b = tos!();
                     let $a = &*_a.$get_a::<$t>();
@@ -180,7 +180,7 @@ impl NessaContext {
             };
         }
 
-        macro_rules! nessa_instruction {
+        macro_rules! ryna_instruction {
             ($name: expr, $expr: expr) => {
                 if DEBUG {                    
                     let now = Instant::now();
@@ -215,17 +215,17 @@ impl NessaContext {
                 let arr = tos!();
                 let first = tos!();
 
-                let arr = &*arr.$deref_arr::<NessaArray>();
+                let arr = &*arr.$deref_arr::<RynaArray>();
                 let idx = &*first.get::<Integer>();
 
                 if !is_valid_index(idx) {
-                    return Err(NessaError::execution_error(format!("{} is not a valid index", idx)));
+                    return Err(RynaError::execution_error(format!("{} is not a valid index", idx)));
                 
                 } else {
                     let native_idx = to_usize(idx);
                     
                     if arr.elements.len() <= native_idx {
-                        return Err(NessaError::execution_error(format!("{} is higher than the length of the array ({})", idx, arr.elements.len())));
+                        return Err(RynaError::execution_error(format!("{} is higher than the length of the array ({})", idx, arr.elements.len())));
     
                     } else {
                         stack.push(arr.elements[native_idx].$ref_method());
@@ -239,7 +239,7 @@ impl NessaContext {
         macro_rules! check_call_stack_limit {
             () => {
                 if call_stack.len() > MAX_STACK_FRAMES {
-                    return Err(NessaError::execution_error(format!("Too many stack frames (max. of {})", MAX_STACK_FRAMES)));
+                    return Err(RynaError::execution_error(format!("Too many stack frames (max. of {})", MAX_STACK_FRAMES)));
                 }
             }
         }
@@ -287,7 +287,7 @@ impl NessaContext {
         macro_rules! lambda_call {
             ($lambda_ref: ident) => {
                 let arg = tos!();
-                let f = &arg.$lambda_ref::<NessaLambda>();
+                let f = &arg.$lambda_ref::<RynaLambda>();
 
                 stack.extend(f.captures.iter().rev().cloned());
                 
@@ -299,32 +299,32 @@ impl NessaContext {
 
         loop {
             match fetch_opcode!() {
-                Empty => nessa_instruction!("Empty", {
+                Empty => ryna_instruction!("Empty", {
                     stack.push(Object::empty());
                     ip += 1;
                 }),
 
-                Bool(obj) => nessa_instruction!("Bool", {
+                Bool(obj) => ryna_instruction!("Bool", {
                     stack.push(Object::new(*obj));
                     ip += 1;
                 }),
 
-                Float(obj) => nessa_instruction!("Float", {
+                Float(obj) => ryna_instruction!("Float", {
                     stack.push(Object::new(*obj));
                     ip += 1;
                 }),
 
-                Int(obj) => nessa_instruction!("Int", {
+                Int(obj) => ryna_instruction!("Int", {
                     stack.push(Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                Str(obj) => nessa_instruction!("Str", {
+                Str(obj) => ryna_instruction!("Str", {
                     stack.push(Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                Array(length, t) => nessa_instruction!("Array", {
+                Array(length, t) => ryna_instruction!("Array", {
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect();
 
@@ -333,7 +333,7 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                Lambda(pos, cap, args, ret) => nessa_instruction!("Lambda", {
+                Lambda(pos, cap, args, ret) => ryna_instruction!("Lambda", {
                     let start_idx = stack.len() - cap;
                     let captures = stack.drain(start_idx..).rev().collect();
 
@@ -341,7 +341,7 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                Construct(id, length, ts) => nessa_instruction!("Construct", {
+                Construct(id, length, ts) => ryna_instruction!("Construct", {
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect();
 
@@ -354,7 +354,7 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                AttributeAssign(attr_idx) => nessa_instruction!("AttributeAssign", {
+                AttributeAssign(attr_idx) => ryna_instruction!("AttributeAssign", {
                     let a = tos!();
                     let b = tos!();
 
@@ -363,37 +363,37 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                AttributeMove(idx) => nessa_instruction!("AttributeMove", {
+                AttributeMove(idx) => ryna_instruction!("AttributeMove", {
                     let elem = tos!();
                     stack.push(elem.get::<TypeInstance>().attributes[*idx].move_contents_if_ref());
                     ip += 1;
                 }),
 
-                AttributeRef(idx) => nessa_instruction!("AttributeRef", {
+                AttributeRef(idx) => ryna_instruction!("AttributeRef", {
                     let elem = tos!();
                     stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_ref());
                     ip += 1;
                 }),
 
-                AttributeMut(idx) => nessa_instruction!("AttributeMut", {
+                AttributeMut(idx) => ryna_instruction!("AttributeMut", {
                     let elem = tos!();
                     stack.push(elem.deref::<TypeInstance>().attributes[*idx].get_mut());
                     ip += 1;
                 }),
 
-                AttributeCopy(idx) => nessa_instruction!("AttributeCopy", {
+                AttributeCopy(idx) => ryna_instruction!("AttributeCopy", {
                     let elem = tos!();
                     stack.push(elem.deref::<TypeInstance>().attributes[*idx].deref_deep_clone());
                     ip += 1;
                 }),
 
-                AttributeDeref(idx) => nessa_instruction!("AttributeDeref", {
+                AttributeDeref(idx) => ryna_instruction!("AttributeDeref", {
                     let elem = tos!();
                     stack.push(elem.deref::<TypeInstance>().attributes[*idx].deref_if_ref());
                     ip += 1;
                 }),
 
-                Tuple(length) => nessa_instruction!("Tuple", {     
+                Tuple(length) => ryna_instruction!("Tuple", {     
                     let start_idx = stack.len() - length;
                     let args = stack.drain(start_idx..).rev().collect::<Vec<_>>();
                     let types = args.iter().map(|i| i.get_type()).collect::<Vec<_>>();
@@ -403,142 +403,142 @@ impl NessaContext {
                     ip += 1;
                 }),
 
-                TupleElemMove(idx) => nessa_instruction!("TupleElemMove", {
+                TupleElemMove(idx) => ryna_instruction!("TupleElemMove", {
                     let elem = tos!();
-                    stack.push(elem.get::<NessaTuple>().elements[*idx].move_contents_if_ref());
+                    stack.push(elem.get::<RynaTuple>().elements[*idx].move_contents_if_ref());
                     ip += 1;
                 }),
 
-                TupleElemRef(idx) => nessa_instruction!("TupleElemRef", {
+                TupleElemRef(idx) => ryna_instruction!("TupleElemRef", {
                     let elem = tos!();
-                    stack.push(elem.deref::<NessaTuple>().elements[*idx].get_ref());
+                    stack.push(elem.deref::<RynaTuple>().elements[*idx].get_ref());
                     ip += 1;
                 }),
 
-                TupleElemMut(idx) => nessa_instruction!("TupleElemMut", {
+                TupleElemMut(idx) => ryna_instruction!("TupleElemMut", {
                     let elem = tos!();
-                    stack.push(elem.deref::<NessaTuple>().elements[*idx].get_mut());
+                    stack.push(elem.deref::<RynaTuple>().elements[*idx].get_mut());
                     ip += 1;
                 }),
 
-                TupleElemCopy(idx) => nessa_instruction!("TupleElemCopy", {
+                TupleElemCopy(idx) => ryna_instruction!("TupleElemCopy", {
                     let elem = tos!();
-                    stack.push(elem.deref::<NessaTuple>().elements[*idx].deref_deep_clone());
+                    stack.push(elem.deref::<RynaTuple>().elements[*idx].deref_deep_clone());
                     ip += 1;
                 }),
 
-                TupleElemDeref(idx) => nessa_instruction!("TupleElemDeref", {
+                TupleElemDeref(idx) => ryna_instruction!("TupleElemDeref", {
                     let elem = tos!();
-                    stack.push(elem.deref::<NessaTuple>().elements[*idx].deref_if_ref());
+                    stack.push(elem.deref::<RynaTuple>().elements[*idx].deref_if_ref());
                     ip += 1;
                 }),
 
-                IdxMove => nessa_instruction!("IdxMove", { idx_op!(get, move_contents_if_ref); }),
-                IdxRef => nessa_instruction!("IdxRef", { idx_op!(deref, get_ref_nostack); }),
-                IdxMut => nessa_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
-                IdxMoveRef => nessa_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
+                IdxMove => ryna_instruction!("IdxMove", { idx_op!(get, move_contents_if_ref); }),
+                IdxRef => ryna_instruction!("IdxRef", { idx_op!(deref, get_ref_nostack); }),
+                IdxMut => ryna_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
+                IdxMoveRef => ryna_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
-                StoreIntVariable(id, obj) => nessa_instruction!("StoreIntVariable", {
+                StoreIntVariable(id, obj) => ryna_instruction!("StoreIntVariable", {
                     update_max_var!(*id);
                     store_variable!(*id + offset, Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreStringVariable(id, obj) => nessa_instruction!("StoreStringVariable", {
+                StoreStringVariable(id, obj) => ryna_instruction!("StoreStringVariable", {
                     update_max_var!(*id);
                     store_variable!(*id + offset, Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreBoolVariable(id, obj) => nessa_instruction!("StoreBoolVariable", {
+                StoreBoolVariable(id, obj) => ryna_instruction!("StoreBoolVariable", {
                     update_max_var!(*id);
                     store_variable!(*id + offset, Object::new(*obj));
                     ip += 1;
                 }),
 
-                StoreFloatVariable(id, obj) => nessa_instruction!("StoreFloatVariable", {
+                StoreFloatVariable(id, obj) => ryna_instruction!("StoreFloatVariable", {
                     update_max_var!(*id);
                     store_variable!(*id + offset, Object::new(*obj));
                     ip += 1;
                 }),
                 
-                StoreVariable(id) => nessa_instruction!("StoreVariable", {
+                StoreVariable(id) => ryna_instruction!("StoreVariable", {
                     update_max_var!(*id);
                     store_variable!(*id + offset, tos!());
                     ip += 1;
                 }),
 
-                GetVariable(id) => nessa_instruction!("GetVariable", {
+                GetVariable(id) => ryna_instruction!("GetVariable", {
                     stack.push(get_variable!(*id + offset).get_mut());
                     ip += 1;
                 }),
 
-                CloneVariable(id) => nessa_instruction!("CloneVariable", {
+                CloneVariable(id) => ryna_instruction!("CloneVariable", {
                     stack.push(get_variable!(*id + offset).clone());
                     ip += 1;
                 }),
 
-                RefVariable(id) => nessa_instruction!("RefVariable", {
+                RefVariable(id) => ryna_instruction!("RefVariable", {
                     stack.push(get_variable!(*id + offset).get_ref());
                     ip += 1;
                 }),
 
-                DerefVariable(id) => nessa_instruction!("DerefVariable", {
+                DerefVariable(id) => ryna_instruction!("DerefVariable", {
                     stack.push(get_variable!(*id + offset).deref_if_ref());
                     ip += 1;
                 }),
 
-                CopyVariable(id) => nessa_instruction!("CopyVariable", {
+                CopyVariable(id) => ryna_instruction!("CopyVariable", {
                     stack.push(get_variable!(*id + offset).deref_deep_clone());
                     ip += 1;
                 }),
 
-                MoveVariable(id) => nessa_instruction!("MoveVariable", {
+                MoveVariable(id) => ryna_instruction!("MoveVariable", {
                     stack.push(get_variable!(*id + offset).move_contents_if_ref());
                     ip += 1;
                 }),
 
-                Assign => nessa_instruction!("Assign", {
+                Assign => ryna_instruction!("Assign", {
                     let a = tos!();
                     let b = tos!();
 
                     if let Err(msg) = a.assign(b, self) {
-                        return Err(NessaError::execution_error(msg));
+                        return Err(RynaError::execution_error(msg));
                     }
 
                     ip += 1;
                 }),
 
-                AssignToVar(id) => nessa_instruction!("AssignToVar", {
+                AssignToVar(id) => ryna_instruction!("AssignToVar", {
                     let var = &get_variable!(*id + offset);
                     let value = tos!();
 
                     if let Err(msg) = var.assign_direct(value, self) {
-                        return Err(NessaError::execution_error(msg));
+                        return Err(RynaError::execution_error(msg));
                     }
 
                     ip += 1;
                 }),
 
-                AssignToVarDirect(id) => nessa_instruction!("AssignToVarDirect", {
+                AssignToVarDirect(id) => ryna_instruction!("AssignToVarDirect", {
                     let var = &get_variable!(*id + offset);
                     let value = tos!();
 
                     if let Err(msg) = var.assign(value, self) {
-                        return Err(NessaError::execution_error(msg));
+                        return Err(RynaError::execution_error(msg));
                     }
 
                     ip += 1;
                 }),
 
-                Drop => nessa_instruction!("Drop", {
+                Drop => ryna_instruction!("Drop", {
                     tos!();
                     ip += 1;
                 }),
 
                 Jump(to) => ip = *to as i32,
                 RelativeJump(to) => ip += *to,
-                RelativeJumpIfFalse(to, false) => nessa_instruction!("RelativeJumpIfFalse", {
+                RelativeJumpIfFalse(to, false) => ryna_instruction!("RelativeJumpIfFalse", {
                     if !*tos!().get::<bool>() {
                         ip += *to as i32;
 
@@ -547,7 +547,7 @@ impl NessaContext {
                     }
                 }),
 
-                RelativeJumpIfTrue(to, false) => nessa_instruction!("RelativeJumpIfTrue", {
+                RelativeJumpIfTrue(to, false) => ryna_instruction!("RelativeJumpIfTrue", {
                     if *tos!().get::<bool>() {
                         ip += *to as i32;
 
@@ -556,7 +556,7 @@ impl NessaContext {
                     }
                 }),
 
-                RelativeJumpIfFalse(to, true) => nessa_instruction!("RelativeJumpIfFalse", {
+                RelativeJumpIfFalse(to, true) => ryna_instruction!("RelativeJumpIfFalse", {
                     if !*stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
 
@@ -565,7 +565,7 @@ impl NessaContext {
                     }
                 }),
 
-                RelativeJumpIfTrue(to, true) => nessa_instruction!("RelativeJumpIfTrue", {
+                RelativeJumpIfTrue(to, true) => ryna_instruction!("RelativeJumpIfTrue", {
                     if *stack.last().unwrap().get::<bool>() {
                         ip += *to as i32;
 
@@ -574,11 +574,11 @@ impl NessaContext {
                     }
                 }),
 
-                Call(to) => nessa_instruction!("Call", { add_stack_frame!(*to as i32); }),
-                LambdaCall => nessa_instruction!("LambdaCall", { lambda_call!(get); }),
-                LambdaCallRef => nessa_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+                Call(to) => ryna_instruction!("Call", { add_stack_frame!(*to as i32); }),
+                LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
+                LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 
-                Return => nessa_instruction!("Return", {
+                Return => ryna_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
                     let idx = call_stack.len() - 1;
                     let l = call_stack[idx].2.max(0) as usize;
@@ -590,7 +590,7 @@ impl NessaContext {
                     offset = prev_offset;
                 }), 
 
-                NativeFunctionCall(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCall", {
+                NativeFunctionCall(func_id, ov_id, type_args) => ryna_instruction!("NativeFunctionCall", {
                     if let FunctionOverload { args: Type::And(v), ret: r, function: Some(f), .. } = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
@@ -600,7 +600,7 @@ impl NessaContext {
 
                         match f(type_args, r, args, self) {
                             Ok(obj) => stack.push(obj),
-                            Err(msg) => return Err(NessaError::execution_error(msg))
+                            Err(msg) => return Err(RynaError::execution_error(msg))
                         };
 
                         ip += 1;
@@ -610,7 +610,7 @@ impl NessaContext {
                     }
                 }),
 
-                NativeFunctionCallNoRet(func_id, ov_id, type_args) => nessa_instruction!("NativeFunctionCallNoRet", {
+                NativeFunctionCallNoRet(func_id, ov_id, type_args) => ryna_instruction!("NativeFunctionCallNoRet", {
                     if let FunctionOverload { args: Type::And(v), ret: r, function: Some(f), .. } = &self.functions[*func_id].overloads[*ov_id] {
                         let mut args = Vec::with_capacity(v.len());
 
@@ -619,7 +619,7 @@ impl NessaContext {
                         }
 
                         if let Err(msg) = f(type_args, r, args, self) {
-                            return Err(NessaError::execution_error(msg));
+                            return Err(RynaError::execution_error(msg));
                         };
 
                         ip += 1;
@@ -629,7 +629,7 @@ impl NessaContext {
                     }
                 }),
 
-                UnaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("UnaryOperatorCall", {
+                UnaryOperatorCall(op_id, ov_id, type_args) => ryna_instruction!("UnaryOperatorCall", {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = tos!();
 
@@ -637,7 +637,7 @@ impl NessaContext {
 
                         match ov.operation.unwrap()(type_args, &ov.ret, obj) {
                             Ok(obj) => stack.push(obj),
-                            Err(msg) => return Err(NessaError::execution_error(msg))
+                            Err(msg) => return Err(RynaError::execution_error(msg))
                         };
 
                         ip += 1;
@@ -647,14 +647,14 @@ impl NessaContext {
                     }
                 }),
 
-                UnaryOperatorCallNoRet(op_id, ov_id, type_args) => nessa_instruction!("UnaryOperatorCallNoRet", {
+                UnaryOperatorCallNoRet(op_id, ov_id, type_args) => ryna_instruction!("UnaryOperatorCallNoRet", {
                     if let Operator::Unary{operations, ..} = &self.unary_ops[*op_id] {
                         let obj = tos!();
 
                         let ov = &operations[*ov_id];
 
                         if let Err(msg) = ov.operation.unwrap()(type_args, &ov.ret, obj) {
-                            return Err(NessaError::execution_error(msg));
+                            return Err(RynaError::execution_error(msg));
                         };
 
                         ip += 1;
@@ -664,7 +664,7 @@ impl NessaContext {
                     }
                 }),
 
-                BinaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("BinaryOperatorCall", {
+                BinaryOperatorCall(op_id, ov_id, type_args) => ryna_instruction!("BinaryOperatorCall", {
                     if let Operator::Binary{operations, ..} = &self.binary_ops[*op_id] {
                         let a = tos!();
                         let b = tos!();
@@ -673,7 +673,7 @@ impl NessaContext {
 
                         match ov.operation.unwrap()(type_args, &ov.ret, a, b, self) {
                             Ok(obj) => stack.push(obj),
-                            Err(msg) => return Err(NessaError::execution_error(msg))
+                            Err(msg) => return Err(RynaError::execution_error(msg))
                         };
                         
                         ip += 1;
@@ -683,7 +683,7 @@ impl NessaContext {
                     }
                 }),
 
-                BinaryOperatorCallNoRet(op_id, ov_id, type_args) => nessa_instruction!("BinaryOperatorCallNoRet", {
+                BinaryOperatorCallNoRet(op_id, ov_id, type_args) => ryna_instruction!("BinaryOperatorCallNoRet", {
                     if let Operator::Binary{operations, ..} = &self.binary_ops[*op_id] {
                         let a = tos!();
                         let b = tos!();
@@ -691,7 +691,7 @@ impl NessaContext {
                         let ov = &operations[*ov_id];
 
                         if let Err(msg) = ov.operation.unwrap()(type_args, &ov.ret, a, b, self) {
-                            return Err(NessaError::execution_error(msg));
+                            return Err(RynaError::execution_error(msg));
                         };
                         
                         ip += 1;
@@ -701,13 +701,13 @@ impl NessaContext {
                     }
                 }),
 
-                NaryOperatorCall(op_id, ov_id, type_args) => nessa_instruction!("NaryOperatorCall", {
+                NaryOperatorCall(op_id, ov_id, type_args) => ryna_instruction!("NaryOperatorCall", {
                     if let Operator::Nary{operations, ..} = &self.nary_ops[*op_id] {
                         let op_ov = &operations[*ov_id];
                         let res = op_ov.operation.unwrap()((&mut stack, &mut offset, &mut call_stack, &mut ip), type_args, &op_ov.ret);
 
                         if let Err(msg) = res {
-                            return Err(NessaError::execution_error(msg));
+                            return Err(RynaError::execution_error(msg));
                         }
 
                     } else {
@@ -717,49 +717,49 @@ impl NessaContext {
 
                 ToFloat => unary_op!("ToFloat", a, get, Integer, f64::rounding_from(a, RoundingMode::Exact).0),
 
-                Ref => nessa_instruction!("Ref", {
+                Ref => ryna_instruction!("Ref", {
                     let a = tos!();
                     stack.push(a.get_ref_nostack());
                     ip += 1;
                 }),
 
-                Mut => nessa_instruction!("Mut", {
+                Mut => ryna_instruction!("Mut", {
                     let a = tos!();
                     stack.push(a.get_mut_nostack());
                     ip += 1;
                 }),
 
-                Copy => nessa_instruction!("Copy", {
+                Copy => ryna_instruction!("Copy", {
                     let a = tos!();
                     stack.push(a.deref_obj().deep_clone());
                     ip += 1;
                 }),
 
-                Deref => nessa_instruction!("Deref", {
+                Deref => ryna_instruction!("Deref", {
                     let a = tos!();
                     stack.push(a.deref_obj());
                     ip += 1;
                 }),
 
-                Demut => nessa_instruction!("Demut", {
+                Demut => ryna_instruction!("Demut", {
                     let a = tos!();
                     stack.push(a.get_ref());
                     ip += 1;
                 }),
 
-                Move => nessa_instruction!("Move", {
+                Move => ryna_instruction!("Move", {
                     let a = tos!();
                     stack.push(a.move_contents());
                     ip += 1;
                 }),
 
-                Inc => nessa_instruction!("Inc", {
+                Inc => ryna_instruction!("Inc", {
                     let a = tos!();
                     *a.deref::<Integer>() += &*ONE;
                     ip += 1;
                 }),
 
-                Dec => nessa_instruction!("Dec", {
+                Dec => ryna_instruction!("Dec", {
                     let a = tos!();
                     *a.deref::<Integer>() -= &*ONE;
                     ip += 1;
@@ -867,7 +867,7 @@ mod tests {
             let a = test(100);
         ";
 
-        ctx.parse_and_execute_nessa_module(&code_str.into()).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str.into()).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(5050)));
     }
@@ -882,7 +882,7 @@ mod tests {
             let v_2: String = \"test\";
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(0)));
         assert_eq!(ctx.variables[1], Object::new(true));
@@ -902,7 +902,7 @@ mod tests {
             inc(v_2);
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(false));
         assert_eq!(ctx.variables[1], Object::new(Integer::from(7)));
@@ -956,7 +956,7 @@ mod tests {
             }
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(Object::new(Integer::from(5))), INT));
         assert_eq!(ctx.variables[1], Object::arr_it(Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
@@ -1034,7 +1034,7 @@ mod tests {
             }
         ".to_string();
         
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(
             Object::new(Integer::from(2)),
@@ -1094,7 +1094,7 @@ mod tests {
             let d = a`b, c´;
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
     }
 
     #[test]
@@ -1171,7 +1171,7 @@ mod tests {
             let v_8 = test_8(100);
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(5)));
         assert_eq!(ctx.variables[1], Object::new(Integer::from(0)).get_mut());
@@ -1196,7 +1196,7 @@ mod tests {
             let b = test<String>();
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(), INT));
         assert_eq!(ctx.variables[1], Object::arr(vec!(), STR));
@@ -1212,7 +1212,7 @@ mod tests {
             let b = sum<String>(\"test\", \"tset\");
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(11)));
         assert_eq!(ctx.variables[1], Object::new("testtset".to_string()));
@@ -1233,7 +1233,7 @@ mod tests {
             let b = ~<String>\"test\";
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(14)));
         assert_eq!(ctx.variables[1], Object::new("testtest".to_string()));
@@ -1251,7 +1251,7 @@ mod tests {
             let b = \"test\"<String>~;
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(14)));
         assert_eq!(ctx.variables[1], Object::new("testtest".to_string()));
@@ -1269,7 +1269,7 @@ mod tests {
             let b = \"test\" <String>@ \"tset\";
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(13)));
         assert_eq!(ctx.variables[1], Object::new("testtset".to_string()));
@@ -1287,7 +1287,7 @@ mod tests {
             let b = \"test\"<String, String>`\"tttt\"´;
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(11)));
         assert_eq!(ctx.variables[1], Object::new("testtttt".to_string()));
@@ -1320,7 +1320,7 @@ mod tests {
         }
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(55)));
 
@@ -1357,7 +1357,7 @@ mod tests {
         }
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::new(Integer::from(55)));
     }
@@ -1380,7 +1380,7 @@ mod tests {
         let c = r.end;
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         let id = ctx.get_type_id("Range".into()).unwrap();
 
@@ -1412,7 +1412,7 @@ mod tests {
         let c = a.obj;
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         let id = ctx.get_type_id("Option".into()).unwrap();
 
@@ -1450,7 +1450,7 @@ mod tests {
         let e = c<Int, Bool, Int>(5, false);
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[1], Object::new(Integer::from(8)));
         assert_eq!(ctx.variables[3], Object::new(Integer::from(7)));
@@ -1465,7 +1465,7 @@ mod tests {
         let a = apply<Int, @(Int => Int), Int>(5, f);
         ".to_string();
 
-        ctx.parse_and_execute_nessa_module(&code_str).unwrap();
+        ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[2], Object::new(Integer::from(25)));
     }

@@ -1,11 +1,11 @@
 use std::{fs::read_to_string, time::Duration};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use nessa::context::standard_ctx;
+use ryna::context::standard_ctx;
 
 pub fn execution_benchmarks(c: &mut Criterion) {
     let files = [
-        "benches/sources/primality.nessa",
+        "benches/sources/primality.ryna",
     
     ].iter().map(|path| {
         (path, read_to_string(path).expect("Unable to locate file"))

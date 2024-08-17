@@ -6,11 +6,11 @@ use serde::{Serialize, Deserialize};
 use malachite::Integer;
 
 use crate::annotations::Annotation;
-use crate::context::NessaContext;
+use crate::context::RynaContext;
 use crate::html_ext::HTMLColorable;
 use crate::id_mapper::IdMapper;
 use crate::interfaces::InterfaceConstraint;
-use crate::nessa_error;
+use crate::ryna_error;
 use crate::object::Object;
 use crate::parser::Location;
 use crate::patterns::Pattern;
@@ -21,7 +21,7 @@ use crate::patterns::Pattern;
                                                   ╘══════════════════╛
 */
 
-pub type ParsingFunction = fn(&NessaContext, &TypeTemplate, &String) -> Result<Object, String>;
+pub type ParsingFunction = fn(&RynaContext, &TypeTemplate, &String) -> Result<Object, String>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TypeTemplate {
@@ -136,7 +136,7 @@ impl Type {
         }
     }
 
-    pub fn get_name(&self, ctx: &NessaContext) -> String {
+    pub fn get_name(&self, ctx: &RynaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
             Type::SelfType => format!("{}", "Self".green()),
@@ -180,7 +180,7 @@ impl Type {
         }
     }
 
-    pub fn get_name_html(&self, ctx: &NessaContext) -> String {
+    pub fn get_name_html(&self, ctx: &RynaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
             Type::SelfType => format!("{}", "Self".html_cyan()),
@@ -224,7 +224,7 @@ impl Type {
         }
     }
 
-    pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
+    pub fn get_name_plain(&self, ctx: &RynaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
             Type::SelfType => "Self".to_string(),
@@ -423,22 +423,22 @@ impl Type {
         };
     }
 
-    pub fn bindable_to(&self, other: &Type, ctx: &NessaContext) -> bool {
+    pub fn bindable_to(&self, other: &Type, ctx: &RynaContext) -> bool {
         self.template_bindable_to(other, &mut HashMap::new(), &mut HashMap::new(), ctx)
     }
 
-    pub fn bindable_to_subtitutions(&self, other: &Type, ctx: &NessaContext) -> (bool, HashMap<usize, Type>) {
+    pub fn bindable_to_subtitutions(&self, other: &Type, ctx: &RynaContext) -> (bool, HashMap<usize, Type>) {
         let mut assignments = HashMap::new();
         let res = self.template_bindable_to(other, &mut assignments, &mut HashMap::new(), ctx);
 
         (res, assignments)
     }
 
-    pub fn bindable_to_template(&self, other: &Type, templates: &[Type], ctx: &NessaContext) -> bool {
+    pub fn bindable_to_template(&self, other: &Type, templates: &[Type], ctx: &RynaContext) -> bool {
         return self.template_bindable_to(other, &mut templates.iter().cloned().enumerate().collect(), &mut HashMap::new(), ctx);
     }
 
-    pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>, ctx: &NessaContext) -> bool {
+    pub fn template_bindable_to(&self, other: &Type, t_assignments: &mut HashMap<usize, Type>, t_deps: &mut HashMap<usize, HashSet<usize>>, ctx: &RynaContext) -> bool {
         return match (self, other) {
             (_, Type::Wildcard) => true,
 
@@ -660,7 +660,7 @@ impl Type {
                     res.sub_templates_rec(args, rec - 1)
                     
                 } else {
-                    nessa_error!("Exceeded type recursion limit (100)"); // TODO: return a compiler error
+                    ryna_error!("Exceeded type recursion limit (100)"); // TODO: return a compiler error
                 }
             },
             Type::Template(id, t) => Type::Template(*id, t.iter().map(|i| i.sub_templates_rec(args, rec)).collect()),
@@ -687,9 +687,9 @@ impl Type {
         };
     }
 
-    pub fn map_type(&self, ctx: &mut NessaContext, other_ctx: &NessaContext, id_mapper: &mut IdMapper, l: &Location) -> Type {
-        self.map_basic_types(&mut |id| ctx.map_nessa_class(other_ctx, id, id_mapper, l))
-            .map_interfaces(&mut |id| ctx.map_nessa_interface(other_ctx, id, id_mapper, l))
+    pub fn map_type(&self, ctx: &mut RynaContext, other_ctx: &RynaContext, id_mapper: &mut IdMapper, l: &Location) -> Type {
+        self.map_basic_types(&mut |id| ctx.map_ryna_class(other_ctx, id, id_mapper, l))
+            .map_interfaces(&mut |id| ctx.map_ryna_interface(other_ctx, id, id_mapper, l))
     }
 
     pub fn map_basic_types(&self, mapping: &mut impl FnMut(usize) -> Result<usize, String>) -> Type {
@@ -765,7 +765,7 @@ pub const T_1: Type = Type::TemplateParam(1, vec!());
 pub const T_2: Type = Type::TemplateParam(2, vec!());
 
 // Standard context
-pub fn standard_types(ctx: &mut NessaContext) {
+pub fn standard_types(ctx: &mut RynaContext) {
     ctx.define_type(Location::none(), vec!(), "Int".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<Integer>().map(Object::new).map_err(|_| "Invalid Int format".into()))).unwrap();
     ctx.define_type(Location::none(), vec!(), "Float".into(), vec!(), vec!(), None, vec!(), Some(|_, _, s| s.parse::<f64>().map(Object::new).map_err(|_| "Invalid float format".to_string()))).unwrap();
     ctx.define_type(Location::none(), vec!(), "String".into(), vec!(), vec!(), None, vec!(), None).unwrap();

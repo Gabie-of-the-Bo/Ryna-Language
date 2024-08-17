@@ -616,13 +616,13 @@ pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize:
         final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 
-    // Add nessa version
+    // Add ryna version
     final_hash.push_str(env!("CARGO_PKG_VERSION"));
 
-    // Add nessa optimization flag
+    // Add ryna optimization flag
     final_hash.push_str(&optimize.to_string());
 
-    // Add nessa test flag
+    // Add ryna test flag
     final_hash.push_str(&test.to_string());
 
     Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache))
@@ -694,7 +694,7 @@ pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, RynaError> {
 
 impl RynaGlobalConfig {
     pub fn load() -> RynaGlobalConfig {
-        if let Some(proj_dirs) = ProjectDirs::from("", "",  "nessa-language") {
+        if let Some(proj_dirs) = ProjectDirs::from("", "",  "ryna-language") {
             let config_path = proj_dirs.config_dir();
             let config_file_path = config_path.join("config.yml");
     

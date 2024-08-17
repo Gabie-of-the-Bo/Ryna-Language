@@ -259,7 +259,7 @@ impl RynaContext {
         macro_rules! get_variable {
             ($id: expr) => {
                 // SAFETY: this is safe as long as an storage is made before the access, which
-                // is guaranteed by the Nessa compiler
+                // is guaranteed by the Ryna compiler
                 unsafe { self.variables.get_unchecked($id) }
             }
         }

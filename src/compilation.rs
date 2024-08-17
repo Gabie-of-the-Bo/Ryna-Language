@@ -933,9 +933,9 @@ impl RynaContext {
 }
 
 /*
-    ╒═══════════════════════╕
-    │ Compiled Nessa struct │
-    ╘═══════════════════════╛
+    ╒══════════════════════╕
+    │ Compiled Ryna struct │
+    ╘══════════════════════╛
 */
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -85,13 +85,13 @@ fn main() {
         ╘══════════════════════════╛
     */
 
-    let mut cli = Command::new("nessa")
+    let mut cli = Command::new("ryna")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
-        .about("Executes Nessa code")
+        .about("Executes Ryna code")
         .subcommand(
             Command::new("run")
-                .about("Run Nessa project")
+                .about("Run Ryna project")
                 .arg(
                     Arg::new("INPUT")
                     .help("Specifies the file you want to execute")
@@ -141,7 +141,7 @@ fn main() {
         )
         .subcommand(
             Command::new("new")
-            .about("Create Nessa project with config files")
+            .about("Create Ryna project with config files")
             .arg(
                 Arg::new("name")
                 .help("Project name")
@@ -174,7 +174,7 @@ fn main() {
         )
         .subcommand(
             Command::new("add")
-            .about("Add dependency to a Nessa project")
+            .about("Add dependency to a Ryna project")
             .arg(
                 Arg::new("name")
                 .help("Module name")
@@ -407,7 +407,7 @@ fn main() {
             }
 
             if !main_path.exists() {
-                ryna_error!("No main nessa file!");
+                ryna_error!("No main ryna file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
@@ -562,7 +562,7 @@ fn main() {
                 deps_yml.module_paths.push(CONFIG.read().unwrap().modules_path.clone());
             
             } else {
-                ryna_error!("Default modules path was not found! Try executing nessa setup");    
+                ryna_error!("Default modules path was not found! Try executing ryna setup");    
             }
 
             if let Some(m) = run_args.get_one::<String>("modules") {

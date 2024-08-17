@@ -73,7 +73,7 @@ impl UsageCache {
     }
 }
 
-// Full Nessa cache
+// Full Ryna cache
 
 #[allow(clippy::type_complexity)]
 #[derive(Default, Clone, Serialize, Deserialize)]

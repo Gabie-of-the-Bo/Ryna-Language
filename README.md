@@ -1,27 +1,27 @@
-[![Rust](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml/badge.svg)](https://github.com/Gabie-of-the-Bo/Nessa-Language/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
-[![Webpage](https://img.shields.io/badge/Webpage-online-green)](https://gabie-of-the-bo.github.io/Nessa-Language/)
+[![Rust](https://github.com/Gabie-of-the-Bo/Ryna-Language/actions/workflows/rust.yml/badge.svg)](https://github.com/Gabie-of-the-Bo/Ryna-Language/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Ryna-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Nessa-Language)
+[![Webpage](https://img.shields.io/badge/Webpage-online-green)](https://gabie-of-the-bo.github.io/Ryna-Language/)
 [![VSCode Extension](https://img.shields.io/badge/VSCode_extension-online-green)](https://marketplace.visualstudio.com/items?itemName=NessaLang.nessa-language-support)
 [![Crates.io Version](https://img.shields.io/crates/v/nessa-language)](https://crates.io/crates/nessa-language)
 
 <p align="center">
-  <a href="https://gabie-of-the-bo.github.io/Nessa-Language/">
-    <img src="docs/img/logo.png" width="60%">
+  <a href="https://gabie-of-the-bo.github.io/Ryna-Language/">
+    <img src="docs/img/logo.png" width="60%" style="border-radius: 2em;">
   </a>
 </p>
   
-# What is _Nessa_?
+# What is _Ryna_?
 
-**_Nessa_** is an imperative concept programming language with a stong type system. Many of its ideas come from the [_ULAN Language_](https://idus.us.es/handle/11441/84976) <sup>(Spanish only)</sup>, of which I'm also the author. The points of this language are to challenge the idea of classical software mantainability and to take extensible programming to an extreme in order to minimize syntatical and semantical noise.
+**_Ryna_** is an imperative concept programming language with a stong type system. Many of its ideas come from the [_ULAN Language_](https://idus.us.es/handle/11441/84976) <sup>(Spanish only)</sup>, of which I'm also the author. The points of this language are to challenge the idea of classical software mantainability and to take extensible programming to an extreme in order to minimize syntatical and semantical noise.
 
-Take a look at the [official page](https://gabie-of-the-bo.github.io/Nessa-Language/) to learn about the language and its features!
+Take a look at the [official page](https://gabie-of-the-bo.github.io/Ryna-Language/) to learn about the language and its features!
 
-# Can I use _Nessa_?
+# Can I use _Ryna_?
 
-**Of course!** The language is at an *experimental* stage, so it is indeed usable, but expect some things to fail. You can take a look [here](https://gabie-of-the-bo.github.io/Nessa-Language/pages/tutorial/start/install/) for instructions on how to install the interpreter.
+**Of course!** The language is at an *experimental* stage, so it is indeed usable, but expect some things to fail. You can take a look [here](https://gabie-of-the-bo.github.io/Ryna-Language/pages/tutorial/start/install/) for instructions on how to install the interpreter.
 
 # Features
 
-These are some of the things you can do with Nessa:
+These are some of the things you can do with Ryna:
 
 * **Arbitrary precision integer arithmetic**.
 * **Full parametric algebraic types**:
@@ -82,7 +82,7 @@ These are some of the things you can do with Nessa:
   5.is_number<Int>();   // You can also explicitly instantiate the template
   ```
 
-* **Custom literals**: you will be able to create new literals using an internal language called _NDL_ (_Nessa Definition Language_):
+* **Custom literals**: you will be able to create new literals using an internal language called _RDL_ (_Ryna Definition Language_):
 
   ```
   class Dice {
@@ -97,7 +97,7 @@ These are some of the things you can do with Nessa:
   dice = 4D20; // Four dice of twenty sides
   ```
 
-* **Compile-time syntax extensions**: you will be able to extend the syntax of the language using _NDL_ by means of high level patterns:
+* **Compile-time syntax extensions**: you will be able to extend the syntax of the language using _RDL_ by means of high level patterns:
 
   ```
   syntax array_initialization from "<" Arg(<type>, type) ">[" [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
@@ -162,7 +162,7 @@ These are some of the things you can do with Nessa:
   }
   ```
 
-* **Built-in documentation generator**: you can use the `@doc` annotation document your project and the `nessa docs` command to generate human-readable markdown files with the documentation of your project:
+* **Built-in documentation generator**: you can use the `@doc` annotation document your project and the `ryna docs` command to generate human-readable markdown files with the documentation of your project:
 
   ```
   @doc(
@@ -180,17 +180,17 @@ These are some of the things you can do with Nessa:
   }
   ```
 
-# Projects written in _Nessa_
+# Projects written in _Ryna_
 
 > If you want to showcase a project here, you can submit a pull request or open an issue :)
 
 ## Chessa engine
 
-[Chessa](https://github.com/Gabie-of-the-Bo/Chessa/) (pun intended) is a simple chess engine written in _Nessa_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
+[Chessa](https://github.com/Gabie-of-the-Bo/Chessa/) (pun intended) is a simple chess engine written in _Ryna_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
 
 ## Genessa
 
-[Genessa](https://github.com/Gabie-of-the-Bo/Genessa/) (again, pun intended) is a genetic algorithms library written in _Nessa_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
+[Genessa](https://github.com/Gabie-of-the-Bo/Genessa/) (again, pun intended) is a genetic algorithms library written in _Ryna_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
 
 # Contribute
 

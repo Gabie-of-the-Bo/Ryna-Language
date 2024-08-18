@@ -1,13 +1,13 @@
 ## Installing the interpreter
 
-Nessa is installed through `cargo`, *Rust*'s package manager. You can see the crate [here](https://crates.io/crates/nessa-language) 
+Ryna is installed through `cargo`, *Rust*'s package manager. You can see the crate [here](https://crates.io/crates/ryna-language) 
 and you can install it by using the following command:
 
 ```
-cargo install nessa-language
+cargo install ryna-language
 ```
 
-After this, you can use the interpreter by using the `nessa` command, as you will see later in the tutorial. `cargo` should
+After this, you can use the interpreter by using the `ryna` command, as you will see later in the tutorial. `cargo` should
 make sure that the interpreter is properly installed.
 
 ## Installing from source
@@ -32,7 +32,7 @@ Then, copy the corresponding binaries in the */target* folder to some location i
 It is extremely recommended that you run this command just after you install it:
 
 ```
-nessa setup
+ryna setup
 ```
 
 This will ask you for a default modules location **where every library will be installed** by default and create a global

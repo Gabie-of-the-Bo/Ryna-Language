@@ -1,4 +1,4 @@
-Nessa also allows you to automatically document your modules by using annotations. Let's take a look at how.
+Ryna also allows you to automatically document your modules by using annotations. Let's take a look at how.
 
 ## Documenting parts of your code
 
@@ -31,7 +31,7 @@ The used as arguments contain **markdown** and will be rendered as such when the
 In order to generate the documentation you have to use the use the following command:
 
 ```
-nessa docs <PATH>
+ryna docs <PATH>
 ```
 
 The documentation will be generated inside a *docs* folder at the root of your project.

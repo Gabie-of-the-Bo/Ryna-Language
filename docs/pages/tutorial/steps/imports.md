@@ -1,5 +1,5 @@
 An important aspect of every programming language is importing code created before either by you or by
-someone else. We call these **modules** in Nessa and you can import code selectively from them. Let's take a look
+someone else. We call these **modules** in Ryna and you can import code selectively from them. Let's take a look
 at how.
 
 ## Syntax
@@ -48,10 +48,10 @@ import nary op * from module_name;
 import * from module_name;
 ```
 
-As you can expect, you have to configure the `module_name` module in your **nessa_config.yml** before importing it.
+As you can expect, you have to configure the `module_name` module in your **ryna_config.yml** before importing it.
 
 ## Local imports
 
-Local imports are a special case that apply when you want to import code from a file that is not **main.nessa** and is located 
+Local imports are a special case that apply when you want to import code from a file that is not **main.ryna** and is located 
 inside the project folder (with any number of anidated folders). For this, just use the syntax `/folder/of/the/file`, where the file
-is `<project_folder>/folder/of/file.nessa`. It is important the the path **starts with** `/`.
+is `<project_folder>/folder/of/file.ryna`. It is important the the path **starts with** `/`.

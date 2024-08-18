@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fs::File, path::PathBuf};
 
-use crate::{compilation::message_and_exit, context::NessaContext, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use crate::{compilation::message_and_exit, context::RynaContext, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 use malachite::Integer;
 use rclite::Rc;
 use serde::{Deserialize, Serialize};
@@ -14,26 +14,26 @@ type DataBlock = Rc<MutCell<ObjectBlock>>;
 */
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct NessaArray {
+pub struct RynaArray {
     pub elements: Vec<Object>,
     pub elem_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct NessaTuple {
+pub struct RynaTuple {
     pub elements: Vec<Object>,
     pub elem_types: Vec<Type>
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct NessaArrayIt {
+pub struct RynaArrayIt {
     pub pos: usize,
     pub block: DataBlock,
     pub it_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct NessaLambda {
+pub struct RynaLambda {
     pub loc: usize,
     pub captures: Vec<Object>,
     pub args_type: Box<Type>,
@@ -41,12 +41,12 @@ pub struct NessaLambda {
 }
 
 #[derive(Clone, Debug)]
-pub struct NessaFile {
+pub struct RynaFile {
     pub path: PathBuf,
     pub file: Option<Rc<RefCell<File>>>
 }
 
-impl PartialEq for NessaFile {
+impl PartialEq for RynaFile {
     fn eq(&self, other: &Self) -> bool {
         match (&self.file, &other.file) {
             (None, None) => self.path == other.path,
@@ -57,7 +57,7 @@ impl PartialEq for NessaFile {
     }
 }
 
-impl NessaFile {
+impl RynaFile {
     pub fn is_open(&self) -> bool {
         self.file.is_some()
     }
@@ -131,16 +131,16 @@ pub enum ObjectBlock {
     Str(String),
     Bool(bool),
 
-    Tuple(NessaTuple),
-    Array(NessaArray),
+    Tuple(RynaTuple),
+    Array(RynaArray),
 
     #[serde(skip)]
-    ArrayIter(NessaArrayIt),
+    ArrayIter(RynaArrayIt),
 
-    Lambda(NessaLambda),
+    Lambda(RynaLambda),
 
     #[serde(skip)]
-    File(NessaFile),
+    File(RynaFile),
 
     Instance(TypeInstance),
 
@@ -216,11 +216,11 @@ impl ObjectBlock {
         unreachable!();
     }
 
-    pub fn assign_ref(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
+    pub fn assign_ref(&mut self, other: ObjectBlock, ctx: &RynaContext) -> Result<(), String> {
         self.dereference().borrow_mut().assign(other, ctx)
     }
 
-    pub fn assign(&mut self, other: ObjectBlock, ctx: &NessaContext) -> Result<(), String> {
+    pub fn assign(&mut self, other: ObjectBlock, ctx: &RynaContext) -> Result<(), String> {
         use ObjectBlock::*;
 
         match (self, other) {
@@ -253,20 +253,20 @@ impl ObjectBlock {
             ObjectBlock::Float(n) => ObjectBlock::Float(*n),
             ObjectBlock::Str(s) => ObjectBlock::Str(s.clone()),
             ObjectBlock::Bool(b) => ObjectBlock::Bool(*b),
-            ObjectBlock::Tuple(t) => ObjectBlock::Tuple(NessaTuple { 
+            ObjectBlock::Tuple(t) => ObjectBlock::Tuple(RynaTuple { 
                 elements: t.elements.iter().map(Object::deep_clone).collect(), 
                 elem_types: t.elem_types.clone()
             }),
-            ObjectBlock::Array(a) => ObjectBlock::Array(NessaArray { 
+            ObjectBlock::Array(a) => ObjectBlock::Array(RynaArray { 
                 elements: a.elements.iter().map(Object::deep_clone).collect(), 
                 elem_type: a.elem_type.clone()
             }),
-            ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(NessaArrayIt { 
+            ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(RynaArrayIt { 
                 pos: i.pos, 
                 block: i.block.clone(), 
                 it_type: i.it_type.clone() 
             }),
-            ObjectBlock::Lambda(l) => ObjectBlock::Lambda(NessaLambda { 
+            ObjectBlock::Lambda(l) => ObjectBlock::Lambda(RynaLambda { 
                 loc: l.loc, 
                 captures: l.captures.iter().map(Object::deep_clone).collect(),
                 args_type: l.args_type.clone(), 
@@ -307,7 +307,7 @@ impl<'de> Deserialize<'de> for Object {
 }
 
 impl Object {
-    pub fn new<T: NessaData>(data: T) -> Self {
+    pub fn new<T: RynaData>(data: T) -> Self {
         data.data().to_obj()
     }
 
@@ -316,23 +316,23 @@ impl Object {
     }
 
     pub fn arr(elements: Vec<Object>, elem_type: Type) -> Self {
-        ObjectBlock::Array(NessaArray { elements, elem_type: Box::new(elem_type) }).to_obj()
+        ObjectBlock::Array(RynaArray { elements, elem_type: Box::new(elem_type) }).to_obj()
     }
 
     pub fn arr_it(it_type: Type, block: DataBlock, pos: usize) -> Self {
-        ObjectBlock::ArrayIter(NessaArrayIt { pos, block, it_type: Box::new(it_type) }).to_obj()
+        ObjectBlock::ArrayIter(RynaArrayIt { pos, block, it_type: Box::new(it_type) }).to_obj()
     }
 
     pub fn lambda(loc: usize, captures: Vec<Object>, args_type: Type, ret_type: Type) -> Self {
-        ObjectBlock::Lambda(NessaLambda { loc, captures, args_type: Box::new(args_type), ret_type: Box::new(ret_type) }).to_obj()
+        ObjectBlock::Lambda(RynaLambda { loc, captures, args_type: Box::new(args_type), ret_type: Box::new(ret_type) }).to_obj()
     }
 
     pub fn tuple(elements: Vec<Object>, elem_types: Vec<Type>) -> Self {
-        ObjectBlock::Tuple(NessaTuple { elements, elem_types }).to_obj()
+        ObjectBlock::Tuple(RynaTuple { elements, elem_types }).to_obj()
     }
 
     pub fn file(path: PathBuf) -> Self {
-        ObjectBlock::File(NessaFile { path, file: None }).to_obj()
+        ObjectBlock::File(RynaFile { path, file: None }).to_obj()
     }
 
     pub fn instance(attributes: Vec<Object>, params: Vec<Type>, id: usize) -> Self {
@@ -395,14 +395,14 @@ impl Object {
         };
     }
     
-    pub fn assign(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
+    pub fn assign(&self, other_obj: Object, ctx: &RynaContext) -> Result<(), String> {
         match Rc::try_unwrap(other_obj.inner) {
             Ok(inner) => self.inner.borrow_mut().assign_ref(inner.take(), ctx),
             Err(inner) => self.inner.borrow_mut().assign_ref(inner.borrow().clone(), ctx)
         }
     }
     
-    pub fn assign_direct(&self, other_obj: Object, ctx: &NessaContext) -> Result<(), String> {
+    pub fn assign_direct(&self, other_obj: Object, ctx: &RynaContext) -> Result<(), String> {
         match Rc::try_unwrap(other_obj.inner) {
             Ok(inner) => self.inner.borrow_mut().assign(inner.take(), ctx),
             Err(inner) => self.inner.borrow_mut().assign(inner.borrow().clone(), ctx)
@@ -489,7 +489,7 @@ impl Object {
     }
 }
 
-pub trait NessaData {
+pub trait RynaData {
     fn data(self) -> ObjectBlock;
 }
 
@@ -506,9 +506,9 @@ pub trait Deref<T> {
     fn deref(&self) -> &mut T;
 }
 
-macro_rules! impl_nessa_data {
+macro_rules! impl_ryna_data {
     ($t: ty, $v: tt) => {
-        impl NessaData for $t {
+        impl RynaData for $t {
             #[inline(always)]
             fn data(self) -> ObjectBlock {
                 return ObjectBlock::$v(self)
@@ -546,16 +546,16 @@ macro_rules! impl_nessa_data {
     };
 }
 
-impl_nessa_data!(Integer, Int);
-impl_nessa_data!(f64, Float);
-impl_nessa_data!(String, Str);
-impl_nessa_data!(bool, Bool);
-impl_nessa_data!(TypeInstance, Instance);
-impl_nessa_data!(NessaArray, Array);
-impl_nessa_data!(NessaTuple, Tuple);
-impl_nessa_data!(NessaLambda, Lambda);
-impl_nessa_data!(NessaArrayIt, ArrayIter);
-impl_nessa_data!(NessaFile, File);
+impl_ryna_data!(Integer, Int);
+impl_ryna_data!(f64, Float);
+impl_ryna_data!(String, Str);
+impl_ryna_data!(bool, Bool);
+impl_ryna_data!(TypeInstance, Instance);
+impl_ryna_data!(RynaArray, Array);
+impl_ryna_data!(RynaTuple, Tuple);
+impl_ryna_data!(RynaLambda, Lambda);
+impl_ryna_data!(RynaArrayIt, ArrayIter);
+impl_ryna_data!(RynaFile, File);
 
 /*
                                                   ╒═════════╕

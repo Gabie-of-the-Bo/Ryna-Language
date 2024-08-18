@@ -1,5 +1,5 @@
 Let's create arguably one of the most useful constructs when working with iterable structures:
-list comprehensions. This can be done thanks to Nessa's syntax definition features.
+list comprehensions. This can be done thanks to Ryna's syntax definition features.
 
 ## What is *list comprehension*?
 
@@ -15,7 +15,7 @@ The syntax for list comprehensions then to be something like this:
 [expr for elem in container]
 ```
 
-This is problematic for us because Nessa is a strongly typed language. We will have to adapt it like this:
+This is problematic for us because Ryna is a strongly typed language. We will have to adapt it like this:
 
 ```
 [expr for elem: ElemType in container]

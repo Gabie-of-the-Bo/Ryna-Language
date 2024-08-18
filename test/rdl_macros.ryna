@@ -1,4 +1,4 @@
-syntax ndl example from "#" s Arg(<ndl>, inner) s "#" {
+syntax rdl example from "#" s Arg(<rdl>, inner) s "#" {
     $inner { ", " $inner \}
 }
 

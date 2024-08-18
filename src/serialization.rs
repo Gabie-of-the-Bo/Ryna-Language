@@ -1,16 +1,16 @@
 use std::{cell::RefCell, fs, path::Path};
 
-use crate::{cache::NessaCache, compilation::{CompiledNessaExpr, NessaError, NessaInstruction}, config::{ImportMap, InnerDepGraph, NessaModule}, context::{standard_ctx, NessaContext, NUM_STD_BINOPS, NUM_STD_FNS, NUM_STD_INTS, NUM_STD_INT_IMPL, NUM_STD_MACROS, NUM_STD_NARYOPS, NUM_STD_TYPES, NUM_STD_UNOPS}, execution::ExecutionInfo, functions::Function, interfaces::{Interface, InterfaceImpl}, macros::NessaMacro, operations::Operator, parser::{NessaExpr, Span}, types::TypeTemplate};
+use crate::{cache::RynaCache, compilation::{CompiledRynaExpr, RynaError, RynaInstruction}, config::{ImportMap, InnerDepGraph, RynaModule}, context::{standard_ctx, RynaContext, NUM_STD_BINOPS, NUM_STD_FNS, NUM_STD_INTS, NUM_STD_INT_IMPL, NUM_STD_MACROS, NUM_STD_NARYOPS, NUM_STD_TYPES, NUM_STD_UNOPS}, execution::ExecutionInfo, functions::Function, interfaces::{Interface, InterfaceImpl}, macros::RynaMacro, operations::Operator, parser::{RynaExpr, Span}, types::TypeTemplate};
 
 use serde::{Serialize, Deserialize};
 use bitcode;
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ReducedNessaModule {
+pub struct ReducedRynaModule {
     pub name: String,
     pub hash: String,
 
-    pub code: Vec<NessaExpr>,
+    pub code: Vec<RynaExpr>,
     pub source: Vec<String>,
     pub imports: ImportMap,
     pub inner_dependencies: InnerDepGraph,
@@ -25,13 +25,13 @@ pub struct ReducedNessaModule {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<NessaMacro>,
+    pub macros: Vec<RynaMacro>,
 
-    pub cache: NessaCache
+    pub cache: RynaCache
 }
 
-impl NessaModule {
-    pub fn get_reduced_module(&self) -> ReducedNessaModule {
+impl RynaModule {
+    pub fn get_reduced_module(&self) -> ReducedRynaModule {
         let reduced_types = self.ctx.type_templates[*NUM_STD_TYPES.lock().unwrap().borrow()..].to_vec();
         let reduced_ints = self.ctx.interfaces[*NUM_STD_INTS.lock().unwrap().borrow()..].to_vec();
         let reduced_int_impls = self.ctx.interface_impls[*NUM_STD_INT_IMPL.lock().unwrap().borrow()..].to_vec();
@@ -95,7 +95,7 @@ impl NessaModule {
             unreachable!();
         }).collect();
 
-        ReducedNessaModule {
+        ReducedRynaModule {
             name: self.name.clone(),
             hash: self.hash.clone(),
             code: self.code.clone(), 
@@ -115,15 +115,15 @@ impl NessaModule {
     }
 }
 
-impl ReducedNessaModule {
-    pub fn recover_module(mut self) -> NessaModule {
+impl ReducedRynaModule {
+    pub fn recover_module(mut self) -> RynaModule {
         let mut std_ctx = standard_ctx();
 
         // Reconstruct original context
         std_ctx.cache = self.cache;
 
         self.type_templates.iter_mut().for_each(|t| {
-            t.parser = Some(|ctx: &NessaContext, c_type, s: &String| {
+            t.parser = Some(|ctx: &RynaContext, c_type, s: &String| {
                 if let Ok((_, o)) = ctx.parse_literal_type(c_type, Span::new(s.as_str()), &RefCell::default()) {
                     return Ok(o);
                 }
@@ -194,7 +194,7 @@ impl ReducedNessaModule {
             }
         }
 
-        NessaModule {
+        RynaModule {
             name: self.name.clone(),
             hash: self.hash.clone(),
             ctx: std_ctx,
@@ -215,7 +215,7 @@ impl ReducedNessaModule {
 
     pub fn from_file(path: &Path) -> Self {
         let data = fs::read(path).expect("Unable to read serialized module from file");
-        ReducedNessaModule::deserialize(&data)
+        ReducedRynaModule::deserialize(&data)
     }
 
     pub fn write_to_file(&self, path: &Path) {
@@ -224,15 +224,15 @@ impl ReducedNessaModule {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct CompiledNessaModule {
+pub struct CompiledRynaModule {
     pub hash: String,
     type_templates: Vec<TypeTemplate>,
     interface_impls: Vec<InterfaceImpl>,
-    instructions: Vec<CompiledNessaExpr>
+    instructions: Vec<CompiledRynaExpr>
 }
 
-impl NessaContext {
-    pub fn get_serializable_module(&self, hash: String, instructions: &[NessaInstruction]) -> CompiledNessaModule {
+impl RynaContext {
+    pub fn get_serializable_module(&self, hash: String, instructions: &[RynaInstruction]) -> CompiledRynaModule {
         let mut reduced_types = self.type_templates[*NUM_STD_TYPES.lock().unwrap().borrow()..].to_vec();
 
         reduced_types.iter_mut().for_each(|t| {
@@ -241,7 +241,7 @@ impl NessaContext {
             t.patterns.clear();
         });
 
-        return CompiledNessaModule {
+        return CompiledRynaModule {
             hash, 
             type_templates: reduced_types, 
             interface_impls: self.interface_impls[*NUM_STD_INT_IMPL.lock().unwrap().borrow()..].to_vec(), 
@@ -250,7 +250,7 @@ impl NessaContext {
     }
 }
 
-impl CompiledNessaModule {
+impl CompiledRynaModule {
     pub fn deserialize(data: &[u8]) -> Self {
         bitcode::deserialize(data).expect("Unable to deserialize code")
     }
@@ -261,14 +261,14 @@ impl CompiledNessaModule {
 
     pub fn from_file(path: &Path) -> Self {
         let data = fs::read(path).expect("Unable to read serialized code from file");
-        CompiledNessaModule::deserialize(&data)
+        CompiledRynaModule::deserialize(&data)
     }
 
     pub fn write_to_file(&self, path: &Path) {
         fs::write(path, self.serialize()).expect("Unable to write serialized code to file");
     }
 
-    pub fn execute<const DEBUG: bool>(&mut self, program_input: &[String]) -> Result<ExecutionInfo, NessaError> {
+    pub fn execute<const DEBUG: bool>(&mut self, program_input: &[String]) -> Result<ExecutionInfo, RynaError> {
         let mut ctx = standard_ctx();
 
         ctx.type_templates.append(&mut self.type_templates);

@@ -1,4 +1,4 @@
-Let's now take a look at the syntax and semantics for defining new functions in Nessa.
+Let's now take a look at the syntax and semantics for defining new functions in Ryna.
 
 ## Syntax
 

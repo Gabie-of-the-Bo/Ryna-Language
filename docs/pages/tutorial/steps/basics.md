@@ -1,16 +1,16 @@
-Nessa is an **imperative**, **strongly-typed** programming language with many common features. Here We will explain the main
+Ryna is an **imperative**, **strongly-typed** programming language with many common features. Here We will explain the main
 ones. All these should be enough to get you started writing basic code, but more complex features will be analyzed later in their
 own respective sections.
 
 ## Literals
 
 One of the main ways you can create values is by writing down explicit constants that the compiler will understand as **basic types**.
-These are called **literals** and are a very important concept in many languages, but more so in Nessa. Here are all the literals that
+These are called **literals** and are a very important concept in many languages, but more so in Ryna. Here are all the literals that
 tthe language supports.   
 
 ### Integers
 
-Integers can be inputted in Nessa in a similar way as other languages:
+Integers can be inputted in Ryna in a similar way as other languages:
 
 ```
 881452      // Basic integer (no size limit)
@@ -38,11 +38,11 @@ All these values are compiled to `Float` values.
 
 ### Logical values
 
-The only logical literals Nessa supports are `true` and `false`. They are compiled to `Bool` values.
+The only logical literals Ryna supports are `true` and `false`. They are compiled to `Bool` values.
 
 ### Strings
 
-Strings in Nessa are UTF-8 encoded and are inputted by using **double quotes** with the possibility of **escape sequences**.
+Strings in Ryna are UTF-8 encoded and are inputted by using **double quotes** with the possibility of **escape sequences**.
 These would be some examples:
 
 ```
@@ -60,7 +60,7 @@ All these values are compiled to `String` values.
 
 ### Characters
 
-Characters do not exist in Nessa as a class, but they can be used as `Int` code points:
+Characters do not exist in Ryna as a class, but they can be used as `Int` code points:
 
 ```
 'w' // This is equal to 119
@@ -70,7 +70,7 @@ This can be used when iterating over code points.
 
 ## Variables
 
-In contrast to functional languages, Nessa does have support for variables and they are used as much as in any other
+In contrast to functional languages, Ryna does have support for variables and they are used as much as in any other
 imperative language. Constants are not implemented for now, but they might be introduced in a future release.
 
 ### Definition
@@ -135,12 +135,12 @@ example.attribute_1() := "Test" // ERROR: String is not bindable to Int
 
 ## Functions
 
-You can also use functions in Nessa, as you might expect. Functions are called using the parentheses syntax used in most imperative languages, 
+You can also use functions in Ryna, as you might expect. Functions are called using the parentheses syntax used in most imperative languages, 
 including angle brackets in the case of generics.
 
 ## Operations
 
-Just as most programming languages, Nessa has **operators** and **operations**. These encode operations with one, two o even more expressions called **operands**. Nessa supports four kind of operators:
+Just as most programming languages, Ryna has **operators** and **operations**. These encode operations with one, two o even more expressions called **operands**. Ryna supports four kind of operators:
 
 1. **Prefix operators:** the operator comes before a single expression (*example:* `-5`).
 2. **Postfix operators:** the operator comes after a single expression (*example:* `5!`).
@@ -152,7 +152,7 @@ and will be explained in their corresponding section.
 
 ## Flow control
 
-These are the flow-control operations that are allowed in Nessa.
+These are the flow-control operations that are allowed in Ryna.
 
 ### If-else
 

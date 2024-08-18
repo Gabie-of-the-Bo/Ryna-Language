@@ -1,6 +1,6 @@
-use crate::{compilation::CompiledNessaExpr, context::NessaContext, operations::{Operator, ADD_BINOP_ID, ANDB_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, ORB_BINOP_ID, OR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID, STR_ID}};
+use crate::{compilation::CompiledRynaExpr, context::RynaContext, operations::{Operator, ADD_BINOP_ID, ANDB_BINOP_ID, AND_BINOP_ID, ASSIGN_BINOP_ID, DEREF_UNOP_ID, DIV_BINOP_ID, EQ_BINOP_ID, GTEQ_BINOP_ID, GT_BINOP_ID, LTEQ_BINOP_ID, LT_BINOP_ID, MOD_BINOP_ID, MUL_BINOP_ID, NEG_UNOP_ID, NEQ_BINOP_ID, NOT_UNOP_ID, ORB_BINOP_ID, OR_BINOP_ID, SHL_BINOP_ID, SHR_BINOP_ID, SUB_BINOP_ID, XOR_BINOP_ID}, types::{Type, BOOL_ID, FLOAT_ID, INT, INT_ID, STR_ID}};
 
-fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
+fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledRynaExpr>>(ctx: &mut RynaContext, id: usize, f: F) {
     if let Operator::Unary { operations, .. } = &ctx.unary_ops[id] {
         for (ov_id, op_ov) in operations.iter().enumerate() {
             if let Some(opcode) = f(&op_ov.args) {
@@ -16,7 +16,7 @@ fn load_unop_opcodes<F: Fn(&Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaC
     }
 }
 
-fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledNessaExpr>>(ctx: &mut NessaContext, id: usize, f: F) {
+fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledRynaExpr>>(ctx: &mut RynaContext, id: usize, f: F) {
     if let Operator::Binary { operations, .. } = &ctx.binary_ops[id] {
         for (ov_id, op_ov) in operations.iter().enumerate() {
             if let Type::And(types) = &op_ov.args {
@@ -38,8 +38,8 @@ fn load_binop_opcodes<F: Fn(&Type, &Type) -> Option<CompiledNessaExpr>>(ctx: &mu
     }
 }
 
-pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
-    use CompiledNessaExpr::*;
+pub fn load_optimized_binop_opcodes(ctx: &mut RynaContext) {
+    use CompiledRynaExpr::*;
 
     // Arithmetic and Bitwise
     let ids = [
@@ -119,8 +119,8 @@ pub fn load_optimized_binop_opcodes(ctx: &mut NessaContext) {
     ctx.cache.opcodes.binary.insert((ASSIGN_BINOP_ID, 0), (Assign, 0));
 }
 
-pub fn load_optimized_unop_opcodes(ctx: &mut NessaContext) {
-    use CompiledNessaExpr::*;
+pub fn load_optimized_unop_opcodes(ctx: &mut RynaContext) {
+    use CompiledRynaExpr::*;
 
     ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 0), (Copy, 0));
     ctx.cache.opcodes.unary.insert((DEREF_UNOP_ID, 1), (Copy, 0));
@@ -151,8 +151,8 @@ pub fn load_optimized_unop_opcodes(ctx: &mut NessaContext) {
     }
 }
 
-pub fn load_optimized_fn_opcodes(ctx: &mut NessaContext) {
-    use CompiledNessaExpr::*;
+pub fn load_optimized_fn_opcodes(ctx: &mut RynaContext) {
+    use CompiledRynaExpr::*;
 
     let deref_id = ctx.get_function_id("deref".into()).unwrap();
     ctx.cache.opcodes.functions.insert((deref_id, 0), (Copy, 0));
@@ -177,7 +177,7 @@ pub fn load_optimized_fn_opcodes(ctx: &mut NessaContext) {
     ctx.cache.opcodes.functions.insert((dec_id, 0), (Dec, 0));
 }
 
-pub fn load_optimized_opcodes(ctx: &mut NessaContext) {
+pub fn load_optimized_opcodes(ctx: &mut RynaContext) {
     load_optimized_unop_opcodes(ctx);
     load_optimized_binop_opcodes(ctx);
     load_optimized_fn_opcodes(ctx);

@@ -1,4 +1,4 @@
-One of the main features of Nessa is that it allows the programmer to define many new elements of the syntax.
+One of the main features of Ryna is that it allows the programmer to define many new elements of the syntax.
 One of these are **literals**, which can be defined for any valid class. Let's see how this works.
 
 ## Basic classes
@@ -31,7 +31,7 @@ let d = Dice(5, 20); // Throw a 20 sided dice 5 times
 ```
 
 Now, the readers that have played *D&D* know that this value is often represented as `5D20`. We can define this simple syntax
-using Nessa:
+using Ryna:
 
 ```
 class Dice {

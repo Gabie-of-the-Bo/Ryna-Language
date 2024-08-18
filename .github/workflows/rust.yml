@@ -18,17 +18,17 @@ jobs:
         toolchain: stable
         components: clippy
 
-    - name: Build nessa binaries
+    - name: Build ryna binaries
       run: cargo build --profile release-debug
       
     - name: Run unit tests
       run: cargo test --profile release-debug
 
-    - name: Setup nessa
-      run: mkdir -p ${{ github.workspace }}/nessa-libs && cargo run --profile release-debug -- setup -m "${{ github.workspace }}/nessa-libs"
+    - name: Setup ryna
+      run: mkdir -p ${{ github.workspace }}/ryna-libs && cargo run --profile release-debug -- setup -m "${{ github.workspace }}/ryna-libs"
 
     - name: Run prelude tests
-      run: chmod +x ./nessa-libs/prelude/test_all.bash && ./nessa-libs/prelude/test_all.bash "cargo run --profile release-debug --"
+      run: chmod +x ./ryna-libs/prelude/test_all.bash && ./ryna-libs/prelude/test_all.bash "cargo run --profile release-debug --"
 
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1

@@ -1,11 +1,11 @@
 [package]
-name = "nessa-language"
+name = "ryna-language"
 description = "An extensible programming language with a strong type system"
 keywords = ["programming-language", "interpreter"]
 categories = ["command-line-utilities", "compilers"]
-documentation = "https://gabie-of-the-bo.github.io/Nessa-Language/"
-homepage = "https://gabie-of-the-bo.github.io/Nessa-Language/"
-repository = "https://github.com/Gabie-of-the-Bo/Nessa-Language"
+documentation = "https://gabie-of-the-bo.github.io/Ryna-Language/"
+homepage = "https://gabie-of-the-bo.github.io/Ryna-Language/"
+repository = "https://github.com/Gabie-of-the-Bo/Ryna-Language"
 version = "0.9.2"
 authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
@@ -23,11 +23,11 @@ lto = false
 panic = "unwind"
 
 [lib]
-name = "nessa"
+name = "ryna"
 path = "src/lib.rs"
 
 [[bin]]
-name = "nessa"
+name = "ryna"
 path = "src/main.rs"
 
 [dependencies]

@@ -11,14 +11,14 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::annotations::Annotation;
-use crate::compilation::CompiledNessaExpr;
+use crate::compilation::CompiledRynaExpr;
 use crate::integer_ext::*;
 use crate::parser::Location;
 use crate::ARR_IT_OF;
 use crate::ARR_OF;
 use crate::types::*;
 use crate::object::*;
-use crate::context::NessaContext;
+use crate::context::RynaContext;
 
 /*
                                                   ╒══════════════════╕
@@ -27,7 +27,7 @@ use crate::context::NessaContext;
 */
 
 // Takes type parameters, return type and arguments
-pub type FunctionOverloadFn = fn(&Vec<Type>, &Type, Vec<Object>, &NessaContext) -> Result<Object, String>;
+pub type FunctionOverloadFn = fn(&Vec<Type>, &Type, Vec<Object>, &RynaContext) -> Result<Object, String>;
 pub type OptFunctionOverloadFn = Option<FunctionOverloadFn>;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -116,7 +116,7 @@ pub const ITERATOR_FUNC_ID: usize = 10;
 pub const NEXT_FUNC_ID: usize = 11;
 pub const IS_CONSUMED_FUNC_ID: usize = 12;
 
-pub fn standard_functions(ctx: &mut NessaContext) {
+pub fn standard_functions(ctx: &mut RynaContext) {
     let idx = ctx.define_function("inc".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
@@ -200,7 +200,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             array.elements.push(v[1].clone());
 
             Ok(Object::empty())
@@ -215,7 +215,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             let size = v[1].get::<Integer>();
 
             if is_valid_index(size) && array.elements.try_reserve_exact(to_usize(size)).is_ok() {
@@ -234,7 +234,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0).to_ref()], 
         INT, 
-        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<NessaArray>().elements.capacity() as u64)))
+        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<RynaArray>().elements.capacity() as u64)))
     ).unwrap();
 
     ctx.define_native_function_overload(
@@ -242,7 +242,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         1,
         &[ARR_OF!(T_0).to_mut()], 
         INT, 
-        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<NessaArray>().elements.capacity() as u64)))
+        |_, _, mut v, _| Ok(Object::new(Integer::from(v.pop().unwrap().deref::<RynaArray>().elements.capacity() as u64)))
     ).unwrap();
 
     let idx = ctx.define_function("iterator".into()).unwrap();
@@ -313,12 +313,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
         T_0.to_mut(), 
         |_, _, v, _| {
-            let iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<RynaArrayIt>();
             let item;
 
             {
                 let reference = iterator.block.borrow_mut();
-                let array = &reference.mut_inner::<NessaArray>();
+                let array = &reference.mut_inner::<RynaArray>();
                 item = array.elements[iterator.pos].get_mut();
             }
 
@@ -334,12 +334,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_ref())))], 
         T_0.to_ref(), 
         |_, _, v, _| {
-            let iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<RynaArrayIt>();
             let item;
 
             {
                 let reference = iterator.block.borrow_mut();
-                let array = &reference.mut_inner::<NessaArray>();
+                let array = &reference.mut_inner::<RynaArray>();
                 item = array.elements[iterator.pos].get_ref();
             }
 
@@ -357,9 +357,9 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_IT_OF!(T_0.to_mut()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
-            let iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<RynaArrayIt>();
 
-            return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<NessaArray>().elements.len()));
+            return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<RynaArray>().elements.len()));
         }
     ).unwrap();
 
@@ -369,9 +369,9 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_IT_OF!(T_0.to_ref()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
-            let iterator = v[0].deref::<NessaArrayIt>();
+            let iterator = v[0].deref::<RynaArrayIt>();
 
-            return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<NessaArray>().elements.len()));
+            return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<RynaArray>().elements.len()));
         }
     ).unwrap();
 
@@ -394,7 +394,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[ARR_OF!(Type::Wildcard).to_ref()], 
         INT, 
-        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<NessaArray>().elements.len() as u64)))
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<RynaArray>().elements.len() as u64)))
     ).unwrap();
 
     ctx.define_native_function_overload(
@@ -402,7 +402,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         0,
         &[ARR_OF!(Type::Wildcard).to_mut()], 
         INT, 
-        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<NessaArray>().elements.len() as u64)))
+        |_, _, v, _| Ok(Object::new(Integer::from(v[0].deref::<RynaArray>().elements.len() as u64)))
     ).unwrap();
 
     ctx.define_native_function_overload(
@@ -627,7 +627,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("open".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), BOOL, BOOL, BOOL], Type::Empty, |_, _, v, _| {
-        let file = &mut *v[0].deref::<NessaFile>();
+        let file = &mut *v[0].deref::<RynaFile>();
         let read = *v[1].get::<bool>();
         let write = *v[2].get::<bool>();
         let append = *v[3].get::<bool>();
@@ -640,7 +640,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("close".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], Type::Empty, |_, _, v, _| {
-        let file = &mut *v[0].deref::<NessaFile>();
+        let file = &mut *v[0].deref::<RynaFile>();
         file.close()?;
 
         Ok(Object::empty())
@@ -649,7 +649,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("exists".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], BOOL, |_, _, v, _| {
-        let file = &*v[0].deref::<NessaFile>();
+        let file = &*v[0].deref::<RynaFile>();
 
         Ok(ObjectBlock::Bool(file.exists()?).to_obj())
     }).unwrap();
@@ -657,7 +657,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("delete".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], BOOL, |_, _, v, _| {
-        let file = &mut *v[0].deref::<NessaFile>();
+        let file = &mut *v[0].deref::<RynaFile>();
 
         Ok(ObjectBlock::Bool(file.delete()?).to_obj())
     }).unwrap();
@@ -665,7 +665,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("read_str".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], STR, |_, _, v, _| {
-        let file = v[0].deref::<NessaFile>();
+        let file = v[0].deref::<RynaFile>();
         let mut buf = String::new();
 
         if !file.is_open() {
@@ -683,7 +683,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("read_bytes".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut()], ARR_OF!(INT), |_, _, v, _| {
-        let file = v[0].deref::<NessaFile>();
+        let file = v[0].deref::<RynaFile>();
         let mut buf = vec!();
 
         if !file.is_open() {
@@ -702,7 +702,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     }).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), INT], ARR_OF!(INT), |_, _, v, _| {
-        let file = v[0].deref::<NessaFile>();
+        let file = v[0].deref::<RynaFile>();
         let num_bytes = v[1].get::<Integer>();
 
         if !is_valid_index(num_bytes) || *num_bytes == *ZERO {
@@ -728,7 +728,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("write_str".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), STR.to_ref()], BOOL, |_, _, v, _| {
-        let file = v[0].deref::<NessaFile>();
+        let file = v[0].deref::<RynaFile>();
         let content = &*v[1].deref::<String>();
 
         if !file.is_open() {
@@ -743,8 +743,8 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("write_bytes".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[FILE.to_mut(), ARR_OF!(INT).to_ref()], BOOL, |_, _, v, _| {
-        let file = v[0].deref::<NessaFile>();
-        let content = &*v[1].deref::<NessaArray>();
+        let file = v[0].deref::<RynaFile>();
+        let content = &*v[1].deref::<RynaArray>();
 
         if !file.is_open() {
             return Err(format!("File at {} is closed", file.path.to_str().unwrap()));
@@ -853,7 +853,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
     let idx = ctx.define_function("utf8_to_str".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[ARR_OF!(INT).to_ref().or(ARR_OF!(INT).to_mut())], STR, |_, _, v, _| {
-        let arr = &*v[0].deref::<NessaArray>();
+        let arr = &*v[0].deref::<RynaArray>();
         let mut bytes = vec!();
         bytes.reserve_exact(arr.elements.len());
 
@@ -922,7 +922,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0, INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             let idx = v[2].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -946,7 +946,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), T_0, INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             let idx = v[2].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -970,7 +970,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut(), INT], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             let idx = v[1].get::<Integer>();
 
             if !is_valid_index(idx) {
@@ -994,7 +994,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
         &[ARR_OF!(T_0).to_mut()], 
         Type::Empty, 
         |_, _, v, _| {
-            let array = v[0].deref::<NessaArray>();
+            let array = v[0].deref::<RynaArray>();
             array.elements.pop();
 
             Ok(Object::empty())
@@ -1041,7 +1041,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 EMPTY_FUNC
             ).unwrap();
 
-            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMove(I), 0));
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledRynaExpr::TupleElemMove(I), 0));
             
             let res = ctx.define_native_function_overload(
                 idx, 
@@ -1051,7 +1051,7 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 EMPTY_FUNC
             ).unwrap();
             
-            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemRef(I), 0));
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledRynaExpr::TupleElemRef(I), 0));
 
             let res = ctx.define_native_function_overload(
                 idx, 
@@ -1061,12 +1061,12 @@ pub fn standard_functions(ctx: &mut NessaContext) {
                 EMPTY_FUNC
             ).unwrap();
 
-            ctx.cache.opcodes.functions.insert((idx, res), (CompiledNessaExpr::TupleElemMut(I), 0));
+            ctx.cache.opcodes.functions.insert((idx, res), (CompiledRynaExpr::TupleElemMut(I), 0));
         });
     });
 }
 
-pub fn define_macro_emit_fn(ctx: &mut NessaContext, name: String) {
+pub fn define_macro_emit_fn(ctx: &mut RynaContext, name: String) {
     let idx = ctx.define_function(name).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[STR], crate::types::Type::Empty, |_, _, mut args, ctx| {

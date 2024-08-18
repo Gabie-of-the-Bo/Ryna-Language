@@ -58,7 +58,7 @@ pub fn uninstall_repo(pack_name: &str) -> Result<(), String> {
 */
 
 pub fn install_prelude() -> Result<(), String> {
-    const PRELUDE_URL: &str = "https://github.com/Gabie-of-the-Bo/Nessa-prelude.git";
+    const PRELUDE_URL: &str = "https://github.com/Gabie-of-the-Bo/Ryna-prelude.git";
 
     install_repo(PRELUDE_URL, "prelude")
 }

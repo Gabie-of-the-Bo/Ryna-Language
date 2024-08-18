@@ -1,4 +1,4 @@
-Nessa does not allow inheritance-based polymorphism as in most programming languages. Instead, generics are
+Ryna does not allow inheritance-based polymorphism as in most programming languages. Instead, generics are
 entirely based on **bounded template substitution**. In order to use this, we need to define **interfaces** and
 **implement** them for out types. In this section we will define the syntax and semantics of this mechanism.
 

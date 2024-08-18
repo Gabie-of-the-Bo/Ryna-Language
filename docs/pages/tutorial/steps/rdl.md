@@ -1,11 +1,11 @@
-Before we dive into the syntax extension mechanics that Nessa has, we have to take a look at a sublanguage called 
-**Nessa Definition Language** (called *NDL* for short). This sublanguage can be embedded in some parts of your Nessa projects
+Before we dive into the syntax extension mechanics that Ryna has, we have to take a look at a sublanguage called 
+**Ryna Definition Language** (called *NDL* for short). This sublanguage can be embedded in some parts of your Ryna projects
 in order to extend the language. Let's see how it works.
 
 ## Almost *regex*
 
 *NDL* is, as the title suggests, almost a flavour of regexes, but more expressive. This bump in expressiveness comes from
-its interlinkage with the Nessa parser, which contains many complex routines that **cannot** be expressed in terms of 
+its interlinkage with the Ryna parser, which contains many complex routines that **cannot** be expressed in terms of 
 regular expressions. 
 
 The basic idea is simple, a **pattern** in NDL is a sequence of other **subpatterns** that have to match a string of characters
@@ -40,7 +40,7 @@ Also, *NDL* has support for some *high level patterns* that make use of complex 
 | Identifier | `<ident>` | Matches an identifier |
 | Type       | `<type>`  | Matches a type        |
 | Expression | `<expr>`  | Matches an expression |
-| NDL        | `<ndl>`   | Matches a NDL pattern |
+| NDL        | `<rdl>`   | Matches a NDL pattern |
 
 ## Examples
 

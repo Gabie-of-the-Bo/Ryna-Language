@@ -1,6 +1,6 @@
-site_name: Nessa Language
+site_name: Ryna Language
 
-repo_url: https://github.com/Gabie-of-the-Bo/Nessa-Language/
+repo_url: https://github.com/Gabie-of-the-Bo/Ryna-Language/
 
 nav:
   - Home: 'index.md'
@@ -14,7 +14,7 @@ nav:
     - Step by step:
       - Introduction: 'pages/tutorial/steps/first.md'
       - Type System:
-        - Nessa Memory Model: 'pages/tutorial/steps/memory.md'
+        - Ryna Memory Model: 'pages/tutorial/steps/memory.md'
         - Built-in Basic Types: 'pages/tutorial/steps/builtin.md'
         - References: 'pages/tutorial/steps/references.md'
         - Algebraic Types: 'pages/tutorial/steps/algebraic.md'
@@ -32,12 +32,12 @@ nav:
       - Defining Classes: 'pages/tutorial/steps/classes.md'
       - Defining Interfaces: 'pages/tutorial/steps/interfaces.md'
       - Extending the Syntax:
-        - Nessa Definition Language: 'pages/tutorial/steps/ndl.md'
+        - Ryna Definition Language: 'pages/tutorial/steps/rdl.md'
         - Literals: 'pages/tutorial/steps/literals.md'
         - Function Macros: 'pages/tutorial/steps/fn_macros.md'
         - Expression Macros: 'pages/tutorial/steps/expr_macros.md'
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
-        - NDL Macros: 'pages/tutorial/steps/ndl_macros.md'
+        - RDL Macros: 'pages/tutorial/steps/rdl_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
       - Importing Modules: 'pages/tutorial/steps/imports.md'
       - Annotations:
@@ -72,8 +72,8 @@ nav:
 theme: 
   name: material
   custom_dir: docs/pages/material/overrides
-  logo: img/logo_nl_t.png
-  favicon: img/logo_nl.png
+  logo: img/logo_nl.png
+  favicon: img/logo_nl_t.png
   font:
     text: Roboto
     code: Roboto Mono
@@ -125,7 +125,7 @@ extra_javascript:
   - 'js/highlight.min.js'
   - 'js/highlightjs-line-numbers.min.js'
   - 'js/fa.min.js'
-  - 'js/nessa.js'
+  - 'js/ryna.js'
 
 extra_css:
   - 'css/main.css'

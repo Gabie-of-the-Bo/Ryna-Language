@@ -19,4 +19,4 @@ A type `A` is bindable to type `B` if and only if one of the following cases app
 13. Both `A` and `B` are **function types** and both their **argument types** and **return types** are bindable.
 
 As you can see, checking whether or not two types are bindable is a recursive process, but the ideas are very intuitive given the descriptions in their
-corresponding sections. Now that we have defined one of the key aspects of Nessa, we will begin explaining how to use the language.
+corresponding sections. Now that we have defined one of the key aspects of Ryna, we will begin explaining how to use the language.

@@ -12,14 +12,14 @@ use serde::{Serialize, Deserialize};
 use serde_yaml::{from_str, to_string};
 use directories::ProjectDirs;
 
-use crate::compilation::NessaError;
-use crate::context::{standard_ctx, NessaContext};
+use crate::compilation::RynaError;
+use crate::context::{standard_ctx, RynaContext};
 use crate::docs::{generate_all_class_docs, generate_all_function_overload_docs, generate_all_interface_docs, generate_all_operation_docs, generate_all_syntax_docs};
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
-use crate::{nessa_error, parser::*};
+use crate::{ryna_error, parser::*};
 use crate::regex_ext::replace_all_fallible;
-use crate::serialization::{CompiledNessaModule, ReducedNessaModule};
+use crate::serialization::{CompiledRynaModule, ReducedRynaModule};
 use crate::object::Object;
 use crate::types::INT;
 use crate::operations::{DIV_BINOP_ID, NEQ_BINOP_ID, SUB_BINOP_ID};
@@ -42,7 +42,7 @@ pub struct ModuleInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NessaConfig {
+pub struct RynaConfig {
     pub module_name: String,
 
     #[serde(default = "default_version")]
@@ -64,7 +64,7 @@ fn default_version() -> String {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NessaGlobalConfig {
+pub struct RynaGlobalConfig {
     #[serde(skip)]
     file_path: String,
 
@@ -76,29 +76,29 @@ pub type ImportMap = HashMap<String, Imports>;
 pub type InnerDepGraph = DirectedGraph<(ImportType, usize), ()>;
 pub type VersionModCache = HashMap<(String, String), ModuleInfo>;
 
-type FileCache = HashMap<String, (NessaConfig, HashMap<String, HashMap<ImportType, HashSet<String>>>, String, bool)>;
+type FileCache = HashMap<String, (RynaConfig, HashMap<String, HashMap<ImportType, HashSet<String>>>, String, bool)>;
 
-pub struct NessaModule {
+pub struct RynaModule {
     pub name: String,
     pub hash: String,
-    pub ctx: NessaContext,
-    pub code: Vec<NessaExpr>,
+    pub ctx: RynaContext,
+    pub code: Vec<RynaExpr>,
     pub source: Vec<String>, 
     pub imports: ImportMap,
     pub inner_dependencies: InnerDepGraph
 }
 
-impl NessaModule {
+impl RynaModule {
     pub fn new(
         name: String,
         hash: String,
-        ctx: NessaContext,
-        code: Vec<NessaExpr>,
+        ctx: RynaContext,
+        code: Vec<RynaExpr>,
         source: Vec<String>, 
         imports: ImportMap,
         inner_dependencies: InnerDepGraph
-    ) -> NessaModule {
-        NessaModule { name, hash, ctx, code, source, imports, inner_dependencies }
+    ) -> RynaModule {
+        RynaModule { name, hash, ctx, code, source, imports, inner_dependencies }
     }
 }
 
@@ -109,10 +109,10 @@ pub fn get_intermediate_cache_path(module_name: &String, module_path: &String) -
     let mut cache_path = module_path.to_owned();
 
     cache_path = if cache_path.is_file() {
-        cache_path.parent().unwrap().join("nessa_cache/intermediate/local")
+        cache_path.parent().unwrap().join("ryna_cache/intermediate/local")
 
     } else {
-        cache_path.join("nessa_cache/intermediate")
+        cache_path.join("ryna_cache/intermediate")
     };
 
     if parts.len() > 1 {
@@ -123,25 +123,25 @@ pub fn get_intermediate_cache_path(module_name: &String, module_path: &String) -
 
     cache_path = cache_path.join(
         if parts.is_empty() { 
-            "main.nessaci".into() 
+            "main.rynaci".into() 
 
         } else { 
-            format!("{}.nessaci", module_path.file_stem().unwrap().to_str().unwrap()) 
+            format!("{}.rynaci", module_path.file_stem().unwrap().to_str().unwrap()) 
         }
     );
 
     cache_path
 }
 
-impl NessaConfig {
-    pub fn get_imports_topological_order(&self, all_modules: &VersionModCache) -> Result<Vec<(String, String)>, NessaError> {
-        fn topological_order(node: &(String, String), res: &mut Vec<(String, String)>, temp: &mut HashSet<(String, String)>, perm: &mut HashSet<(String, String)>, all_modules: &VersionModCache) -> Result<(), NessaError> {
+impl RynaConfig {
+    pub fn get_imports_topological_order(&self, all_modules: &VersionModCache) -> Result<Vec<(String, String)>, RynaError> {
+        fn topological_order(node: &(String, String), res: &mut Vec<(String, String)>, temp: &mut HashSet<(String, String)>, perm: &mut HashSet<(String, String)>, all_modules: &VersionModCache) -> Result<(), RynaError> {
             if perm.contains(node) {
                 return Ok(());
             }
 
             if temp.contains(node) {
-                return Err(NessaError::module_error("Dependency tree is cyclic".into()));
+                return Err(RynaError::module_error("Dependency tree is cyclic".into()));
             }
 
             temp.insert(node.clone());
@@ -154,7 +154,7 @@ impl NessaConfig {
                 },
 
                 None => {
-                    return Err(NessaError::module_error(format!("Module {} {} was not found", node.0.green(), format!("v{}", node.1).cyan())));
+                    return Err(RynaError::module_error(format!("Module {} {} was not found", node.0.green(), format!("v{}", node.1).cyan())));
                 },
             }
 
@@ -174,7 +174,7 @@ impl NessaConfig {
         Ok(res)
     }
 
-    fn get_cached_intermediate_module(&self, path: &String, force_recompile: bool) -> Option<NessaModule> {
+    fn get_cached_intermediate_module(&self, path: &String, force_recompile: bool) -> Option<RynaModule> {
         if force_recompile {
             return None;
         }
@@ -182,7 +182,7 @@ impl NessaConfig {
         let cache_path = get_intermediate_cache_path(&self.module_name, path);
 
         if cache_path.is_file() {
-            let reduced_module = ReducedNessaModule::from_file(&cache_path);
+            let reduced_module = ReducedRynaModule::from_file(&cache_path);
 
             if reduced_module.hash == self.hash {
                 return Some(reduced_module.recover_module());
@@ -193,7 +193,7 @@ impl NessaConfig {
     }
 }
 
-fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), NessaModule>, all_modules: &VersionModCache, file_cache: &FileCache, optimize: bool, force_recompile: bool) -> Result<NessaModule, NessaError> {
+fn parse_ryna_module_with_config(path: &String, already_compiled: &mut HashMap<(String, String), RynaModule>, all_modules: &VersionModCache, file_cache: &FileCache, optimize: bool, force_recompile: bool) -> Result<RynaModule, RynaError> {
     let (config_yml, imports, main, is_macro) = file_cache.get(path).unwrap();
 
     // Try to read intermediate cache
@@ -225,7 +225,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
             if vers.len() > 1 {
                 let all_but_last_vers = &vers[..vers.len() - 1];
 
-                return Err(NessaError::module_error(
+                return Err(RynaError::module_error(
                     format!(
                         "Multiple versions needed for module {} ({} and {})", 
                         name,
@@ -241,7 +241,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
         for dep in &topological_order {
             if *dep.0 != config_yml.module_name && !already_compiled.contains_key(dep) {
                 let module = all_modules.get(dep).unwrap();
-                let compiled_module = parse_nessa_module_with_config(&module.path, already_compiled, all_modules, file_cache, optimize, force_recompile)?;
+                let compiled_module = parse_ryna_module_with_config(&module.path, already_compiled, all_modules, file_cache, optimize, force_recompile)?;
 
                 already_compiled.entry(dep.clone()).or_insert(compiled_module);
             }
@@ -258,7 +258,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
         let (module, source) = ctx.parse_with_dependencies(&config_yml.module_name, main, &module_dependencies)?;
         let graph = ctx.get_inner_dep_graph(&module)?;
         
-        let res = NessaModule::new(config_yml.module_name.clone(), config_yml.hash.clone(), ctx, module, source, imports.clone(), graph);
+        let res = RynaModule::new(config_yml.module_name.clone(), config_yml.hash.clone(), ctx, module, source, imports.clone(), graph);
 
         save_intermediate_cache(&res);
 
@@ -266,7 +266,7 @@ fn parse_nessa_module_with_config(path: &String, already_compiled: &mut HashMap<
     }
 }
 
-pub fn save_intermediate_cache(module: &NessaModule) {
+pub fn save_intermediate_cache(module: &RynaModule) {
     let cache_path = get_intermediate_cache_path(&module.ctx.module_name, &module.ctx.module_path);
 
     std::fs::create_dir_all(cache_path.parent().unwrap()).expect("Unable to create cache folders");
@@ -275,17 +275,17 @@ pub fn save_intermediate_cache(module: &NessaModule) {
     reduced_module.write_to_file(&cache_path);
 }
 
-pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String>, seen_paths: &mut HashSet<String>, modules: &mut VersionModCache, file_cache: &mut FileCache) -> Result<(), NessaError> {
-    let main_path = module_path.join(Path::new("main.nessa"));
+pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String>, seen_paths: &mut HashSet<String>, modules: &mut VersionModCache, file_cache: &mut FileCache) -> Result<(), RynaError> {
+    let main_path = module_path.join(Path::new("main.ryna"));
 
     if macro_code.is_none() && !main_path.exists() {
-        return Err(NessaError::module_error(format!("Main file ({}) does not exist", main_path.to_str().unwrap())));
+        return Err(RynaError::module_error(format!("Main file ({}) does not exist", main_path.to_str().unwrap())));
     }
 
-    let config_path = module_path.join(Path::new("nessa_config.yml"));
+    let config_path = module_path.join(Path::new("ryna_config.yml"));
 
     if !config_path.exists() {
-        return Err(NessaError::module_error(format!("Config file ({}) does not exist", config_path.to_str().unwrap())));
+        return Err(RynaError::module_error(format!("Config file ({}) does not exist", config_path.to_str().unwrap())));
     }
 
     let config = fs::read_to_string(&config_path).expect("Error while reading config file");
@@ -295,10 +295,10 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
         None => fs::read_to_string(&main_path).expect("Error while reading main file"),
     };
 
-    let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse configuration file");
-    let imports = nessa_module_imports_parser(Span::new(&main), Arc::new(config_yml.module_name.clone())).unwrap().1;
+    let mut config_yml: RynaConfig = from_str(&config).expect("Unable to parse configuration file");
+    let imports = ryna_module_imports_parser(Span::new(&main), Arc::new(config_yml.module_name.clone())).unwrap().1;
 
-    let mut local_files = glob(format!("{}/**/*.nessa", module_path.to_str().unwrap()).as_str())
+    let mut local_files = glob(format!("{}/**/*.ryna", module_path.to_str().unwrap()).as_str())
         .expect("Error while reading module path")
         .map(Result::unwrap)
         .collect::<Vec<_>>();
@@ -331,7 +331,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
 
     for path in local_files {
         let full_import_path = normalize_path(&path)?;
-        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 6].replace('\\', "/");
+        let import_name = full_import_path[norm_mod_path.len()..full_import_path.len() - 5].replace('\\', "/");
 
         if import_name != "/main" {
             let parent_module_name = config_yml.module_name.clone();
@@ -351,13 +351,13 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     for (module_name, info) in config_yml.modules.iter_mut() {
         if info.is_local {
             let local_main = fs::read_to_string(&info.path).expect("Error while reading main file");
-            let local_file_imports = nessa_module_imports_parser(Span::new(&local_main), Arc::new(config_yml.module_name.clone())).unwrap().1;
+            let local_file_imports = ryna_module_imports_parser(Span::new(&local_main), Arc::new(config_yml.module_name.clone())).unwrap().1;
 
-            local_imports.entry(module_name.clone()).or_insert((local_file_imports.clone(), local_main));
+            local_imports.entry(module_name.clone()).or_insert((local_file_imports.clone(), local_main));   
 
             for module in local_file_imports.keys() {
                 if !all_deps.contains_key(module) {
-                    return Err(NessaError::module_error(format!("Module with name {} was not found", module.green())));
+                    return Err(RynaError::module_error(format!("Module with name {} was not found", module.green())));
                 }
             }
 
@@ -384,7 +384,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
 
     for module in imports.keys() {
         if !config_yml.modules.contains_key(module) {
-            return Err(NessaError::module_error(format!("Module with name {} was not found", module.green())));
+            return Err(RynaError::module_error(format!("Module with name {} was not found", module.green())));
         }
     }
 
@@ -401,14 +401,14 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
         if !seen_paths.contains(&n_path) {
             seen_paths.insert(n_path.clone());
 
-            for file in glob(format!("{}/**/nessa_config.yml", n_path).as_str()).expect("Error while reading module path") {
+            for file in glob(format!("{}/**/ryna_config.yml", n_path).as_str()).expect("Error while reading module path") {
                 match file {
                     Ok(f) if f.is_file() => {
                         get_all_modules_cascade_aux(f.parent().unwrap(), None, seen_paths, modules, file_cache)?;
                     },
     
                     _ => {
-                        return Err(NessaError::module_error("Unable to extract file from module path".into()));
+                        return Err(RynaError::module_error("Unable to extract file from module path".into()));
                     }
                 }
             }
@@ -418,7 +418,7 @@ pub fn get_all_modules_cascade_aux(module_path: &Path, macro_code: Option<String
     Ok(())
 }
 
-pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -> Result<(VersionModCache, FileCache), NessaError> {
+pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -> Result<(VersionModCache, FileCache), RynaError> {
     let mut res = HashMap::new();
     let mut file_cache = HashMap::new();
 
@@ -427,16 +427,16 @@ pub fn get_all_modules_cascade(module_path: &Path, macro_code: Option<String>) -
     Ok((res, file_cache))
 }
 
-fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
+fn generate_test_file(module: &mut RynaModule) -> Result<(), RynaError> {
     // Add definitions
     let mut new_code = module.code.iter()
                                   .cloned()
-                                  .filter(NessaExpr::is_definition)
+                                  .filter(RynaExpr::is_definition)
                                   .collect::<Vec<_>>();
 
     macro_rules! fn_call {
         ($id: expr) => {
-            NessaExpr::FunctionCall(
+            RynaExpr::FunctionCall(
                 Location::none(), $id, vec!(), vec!()
             )
         };
@@ -444,7 +444,7 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
 
     macro_rules! fn_call_1 {
         ($id: expr, $arg: expr) => {
-            NessaExpr::FunctionCall(
+            RynaExpr::FunctionCall(
                 Location::none(), $id, vec!(), vec!($arg)
             )
         };
@@ -452,13 +452,13 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
 
     macro_rules! literal {
         ($obj: expr) => {
-            NessaExpr::Literal(Location::none(), Object::new($obj))
+            RynaExpr::Literal(Location::none(), Object::new($obj))
         };
     }
 
     macro_rules! if_else {
         ($cond: expr, $ib: expr, $eb: expr) => {
-            NessaExpr::If(
+            RynaExpr::If(
                 Location::none(),
                 Box::new($cond),
                 $ib,
@@ -470,19 +470,19 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
 
     macro_rules! var_def {
         ($name: expr, $obj: expr) => {
-            NessaExpr::VariableDefinition(Location::none(), $name, INT, Box::new($obj))
+            RynaExpr::VariableDefinition(Location::none(), $name, INT, Box::new($obj))
         };
     }
 
     macro_rules! var {
         ($obj: expr) => {
-            NessaExpr::NameReference(Location::none(), $obj)
+            RynaExpr::NameReference(Location::none(), $obj)
         };
     }
 
     macro_rules! binop {
         ($id: expr, $a: expr, $b: expr) => {
-            NessaExpr::BinaryOperation(Location::none(), $id, vec!(), Box::new($a), Box::new($b))
+            RynaExpr::BinaryOperation(Location::none(), $id, vec!(), Box::new($a), Box::new($b))
         };
     }
 
@@ -572,8 +572,8 @@ fn generate_test_file(module: &mut NessaModule) -> Result<(), NessaError> {
     Ok(())
 }
 
-pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool, test: bool, force_recompile: bool) -> Result<(NessaContext, Vec<NessaExpr>), NessaError> {
-    let mut module = parse_nessa_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache, optimize, force_recompile)?;
+pub fn precompile_ryna_module_with_config(path: &String, all_modules: VersionModCache, file_cache: FileCache, optimize: bool, test: bool, force_recompile: bool) -> Result<(RynaContext, Vec<RynaExpr>), RynaError> {
+    let mut module = parse_ryna_module_with_config(&normalize_path(Path::new(path))?, &mut HashMap::new(), &all_modules, &file_cache, optimize, force_recompile)?;
 
     if test {
         generate_test_file(&mut module)?;
@@ -584,11 +584,11 @@ pub fn precompile_nessa_module_with_config(path: &String, all_modules: VersionMo
     Ok((module.ctx, module.code))
 }
 
-pub fn generate_docs(path: &String) -> Result<(), NessaError> {
+pub fn generate_docs(path: &String) -> Result<(), RynaError> {
     let project_path = &normalize_path(Path::new(path))?;
 
     let (_, all_mods, files) = compute_project_hash(path, None, false, false)?;
-    let mut module = parse_nessa_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false, false)?;
+    let mut module = parse_ryna_module_with_config(project_path, &mut HashMap::new(), &all_mods, &files, false, false)?;
     module.ctx.precompile_module(&mut module.code)?;
 
     generate_all_function_overload_docs(&project_path, &module);
@@ -600,7 +600,7 @@ pub fn generate_docs(path: &String) -> Result<(), NessaError> {
     Ok(())
 }
 
-pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize: bool, test: bool) -> Result<(String, VersionModCache, FileCache), NessaError> {
+pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize: bool, test: bool) -> Result<(String, VersionModCache, FileCache), RynaError> {
     let module_path = Path::new(path);
     let (all_modules, file_cache) = get_all_modules_cascade(module_path, macro_code)?;
 
@@ -616,65 +616,65 @@ pub fn compute_project_hash(path: &String, macro_code: Option<String>, optimize:
         final_hash = format!("{}{}", final_hash, file_cache.get(&normalize_path(Path::new(&info.path))?).unwrap().0.hash);
     }
 
-    // Add nessa version
+    // Add ryna version
     final_hash.push_str(env!("CARGO_PKG_VERSION"));
 
-    // Add nessa optimization flag
+    // Add ryna optimization flag
     final_hash.push_str(&optimize.to_string());
 
-    // Add nessa test flag
+    // Add ryna test flag
     final_hash.push_str(&test.to_string());
 
     Ok((format!("{:x}", compute(&final_hash)), all_modules, file_cache))
 }
 
-pub fn read_compiled_cache(path: &String) -> Option<CompiledNessaModule> {
+pub fn read_compiled_cache(path: &String) -> Option<CompiledRynaModule> {
     let module_path = Path::new(path);
-    let cache_path = module_path.join(Path::new("nessa_cache"));
+    let cache_path = module_path.join(Path::new("ryna_cache"));
 
     if !cache_path.exists() {
         return None;
     }
 
-    let code_path = cache_path.join(Path::new("main.nessac"));
+    let code_path = cache_path.join(Path::new("main.rynac"));
 
     if !code_path.exists() {
         return None;
     }
 
-    let code = CompiledNessaModule::from_file(&code_path);
+    let code = CompiledRynaModule::from_file(&code_path);
 
     Some(code)
 }
 
-pub fn save_compiled_cache(path: &String, module: &CompiledNessaModule) -> Result<(), NessaError> {
+pub fn save_compiled_cache(path: &String, module: &CompiledRynaModule) -> Result<(), RynaError> {
     let module_path = Path::new(path);
-    let cache_path = module_path.join(Path::new("nessa_cache"));
+    let cache_path = module_path.join(Path::new("ryna_cache"));
 
     if !cache_path.exists() {
         fs::create_dir(&cache_path).expect("Unable to create cache directory");
     }
 
-    let code_path = cache_path.join(Path::new("main.nessac"));
+    let code_path = cache_path.join(Path::new("main.rynac"));
     module.write_to_file(&code_path);
 
     Ok(())
 }
 
-pub fn normalize_path(path: &Path) -> Result<String, NessaError> {
+pub fn normalize_path(path: &Path) -> Result<String, RynaError> {
     let path_slashes = path.to_str().unwrap().replace('\\', "/");
     let sub_path = parse_env_vars_and_normalize(&path_slashes)?;
     
     return match Path::new(&sub_path).canonicalize() {
         Ok(p) => Ok(p.to_str().unwrap().replace('\\', "/")),
-        Err(_) => Err(NessaError::module_error(format!(
+        Err(_) => Err(RynaError::module_error(format!(
             "Unable to normalize path: {} (does it exist?)",
             path_slashes.green()
         ))),
     };
 }
 
-pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, NessaError> {
+pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, RynaError> {
     let res = path.to_owned();
     let env_var_regex = Regex::new(ENV_VAR_REGEX).unwrap();
 
@@ -685,16 +685,16 @@ pub fn parse_env_vars_and_normalize(path: &str) -> Result<String, NessaError> {
             Ok(var.into())
  
         } else {
-            Err(NessaError::module_error(format!("Unable to find config variable {}", cap)))
+            Err(RynaError::module_error(format!("Unable to find config variable {}", cap)))
         }
     };
     
     return replace_all_fallible(&env_var_regex, res.as_str(), replacement);
 }
 
-impl NessaGlobalConfig {
-    pub fn load() -> NessaGlobalConfig {
-        if let Some(proj_dirs) = ProjectDirs::from("", "",  "nessa-language") {
+impl RynaGlobalConfig {
+    pub fn load() -> RynaGlobalConfig {
+        if let Some(proj_dirs) = ProjectDirs::from("", "",  "ryna-language") {
             let config_path = proj_dirs.config_dir();
             let config_file_path = config_path.join("config.yml");
     
@@ -704,14 +704,14 @@ impl NessaGlobalConfig {
             }
 
             let config_file = std::fs::read_to_string(&config_file_path).unwrap();
-            let mut config: NessaGlobalConfig = serde_yaml::from_str(&config_file).unwrap();
+            let mut config: RynaGlobalConfig = serde_yaml::from_str(&config_file).unwrap();
 
             config.file_path = config_file_path.to_str().unwrap().to_string();
 
             return config;
         }
     
-        nessa_error!("Unable to read config file");
+        ryna_error!("Unable to read config file");
     }
 
     pub fn save(&self) -> Result<(), String> {
@@ -730,5 +730,5 @@ impl NessaGlobalConfig {
 }
 
 lazy_static! {
-    pub static ref CONFIG: RwLock<NessaGlobalConfig> = RwLock::new(NessaGlobalConfig::load());
+    pub static ref CONFIG: RwLock<RynaGlobalConfig> = RwLock::new(RynaGlobalConfig::load());
 }

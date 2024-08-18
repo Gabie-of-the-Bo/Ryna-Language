@@ -1,9 +1,9 @@
 Sometimes you want to use macros to create small code transformations that result in an expression (ie. not an **if-else**, **for**, **while** or definition). 
-For this purpose, you can use the second type of macro that Nessa has: **expression macros**. Let"s see how they work.
+For this purpose, you can use the second type of macro that Ryna has: **expression macros**. Let"s see how they work.
 
 ## Syntax
 
-An expression macro can be created in Nessa using this syntax:
+An expression macro can be created in Ryna using this syntax:
 
 ```
 syntax expr macro_name from NDL_Pattern {

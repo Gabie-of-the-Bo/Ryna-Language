@@ -1,4 +1,4 @@
-There is a final function-related issue that might happen when you code in Nessa. It can be solved with a new feature called **do blocks**, 
+There is a final function-related issue that might happen when you code in Ryna. It can be solved with a new feature called **do blocks**, 
 so let's take a look:
 
 ## The problem
@@ -17,7 +17,7 @@ if c {
 }
 ```
 
-The problem is, Nessa does not allow to declare a variable without initializing it. One way to solve this would be using a dummy value `d`: 
+The problem is, Ryna does not allow to declare a variable without initializing it. One way to solve this would be using a dummy value `d`: 
 
 ```
 let var = d;

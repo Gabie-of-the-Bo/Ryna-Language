@@ -1,5 +1,5 @@
-The main building blocks of the Nessa type system are what we will call **basic types**. These represent kinds of data that can be stored.
-As you might expect, Nessa provides an implementation for some basic types, which are summarized in the following table:
+The main building blocks of the Ryna type system are what we will call **basic types**. These represent kinds of data that can be stored.
+As you might expect, Ryna provides an implementation for some basic types, which are summarized in the following table:
 
 | Name     | Description                                                 |
 | -------- | ----------------------------------------------------------- |

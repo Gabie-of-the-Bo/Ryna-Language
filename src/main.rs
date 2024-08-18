@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use nessa::{config::{generate_docs, ModuleInfo, NessaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, nessa_error, nessa_warning};
+use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, ryna_error, ryna_warning};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -74,7 +74,7 @@ impl Autocomplete for OptionsAutocompleter {
 }
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
-const DEFAULT_GITIGNORE: &str = "nessa_cache\nnessa_config.yml";
+const DEFAULT_GITIGNORE: &str = "ryna_cache\nryna_config.yml";
 const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
 const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
@@ -85,13 +85,13 @@ fn main() {
         ╘══════════════════════════╛
     */
 
-    let mut cli = Command::new("nessa")
+    let mut cli = Command::new("ryna")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Javier Castillo <javier.castillo.dev@gmail.com>")
-        .about("Executes Nessa code")
+        .about("Executes Ryna code")
         .subcommand(
             Command::new("run")
-                .about("Run Nessa project")
+                .about("Run Ryna project")
                 .arg(
                     Arg::new("INPUT")
                     .help("Specifies the file you want to execute")
@@ -141,7 +141,7 @@ fn main() {
         )
         .subcommand(
             Command::new("new")
-            .about("Create Nessa project with config files")
+            .about("Create Ryna project with config files")
             .arg(
                 Arg::new("name")
                 .help("Project name")
@@ -174,7 +174,7 @@ fn main() {
         )
         .subcommand(
             Command::new("add")
-            .about("Add dependency to a Nessa project")
+            .about("Add dependency to a Ryna project")
             .arg(
                 Arg::new("name")
                 .help("Module name")
@@ -276,17 +276,17 @@ fn main() {
             };
 
             let res = if profile {
-                NessaContext::parse_and_execute_nessa_project::<true>(path.into(), force_recompile || profile, optimize, test, &program_input)
+                RynaContext::parse_and_execute_ryna_project::<true>(path.into(), force_recompile || profile, optimize, test, &program_input)
 
             } else {
-                NessaContext::parse_and_execute_nessa_project::<false>(path.into(), force_recompile || profile, optimize, test, &program_input)
+                RynaContext::parse_and_execute_ryna_project::<false>(path.into(), force_recompile || profile, optimize, test, &program_input)
             };
             
             match res {
                 Ok(ex) => {
                     if ex.profiling_info.is_some() {
                         let proj_path = Path::new(path);
-                        let prof_path = proj_path.join("nessa_cache/prof.json");
+                        let prof_path = proj_path.join("ryna_cache/prof.json");
     
                         let prof_file = serde_json::to_string(&ex.profiling_info).expect("Unable to serialize profiling information");
     
@@ -339,7 +339,7 @@ fn main() {
                     }
                 
                 } else {
-                    nessa_warning!(
+                    ryna_warning!(
                         "Default modules path was not found. Skipping this dependency folder..."
                     );    
                 }
@@ -356,7 +356,7 @@ fn main() {
                         .with_default("libs")
                         .with_validator(RegexValidator::new(PATH_REGEX, "Modules path contains invalid characters"))
                         .with_placeholder("path/to/modules")
-                        .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in nessa_config.yml)")
+                        .with_help_message("The interpreter will look for any imported modules in this folder (you can add more in ryna_config.yml)")
                         .prompt().unwrap().trim().to_string()
                     );
                 }
@@ -365,12 +365,12 @@ fn main() {
             let module_path = Path::new(&name);
 
             if module_path.exists() {
-                nessa_error!("Project folder already exists!");
+                ryna_error!("Project folder already exists!");
             }
 
             fs::create_dir(&name).expect("Unable to create project directory");
 
-            let config = NessaConfig {
+            let config = RynaConfig {
                 module_name: name.clone(),
                 hash: "".into(),
                 version,
@@ -378,8 +378,8 @@ fn main() {
                 modules: HashMap::new(),
             };
 
-            fs::write(module_path.join(Path::new("nessa_config.yml")), serde_yaml::to_string(&config).unwrap()).expect("Unable to write configuration file");
-            fs::write(module_path.join(Path::new("main.nessa")), DEFAULT_CODE).expect("Unable to write main file");
+            fs::write(module_path.join(Path::new("ryna_config.yml")), serde_yaml::to_string(&config).unwrap()).expect("Unable to write configuration file");
+            fs::write(module_path.join(Path::new("main.ryna")), DEFAULT_CODE).expect("Unable to write main file");
 
             let gitignore = !run_args.get_one::<bool>("no-gitignore").expect("Invalid no-gitignore flag");
 
@@ -399,27 +399,27 @@ fn main() {
         Some(("add", run_args)) => {
             let module_path = Path::new(".");
 
-            let config_path = module_path.join(Path::new("nessa_config.yml"));
-            let main_path = module_path.join(Path::new("main.nessa"));
+            let config_path = module_path.join(Path::new("ryna_config.yml"));
+            let main_path = module_path.join(Path::new("main.ryna"));
 
             if !config_path.exists() {
-                nessa_error!("No project config file!");
+                ryna_error!("No project config file!");
             }
 
             if !main_path.exists() {
-                nessa_error!("No main nessa file!");
+                ryna_error!("No main ryna file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
-            let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse config file");
+            let mut config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
 
             let mut module_versions = HashMap::<String, HashSet<_>>::new();
             let mut paths = HashMap::new();
 
             for path in &config_yml.module_paths {
-                for f in glob(format!("{}/**/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                for f in glob(format!("{}/**/ryna_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
                     let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
-                    let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
+                    let config_yml_f: RynaConfig = from_str(&config_f).expect("Unable to parse config file");
                     module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
 
                     paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
@@ -459,7 +459,7 @@ fn main() {
             }
 
             if paths.get(&(name.clone(), version.clone())).is_none() {
-                nessa_warning!(
+                ryna_warning!(
                     "Module {} {} was not found. Setting empty module path...",
                     name.green(),
                     format!("v{version}").cyan()
@@ -500,7 +500,7 @@ fn main() {
 
             match install_prelude() {
                 Ok(_) => {},
-                Err(err) => nessa_error!("{}", err),
+                Err(err) => ryna_error!("{}", err),
             }
         }
 
@@ -510,7 +510,7 @@ fn main() {
 
             match install_repo(repo_url, pack_name) {
                 Ok(_) => {},
-                Err(err) => nessa_error!("{}", err),
+                Err(err) => ryna_error!("{}", err),
             }
         }
 
@@ -519,21 +519,21 @@ fn main() {
 
             match uninstall_repo(pack_name) {
                 Ok(_) => {},
-                Err(err) => nessa_error!("{}", err),
+                Err(err) => ryna_error!("{}", err),
             }
         }
 
         Some(("save-deps", _)) => {
             let module_path = Path::new(".");
 
-            let config_path = module_path.join(Path::new("nessa_config.yml"));
+            let config_path = module_path.join(Path::new("ryna_config.yml"));
 
             if !config_path.exists() {
-                nessa_error!("No project config file!");
+                ryna_error!("No project config file!");
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");
-            let mut config_yml: NessaConfig = from_str(&config).expect("Unable to parse config file");
+            let mut config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
 
             // Anonymize
             config_yml.hash.clear();
@@ -543,26 +543,26 @@ fn main() {
                 m.1.path.clear();
             });
 
-            fs::write(module_path.join(Path::new("nessa_deps.yml")), serde_yaml::to_string(&config_yml).unwrap()).expect("Unable to write configuration file");
+            fs::write(module_path.join(Path::new("ryna_deps.yml")), serde_yaml::to_string(&config_yml).unwrap()).expect("Unable to write configuration file");
         }
 
         Some(("load-deps", run_args)) => {
             let module_path = Path::new(".");
 
-            let deps_path = module_path.join(Path::new("nessa_deps.yml"));
+            let deps_path = module_path.join(Path::new("ryna_deps.yml"));
 
             if !deps_path.exists() {
-                nessa_error!("No project requirements file!");
+                ryna_error!("No project requirements file!");
             }
 
             let deps = fs::read_to_string(&deps_path).expect("Unable to read requirements file");
-            let mut deps_yml: NessaConfig = from_str(&deps).expect("Unable to parse requirements file");
+            let mut deps_yml: RynaConfig = from_str(&deps).expect("Unable to parse requirements file");
 
             if !CONFIG.read().unwrap().modules_path.is_empty() {
                 deps_yml.module_paths.push(CONFIG.read().unwrap().modules_path.clone());
             
             } else {
-                nessa_error!("Default modules path was not found! Try executing nessa setup");    
+                ryna_error!("Default modules path was not found! Try executing ryna setup");    
             }
 
             if let Some(m) = run_args.get_one::<String>("modules") {
@@ -573,9 +573,9 @@ fn main() {
             let mut paths = HashMap::new();
 
             for path in &deps_yml.module_paths {
-                for f in glob(format!("{}/**/nessa_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+                for f in glob(format!("{}/**/ryna_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
                     let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
-                    let config_yml_f: NessaConfig = from_str(&config_f).expect("Unable to parse config file");
+                    let config_yml_f: RynaConfig = from_str(&config_f).expect("Unable to parse config file");
                     module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
 
                     paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
@@ -584,17 +584,17 @@ fn main() {
 
             for module in deps_yml.modules.iter_mut() {
                 if !module_versions.contains_key(module.0) {
-                    nessa_error!("Module {} not found!", module.0.green());    
+                    ryna_error!("Module {} not found!", module.0.green());    
                 }
                 
                 if !module_versions.get(module.0).unwrap().contains(&module.1.version) {
-                    nessa_error!("Version {} for module {} not found!", format!("v{}", module.1.version).cyan(), module.0.green());    
+                    ryna_error!("Version {} for module {} not found!", format!("v{}", module.1.version).cyan(), module.0.green());    
                 }
 
                 module.1.path = paths.get(&(module.0.clone(), module.1.version.clone())).unwrap().clone();
             }
 
-            fs::write(module_path.join(Path::new("nessa_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
+            fs::write(module_path.join(Path::new("ryna_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
         }
 
         _ => {

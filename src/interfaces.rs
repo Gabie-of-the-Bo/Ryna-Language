@@ -1,7 +1,7 @@
 use colored::Colorize;
 use serde::{Serialize, Deserialize};
 
-use crate::{annotations::Annotation, context::NessaContext, html_ext::HTMLColorable, parser::Location, types::{Type, BOOL, FLOAT, INT, STR, T_0, T_1, T_2}, ARR_IT_OF, ARR_OF};
+use crate::{annotations::Annotation, context::RynaContext, html_ext::HTMLColorable, parser::Location, types::{Type, BOOL, FLOAT, INT, STR, T_0, T_1, T_2}, ARR_IT_OF, ARR_OF};
 
 pub type InterfaceFunctionHeader = (Vec<Annotation>, String, Option<Vec<String>>, Vec<(String, Type)>, Type);
 pub type InterfaceUnaryOpHeader = (Vec<Annotation>, usize, Vec<String>, String, Type, Type);
@@ -44,7 +44,7 @@ impl InterfaceConstraint {
 }
 
 impl InterfaceConstraint {
-    pub fn get_name(&self, ctx: &NessaContext) -> String {
+    pub fn get_name(&self, ctx: &RynaContext) -> String {
         if !self.args.is_empty() {
             format!(
                 "{}<{}>", 
@@ -57,7 +57,7 @@ impl InterfaceConstraint {
         }
     }
 
-    pub fn get_name_html(&self, ctx: &NessaContext) -> String {
+    pub fn get_name_html(&self, ctx: &RynaContext) -> String {
         if !self.args.is_empty() {
             format!(
                 "{}&lt;{}&gt;", 
@@ -70,7 +70,7 @@ impl InterfaceConstraint {
         }
     }
 
-    pub fn get_name_plain(&self, ctx: &NessaContext) -> String {
+    pub fn get_name_plain(&self, ctx: &RynaContext) -> String {
         if !self.args.is_empty() {
             format!(
                 "{}<{}>", 
@@ -100,7 +100,7 @@ pub const PRINTABLE: InterfaceConstraint = InterfaceConstraint { id: PRINTABLE_I
 macro_rules! ITERABLE_OF { ($t: expr) => { InterfaceConstraint::new($t) }; }
 
 // Standard context
-pub fn standard_interfaces(ctx: &mut NessaContext) {
+pub fn standard_interfaces(ctx: &mut RynaContext) {
     
     // Definitions
     ctx.define_interface(Location::none(), vec!(), "Iterable".into(), vec!("Iter".into(), "Elem".into()), vec!(

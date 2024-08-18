@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::annotations::Annotation;
-use crate::compilation::CompiledNessaExpr;
+use crate::compilation::CompiledRynaExpr;
 use crate::parser::Location;
 use crate::types::{Type, INT, BOOL, STR, T_0, FLOAT};
 use crate::{object::*, ARR_OF};
-use crate::context::NessaContext;
+use crate::context::RynaContext;
 
 /*
                                                   ╒══════════════════╕
@@ -14,7 +14,7 @@ use crate::context::NessaContext;
 */
 
 pub type UnaryFunctionFn = fn(&Vec<Type>, &Type, Object) -> Result<Object, String>;
-pub type BinaryFunctionFn = fn(&Vec<Type>, &Type, Object, Object, &NessaContext) -> Result<Object, String>;
+pub type BinaryFunctionFn = fn(&Vec<Type>, &Type, Object, Object, &RynaContext) -> Result<Object, String>;
 pub type NaryFunctionFn = fn((&mut Vec<Object>, &mut usize, &mut Vec<(i32, usize, i32)>, &mut i32), &Vec<Type>, &Type) -> Result<(), String>;
 
 pub type OptUnaryFunctionFn = Option<UnaryFunctionFn>;
@@ -129,7 +129,7 @@ pub const NEG_UNOP_ID: usize = 0;
 pub const NOT_UNOP_ID: usize = 1;
 pub const DEREF_UNOP_ID: usize = 2;
 
-pub fn standard_unary_operations(ctx: &mut NessaContext) {
+pub fn standard_unary_operations(ctx: &mut RynaContext) {
     ctx.define_unary_operator("-".into(), true, 300).unwrap();
 
     define_unary_native_op_combinations!(ctx, 0, INT, INT);
@@ -208,7 +208,7 @@ pub const LT_BINOP_PREC: usize = 900;
 
 pub const DEFINE_BINOP_ID: usize = 20;
 
-pub fn standard_binary_operations(ctx: &mut NessaContext) {
+pub fn standard_binary_operations(ctx: &mut RynaContext) {
     
     /*
         ╒═════════════════════════════╕
@@ -360,7 +360,7 @@ pub fn standard_binary_operations(ctx: &mut NessaContext) {
 
 pub const CALL_OP: usize = 0;
 
-pub fn standard_nary_operations(ctx: &mut NessaContext) {
+pub fn standard_nary_operations(ctx: &mut RynaContext) {
     ctx.define_nary_operator("(".into(), ")".into(), 50).unwrap();
 
     for n in 0..30 {
@@ -379,7 +379,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             EMPTY_NARY_FUNC
         ).unwrap();
 
-        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCallRef, 0));
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledRynaExpr::LambdaCallRef, 0));
 
         let res = ctx.define_native_nary_operation(
             0, n + 1, 
@@ -389,7 +389,7 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             EMPTY_NARY_FUNC
         ).unwrap();
 
-        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCallRef, 0));
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledRynaExpr::LambdaCallRef, 0));
 
         let res = ctx.define_native_nary_operation(
             0, n + 1, 
@@ -399,18 +399,18 @@ pub fn standard_nary_operations(ctx: &mut NessaContext) {
             EMPTY_NARY_FUNC
         ).unwrap();
 
-        ctx.cache.opcodes.nary.insert((0, res), (CompiledNessaExpr::LambdaCall, 0));
+        ctx.cache.opcodes.nary.insert((0, res), (CompiledRynaExpr::LambdaCall, 0));
     }  
 
     ctx.define_nary_operator("[".into(), "]".into(), 75).unwrap();
 
     // Indexing operations on arrays
     let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0), &[INT], T_0, EMPTY_NARY_FUNC).unwrap();
-    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxMove, 0));
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledRynaExpr::IdxMove, 0));
     
     let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0).to_mut(), &[INT], T_0.to_mut(), EMPTY_NARY_FUNC).unwrap();
-    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxMut, 0));
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledRynaExpr::IdxMut, 0));
     
     let res = ctx.define_native_nary_operation(1, 1, ARR_OF!(T_0).to_ref(), &[INT], T_0.to_ref(), EMPTY_NARY_FUNC).unwrap();
-    ctx.cache.opcodes.nary.insert((1, res), (CompiledNessaExpr::IdxRef, 0));
+    ctx.cache.opcodes.nary.insert((1, res), (CompiledRynaExpr::IdxRef, 0));
 }

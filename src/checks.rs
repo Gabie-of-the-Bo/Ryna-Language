@@ -4,11 +4,11 @@ use colored::Colorize;
 use rustc_hash::FxHashSet;
 
 use crate::annotations::Annotation;
-use crate::compilation::NessaError;
-use crate::context::NessaContext;
+use crate::compilation::RynaError;
+use crate::context::RynaContext;
 use crate::formats::{check_class_name, check_fn_name, check_interface_name, check_template_name};
-use crate::located_nessa_warning;
-use crate::parser::{NessaExpr, Location};
+use crate::located_ryna_warning;
+use crate::parser::{RynaExpr, Location};
 use crate::operations::Operator;
 use crate::types::{Type, BOOL};
 use crate::patterns::Pattern;
@@ -19,35 +19,35 @@ use crate::patterns::Pattern;
                                                   ╘══════════════════╛
 */
 
-impl NessaContext {
-    pub fn ensured_return_check(expr: &NessaExpr) -> Result<(), NessaError> {
+impl RynaContext {
+    pub fn ensured_return_check(expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
-            NessaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, body) |
-            NessaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, body)  => NessaContext::ensured_return_check_body(body, l, "Operation"),
+            RynaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |
+            RynaExpr::PostfixOperationDefinition(l, _, _, _, _, _, _, body) |
+            RynaExpr::BinaryOperationDefinition(l, _, _, _, _, _, _, body) |
+            RynaExpr::NaryOperationDefinition(l, _, _, _, _, _, _, body)  => RynaContext::ensured_return_check_body(body, l, "Operation"),
 
-            NessaExpr::CompiledLambda(l, _, _, _, _, body) |
-            NessaExpr::FunctionDefinition(l, _, _, _, _, _, body) => NessaContext::ensured_return_check_body(body, l, "Function"),
+            RynaExpr::CompiledLambda(l, _, _, _, _, body) |
+            RynaExpr::FunctionDefinition(l, _, _, _, _, _, body) => RynaContext::ensured_return_check_body(body, l, "Function"),
 
-            NessaExpr::DoBlock(l, body, _) => NessaContext::ensured_return_check_body(body, l, "Do block"),
+            RynaExpr::DoBlock(l, body, _) => RynaContext::ensured_return_check_body(body, l, "Do block"),
 
             _ => Ok(())
         }
     }
 
-    pub fn ensured_return_check_body(lines: &Vec<NessaExpr>, l: &Location, instance: &str) -> Result<(), NessaError> {
+    pub fn ensured_return_check_body(lines: &Vec<RynaExpr>, l: &Location, instance: &str) -> Result<(), RynaError> {
         for line in lines {
             match line {
-                NessaExpr::Return(_, _) => return Ok(()),
+                RynaExpr::Return(_, _) => return Ok(()),
 
-                NessaExpr::If(_, _, ib, ei, Some(eb_inner)) => {
-                    let mut returns = NessaContext::ensured_return_check_body(ib, l, instance).is_ok() && 
-                                      NessaContext::ensured_return_check_body(eb_inner, l, instance).is_ok();
+                RynaExpr::If(_, _, ib, ei, Some(eb_inner)) => {
+                    let mut returns = RynaContext::ensured_return_check_body(ib, l, instance).is_ok() && 
+                                      RynaContext::ensured_return_check_body(eb_inner, l, instance).is_ok();
 
                     if returns { // Check every branch
                         for (_, ei_b) in ei {
-                            if NessaContext::ensured_return_check_body(ei_b, l, instance).is_err() {
+                            if RynaContext::ensured_return_check_body(ei_b, l, instance).is_err() {
                                 returns = false;
                                 break;
                             }
@@ -63,41 +63,41 @@ impl NessaContext {
             }
         }
         
-        Err(NessaError::compiler_error(format!("{instance} may not always return a value"), l, vec!()))
+        Err(RynaError::compiler_error(format!("{instance} may not always return a value"), l, vec!()))
     }
 
-    pub fn return_check(&self, expr: &NessaExpr, ret_type: &Option<Type>) -> Result<(), NessaError> {
+    pub fn return_check(&self, expr: &RynaExpr, ret_type: &Option<Type>) -> Result<(), RynaError> {
         match (expr, ret_type) {
-            (NessaExpr::Break(..), _) |
-            (NessaExpr::Continue(..), _) |
-            (NessaExpr::Literal(..), _) |
-            (NessaExpr::Tuple(..), _) |
-            (NessaExpr::Variable(..), _) |
-            (NessaExpr::UnaryOperation(..), _) |
-            (NessaExpr::BinaryOperation(..), _) |
-            (NessaExpr::NaryOperation(..), _) |
-            (NessaExpr::FunctionCall(..), _) |
-            (NessaExpr::AttributeAccess(..), _) |
-            (NessaExpr::AttributeAssignment(..), _) |
-            (NessaExpr::PrefixOperatorDefinition(..), _) |
-            (NessaExpr::PostfixOperatorDefinition(..), _) |
-            (NessaExpr::BinaryOperatorDefinition(..), _) |
-            (NessaExpr::NaryOperatorDefinition(..), _) |
-            (NessaExpr::InterfaceDefinition(..), _) |
-            (NessaExpr::InterfaceImplementation(..), _) |
-            (NessaExpr::ClassDefinition(..), _) => Ok(()),
+            (RynaExpr::Break(..), _) |
+            (RynaExpr::Continue(..), _) |
+            (RynaExpr::Literal(..), _) |
+            (RynaExpr::Tuple(..), _) |
+            (RynaExpr::Variable(..), _) |
+            (RynaExpr::UnaryOperation(..), _) |
+            (RynaExpr::BinaryOperation(..), _) |
+            (RynaExpr::NaryOperation(..), _) |
+            (RynaExpr::FunctionCall(..), _) |
+            (RynaExpr::AttributeAccess(..), _) |
+            (RynaExpr::AttributeAssignment(..), _) |
+            (RynaExpr::PrefixOperatorDefinition(..), _) |
+            (RynaExpr::PostfixOperatorDefinition(..), _) |
+            (RynaExpr::BinaryOperatorDefinition(..), _) |
+            (RynaExpr::NaryOperatorDefinition(..), _) |
+            (RynaExpr::InterfaceDefinition(..), _) |
+            (RynaExpr::InterfaceImplementation(..), _) |
+            (RynaExpr::ClassDefinition(..), _) => Ok(()),
 
-            (NessaExpr::CompiledVariableDefinition(_, _, _, _, e), _) |
-            (NessaExpr::CompiledVariableAssignment(_, _, _, _, e), _) => self.return_check(e, &None),
+            (RynaExpr::CompiledVariableDefinition(_, _, _, _, e), _) |
+            (RynaExpr::CompiledVariableAssignment(_, _, _, _, e), _) => self.return_check(e, &None),
 
-            (NessaExpr::Return(l, _), None) => {
-                Err(NessaError::compiler_error(
+            (RynaExpr::Return(l, _), None) => {
+                Err(RynaError::compiler_error(
                     "Return statements are only allowed inside function and operation definition bodies".into(), 
                     l, vec!()
                 ))
             },
 
-            (NessaExpr::Return(l, e), Some(expected_t)) => {
+            (RynaExpr::Return(l, e), Some(expected_t)) => {
                 self.return_check(e, ret_type)?;
                 let t = self.infer_type(e)?;
 
@@ -105,18 +105,18 @@ impl NessaContext {
                     Ok(())
 
                 } else {
-                    Err(NessaError::compiler_error(
+                    Err(RynaError::compiler_error(
                         format!("Value of type {} is not bindable to expected return value of type {}", t.get_name(self), expected_t.get_name(self)), 
                         l, vec!()
                     ))
                 }
             },
 
-            (NessaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
-            (NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
-            (NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
-            (NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, ret, body), None) |
-            (NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, ret, body), None) => {
+            (RynaExpr::FunctionDefinition(_, _, _, t, _, ret, body), None) |
+            (RynaExpr::PrefixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (RynaExpr::PostfixOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (RynaExpr::BinaryOperationDefinition(_, _, _, t, _, _, ret, body), None) |
+            (RynaExpr::NaryOperationDefinition(_, _, _, t, _, _, ret, body), None) => {
                 if t.is_empty() {
                     let expected_ret = Some(ret.clone());
 
@@ -125,10 +125,10 @@ impl NessaContext {
                     }
                 }
 
-                NessaContext::ensured_return_check(expr)
+                RynaContext::ensured_return_check(expr)
             }
 
-            (NessaExpr::CompiledLambda(_, _, _, _, ret, body), _) => {
+            (RynaExpr::CompiledLambda(_, _, _, _, ret, body), _) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
@@ -137,21 +137,21 @@ impl NessaContext {
 
                 self.repeated_arguments_check(expr)?;
                 self.lambda_check(expr)?;
-                NessaContext::ensured_return_check(expr)
+                RynaContext::ensured_return_check(expr)
             }
 
-            (NessaExpr::DoBlock(_, body, ret), _) => {
+            (RynaExpr::DoBlock(_, body, ret), _) => {
                 let expected_ret = Some(ret.clone());
 
                 for line in body {
                     self.return_check(line, &expected_ret)?;
                 }
 
-                NessaContext::ensured_return_check(expr)
+                RynaContext::ensured_return_check(expr)
             }
 
-            (NessaExpr::While(_, cond, body), ret) |
-            (NessaExpr::CompiledFor(_, _, _, _, cond, body), ret) => {
+            (RynaExpr::While(_, cond, body), ret) |
+            (RynaExpr::CompiledFor(_, _, _, _, cond, body), ret) => {
                 self.return_check(cond, ret)?;
 
                 for line in body {
@@ -161,7 +161,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            (NessaExpr::If(_, ih, ib, ei, eb), ret) => {
+            (RynaExpr::If(_, ih, ib, ei, eb), ret) => {
                 self.return_check(ih, ret)?;
 
                 for line in ib {
@@ -185,29 +185,29 @@ impl NessaContext {
                 Ok(())
             },
 
-            (NessaExpr::Macro(..), _) => { Ok(()) },
+            (RynaExpr::Macro(..), _) => { Ok(()) },
 
             _ => unimplemented!("{:?}", expr)
         }
     }
 
-    pub fn ambiguity_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn ambiguity_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            NessaExpr::Break(..) |
-            NessaExpr::Continue(..) |
-            NessaExpr::Literal(..) |
-            NessaExpr::Variable(..) |
-            NessaExpr::PrefixOperatorDefinition(..) |
-            NessaExpr::PostfixOperatorDefinition(..) |
-            NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) |
-            NessaExpr::InterfaceDefinition(..) |
-            NessaExpr::InterfaceImplementation(..) |
-            NessaExpr::ClassDefinition(..) => Ok(()),
+            RynaExpr::Break(..) |
+            RynaExpr::Continue(..) |
+            RynaExpr::Literal(..) |
+            RynaExpr::Variable(..) |
+            RynaExpr::PrefixOperatorDefinition(..) |
+            RynaExpr::PostfixOperatorDefinition(..) |
+            RynaExpr::BinaryOperatorDefinition(..) |
+            RynaExpr::NaryOperatorDefinition(..) |
+            RynaExpr::InterfaceDefinition(..) |
+            RynaExpr::InterfaceImplementation(..) |
+            RynaExpr::ClassDefinition(..) => Ok(()),
 
-            NessaExpr::DoBlock(_, body, _) |
-            NessaExpr::CompiledLambda(_, _, _, _, _, body) |
-            NessaExpr::Tuple(_, body) => {
+            RynaExpr::DoBlock(_, body, _) |
+            RynaExpr::CompiledLambda(_, _, _, _, _, body) |
+            RynaExpr::Tuple(_, body) => {
                 for line in body {
                     self.ambiguity_check(line)?;
                 }
@@ -215,7 +215,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::FunctionCall(l, id, _ , args) => {
+            RynaExpr::FunctionCall(l, id, _ , args) => {
                 let mut arg_types = Vec::with_capacity(args.len());
 
                 for arg in args.iter() {
@@ -229,7 +229,7 @@ impl NessaContext {
                     let f_name = &self.functions[*id].name;
                     let possibilities = ov.iter().map(|(a, r)| format!("{}{} -> {}", f_name, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
                     
-                    Err(NessaError::compiler_error(
+                    Err(RynaError::compiler_error(
                         format!(
                             "Function call {}({}) is ambiguous",
                             f_name.green(),
@@ -243,7 +243,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(l, id, _, arg) => {
+            RynaExpr::UnaryOperation(l, id, _, arg) => {
                 self.ambiguity_check(arg)?;
                 let t = self.infer_type(arg)?;
 
@@ -252,7 +252,7 @@ impl NessaContext {
                         if *prefix {
                             let possibilities = ov.iter().map(|(a, r)| format!("{}({}) -> {}", representation, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
                             
-                            Err(NessaError::compiler_error(
+                            Err(RynaError::compiler_error(
                                 format!(
                                     "Unary operation {}({}) is ambiguous",
                                     representation,
@@ -264,7 +264,7 @@ impl NessaContext {
                         } else {
                             let possibilities = ov.iter().map(|(a, r)| format!("({}){} -> {}", a.get_name(self), representation, r.get_name(self))).collect::<Vec<_>>();
         
-                            Err(NessaError::compiler_error(
+                            Err(RynaError::compiler_error(
                                 format!(
                                     "Unary operation ({}){} is ambiguous",
                                     t.get_name(self),
@@ -283,7 +283,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(l, id, _, arg1, arg2) => {
+            RynaExpr::BinaryOperation(l, id, _, arg1, arg2) => {
                 self.ambiguity_check(arg1)?;
                 self.ambiguity_check(arg2)?;
 
@@ -296,7 +296,7 @@ impl NessaContext {
                             .map(|(a1, a2, r)| format!("({}){}({}) -> {}", a1.get_name(self), representation, a2.get_name(self), r.get_name(self)))
                             .collect::<Vec<_>>();                
                         
-                        Err(NessaError::compiler_error(
+                        Err(RynaError::compiler_error(
                             format!(
                                 "Binary operation ({}){}({}) is ambiguous",
                                 t1.get_name(self),
@@ -315,7 +315,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::NaryOperation(l, id, _, first, args) => {
+            RynaExpr::NaryOperation(l, id, _, first, args) => {
                 self.ambiguity_check(first)?;
                 let t = self.infer_type(first)?;
 
@@ -341,7 +341,7 @@ impl NessaContext {
                             )
                             .collect::<Vec<_>>();
                         
-                        Err(NessaError::compiler_error(
+                        Err(RynaError::compiler_error(
                             format!(
                                 "N-ary operation {}{}{}{} is ambiguous",
                                 t.get_name(self), 
@@ -361,7 +361,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(_, ih, ib, ei, eb) => {
+            RynaExpr::If(_, ih, ib, ei, eb) => {
                 self.ambiguity_check(ih)?;
 
                 for line in ib {
@@ -385,7 +385,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::While(_, cond, body) => {
+            RynaExpr::While(_, cond, body) => {
                 self.ambiguity_check(cond)?;
 
                 for line in body {
@@ -395,26 +395,26 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::AttributeAssignment(_, a, b, _) => {
+            RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.ambiguity_check(a)?;
                 self.ambiguity_check(b)
             }
 
-            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
-            NessaExpr::AttributeAccess(_, e, _) |
-            NessaExpr::Return(_, e) => {
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::AttributeAccess(_, e, _) |
+            RynaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
                 self.infer_type(e)?;
 
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::BinaryOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::NaryOperationDefinition(_, _, _, t, _, _, _, b) |
-            NessaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
+            RynaExpr::PrefixOperationDefinition(_, _, _, t, _, _, _, b) |
+            RynaExpr::PostfixOperationDefinition(_, _, _, t, _, _, _, b) |
+            RynaExpr::BinaryOperationDefinition(_, _, _, t, _, _, _, b) |
+            RynaExpr::NaryOperationDefinition(_, _, _, t, _, _, _, b) |
+            RynaExpr::FunctionDefinition(_, _, _, t, _, _, b) => {
                 if t.is_empty() {
                     for line in b {
                         self.ambiguity_check(line)?;
@@ -424,7 +424,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledFor(_, _, _, _, _, b) => {
+            RynaExpr::CompiledFor(_, _, _, _, _, b) => {
                 for line in b {
                     self.ambiguity_check(line)?;
                 }
@@ -432,162 +432,162 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::Macro(..) => { Ok(()) },
+            RynaExpr::Macro(..) => { Ok(()) },
 
             _ => unimplemented!("{:?}", expr)
         }
     }
 
-    pub fn break_continue_check(expr: &NessaExpr, allowed: bool) -> Result<(), NessaError> {
+    pub fn break_continue_check(expr: &RynaExpr, allowed: bool) -> Result<(), RynaError> {
         return match expr {
-            NessaExpr::ClassDefinition(..) |
-            NessaExpr::InterfaceImplementation(..) |
-            NessaExpr::PrefixOperatorDefinition(..) |
-            NessaExpr::PostfixOperatorDefinition(..) |
-            NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) |
-            NessaExpr::InterfaceDefinition(..) |
-            NessaExpr::Macro(..) |
-            NessaExpr::Variable(..) |
-            NessaExpr::Literal(..) => Ok(()),
+            RynaExpr::ClassDefinition(..) |
+            RynaExpr::InterfaceImplementation(..) |
+            RynaExpr::PrefixOperatorDefinition(..) |
+            RynaExpr::PostfixOperatorDefinition(..) |
+            RynaExpr::BinaryOperatorDefinition(..) |
+            RynaExpr::NaryOperatorDefinition(..) |
+            RynaExpr::InterfaceDefinition(..) |
+            RynaExpr::Macro(..) |
+            RynaExpr::Variable(..) |
+            RynaExpr::Literal(..) => Ok(()),
 
-            NessaExpr::Break(..) if allowed => Ok(()),
-            NessaExpr::Break(l) if !allowed => {
-                Err(NessaError::compiler_error("Break statement is not allowed in this context".into(), l, vec!()))
+            RynaExpr::Break(..) if allowed => Ok(()),
+            RynaExpr::Break(l) if !allowed => {
+                Err(RynaError::compiler_error("Break statement is not allowed in this context".into(), l, vec!()))
             }
 
-            NessaExpr::Continue(..) if allowed => Ok(()),
-            NessaExpr::Continue(l) if !allowed => {
-                Err(NessaError::compiler_error("Continue statement is not allowed in this context".into(), l, vec!()))
+            RynaExpr::Continue(..) if allowed => Ok(()),
+            RynaExpr::Continue(l) if !allowed => {
+                Err(RynaError::compiler_error("Continue statement is not allowed in this context".into(), l, vec!()))
             }
 
-            NessaExpr::CompiledVariableAssignment(_, _, _, _, e) |
-            NessaExpr::CompiledVariableDefinition(_, _, _, _, e) => {
-                NessaContext::break_continue_check(e, allowed)
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) => {
+                RynaContext::break_continue_check(e, allowed)
             }
 
-            NessaExpr::Tuple(_, args) => args.iter().try_for_each(|i| NessaContext::break_continue_check(i, allowed)),
+            RynaExpr::Tuple(_, args) => args.iter().try_for_each(|i| RynaContext::break_continue_check(i, allowed)),
             
-            NessaExpr::If(_, i, ib, ei, eb) => {
-                NessaContext::break_continue_check(i, allowed)?;
+            RynaExpr::If(_, i, ib, ei, eb) => {
+                RynaContext::break_continue_check(i, allowed)?;
 
                 for i in ib {
-                    NessaContext::break_continue_check(i, allowed)?;
+                    RynaContext::break_continue_check(i, allowed)?;
                 }
                 
                 for (ei_h, ei_b) in ei {
-                    NessaContext::break_continue_check(ei_h, allowed)?;
+                    RynaContext::break_continue_check(ei_h, allowed)?;
 
                     for i in ei_b {
-                        NessaContext::break_continue_check(i, allowed)?;
+                        RynaContext::break_continue_check(i, allowed)?;
                     }
                 }
 
                 if let Some(eb_inner) = eb {
                     for i in eb_inner {
-                        NessaContext::break_continue_check(i, allowed)?;
+                        RynaContext::break_continue_check(i, allowed)?;
                     }    
                 }
 
                 Ok(())
             },
 
-            NessaExpr::DoBlock(_, b, _) => {
+            RynaExpr::DoBlock(_, b, _) => {
                 for i in b {
-                    NessaContext::break_continue_check(i, allowed)?;
+                    RynaContext::break_continue_check(i, allowed)?;
                 }
 
                 Ok(())
             }
 
-            NessaExpr::CompiledFor(_, _, _, _, c, b) |
-            NessaExpr::While(_, c, b) => {
-                NessaContext::break_continue_check(c, true)?;
+            RynaExpr::CompiledFor(_, _, _, _, c, b) |
+            RynaExpr::While(_, c, b) => {
+                RynaContext::break_continue_check(c, true)?;
 
                 for i in b {
-                    NessaContext::break_continue_check(i, true)?;
+                    RynaContext::break_continue_check(i, true)?;
                 }
 
                 Ok(())
             },
 
-            NessaExpr::UnaryOperation(_, _, _, e) => {
-                NessaContext::break_continue_check(e, allowed)?;
+            RynaExpr::UnaryOperation(_, _, _, e) => {
+                RynaContext::break_continue_check(e, allowed)?;
 
                 Ok(())
             }
 
-            NessaExpr::AttributeAssignment(_, a, b, _) |
-            NessaExpr::BinaryOperation(_, _, _, a, b) => {
-                NessaContext::break_continue_check(a, allowed)?;
-                NessaContext::break_continue_check(b, allowed)?;
+            RynaExpr::AttributeAssignment(_, a, b, _) |
+            RynaExpr::BinaryOperation(_, _, _, a, b) => {
+                RynaContext::break_continue_check(a, allowed)?;
+                RynaContext::break_continue_check(b, allowed)?;
 
                 Ok(())
             },
 
-            NessaExpr::NaryOperation(_, _, _, a, args) => {
-                NessaContext::break_continue_check(a, allowed)?;
+            RynaExpr::NaryOperation(_, _, _, a, args) => {
+                RynaContext::break_continue_check(a, allowed)?;
                 
                 for i in args {
-                    NessaContext::break_continue_check(i, allowed)?;
+                    RynaContext::break_continue_check(i, allowed)?;
                 }
 
                 Ok(())
             },
 
-            NessaExpr::FunctionCall(_, _, _, args) => {
+            RynaExpr::FunctionCall(_, _, _, args) => {
                 for i in args {
-                    NessaContext::break_continue_check(i, allowed)?;
+                    RynaContext::break_continue_check(i, allowed)?;
                 }
 
                 Ok(())
             },
 
-            NessaExpr::AttributeAccess(_, e, _) |
-            NessaExpr::Return(_, e) => NessaContext::break_continue_check(e, allowed),
+            RynaExpr::AttributeAccess(_, e, _) |
+            RynaExpr::Return(_, e) => RynaContext::break_continue_check(e, allowed),
 
-            NessaExpr::CompiledLambda(_, _, _, _, _, b) => {
+            RynaExpr::CompiledLambda(_, _, _, _, _, b) => {
                 for i in b {
-                    NessaContext::break_continue_check(i, false)?;
+                    RynaContext::break_continue_check(i, false)?;
                 }
 
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(_, _, _, tm, _, _, _, b) => {
+            RynaExpr::PrefixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
-                        NessaContext::break_continue_check(i, false)?;
+                        RynaContext::break_continue_check(i, false)?;
                     }
                 }
 
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(_, _, _, tm, _, _, _, b) => {
+            RynaExpr::PostfixOperationDefinition(_, _, _, tm, _, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
-                        NessaContext::break_continue_check(i, false)?;    
+                        RynaContext::break_continue_check(i, false)?;    
                     }
                 }
                 
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(_, _, _, tm, (_, _), (_, _), _, b) => {
+            RynaExpr::BinaryOperationDefinition(_, _, _, tm, (_, _), (_, _), _, b) => {
                 if tm.is_empty() {
                     for i in b {
-                        NessaContext::break_continue_check(i, false)?;    
+                        RynaContext::break_continue_check(i, false)?;    
                     }          
                 }
                 
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(_, _, _, tm, (_, _), _, _, b) => {
+            RynaExpr::NaryOperationDefinition(_, _, _, tm, (_, _), _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
-                        NessaContext::break_continue_check(i, false)?;    
+                        RynaContext::break_continue_check(i, false)?;    
                     }
                 }
                 
@@ -595,10 +595,10 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(_, _, _, tm, _, _, b) => {
+            RynaExpr::FunctionDefinition(_, _, _, tm, _, _, b) => {
                 if tm.is_empty() {
                     for i in b {
-                        NessaContext::break_continue_check(i, false)?;    
+                        RynaContext::break_continue_check(i, false)?;    
                     }
                 }
                 
@@ -609,23 +609,23 @@ impl NessaContext {
         };
     }
 
-    pub fn invalid_type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn invalid_type_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            NessaExpr::PrefixOperatorDefinition(..) |
-            NessaExpr::PostfixOperatorDefinition(..) |
-            NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) |
-            NessaExpr::InterfaceDefinition(..) |
-            NessaExpr::Macro(..) |
-            NessaExpr::Break(..) |
-            NessaExpr::Continue(..) |
-            NessaExpr::Variable(..) |
-            NessaExpr::Literal(..) => Ok(()),
+            RynaExpr::PrefixOperatorDefinition(..) |
+            RynaExpr::PostfixOperatorDefinition(..) |
+            RynaExpr::BinaryOperatorDefinition(..) |
+            RynaExpr::NaryOperatorDefinition(..) |
+            RynaExpr::InterfaceDefinition(..) |
+            RynaExpr::Macro(..) |
+            RynaExpr::Break(..) |
+            RynaExpr::Continue(..) |
+            RynaExpr::Variable(..) |
+            RynaExpr::Literal(..) => Ok(()),
 
-            NessaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            NessaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
                 if t.has_self() {
-                    return Err(NessaError::compiler_error(
+                    return Err(RynaError::compiler_error(
                         format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                         l, vec!()
                     ));
@@ -634,14 +634,14 @@ impl NessaContext {
                 self.invalid_type_check(e)
             }
 
-            NessaExpr::AttributeAssignment(_, a, b, _) => {
+            RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.invalid_type_check(a)?;
                 self.invalid_type_check(b)
             }
 
-            NessaExpr::Tuple(_, args) => args.iter().try_for_each(|i| self.invalid_type_check(i)),
+            RynaExpr::Tuple(_, args) => args.iter().try_for_each(|i| self.invalid_type_check(i)),
             
-            NessaExpr::If(_, i, ib, ei, eb) => {
+            RynaExpr::If(_, i, ib, ei, eb) => {
                 self.invalid_type_check(i)?;
 
                 for i in ib {
@@ -665,9 +665,9 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::DoBlock(l, b, t) => {
+            RynaExpr::DoBlock(l, b, t) => {
                 if t.has_self() {
-                    return Err(NessaError::compiler_error(
+                    return Err(RynaError::compiler_error(
                         format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                         l, vec!()
                     ));
@@ -680,8 +680,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledFor(_, _, _, _, c, b) |
-            NessaExpr::While(_, c, b) => {
+            RynaExpr::CompiledFor(_, _, _, _, c, b) |
+            RynaExpr::While(_, c, b) => {
                 self.invalid_type_check(c)?;
 
                 for i in b {
@@ -691,12 +691,12 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::UnaryOperation(l, _, tm, e) => {
+            RynaExpr::UnaryOperation(l, _, tm, e) => {
                 self.invalid_type_check(e)?;
 
                 for t in tm {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -706,13 +706,13 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperation(l, _, tm, a, b) => {
+            RynaExpr::BinaryOperation(l, _, tm, a, b) => {
                 self.invalid_type_check(a)?;
                 self.invalid_type_check(b)?;
 
                 for t in tm {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -722,7 +722,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperation(l, _, tm, a, args) => {
+            RynaExpr::NaryOperation(l, _, tm, a, args) => {
                 self.invalid_type_check(a)?;
                 
                 for i in args {
@@ -731,7 +731,7 @@ impl NessaContext {
 
                 for t in tm {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -741,14 +741,14 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::FunctionCall(l, _, tm, args) => {
+            RynaExpr::FunctionCall(l, _, tm, args) => {
                 for i in args {
                     self.invalid_type_check(i)?;
                 }
 
                 for t in tm {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -758,10 +758,10 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::AttributeAccess(_, e, _) |
-            NessaExpr::Return(_, e) => self.invalid_type_check(e),
+            RynaExpr::AttributeAccess(_, e, _) |
+            RynaExpr::Return(_, e) => self.invalid_type_check(e),
 
-            NessaExpr::CompiledLambda(l, _, c, args, ret, b) => {
+            RynaExpr::CompiledLambda(l, _, c, args, ret, b) => {
                 for (_, i) in c {
                     self.invalid_type_check(i)?;
                 }
@@ -772,7 +772,7 @@ impl NessaContext {
 
                 for t in args.iter().map(|(_, t)| t).chain([ret]) {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -782,7 +782,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PrefixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
+            RynaExpr::PrefixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;
@@ -790,7 +790,7 @@ impl NessaContext {
     
                     for t in [a, ret] {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -801,7 +801,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::PostfixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
+            RynaExpr::PostfixOperationDefinition(l, _, _, tm, _, a, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -809,7 +809,7 @@ impl NessaContext {
     
                     for t in [a, ret] {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -820,7 +820,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::BinaryOperationDefinition(l, _, _, tm, (_, a_1), (_, a_2), ret, b) => {
+            RynaExpr::BinaryOperationDefinition(l, _, _, tm, (_, a_1), (_, a_2), ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -828,7 +828,7 @@ impl NessaContext {
     
                     for t in [a_1, a_2, ret] {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -839,7 +839,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::NaryOperationDefinition(l, _, _, tm, (_, a), args, ret, b) => {
+            RynaExpr::NaryOperationDefinition(l, _, _, tm, (_, a), args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -847,7 +847,7 @@ impl NessaContext {
     
                     for t in args.iter().map(|(_, t)| t).chain([a, ret]) {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -859,7 +859,7 @@ impl NessaContext {
             },
 
 
-            NessaExpr::FunctionDefinition(l, _, _, tm, args, ret, b) => {
+            RynaExpr::FunctionDefinition(l, _, _, tm, args, ret, b) => {
                 if tm.is_empty() {
                     for i in b {
                         self.invalid_type_check(i)?;    
@@ -867,7 +867,7 @@ impl NessaContext {
     
                     for t in args.iter().map(|(_, t)| t).chain([ret]) {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -878,10 +878,10 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::ClassDefinition(l, _, _, _, args, alias, _) => {
+            RynaExpr::ClassDefinition(l, _, _, _, args, alias, _) => {
                 if let Some(t) = alias {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -890,7 +890,7 @@ impl NessaContext {
                 } else {
                     for t in args.iter().map(|(_, t)| t) {
                         if t.has_self() {
-                            return Err(NessaError::compiler_error(
+                            return Err(RynaError::compiler_error(
                                 format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                                 l, vec!()
                             ));    
@@ -901,10 +901,10 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::InterfaceImplementation(l, _, ret, _, args) => {
+            RynaExpr::InterfaceImplementation(l, _, ret, _, args) => {
                 for t in args.iter().chain([ret]) {
                     if t.has_self() {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("{} type found outside an interface", Type::SelfType.get_name(self)),
                             l, vec!()
                         ));    
@@ -918,7 +918,7 @@ impl NessaContext {
         };
     }
 
-    pub fn check_type_well_formed(&self, t: &Type, l: &Location) -> Result<(), NessaError> {
+    pub fn check_type_well_formed(&self, t: &Type, l: &Location) -> Result<(), RynaError> {
         return match t {
             Type::Empty |
             Type::SelfType |
@@ -933,7 +933,7 @@ impl NessaContext {
             Type::And(v) => v.iter().try_for_each(|i| self.check_type_well_formed(i, l)),
 
             Type::TemplateParamStr(n, _) => {
-                Err(NessaError::compiler_error(
+                Err(RynaError::compiler_error(
                     format!(
                         "Template {} is not defined", 
                         format!("'{}", n).green(),
@@ -950,7 +950,7 @@ impl NessaContext {
 
                     if c.args.len() != interface_args {
                         return Err(
-                            NessaError::compiler_error(
+                            RynaError::compiler_error(
                                 format!(
                                     "Interface {}{} expected {} arguments (got {})", 
                                     interface.name.cyan(), 
@@ -982,7 +982,7 @@ impl NessaContext {
 
                 if num_params != args.len() {
                     return Err(
-                        NessaError::compiler_error(
+                        RynaError::compiler_error(
                             format!(
                                 "Type {}{} expected {} arguments (got {})", 
                                 t.name.cyan(), 
@@ -1006,19 +1006,19 @@ impl NessaContext {
         }
     }
 
-    pub fn type_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn type_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::Break(..) |
-            NessaExpr::Continue(..) |
-            NessaExpr::Literal(..) |
-            NessaExpr::Variable(..) |
-            NessaExpr::PrefixOperatorDefinition(..) |
-            NessaExpr::PostfixOperatorDefinition(..) |
-            NessaExpr::BinaryOperatorDefinition(..) |
-            NessaExpr::NaryOperatorDefinition(..) => Ok(()),
+            RynaExpr::Break(..) |
+            RynaExpr::Continue(..) |
+            RynaExpr::Literal(..) |
+            RynaExpr::Variable(..) |
+            RynaExpr::PrefixOperatorDefinition(..) |
+            RynaExpr::PostfixOperatorDefinition(..) |
+            RynaExpr::BinaryOperatorDefinition(..) |
+            RynaExpr::NaryOperatorDefinition(..) => Ok(()),
 
-            NessaExpr::DoBlock(_, args, _) |
-            NessaExpr::Tuple(_, args) => {
+            RynaExpr::DoBlock(_, args, _) |
+            RynaExpr::Tuple(_, args) => {
                 for arg in args {
                     self.type_check(arg)?;
                 }
@@ -1026,8 +1026,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledVariableDefinition(l, _, n, t, e) |
-            NessaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
+            RynaExpr::CompiledVariableDefinition(l, _, n, t, e) |
+            RynaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
                 self.check_type_well_formed(t, l)?;
                 self.type_check(e)?;
 
@@ -1037,7 +1037,7 @@ impl NessaContext {
                     Ok(())
 
                 } else{
-                    Err(NessaError::compiler_error(format!(
+                    Err(RynaError::compiler_error(format!(
                         "Unable to bind value of type {} to variable {}, which is of type {}",
                         it.get_name(self),
                         n.cyan(),
@@ -1046,7 +1046,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::AttributeAssignment(l, a, b, attr_idx) => {
+            RynaExpr::AttributeAssignment(l, a, b, attr_idx) => {
                 self.type_check(a)?;
                 self.type_check(b)?;
 
@@ -1059,14 +1059,14 @@ impl NessaContext {
                 };
 
                 if let Type::Ref(_) = lhs_attr {
-                    return Err(NessaError::compiler_error(format!(
+                    return Err(RynaError::compiler_error(format!(
                         "Unable assign value to attribute {} because it is accessed from a constant reference",
                         attr_name.cyan()
                     ), l, vec!()));
                 }
 
                 if !matches!(lhs_attr, Type::MutRef(_)) {
-                    return Err(NessaError::compiler_error(format!(
+                    return Err(RynaError::compiler_error(format!(
                         "Unable assign value to attribute {} because it is not accesed from a mutable reference",
                         attr_name.cyan()
                     ), l, vec!()));
@@ -1078,7 +1078,7 @@ impl NessaContext {
                     Ok(())
 
                 } else {
-                    return Err(NessaError::compiler_error(format!(
+                    return Err(RynaError::compiler_error(format!(
                         "Unable to bind value of type {} to attribute {}, which is of type {}",
                         rhs.get_name(self),
                         attr_name.cyan(),
@@ -1087,7 +1087,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::FunctionCall(l, id, templates, args) => {
+            RynaExpr::FunctionCall(l, id, templates, args) => {
                 for t in templates {
                     self.check_type_well_formed(t, l)?;
                 }
@@ -1103,7 +1103,7 @@ impl NessaContext {
 
                 //Invalid number of template arguments
                 if self.functions[*id].overloads[ov_id].templates != templates.len() {
-                    Err(NessaError::compiler_error(format!(
+                    Err(RynaError::compiler_error(format!(
                         "Function overload for {}{}({}) expected {} type arguments (got {})",
                         self.functions[*id].name.green(),
                         if templates.is_empty() { "".into() } else { format!("<{}>", templates.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")) },
@@ -1120,7 +1120,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::UnaryOperation(l, id, templates, arg) => {
+            RynaExpr::UnaryOperation(l, id, templates, arg) => {
                 for t in templates {
                     self.check_type_well_formed(t, l)?;
                 }
@@ -1133,7 +1133,7 @@ impl NessaContext {
                 if let Operator::Unary{prefix, representation, operations, ..} = &self.unary_ops[*id] {
                     if operations[ov_id].templates != templates.len() {
                         if *prefix {
-                            Err(NessaError::compiler_error(format!(
+                            Err(RynaError::compiler_error(format!(
                                 "Unary operator overload for {}({}) expected {} type arguments (got {})",
                                 representation,
                                 t.get_name(self),
@@ -1141,7 +1141,7 @@ impl NessaContext {
                             ), l, vec!()))
 
                         } else {
-                            Err(NessaError::compiler_error(format!(
+                            Err(RynaError::compiler_error(format!(
                                 "Unary operator overload for ({}){} expected {} type arguments (got {})",
                                 t.get_name(self),
                                 representation,
@@ -1162,7 +1162,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::BinaryOperation(l, id, templates, arg1, arg2) => {
+            RynaExpr::BinaryOperation(l, id, templates, arg1, arg2) => {
                 for t in templates {
                     self.check_type_well_formed(t, l)?;
                 }
@@ -1177,7 +1177,7 @@ impl NessaContext {
 
                 if let Operator::Binary{representation, operations, ..} = &self.binary_ops[*id] {
                     if operations[ov_id].templates != templates.len() {
-                        Err(NessaError::compiler_error(format!(
+                        Err(RynaError::compiler_error(format!(
                             "Binary operator overload for ({}){}({}) expected {} type arguments (got {})",
                             t1.get_name(self),
                             representation,
@@ -1198,7 +1198,7 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::NaryOperation(l, id, templates, first, args) => {
+            RynaExpr::NaryOperation(l, id, templates, first, args) => {
                 for t in templates {
                     self.check_type_well_formed(t, l)?;
                 }
@@ -1217,7 +1217,7 @@ impl NessaContext {
 
                 if let Operator::Nary{open_rep, close_rep, operations, ..} = &self.nary_ops[*id] {
                     if operations[ov_id].templates != templates.len() {
-                        Err(NessaError::compiler_error(format!(
+                        Err(RynaError::compiler_error(format!(
                             "N-ary operator overload for {}{}{}{} expected {} type arguments (got {})",
                             t.get_name(self),
                             open_rep,
@@ -1242,13 +1242,13 @@ impl NessaContext {
                 }
             },
 
-            NessaExpr::If(l, ih, ib, ei, eb) => {
+            RynaExpr::If(l, ih, ib, ei, eb) => {
                 self.type_check(ih)?;
 
                 let t = self.infer_type(ih)?;
 
                 if *t.deref_type() != BOOL {
-                    return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
+                    return Err(RynaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in ib {
@@ -1260,7 +1260,7 @@ impl NessaContext {
                     let t = self.infer_type(ei_h)?;
 
                     if *t.deref_type() != BOOL {
-                        return Err(NessaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("If condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                     }
 
                     for line in ei_b {
@@ -1277,7 +1277,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::CompiledFor(_, _, _, _, iter, body) => {
+            RynaExpr::CompiledFor(_, _, _, _, iter, body) => {
                 self.type_check(iter)?;
 
                 for line in body {
@@ -1287,12 +1287,12 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::While(l, cond, body) => {
+            RynaExpr::While(l, cond, body) => {
                 self.type_check(cond)?;
                 let t = self.infer_type(cond)?;
 
                 if *t.deref_type() != BOOL {
-                    return Err(NessaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
+                    return Err(RynaError::compiler_error(format!("While condition inferred to be of type {} (expected Bool, &Bool or @Bool)", t.get_name(self)), l, vec!()));
                 }
 
                 for line in body {
@@ -1302,15 +1302,15 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::AttributeAccess(_, e, _) |
-            NessaExpr::Return(_, e) => {
+            RynaExpr::AttributeAccess(_, e, _) |
+            RynaExpr::Return(_, e) => {
                 self.type_check(e)?;
                 self.infer_type(e)?;
                 
                 Ok(())
             }
 
-            NessaExpr::CompiledLambda(l, _, c, args, _, b) => {
+            RynaExpr::CompiledLambda(l, _, c, args, _, b) => {
                 for (_, i) in c {
                     self.type_check(i)?;
                 }     
@@ -1326,8 +1326,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::PrefixOperationDefinition(l, _, _, t, _, arg, r, b) |
-            NessaExpr::PostfixOperationDefinition(l, _, _, t, _, arg, r, b) => {
+            RynaExpr::PrefixOperationDefinition(l, _, _, t, _, arg, r, b) |
+            RynaExpr::PostfixOperationDefinition(l, _, _, t, _, arg, r, b) => {
                 self.check_type_well_formed(arg, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -1343,7 +1343,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1351,7 +1351,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, _, t, (_, ta), (_, tb), r, b) => {
+            RynaExpr::BinaryOperationDefinition(l, _, _, t, (_, ta), (_, tb), r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(tb, l)?;
                 self.check_type_well_formed(r, l)?;
@@ -1369,7 +1369,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1377,7 +1377,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, _, t, (_, ta), args, r, b) => {
+            RynaExpr::NaryOperationDefinition(l, _, _, t, (_, ta), args, r, b) => {
                 self.check_type_well_formed(ta, l)?;
                 self.check_type_well_formed(r, l)?;
 
@@ -1401,7 +1401,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1409,7 +1409,7 @@ impl NessaContext {
                 Ok(())
             },
 
-            NessaExpr::FunctionDefinition(l, _, _, t, args, r, b) => {
+            RynaExpr::FunctionDefinition(l, _, _, t, args, r, b) => {
                 self.check_type_well_formed(r, l)?;
 
                 for (_, t) in args {
@@ -1431,7 +1431,7 @@ impl NessaContext {
 
                     for (i, n) in t.iter().enumerate() {
                         if !templates.contains(&i) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }
                     }
                 }
@@ -1439,7 +1439,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::InterfaceDefinition(l, _, _, t, fns, uns, bin, nary) => {
+            RynaExpr::InterfaceDefinition(l, _, _, t, fns, uns, bin, nary) => {
                 let mut templates = HashSet::new();
 
                 for (_, _, f_t, args, r) in fns {
@@ -1461,7 +1461,7 @@ impl NessaContext {
                             let offset_id = i + t.len();
 
                             if !templates.contains(&offset_id) {
-                                return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                                return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                             }    
                         }
                     }
@@ -1478,7 +1478,7 @@ impl NessaContext {
                         let offset_id = i + t.len();
 
                         if !templates.contains(&offset_id) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }    
                     }
                 }
@@ -1496,7 +1496,7 @@ impl NessaContext {
                         let offset_id = i + t.len();
 
                         if !templates.contains(&offset_id) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }    
                     }
                 }
@@ -1517,21 +1517,21 @@ impl NessaContext {
                         let offset_id = i + t.len();
 
                         if !templates.contains(&offset_id) {
-                            return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                            return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                         }    
                     }
                 }
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
                 
                 Ok(())
             }
 
-            NessaExpr::InterfaceImplementation(l, t, tp, _, args) => {
+            RynaExpr::InterfaceImplementation(l, t, tp, _, args) => {
                 let mut templates = HashSet::new();
                 self.check_type_well_formed(tp, l)?;
                 tp.template_dependencies(&mut templates);
@@ -1543,14 +1543,14 @@ impl NessaContext {
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
 
                 Ok(())
             }
 
-            NessaExpr::ClassDefinition(l, _, _, t, attrs, alias, _) => {
+            RynaExpr::ClassDefinition(l, _, _, t, attrs, alias, _) => {
                 let mut templates = HashSet::new();
 
                 if let Some(a) = alias {
@@ -1566,14 +1566,14 @@ impl NessaContext {
 
                 for (i, n) in t.iter().enumerate() {
                     if !templates.contains(&i) {
-                        return Err(NessaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("Template parameter {} is not used anywhere", n.green()), l, vec!()));
                     }
                 }
 
                 Ok(())
             }
 
-            NessaExpr::Macro(..) => { Ok(()) },
+            RynaExpr::Macro(..) => { Ok(()) },
 
             _ => unimplemented!("{:?}", expr)
         }
@@ -1602,12 +1602,12 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn class_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn class_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::ClassDefinition(l, _, n, _, attributes, _, _) => {
+            RynaExpr::ClassDefinition(l, _, n, _, attributes, _, _) => {
                 for (att, _) in attributes {
                     if attributes.iter().filter(|(i, _)| i == att).count() > 1 {
-                        return Err(NessaError::compiler_error(format!("Repeated attribute \"{}\" in class {}", att, n), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("Repeated attribute \"{}\" in class {}", att, n), l, vec!()));
                     }
                 }
                 
@@ -1618,15 +1618,15 @@ impl NessaContext {
         }
     }
 
-    pub fn macro_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn macro_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::Macro(l, _, n, _, p, b) => {
+            RynaExpr::Macro(l, _, n, _, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
                 
                 for p in &pattern_args {
                     if !macro_args.contains(&(false, p.clone())) {
-                        return Err(NessaError::compiler_error(
+                        return Err(RynaError::compiler_error(
                             format!("Argument {} is not used inside {} syntax", p.green(), n.blue()),
                             l, vec!()
                         ));
@@ -1635,8 +1635,8 @@ impl NessaContext {
                 
                 for p in macro_args {
                     if !p.0 && !pattern_args.contains(&p.1) {
-                        return Err(NessaError::compiler_error(
-                            format!("Argument {} is referenced inside {} syntax, but is not present in its NDL pattern", p.1.green(), n.blue()),
+                        return Err(RynaError::compiler_error(
+                            format!("Argument {} is referenced inside {} syntax, but is not present in its RDL pattern", p.1.green(), n.blue()),
                             l, vec!()
                         ));
                     }
@@ -1649,9 +1649,9 @@ impl NessaContext {
         }
     }
 
-    pub fn interface_impl_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn interface_impl_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            NessaExpr::InterfaceImplementation(l, _, t, n, ts) => {
+            RynaExpr::InterfaceImplementation(l, _, t, n, ts) => {
                 match self.get_interface_id(n.clone()) {
                     Ok(int_id) => {
                         let fns = &self.interfaces[int_id].fns;
@@ -1682,7 +1682,7 @@ impl NessaContext {
                                         None => {
                                             if let Ok((_, r, _, _)) = self.get_first_function_overload(fn_id, args_sub.clone(), None, true, l) {
                                                 if !r.bindable_to(&ret_sub, self) {
-                                                    return Err(NessaError::compiler_error(
+                                                    return Err(RynaError::compiler_error(
                                                         format!(
                                                             "Function overload for {}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
                                                             f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
@@ -1693,7 +1693,7 @@ impl NessaContext {
                                                 }
 
                                             } else {
-                                                return Err(NessaError::compiler_error(
+                                                return Err(RynaError::compiler_error(
                                                     format!(
                                                         "Unable to find the function overload for {}({}) needed by interface {}", 
                                                         f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", "),
@@ -1712,7 +1712,7 @@ impl NessaContext {
                                             
                                             let possibilities = ov.iter().map(|(a, r)| format!("{}{} -> {}", self.functions[fn_id].name, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
 
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Function call {}({}) is ambiguous", 
                                                     f_n, args_sub.iter().map(|i| i.get_name(self)).collect::<Vec<_>>().join(", ")
@@ -1724,7 +1724,7 @@ impl NessaContext {
                                 }
 
                                 Err(err) => {
-                                    return Err(NessaError::compiler_error(err, l, vec!()));
+                                    return Err(RynaError::compiler_error(err, l, vec!()));
                                 }
                             }
                         }
@@ -1739,7 +1739,7 @@ impl NessaContext {
                                         if !r.bindable_to(&ret_sub, self) {
                                             if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
                                                 if *prefix {
-                                                    return Err(NessaError::compiler_error(
+                                                    return Err(RynaError::compiler_error(
                                                         format!(
                                                             "Unary operation overload for {}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
                                                             representation, arg_sub.get_name(self),
@@ -1749,7 +1749,7 @@ impl NessaContext {
                                                     ));     
 
                                                 } else {
-                                                    return Err(NessaError::compiler_error(
+                                                    return Err(RynaError::compiler_error(
                                                         format!(
                                                             "Unary operation overload for ({}){} needed by interface {} returns {}, which is not bindable to the required {}", 
                                                             arg_sub.get_name(self), representation,
@@ -1763,7 +1763,7 @@ impl NessaContext {
                                     
                                     } else if let Operator::Unary{representation, prefix, ..} = &self.unary_ops[*op_id] {
                                         if *prefix {
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unable to find the unary operation overload overload for {}({}) needed by interface {}", 
                                                     representation, arg_sub.get_name(self),
@@ -1773,7 +1773,7 @@ impl NessaContext {
                                             ));   
 
                                         } else {
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unable to find the unary operation overload overload for ({}){} needed by interface {}", 
                                                     arg_sub.get_name(self), representation,
@@ -1795,7 +1795,7 @@ impl NessaContext {
                                         if *prefix {
                                             let possibilities = ov.iter().map(|(a, r)| format!("{}({}) -> {}", representation, a.get_name(self), r.get_name(self))).collect::<Vec<_>>();
                                             
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unary operation {}({}) is ambiguous",
                                                     representation,
@@ -1807,7 +1807,7 @@ impl NessaContext {
                                         } else {
                                             let possibilities = ov.iter().map(|(a, r)| format!("({}){} -> {}", a.get_name(self), representation, r.get_name(self))).collect::<Vec<_>>();
                         
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unary operation ({}){} is ambiguous",
                                                     t.get_name(self),
@@ -1834,7 +1834,7 @@ impl NessaContext {
                                     if let Operator::Binary{representation, ..} = &self.binary_ops[*op_id] {
                                         if let Ok((_, r, _, _)) = self.get_first_binary_op(*op_id, arg0_sub.clone(), arg1_sub.clone(), None, true, l) {
                                             if !r.bindable_to(&ret_sub, self) {
-                                                return Err(NessaError::compiler_error(
+                                                return Err(RynaError::compiler_error(
                                                     format!(
                                                         "Binary operation overload for ({}){}({}) needed by interface {} returns {}, which is not bindable to the required {}", 
                                                         arg0_sub.get_name(self), representation, arg1_sub.get_name(self),
@@ -1845,7 +1845,7 @@ impl NessaContext {
                                             }
     
                                         } else {
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unable to find the binary operation overload for ({}){}({}) needed by interface {}", 
                                                     arg0_sub.get_name(self), representation, arg1_sub.get_name(self),
@@ -1868,7 +1868,7 @@ impl NessaContext {
                                             .map(|(a1, a2, r)| format!("({}){}({}) -> {}", a1.get_name(self), representation, a2.get_name(self), r.get_name(self)))
                                             .collect::<Vec<_>>();                
                                         
-                                        return Err(NessaError::compiler_error(
+                                        return Err(RynaError::compiler_error(
                                             format!(
                                                 "Binary operation ({}){}({}) is ambiguous",
                                                 arg0_sub.get_name(self),
@@ -1892,7 +1892,7 @@ impl NessaContext {
                                     if let Operator::Nary{open_rep, close_rep, ..} = &self.nary_ops[*op_id] {
                                         if let Ok((_, r, _, _)) = self.get_first_nary_op(*op_id, arg0_sub.clone(), args_sub.clone(), None, true, l) {
                                             if !r.bindable_to(&ret_sub, self) {
-                                                return Err(NessaError::compiler_error(
+                                                return Err(RynaError::compiler_error(
                                                     format!(
                                                         "N-ary operation overload for {}{}{}{} needed by interface {} returns {}, which is not bindable to the required {}", 
                                                         arg0_sub.get_name(self), 
@@ -1906,7 +1906,7 @@ impl NessaContext {
                                             }
 
                                         } else {
-                                            return Err(NessaError::compiler_error(
+                                            return Err(RynaError::compiler_error(
                                                 format!(
                                                     "Unable to find the n-ary operation overload for {}{}{}{} needed by interface {}", 
                                                     arg0_sub.get_name(self), 
@@ -1936,7 +1936,7 @@ impl NessaContext {
                                             )
                                             .collect::<Vec<_>>();
                                 
-                                        return Err(NessaError::compiler_error(
+                                        return Err(RynaError::compiler_error(
                                             format!(
                                                 "N-ary operation {}{}{}{} is ambiguous",
                                                 arg0_sub.get_name(self), 
@@ -1954,7 +1954,7 @@ impl NessaContext {
                         Ok(())
                     }
 
-                    Err(err) => Err(NessaError::compiler_error(err, l, vec!()))
+                    Err(err) => Err(RynaError::compiler_error(err, l, vec!()))
                 }
             }
 
@@ -1962,48 +1962,48 @@ impl NessaContext {
         };
     }
 
-    pub fn no_template_check_type(&self, t: &Type, l: &Location) -> Result<(), NessaError> {
+    pub fn no_template_check_type(&self, t: &Type, l: &Location) -> Result<(), RynaError> {
         if t.has_templates() {
-            Err(NessaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
+            Err(RynaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
 
         } else {
             Ok(())
         }
     }
 
-    pub fn no_template_check_types(&self, t: &[Type], l: &Location) -> Result<(), NessaError> {
+    pub fn no_template_check_types(&self, t: &[Type], l: &Location) -> Result<(), RynaError> {
         if t.iter().any(Type::has_templates) {
-            Err(NessaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
+            Err(RynaError::compiler_error("Template types are not allowed in this context".into(), l, vec!()))
 
         } else {
             Ok(())
         }
     }
 
-    pub fn no_template_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn no_template_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::Literal(..) |
-            NessaExpr::CompiledLambda(..) => Ok(()),
+            RynaExpr::Literal(..) |
+            RynaExpr::CompiledLambda(..) => Ok(()),
 
-            NessaExpr::Variable(l, _, _, t) => self.no_template_check_type(t, l),
+            RynaExpr::Variable(l, _, _, t) => self.no_template_check_type(t, l),
 
-            NessaExpr::AttributeAssignment(_, a, b, _) => {
+            RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.no_template_check(a)?;
                 self.no_template_check(b)
             }
 
-            NessaExpr::AttributeAccess(_, e, _) => {
+            RynaExpr::AttributeAccess(_, e, _) => {
                 self.no_template_check(e)
             }
 
-            NessaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            NessaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
                 self.no_template_check_type(t, l)?;
                 self.no_template_check(e)
             }
 
-            NessaExpr::DoBlock(_, e, _) |
-            NessaExpr::Tuple(_, e) => {
+            RynaExpr::DoBlock(_, e, _) |
+            RynaExpr::Tuple(_, e) => {
                 for i in e {
                     self.no_template_check(i)?;
                 }
@@ -2011,18 +2011,18 @@ impl NessaContext {
                 Ok(())
             }
             
-            NessaExpr::UnaryOperation(l, _, tm, e) => {
+            RynaExpr::UnaryOperation(l, _, tm, e) => {
                 self.no_template_check_types(tm, l)?;
                 self.no_template_check(e)
             }
             
-            NessaExpr::BinaryOperation(l, _, tm, a, b) => {
+            RynaExpr::BinaryOperation(l, _, tm, a, b) => {
                 self.no_template_check_types(tm, l)?;
                 self.no_template_check(a)?;
                 self.no_template_check(b)
             }
             
-            NessaExpr::NaryOperation(l, _, tm, a, b) => {
+            RynaExpr::NaryOperation(l, _, tm, a, b) => {
                 self.no_template_check_types(tm, l)?;
                 self.no_template_check(a)?;
 
@@ -2033,7 +2033,7 @@ impl NessaContext {
                 Ok(())
             }
             
-            NessaExpr::FunctionCall(l, _, tm, e) => {
+            RynaExpr::FunctionCall(l, _, tm, e) => {
                 self.no_template_check_types(tm, l)?;
 
                 for i in e {
@@ -2043,8 +2043,8 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::CompiledFor(_, _, _, _, e, b) |
-            NessaExpr::While(_, e, b) => {
+            RynaExpr::CompiledFor(_, _, _, _, e, b) |
+            RynaExpr::While(_, e, b) => {
                 self.no_template_check(e)?;
 
                 for i in b {
@@ -2054,7 +2054,7 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::If(_, ih, ib, ei, eb) => {
+            RynaExpr::If(_, ih, ib, ei, eb) => {
                 self.no_template_check(ih)?;
 
                 for i in ib {
@@ -2078,24 +2078,24 @@ impl NessaContext {
                 Ok(())
             }
 
-            NessaExpr::Return(_, e) => self.no_template_check(e),
+            RynaExpr::Return(_, e) => self.no_template_check(e),
             
             _ => unimplemented!("{:?}", expr)
         }
     }
 
-    pub fn lambda_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
-        if let NessaExpr::CompiledLambda(l, _, c, a, r, b) = expr {
+    pub fn lambda_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
+        if let RynaExpr::CompiledLambda(l, _, c, a, r, b) = expr {
             for (_, i) in c {
                 self.no_template_check(i)?;
             }
 
             if r.has_templates() {
-                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda return types".into(), l, vec!()));
+                return Err(RynaError::compiler_error("Parametric types are not allowed in lambda return types".into(), l, vec!()));
             }
 
             if a.iter().map(|(_, t)| t).any(Type::has_templates) {
-                return Err(NessaError::compiler_error("Parametric types are not allowed in lambda parameters".into(), l, vec!()));
+                return Err(RynaError::compiler_error("Parametric types are not allowed in lambda parameters".into(), l, vec!()));
             }
 
             for line in b {
@@ -2123,87 +2123,87 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn repeated_arguments_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn repeated_arguments_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            NessaExpr::PostfixOperationDefinition(l, _, _, t, n, _, _, _) |
-            NessaExpr::PrefixOperationDefinition(l, _, _, t, n, _, _, _) => {
+            RynaExpr::PostfixOperationDefinition(l, _, _, t, n, _, _, _) |
+            RynaExpr::PrefixOperationDefinition(l, _, _, t, n, _, _, _) => {
                 let err = self.repeated_args(&vec!(n), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
             }
 
-            NessaExpr::BinaryOperationDefinition(l, _, _, t, (n1, _), (n2, _), _, _) => {
+            RynaExpr::BinaryOperationDefinition(l, _, _, t, (n1, _), (n2, _), _, _) => {
                 let err = self.repeated_args(&vec!(n1, n2), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
             }
 
-            NessaExpr::NaryOperationDefinition(l, _, _, t, (n1, _), n, _, _) => {
+            RynaExpr::NaryOperationDefinition(l, _, _, t, (n1, _), n, _, _) => {
                 let mut args = vec!(n1);
                 args.extend(n.iter().map(|(i, _)| i));
 
                 let err = self.repeated_args(&args, "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
             }
 
-            NessaExpr::FunctionDefinition(l, _, _, t, a, _, _) => {
+            RynaExpr::FunctionDefinition(l, _, _, t, a, _, _) => {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&t.iter().collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 Ok(())
             }
 
-            NessaExpr::CompiledLambda(l, _, c, a, _, _) => {
+            RynaExpr::CompiledLambda(l, _, c, a, _, _) => {
                 let err = self.repeated_args(&a.iter().map(|(n, _)| n).collect(), "Parameter");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let err = self.repeated_args(&c.iter().map(|(n, _)| n).collect(), "Capture");
 
                 if let Err(msg) = err {
-                    return Err(NessaError::compiler_error(msg, l, vec!()));
+                    return Err(RynaError::compiler_error(msg, l, vec!()));
                 }
 
                 let cap_names = &c.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
@@ -2211,7 +2211,7 @@ impl NessaContext {
 
                 for n in cap_names {
                     if arg_names.contains(n) {
-                        return Err(NessaError::compiler_error(format!("Capture \"{}\" is also defined as a parameter", n), l, vec!()));
+                        return Err(RynaError::compiler_error(format!("Capture \"{}\" is also defined as a parameter", n), l, vec!()));
                     }
                 }
 
@@ -2265,9 +2265,9 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn annotation_checks(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn annotation_checks(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            NessaExpr::Macro(l, an, _, _, _, _) => {
+            RynaExpr::Macro(l, an, _, _, _, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Macros cannot have the {} annotation", "test".cyan())),
@@ -2276,11 +2276,11 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
-            NessaExpr::ClassDefinition(l, an, _, _, atts, _, _) => {
+            RynaExpr::ClassDefinition(l, an, _, _, atts, _, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Classes cannot have the {} annotation", "test".cyan())),
@@ -2289,11 +2289,11 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
-            NessaExpr::InterfaceDefinition(l, an, _, _, fns, unops, binops, naryops) => {
+            RynaExpr::InterfaceDefinition(l, an, _, _, fns, unops, binops, naryops) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Interfaces cannot have the {} annotation", "test".cyan())),
@@ -2302,7 +2302,7 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
 
                 for (inner_an, _, _, args, _) in fns {
@@ -2314,7 +2314,7 @@ impl NessaContext {
                             n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                         };
                         
-                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                        res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                     }    
                 }
 
@@ -2327,7 +2327,7 @@ impl NessaContext {
                             n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                         };
                         
-                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                        res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                     }    
                 }
 
@@ -2340,7 +2340,7 @@ impl NessaContext {
                             n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                         };
                         
-                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                        res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                     }    
                 }
 
@@ -2356,12 +2356,12 @@ impl NessaContext {
                             n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                         };
                         
-                        res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                        res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                     }    
                 }
             }
 
-            NessaExpr::FunctionDefinition(l, an, _, t, args, r, _) => {
+            RynaExpr::FunctionDefinition(l, an, _, t, args, r, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, args, r),
@@ -2370,12 +2370,12 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
-            NessaExpr::PrefixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) |
-            NessaExpr::PostfixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) => {
+            RynaExpr::PrefixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) |
+            RynaExpr::PostfixOperationDefinition(l, an, _, t, arg_n, arg_t, r, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!((arg_n.clone(), arg_t.clone())), r),
@@ -2384,11 +2384,11 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
-            NessaExpr::BinaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+            RynaExpr::BinaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => self.check_test_annotation(a, t, &vec!(arg_a.clone(), arg_b.clone()), r),
@@ -2397,11 +2397,11 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
-            NessaExpr::NaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
+            RynaExpr::NaryOperationDefinition(l, an, _, t, arg_a, arg_b, r, _) => {
                 let mut all_args = vec!(arg_a.clone());
                 all_args.extend(arg_b.iter().cloned());
 
@@ -2413,7 +2413,7 @@ impl NessaContext {
                         n => Err(format!("Annotation with name {} does not exist", n.cyan()))  
                     };
                     
-                    res.map_err(|m| NessaError::compiler_error(m, l, vec!()))?;
+                    res.map_err(|m| RynaError::compiler_error(m, l, vec!()))?;
                 }
             }
 
@@ -2423,51 +2423,51 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn check_formats(&self, expr: &NessaExpr) {
+    pub fn check_formats(&self, expr: &RynaExpr) {
         match expr {
-            NessaExpr::ClassDefinition(l, _, n, ts, _, _, _) => {
+            RynaExpr::ClassDefinition(l, _, n, ts, _, _, _) => {
                 if let Err(warn) = check_class_name(n) {
-                    located_nessa_warning!(l, "{}", warn);
+                    located_ryna_warning!(l, "{}", warn);
                 }
 
                 for t in ts {
                     if let Err(warn) = check_template_name(t) {
-                        located_nessa_warning!(l, "{}", warn);
+                        located_ryna_warning!(l, "{}", warn);
                     }
                 }
             }
 
-            NessaExpr::FunctionDefinition(l, _, id, ts, _, _, _) => {
+            RynaExpr::FunctionDefinition(l, _, id, ts, _, _, _) => {
                 if let Err(warn) = check_fn_name(&self.functions[*id].name) {
-                    located_nessa_warning!(l, "{}", warn);
+                    located_ryna_warning!(l, "{}", warn);
                 }
 
                 for t in ts {
                     if let Err(warn) = check_template_name(t) {
-                        located_nessa_warning!(l, "{}", warn);
+                        located_ryna_warning!(l, "{}", warn);
                     }
                 }
             }
 
-            NessaExpr::InterfaceDefinition(l, _, n, ts, fns, _, _, _) => {
+            RynaExpr::InterfaceDefinition(l, _, n, ts, fns, _, _, _) => {
                 if let Err(warn) = check_interface_name(n) {
-                    located_nessa_warning!(l, "{}", warn);
+                    located_ryna_warning!(l, "{}", warn);
                 }
 
                 for t in ts {
                     if let Err(warn) = check_template_name(t) {
-                        located_nessa_warning!(l, "{}", warn);
+                        located_ryna_warning!(l, "{}", warn);
                     }
                 }
 
                 for f in fns {
                     if let Err(warn) = check_fn_name(&f.1) {
-                        located_nessa_warning!(l, "{}", warn);
+                        located_ryna_warning!(l, "{}", warn);
                     }
 
                     for t in f.2.as_ref().unwrap_or(&vec!()) {
                         if let Err(warn) = check_template_name(t) {
-                            located_nessa_warning!(l, "{}", warn);
+                            located_ryna_warning!(l, "{}", warn);
                         }
                     }
                 }
@@ -2477,13 +2477,13 @@ impl NessaContext {
         }
     }
 
-    pub fn static_check_expected(&self, expr: &NessaExpr, expected: &Option<Type>) -> Result<(), NessaError> {
+    pub fn static_check_expected(&self, expr: &RynaExpr, expected: &Option<Type>) -> Result<(), RynaError> {
         self.repeated_arguments_check(expr)?;
         self.invalid_type_check(expr)?;
         self.type_check(expr)?;
         self.ambiguity_check(expr)?;
         self.return_check(expr, expected)?;
-        NessaContext::break_continue_check(expr, false)?;
+        RynaContext::break_continue_check(expr, false)?;
         self.class_check(expr)?;
         self.macro_check(expr)?;
         self.interface_impl_check(expr)?;
@@ -2493,7 +2493,7 @@ impl NessaContext {
         Ok(())
     }
 
-    pub fn static_check(&self, expr: &NessaExpr) -> Result<(), NessaError> {
+    pub fn static_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         self.static_check_expected(expr, &None)
     }
 }

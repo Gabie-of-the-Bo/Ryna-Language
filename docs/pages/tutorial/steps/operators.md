@@ -1,4 +1,4 @@
-Let's now see how you can define operators and operations in Nessa. The process is always to define the operator and then the operations,
+Let's now see how you can define operators and operations in Ryna. The process is always to define the operator and then the operations,
 so the sections will follow that order. 
 
 ## How precedence works
@@ -11,7 +11,7 @@ let n = 2 + 3 * 4;
 
 Is `a` equal to `2 + (3 * 4)` or `(2 + 3) * 4`? In this case it is obvious that the first option is correct, but this might not be as obvious with
 other operators. We make the interpreter read that expression properly by setting a **lower** precedence on the `*` operator compared to `+`. This 
-idea can also be naturally be extended to every other type of operator supported by Nessa.
+idea can also be naturally be extended to every other type of operator supported by Ryna.
 
 ## Prefix
 

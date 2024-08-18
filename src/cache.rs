@@ -2,7 +2,7 @@ use std::{cell::{RefCell, RefMut}, hash::Hash};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-use crate::{types::Type, parser::{NessaExpr, ImportType}, patterns::Pattern, config::Imports, compilation::CompiledNessaExpr};
+use crate::{types::Type, parser::{RynaExpr, ImportType}, patterns::Pattern, config::Imports, compilation::CompiledRynaExpr};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Cache<K: Hash + PartialEq + Eq + Clone, V: Clone> {
@@ -59,11 +59,11 @@ impl<K: Hash + PartialEq + Eq + Clone, V: Clone> Cache<K, V> {
 type ResultCache<K, O, E> = Cache<K, Result<O, E>>;
 type StringCache<V> = Cache<String, V>;
 type IdCache = ResultCache<String, usize, String>;
-type TemplateCache = Cache<(usize, Vec<Type>, Vec<Type>), Vec<NessaExpr>>;
+type TemplateCache = Cache<(usize, Vec<Type>, Vec<Type>), Vec<RynaExpr>>;
 type OverloadCache = Cache<(usize, Vec<Type>, Vec<Type>), usize>;
 type UsageCache = Cache<usize, FxHashSet<(Vec<Type>, Vec<Type>)>>;
 type ImportCache<T> = FxHashSet<(String, T)>;
-type OpcodeCache = Cache<(usize, usize), (CompiledNessaExpr, usize)>;
+type OpcodeCache = Cache<(usize, usize), (CompiledRynaExpr, usize)>;
 
 //  Concrete functionalities
 
@@ -73,11 +73,11 @@ impl UsageCache {
     }
 }
 
-// Full Nessa cache
+// Full Ryna cache
 
 #[allow(clippy::type_complexity)]
 #[derive(Default, Clone, Serialize, Deserialize)]
-pub struct NessaImportCache {
+pub struct RynaImportCache {
     pub functions: ImportCache<(usize, Vec<String>, Vec<(String, Type)>, Type)>,
     pub unary: ImportCache<(usize, Vec<String>, Type, Type)>,
     pub binary: ImportCache<(usize, Vec<String>, Type, Type, Type)>,
@@ -94,7 +94,7 @@ pub struct NessaImportCache {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
-pub struct NessaDividedCache<T> {
+pub struct RynaDividedCache<T> {
     pub functions: T,
     pub unary: T,
     pub binary: T,
@@ -102,16 +102,16 @@ pub struct NessaDividedCache<T> {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
-pub struct NessaCache {
+pub struct RynaCache {
     pub class_id: IdCache,
     pub function_id: IdCache,
     pub interface_id: IdCache,
-    pub templates: NessaDividedCache<TemplateCache>,
-    pub usages: NessaDividedCache<UsageCache>,
-    pub overloads: NessaDividedCache<OverloadCache>,
-    pub locations: NessaDividedCache<OverloadCache>,
-    pub opcodes: NessaDividedCache<OpcodeCache>,
-    pub imports: NessaImportCache,
+    pub templates: RynaDividedCache<TemplateCache>,
+    pub usages: RynaDividedCache<UsageCache>,
+    pub overloads: RynaDividedCache<OverloadCache>,
+    pub locations: RynaDividedCache<OverloadCache>,
+    pub opcodes: RynaDividedCache<OpcodeCache>,
+    pub imports: RynaImportCache,
     pub ranges: StringCache<(usize, usize)>
 }
 

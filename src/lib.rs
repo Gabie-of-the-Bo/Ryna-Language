@@ -68,9 +68,9 @@ pub mod mut_cell;
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;
-    use crate::compilation::NessaError;
+    use crate::compilation::RynaError;
     use crate::context::standard_ctx;
-    use crate::config::{precompile_nessa_module_with_config, compute_project_hash};
+    use crate::config::{precompile_ryna_module_with_config, compute_project_hash};
     use glob::glob;
 
     fn integration_test(file_path: &str) {
@@ -78,7 +78,7 @@ mod integration {
         let mut ctx = standard_ctx();
         ctx.optimize = true;
 
-        if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
+        if let Err(err) = ctx.parse_and_execute_ryna_module(&file) {
             err.emit();
         }
     }
@@ -95,10 +95,10 @@ mod integration {
                     let mut ctx = standard_ctx();
                     ctx.optimize = true;
 
-                    ctx.parse_and_execute_nessa_module(&file)
+                    ctx.parse_and_execute_ryna_module(&file)
         
                 }).unwrap_or_else(|err| {
-                    Err(NessaError::execution_error(panic_message::panic_message(&err).to_owned()))
+                    Err(RynaError::execution_error(panic_message::panic_message(&err).to_owned()))
                 });
         
                 if let Err(err) = result {
@@ -124,7 +124,7 @@ mod integration {
                 // Positive test
                 let mut ctx = standard_ctx();
 
-                if let Err(err) = ctx.parse_and_execute_nessa_module(&file) {
+                if let Err(err) = ctx.parse_and_execute_ryna_module(&file) {
                     err.emit();
                 }        
             }
@@ -134,7 +134,7 @@ mod integration {
     fn module_test(module_path: &str) {
         let path_str = &module_path.to_string();
         let (_, all_mods, files) = compute_project_hash(path_str, None, true, false).unwrap();
-        let err = precompile_nessa_module_with_config(path_str, all_mods, files, true, false, true);
+        let err = precompile_ryna_module_with_config(path_str, all_mods, files, true, false, true);
 
         if let Err(err) = &err {
             err.emit();
@@ -161,192 +161,192 @@ mod integration {
 
     #[test]
     fn naive_primality() {
-        integration_test("test/primality.nessa");
+        integration_test("test/primality.ryna");
     }
 
     #[test]
     fn mapped_iterator() {
-        integration_test("test/mapped_iterator.nessa");
+        integration_test("test/mapped_iterator.ryna");
     }
 
     #[test]
     fn dice() {
-        integration_test("test/dice.nessa");
+        integration_test("test/dice.ryna");
     }
 
     #[test]
     fn ints_custom_syntax() {
-        integration_test("test/ints.nessa");
+        integration_test("test/ints.ryna");
     }
 
     #[test]
     fn random() {
-        integration_test("test/random.nessa");
+        integration_test("test/random.ryna");
     }
 
     #[test]
     fn tuples() {
-        integration_test("test/tuples.nessa");
+        integration_test("test/tuples.ryna");
     }
 
     #[test]
     fn array_access() {
-        integration_test("test/array_access.nessa");
+        integration_test("test/array_access.ryna");
     }
 
     #[test]
     fn array_init() {
-        integration_test("test/array_init.nessa");
+        integration_test("test/array_init.ryna");
     }
 
     #[test]
     fn list_comprehension() {
-        integration_test("test/list_comprehension.nessa");
+        integration_test("test/list_comprehension.ryna");
     }
 
     #[test]
     fn map_array() {
-        integration_test("test/map_array.nessa");
+        integration_test("test/map_array.ryna");
     }
 
     #[test]
     fn array_transform() {
-        integration_test("test/array_transform.nessa");
+        integration_test("test/array_transform.ryna");
     }
 
     #[test]
     fn e_approximation() {
-        integration_test("test/e_approximation.nessa");
+        integration_test("test/e_approximation.ryna");
     }
 
     #[test]
     fn basic_alias() {
-        integration_test("test/basic_alias.nessa");
+        integration_test("test/basic_alias.ryna");
     }
 
     #[test]
     fn adt_list() {
-        integration_test("test/adt_list.nessa");
+        integration_test("test/adt_list.ryna");
     }
 
     #[test]
     fn adt_generic_list() {
-        integration_test("test/adt_generic_list.nessa");
+        integration_test("test/adt_generic_list.ryna");
     }
 
     #[test]
     fn adt_bin_tree() {
-        integration_test("test/adt_bin_tree.nessa");
+        integration_test("test/adt_bin_tree.ryna");
     }
 
     #[test]
     fn numeric_interface() {
-        integration_test("test/numeric_interface.nessa");
+        integration_test("test/numeric_interface.ryna");
     }
 
     #[test]
     fn parametric_interface() {
-        integration_test("test/parametric_interface.nessa");
+        integration_test("test/parametric_interface.ryna");
     }
 
     #[test]
     fn peano_arithmetic() {
-        integration_test("test/peano_arithmetic.nessa");
+        integration_test("test/peano_arithmetic.ryna");
     }
 
     #[test]
     fn short_circuit() {
-        integration_test("test/short_circuit.nessa");
+        integration_test("test/short_circuit.ryna");
     }
 
     #[test]
     fn file_manip() {
-        integration_test("test/file_manip.nessa");
+        integration_test("test/file_manip.ryna");
     }
 
     #[test]
     fn string_manip() {
-        integration_test("test/string_manip.nessa");
+        integration_test("test/string_manip.ryna");
     }
 
     #[test]
     fn ambiguous_impl() {
-        integration_test("test/ambiguous_impl.nessa");
+        integration_test("test/ambiguous_impl.ryna");
     }
 
     #[test]
     fn ternary() {
-        integration_test("test/ternary.nessa");
+        integration_test("test/ternary.ryna");
     }
 
     #[test]
     fn adt_assignment() {
-        integration_test("test/adt_assignment.nessa");
+        integration_test("test/adt_assignment.ryna");
     }
 
     #[test]
     fn bitwise() {
-        integration_test("test/bitwise.nessa");
+        integration_test("test/bitwise.ryna");
     }
 
     #[test]
-    fn ndl_macros() {
-        integration_test("test/ndl_macros.nessa");
+    fn rdl_macros() {
+        integration_test("test/rdl_macros.ryna");
     }
 
     #[test]
     fn do_blocks() {
-        integration_test("test/do_blocks.nessa");
+        integration_test("test/do_blocks.ryna");
     }
 
     #[test]
     fn break_loops() {
-        integration_test("test/break_loops.nessa");
+        integration_test("test/break_loops.ryna");
     }
 
     #[test]
     fn continue_loops() {
-        integration_test("test/continue_loops.nessa");
+        integration_test("test/continue_loops.ryna");
     }
 
     #[test]
     fn lambda_capture() {
-        integration_test("test/lambda_capture.nessa");
+        integration_test("test/lambda_capture.ryna");
     }
 
     #[test]
     fn unicode() {
-        integration_test("test/unicode.nessa");
+        integration_test("test/unicode.ryna");
     }
 
     #[test]
     fn implicit_lambda() {
-        integration_test("test/implicit_lambda.nessa");
+        integration_test("test/implicit_lambda.ryna");
     }
 
     #[test]
     fn exp_floats() {
-        integration_test("test/exp_floats.nessa");
+        integration_test("test/exp_floats.ryna");
     }
 
     #[test]
     fn moving() {
-        integration_test_batch("test/batches/moving/*.nessa");
+        integration_test_batch("test/batches/moving/*.ryna");
     }
 
     #[test]
     fn interfaces() {
-        integration_test_batch("test/batches/interfaces/*.nessa");
+        integration_test_batch("test/batches/interfaces/*.ryna");
     }
 
     #[test]
     fn macros() {
-        integration_test_batch("test/batches/macros/*.nessa");
+        integration_test_batch("test/batches/macros/*.ryna");
     }
 
     #[test]
     fn stack() {
-        integration_test_batch("test/batches/stack/*.nessa");
+        integration_test_batch("test/batches/stack/*.ryna");
     }
 
     #[test]

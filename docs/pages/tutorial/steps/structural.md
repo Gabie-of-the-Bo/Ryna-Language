@@ -4,7 +4,7 @@ allowed to be **recursive** so you can create data structures from them.
 
 ## Syntax
 
-To talk about structural types we need to take a look at the syntax Nessa uses to define them:
+To talk about structural types we need to take a look at the syntax Ryna uses to define them:
 
 ```
 type Name = AnotherType;

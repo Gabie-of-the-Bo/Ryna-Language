@@ -3,31 +3,31 @@ use std::collections::{HashMap, HashSet};
 use nom::{branch::alt, bytes::complete::tag, character::complete::satisfy, combinator::{eof, map, map_opt, peek, value}, multi::{many0, many_till}, sequence::{delimited, preceded, tuple}};
 use serde::{Deserialize, Serialize};
 
-use crate::{annotations::Annotation, context::NessaContext, parser::{empty0, identifier_parser, Location, PResult, Span}, patterns::Pattern};
+use crate::{annotations::Annotation, context::RynaContext, parser::{empty0, identifier_parser, Location, PResult, Span}, patterns::Pattern};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum NessaMacroType {
-    Function, Expression, Block, Ndl
+pub enum RynaMacroType {
+    Function, Expression, Block, Rdl
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum NdlMacro {
+pub enum RdlMacro {
     Text(String),
     Var(String),
     IndexedVar(String, String),
-    Loop(String, String, Box<NdlMacro>),
-    Seq(Vec<NdlMacro>),
-    Code(Box<NdlMacro>)
+    Loop(String, String, Box<RdlMacro>),
+    Seq(Vec<RdlMacro>),
+    Code(Box<RdlMacro>)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NessaMacro {
+pub struct RynaMacro {
     pub location: Location,
     pub annotations: Vec<Annotation>,
     pub name: String,
-    pub m_type: NessaMacroType,
+    pub m_type: RynaMacroType,
     pub pattern: Pattern,
-    pub generator: NdlMacro
+    pub generator: RdlMacro
 }
 
 pub fn text_pattern_char(input: Span<'_>) -> PResult<char> {
@@ -63,24 +63,24 @@ pub fn text_pattern_end(input: Span<'_>) -> PResult<()> {
     ))(input)
 }
 
-pub fn parse_text(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_text(input: Span<'_>) -> PResult<RdlMacro> {
     map_opt(
         many_till(text_pattern_char, peek(text_pattern_end)),
-        |(i, _)| if !i.is_empty() { Some(NdlMacro::Text(i.iter().collect())) } else { None }
+        |(i, _)| if !i.is_empty() { Some(RdlMacro::Text(i.iter().collect())) } else { None }
     )(input)
 }
 
-pub fn parse_var(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_var(input: Span<'_>) -> PResult<RdlMacro> {
     map(
         preceded(
             tag("$"),
             identifier_parser
         ),
-        NdlMacro::Var
+        RdlMacro::Var
     )(input)
 }
 
-pub fn parse_index(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_index(input: Span<'_>) -> PResult<RdlMacro> {
     map(
         tuple((
             tag("$"),
@@ -88,7 +88,7 @@ pub fn parse_index(input: Span<'_>) -> PResult<NdlMacro> {
             tag("."),
             identifier_parser
         )),
-        |(_, c, _, i)| NdlMacro::IndexedVar(c, i)
+        |(_, c, _, i)| RdlMacro::IndexedVar(c, i)
     )(input)
 }
 
@@ -104,33 +104,33 @@ pub fn parse_loop_header(input: Span<'_>) -> PResult<(String, String)> {
     )(input)
 }
 
-pub fn parse_loop(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_loop(input: Span<'_>) -> PResult<RdlMacro> {
     map(
         tuple((
             parse_loop_header,
             empty0,
             delimited(
                 tag("{"),
-                parse_nessa_macro,
+                parse_ryna_macro,
                 tag("}")                
             )
         )),
-        |(h, _, b)| NdlMacro::Loop(h.0, h.1, Box::new(b))
+        |(h, _, b)| RdlMacro::Loop(h.0, h.1, Box::new(b))
     )(input)
 }
 
-pub fn parse_code(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_code(input: Span<'_>) -> PResult<RdlMacro> {
     map(
         delimited(
             tag("{|"),
-            parse_nessa_macro,
+            parse_ryna_macro,
             tag("|}")
         ),
-        |i| NdlMacro::Code(Box::new(i))
+        |i| RdlMacro::Code(Box::new(i))
     )(input)
 }
 
-pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_ryna_macro_line(input: Span<'_>) -> PResult<RdlMacro> {
     alt((
         parse_index,
         parse_var,
@@ -140,17 +140,17 @@ pub fn parse_nessa_macro_line(input: Span<'_>) -> PResult<NdlMacro> {
     ))(input)
 }
 
-pub fn parse_nessa_macro(input: Span<'_>) -> PResult<NdlMacro> {
+pub fn parse_ryna_macro(input: Span<'_>) -> PResult<RdlMacro> {
     map(
-        many0(parse_nessa_macro_line),
-        NdlMacro::Seq
+        many0(parse_ryna_macro_line),
+        RdlMacro::Seq
     )(input)
 }
 
-impl NdlMacro {
+impl RdlMacro {
     pub fn get_markers(&self) -> HashSet<(bool, String)> {
         return match self {
-            NdlMacro::Loop(v, i, b) => {
+            RdlMacro::Loop(v, i, b) => {
                 let mut res = b.get_markers().into_iter().chain(vec!((false, v.clone()), (true, i.clone()))).collect::<HashSet<_>>();
                 let repeated = res.iter().filter(|(it, _)| *it).cloned().collect::<Vec<_>>();
 
@@ -162,17 +162,17 @@ impl NdlMacro {
                 res
             },
             
-            NdlMacro::Seq(b) => b.iter().flat_map(NdlMacro::get_markers).collect(),
-            NdlMacro::Var(v) => vec!((false, v.clone())).into_iter().collect(),
-            NdlMacro::IndexedVar(v, i) => vec!((false, v.clone()), (true, i.clone())).into_iter().collect(),
+            RdlMacro::Seq(b) => b.iter().flat_map(RdlMacro::get_markers).collect(),
+            RdlMacro::Var(v) => vec!((false, v.clone())).into_iter().collect(),
+            RdlMacro::IndexedVar(v, i) => vec!((false, v.clone()), (true, i.clone())).into_iter().collect(),
 
-            NdlMacro::Code(c) => c.get_markers(),
+            RdlMacro::Code(c) => c.get_markers(),
 
             _ => HashSet::new(),
         };
     }
 
-    pub fn expand(&self, args: &HashMap<String, Vec<String>>, ctx: &NessaContext) -> Result<String, String> {
+    pub fn expand(&self, args: &HashMap<String, Vec<String>>, ctx: &RynaContext) -> Result<String, String> {
         macro_rules! extract_var {
             ($n: expr) => {
                 match args.get($n) {
@@ -191,16 +191,16 @@ impl NdlMacro {
         }
 
         match self {
-            NdlMacro::Text(s) => Ok(s.clone()),
+            RdlMacro::Text(s) => Ok(s.clone()),
             
-            NdlMacro::Var(v) => {
+            RdlMacro::Var(v) => {
                 let var = extract_var!(v)?;
                 assert_single!(var, v);
 
                 Ok(var[0].clone())
             },
             
-            NdlMacro::IndexedVar(c, i) => {
+            RdlMacro::IndexedVar(c, i) => {
                 let cs = extract_var!(c)?;
                 let idx = extract_var!(i)?;
                 assert_single!(idx, i);
@@ -211,7 +211,7 @@ impl NdlMacro {
                 }
             },
 
-            NdlMacro::Loop(c, i, b) => {
+            RdlMacro::Loop(c, i, b) => {
                 let cont = extract_var!(c)?;
 
                 let mut args_cpy = args.clone();
@@ -226,14 +226,14 @@ impl NdlMacro {
                 Ok(iters.join(""))
             },
             
-            NdlMacro::Seq(b) => {
+            RdlMacro::Seq(b) => {
                 Ok(b.iter().map(|i| i.expand(args, ctx)).collect::<Result<Vec<_>, _>>()?.join(""))
             },
 
-            NdlMacro::Code(p) => {
+            RdlMacro::Code(p) => {
                 let sub_code = p.expand(args, ctx)?;
 
-                let ex = NessaContext::parse_and_execute_nessa_project_inner::<false>(
+                let ex = RynaContext::parse_and_execute_ryna_project_inner::<false>(
                     ctx.module_path.clone(), 
                     Some(sub_code), 
                     true, 
@@ -254,9 +254,9 @@ mod tests {
     #[allow(unused)] 
     use crate::context::standard_ctx;
     #[allow(unused)] 
-    use crate::macros::NdlMacro;
+    use crate::macros::RdlMacro;
     #[allow(unused)] 
-    use super::parse_nessa_macro;
+    use super::parse_ryna_macro;
 
     #[test]
     fn macro_parsing() {
@@ -266,44 +266,44 @@ mod tests {
         let example_4 = "@list.i { let i = $list.i; }";
         let example_5 = "let res = {|$expr|};";
 
-        let example_1_macro = parse_nessa_macro(example_1.into()).unwrap().1;
-        let example_2_macro = parse_nessa_macro(example_2.into()).unwrap().1;
-        let example_3_macro = parse_nessa_macro(example_3.into()).unwrap().1;
-        let example_4_macro = parse_nessa_macro(example_4.into()).unwrap().1;
-        let example_5_macro = parse_nessa_macro(example_5.into()).unwrap().1;
+        let example_1_macro = parse_ryna_macro(example_1.into()).unwrap().1;
+        let example_2_macro = parse_ryna_macro(example_2.into()).unwrap().1;
+        let example_3_macro = parse_ryna_macro(example_3.into()).unwrap().1;
+        let example_4_macro = parse_ryna_macro(example_4.into()).unwrap().1;
+        let example_5_macro = parse_ryna_macro(example_5.into()).unwrap().1;
 
-        assert_eq!(example_1_macro, NdlMacro::Seq(vec!(
-            NdlMacro::Text("let test = arr<".into()),
-            NdlMacro::Var("type".into()),
-            NdlMacro::Text(">();".into())
+        assert_eq!(example_1_macro, RdlMacro::Seq(vec!(
+            RdlMacro::Text("let test = arr<".into()),
+            RdlMacro::Var("type".into()),
+            RdlMacro::Text(">();".into())
         )));
         
-        assert_eq!(example_2_macro, NdlMacro::Seq(vec!(
-            NdlMacro::Text("let $var = arr<".into()),
-            NdlMacro::Var("type".into()),
-            NdlMacro::Text(">();".into())
+        assert_eq!(example_2_macro, RdlMacro::Seq(vec!(
+            RdlMacro::Text("let $var = arr<".into()),
+            RdlMacro::Var("type".into()),
+            RdlMacro::Text(">();".into())
         )));
         
-        assert_eq!(example_3_macro, NdlMacro::Seq(vec!(
-            NdlMacro::Text("if ".into()),
-            NdlMacro::Var("cond".into()),
-            NdlMacro::Text(" { ".into()),
-            NdlMacro::Var("expr".into()),
-            NdlMacro::Text(" }".into()),
+        assert_eq!(example_3_macro, RdlMacro::Seq(vec!(
+            RdlMacro::Text("if ".into()),
+            RdlMacro::Var("cond".into()),
+            RdlMacro::Text(" { ".into()),
+            RdlMacro::Var("expr".into()),
+            RdlMacro::Text(" }".into()),
         )));
         
-        assert_eq!(example_4_macro, NdlMacro::Seq(vec!(
-            NdlMacro::Loop("list".into(), "i".into(), Box::new(NdlMacro::Seq(vec!(
-                NdlMacro::Text(" let i = ".into()),
-                NdlMacro::IndexedVar("list".into(), "i".into()),
-                NdlMacro::Text("; ".into())
+        assert_eq!(example_4_macro, RdlMacro::Seq(vec!(
+            RdlMacro::Loop("list".into(), "i".into(), Box::new(RdlMacro::Seq(vec!(
+                RdlMacro::Text(" let i = ".into()),
+                RdlMacro::IndexedVar("list".into(), "i".into()),
+                RdlMacro::Text("; ".into())
             ))))
         )));
         
-        assert_eq!(example_5_macro, NdlMacro::Seq(vec!(
-            NdlMacro::Text("let res = ".into()),
-            NdlMacro::Code(Box::new(NdlMacro::Seq(vec!(NdlMacro::Var("expr".into()))))),
-            NdlMacro::Text(";".into()),
+        assert_eq!(example_5_macro, RdlMacro::Seq(vec!(
+            RdlMacro::Text("let res = ".into()),
+            RdlMacro::Code(Box::new(RdlMacro::Seq(vec!(RdlMacro::Var("expr".into()))))),
+            RdlMacro::Text(";".into()),
         )));
     }
 
@@ -314,7 +314,7 @@ mod tests {
         // Array syntax
         let macro_ex_str = "let res = arr<$type>(); @elems.i {res.push($elems.i);} return move(res);";
 
-        let macro_ex = parse_nessa_macro(macro_ex_str.into()).unwrap().1;
+        let macro_ex = parse_ryna_macro(macro_ex_str.into()).unwrap().1;
 
         let expanded_code_ex = macro_ex.expand(&[
             ("type".into(), vec!("Int".into())),
@@ -329,7 +329,7 @@ mod tests {
         // Hashmap syntax
         let macro_ex_str = "let res = hashmap<$ktype, $vtype>(); @keys.i {res.add($keys.i, $values.i);} return move(res);";
 
-        let macro_ex = parse_nessa_macro(macro_ex_str.into()).unwrap().1;
+        let macro_ex = parse_ryna_macro(macro_ex_str.into()).unwrap().1;
 
         let expanded_code_ex = macro_ex.expand(&[
             ("ktype".into(), vec!("Int".into())),

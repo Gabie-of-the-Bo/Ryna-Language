@@ -5,7 +5,7 @@ use derive_builder::Builder;
 use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 
-use crate::{context::NessaContext, operations::Operator, parser::NessaExpr, types::Type};
+use crate::{context::RynaContext, operations::Operator, parser::RynaExpr, types::Type};
 
 // Instruction-level debug information
 
@@ -45,18 +45,18 @@ impl DebugInfo {
 
 // Expression printing
 
-impl NessaContext {
-    pub fn to_string(&self, expr: &NessaExpr) -> String  {
+impl RynaContext {
+    pub fn to_string(&self, expr: &RynaExpr) -> String  {
         match expr {
-            NessaExpr::NameReference(_, n) |
-            NessaExpr::Variable(_, _, n, _) => n.clone().cyan().to_string(),
-            NessaExpr::CompiledVariableDefinition(_, _, n, t, e) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
-            NessaExpr::CompiledVariableAssignment(_, _, n, _, e) => format!("{} = {}", n.cyan(), self.to_string(e)),
+            RynaExpr::NameReference(_, n) |
+            RynaExpr::Variable(_, _, n, _) => n.clone().cyan().to_string(),
+            RynaExpr::CompiledVariableDefinition(_, _, n, t, e) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
+            RynaExpr::CompiledVariableAssignment(_, _, n, _, e) => format!("{} = {}", n.cyan(), self.to_string(e)),
 
-            NessaExpr::Literal(_, obj) => obj.to_debug_string().magenta().to_string(),
-            NessaExpr::Tuple(_, args) => format!("({})", args.iter().map(|i| self.to_string(i)).collect::<Vec<_>>().join(", ")),
+            RynaExpr::Literal(_, obj) => obj.to_debug_string().magenta().to_string(),
+            RynaExpr::Tuple(_, args) => format!("({})", args.iter().map(|i| self.to_string(i)).collect::<Vec<_>>().join(", ")),
 
-            NessaExpr::FunctionCall(_, id, t, args) => {
+            RynaExpr::FunctionCall(_, id, t, args) => {
                 let temp = if t.is_empty() {
                     String::new()
 
@@ -72,7 +72,7 @@ impl NessaContext {
                 )
             },
 
-            NessaExpr::UnaryOperation(_, id, t, expr) => {
+            RynaExpr::UnaryOperation(_, id, t, expr) => {
                 let temp = if t.is_empty() {
                     String::new()
 
@@ -92,7 +92,7 @@ impl NessaContext {
                 unreachable!()
             },
 
-            NessaExpr::BinaryOperation(_, id, t, a, b) => {
+            RynaExpr::BinaryOperation(_, id, t, a, b) => {
                 let temp = if t.is_empty() {
                     String::new()
 
@@ -103,7 +103,7 @@ impl NessaContext {
                 format!("{} {}{} {}", self.to_string(a), temp, self.binary_ops[*id].get_repr(), self.to_string(b))
             },
 
-            NessaExpr::NaryOperation(_, id, t, a, b) => {
+            RynaExpr::NaryOperation(_, id, t, a, b) => {
                 let temp = if t.is_empty() {
                     String::new()
 
@@ -118,7 +118,7 @@ impl NessaContext {
                 unreachable!()
             },
 
-            NessaExpr::Return(_, expr) => format!("return {}", self.to_string(expr)),
+            RynaExpr::Return(_, expr) => format!("return {}", self.to_string(expr)),
 
             _ => todo!("Unable to convert {:?} to pretty string", expr)
         }

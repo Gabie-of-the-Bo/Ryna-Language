@@ -8,8 +8,8 @@ use colored::Colorize;
 use rustc_hash::FxHashMap;
 
 use crate::annotations::Annotation;
-use crate::cache::NessaCache;
-use crate::compilation::NessaInstruction;
+use crate::cache::RynaCache;
+use crate::compilation::RynaInstruction;
 use crate::interfaces::Interface;
 use crate::interfaces::InterfaceBinaryOpHeader;
 use crate::interfaces::InterfaceConstraint;
@@ -18,7 +18,7 @@ use crate::interfaces::InterfaceImpl;
 use crate::interfaces::InterfaceNaryOpHeader;
 use crate::interfaces::InterfaceUnaryOpHeader;
 use crate::interfaces::standard_interfaces;
-use crate::macros::NessaMacro;
+use crate::macros::RynaMacro;
 use crate::parser::Location;
 use crate::translation::load_optimized_opcodes;
 use crate::types::*;
@@ -34,7 +34,7 @@ use crate::patterns::*;
 */
 
 #[derive(Default, Clone)]
-pub struct NessaContext {
+pub struct RynaContext {
     pub type_templates: Vec<TypeTemplate>, 
     pub interfaces: Vec<Interface>,
     pub interface_impls: Vec<InterfaceImpl>,
@@ -46,16 +46,16 @@ pub struct NessaContext {
 
     pub functions: Vec<Function>,
 
-    pub macros: Vec<NessaMacro>,
+    pub macros: Vec<RynaMacro>,
 
     pub variables: Vec<Object>,
 
     pub lambdas: usize,
     pub lambda_code_length: usize,
-    pub lambda_code: Vec<NessaInstruction>,
+    pub lambda_code: Vec<RynaInstruction>,
     pub lambda_positions: HashMap<usize, usize>,
 
-    pub cache: NessaCache,
+    pub cache: RynaCache,
 
     pub optimize: bool,
     
@@ -65,7 +65,7 @@ pub struct NessaContext {
     pub program_input: Vec<String>
 }
 
-impl NessaContext {
+impl RynaContext {
 
     /*
         ╒════════════════════════════╕
@@ -572,8 +572,8 @@ lazy_static! {
     pub static ref NUM_STD_MACROS: Mutex<RefCell<usize>> = Mutex::default();    
 }
 
-pub fn standard_ctx() -> NessaContext {
-    let mut ctx = NessaContext::default();
+pub fn standard_ctx() -> RynaContext {
+    let mut ctx = RynaContext::default();
 
     // Define std context contents
     standard_types(&mut ctx);

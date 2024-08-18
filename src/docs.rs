@@ -5,7 +5,7 @@ use std::io::Write;
 use crate::interfaces::Interface;
 use crate::operations::Operator;
 use crate::types::TypeTemplate;
-use crate::{annotations::Annotation, config::NessaModule, html_ext::HTMLColorable, types::Type};
+use crate::{annotations::Annotation, config::RynaModule, html_ext::HTMLColorable, types::Type};
 
 pub fn default_markdown_style() -> String {
     [
@@ -69,7 +69,7 @@ pub fn write_args_and_ret(file: &mut File, annot: &Annotation) {
     ).expect("Error while writing to docs file");
 }
 
-pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
+pub fn write_function_overload_docs(file: &mut File, module: &RynaModule, f: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
     write!(
         file, 
         "## {} {}{}{} -> {}\n\n", 
@@ -87,7 +87,7 @@ pub fn write_function_overload_docs(file: &mut File, module: &NessaModule, f: &s
     write_args_and_ret(file, annot);
 }
 
-pub fn write_unary_operation_docs(file: &mut File, module: &NessaModule, op: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation, prefix: bool) {
+pub fn write_unary_operation_docs(file: &mut File, module: &RynaModule, op: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation, prefix: bool) {
     if prefix {
         write!(
             file, 
@@ -123,7 +123,7 @@ pub fn write_unary_operation_docs(file: &mut File, module: &NessaModule, op: &st
     write_args_and_ret(file, annot);
 }
 
-pub fn write_binary_operation_docs(file: &mut File, module: &NessaModule, op: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
+pub fn write_binary_operation_docs(file: &mut File, module: &RynaModule, op: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
     if let Type::And(args_t) = args {
         write!(
             file, 
@@ -148,7 +148,7 @@ pub fn write_binary_operation_docs(file: &mut File, module: &NessaModule, op: &s
     write_args_and_ret(file, annot);
 }
 
-pub fn write_nary_operation_docs(file: &mut File, module: &NessaModule, op_open: &str, op_close: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
+pub fn write_nary_operation_docs(file: &mut File, module: &RynaModule, op_open: &str, op_close: &str, t: usize, args: &Type, ret: &Type, annot: &Annotation) {
     if let Type::And(args_t) = args {
         let args_b = &args_t[1..];
 
@@ -225,7 +225,7 @@ pub fn write_syntax_docs(file: &mut File, name: &String, annot: &Annotation) {
     ).expect("Error while writing to docs file");
 }
 
-pub fn write_interface_docs(file: &mut File, module: &NessaModule, interface: &Interface, annot: &Annotation) {
+pub fn write_interface_docs(file: &mut File, module: &RynaModule, interface: &Interface, annot: &Annotation) {
     write!(
         file,
         "# {} {}",
@@ -289,7 +289,7 @@ pub fn write_interface_docs(file: &mut File, module: &NessaModule, interface: &I
     }
 }
 
-pub fn generate_all_function_overload_docs(project_path: &String, module: &NessaModule) {
+pub fn generate_all_function_overload_docs(project_path: &String, module: &RynaModule) {
     let mut functions_file = create_markdown_file(project_path, "functions.md");
 
     for f in &module.ctx.functions {
@@ -306,7 +306,7 @@ pub fn generate_all_function_overload_docs(project_path: &String, module: &Nessa
     }
 }
 
-pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) {
+pub fn generate_all_operation_docs(project_path: &String, module: &RynaModule) {
     let mut operations_file = create_markdown_file(project_path, "operations.md");
 
     write!(operations_file, "# Unary operations\n\n").expect("Error while writing to docs file");
@@ -361,7 +361,7 @@ pub fn generate_all_operation_docs(project_path: &String, module: &NessaModule) 
     }
 }
 
-pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
+pub fn generate_all_class_docs(project_path: &String, module: &RynaModule) {
     let mut classes_file = create_markdown_file(project_path, "classes.md");
 
     for c in &module.ctx.type_templates {
@@ -376,7 +376,7 @@ pub fn generate_all_class_docs(project_path: &String, module: &NessaModule) {
     }
 }
 
-pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
+pub fn generate_all_syntax_docs(project_path: &String, module: &RynaModule) {
     let mut syntaxes_file = create_markdown_file(project_path, "syntaxes.md");
 
     for m in &module.ctx.macros {
@@ -391,7 +391,7 @@ pub fn generate_all_syntax_docs(project_path: &String, module: &NessaModule) {
     }
 }
 
-pub fn generate_all_interface_docs(project_path: &String, module: &NessaModule) {
+pub fn generate_all_interface_docs(project_path: &String, module: &RynaModule) {
     let mut interfaces_file = create_markdown_file(project_path, "interfaces.md");
 
     for i in &module.ctx.interfaces {

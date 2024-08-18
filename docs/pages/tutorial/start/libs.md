@@ -1,4 +1,4 @@
-The Nessa interpreter allows you to install libraries from git repositories. Here are the commands that you can
+The Ryna interpreter allows you to install libraries from git repositories. Here are the commands that you can
 use in order to do that.
 
 ## Installing *library packs*
@@ -8,10 +8,10 @@ because a repository might have more than one in different folders for convenien
 command:
 
 ```
-nessa install <REPO_URL> <PACK_NAME>
+ryna install <REPO_URL> <PACK_NAME>
 ```
 
-This will clone the repository inside the configured modules folder. We assume that you have already executed `nessa setup` 
+This will clone the repository inside the configured modules folder. We assume that you have already executed `ryna setup` 
 before and completed the wizard.
 
 ## Uninstalling *library packs*
@@ -19,7 +19,7 @@ before and completed the wizard.
 In order to uninstall a library pack you have to use the following command:
 
 ```
-nessa uninstall <PACK_NAME>
+ryna uninstall <PACK_NAME>
 ```
 
 This removes the library pack from the configured modules folder.

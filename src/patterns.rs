@@ -5,7 +5,7 @@ use nom::{
 };
 use serde::{Serialize, Deserialize};
 
-use crate::{context::NessaContext, macros::NessaMacroType, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
+use crate::{context::RynaContext, macros::RynaMacroType, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
 
 /*
                                                   ╒══════════════════╕
@@ -27,7 +27,7 @@ pub enum Pattern{
     Identifier,
     Type,
     Expr,
-    Ndl,
+    Rdl,
 
     // Combination patterns
     Or(Vec<Pattern>),
@@ -48,7 +48,7 @@ impl Pattern {
         };
     }
 
-    pub fn extract<'a>(&'a self, text: Span<'a>, ctx: &'a NessaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
+    pub fn extract<'a>(&'a self, text: Span<'a>, ctx: &'a RynaContext, cache: &PCache<'a>) -> PResult<'a, HashMap<String, Vec<String>>> {
         fn merge(a: &mut HashMap<String, Vec<String>>, b: HashMap<String, Vec<String>>) {
             for (k, v) in b.into_iter() {
                 a.entry(k).or_default().extend(v);
@@ -68,8 +68,8 @@ impl Pattern {
 
             Pattern::Identifier => value(HashMap::new(), identifier_parser)(text),
             Pattern::Type => value(HashMap::new(), |input| ctx.type_parser(input))(text),
-            Pattern::Expr => value(HashMap::new(), |input| ctx.nessa_expr_parser(input, cache))(text),
-            Pattern::Ndl => value(HashMap::new(), |input| parse_ndl_pattern(input, true, true, ctx))(text),
+            Pattern::Expr => value(HashMap::new(), |input| ctx.ryna_expr_parser(input, cache))(text),
+            Pattern::Rdl => value(HashMap::new(), |input| parse_rdl_pattern(input, true, true, ctx))(text),
 
             Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
 
@@ -151,10 +151,10 @@ impl Pattern {
     }
 }
 
-fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
+fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &'a RynaContext) -> PResult<'a, Pattern> {
     return if and {
         map(
-            separated_list1(empty1, |i| parse_ndl_pattern(i, false, false, ctx)), 
+            separated_list1(empty1, |i| parse_rdl_pattern(i, false, false, ctx)), 
             |v| if v.len() > 1 { Pattern::And(v) } else { v[0].clone() }
         )(text)
         
@@ -163,10 +163,10 @@ fn parse_and<'a>(text: Span<'a>, and: bool, ctx: &'a NessaContext) -> PResult<'a
     }
 }
 
-fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
+fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &'a RynaContext) -> PResult<'a, Pattern> {
     return if or {
         return map(
-            separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_ndl_pattern(i, false, true, ctx)), 
+            separated_list1(tuple((empty0, tag("|"), empty0)), |i| parse_rdl_pattern(i, false, true, ctx)), 
             |v| if v.len() > 1 { Pattern::Or(v) } else { v[0].clone() }
         )(text)
         
@@ -175,23 +175,23 @@ fn parse_or<'a>(text: Span<'a>, or: bool, ctx: &'a NessaContext) -> PResult<'a, 
     }
 }
 
-fn custom_ndl_pattern_parser<'a>(ctx: &'a NessaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
+fn custom_rdl_pattern_parser<'a>(ctx: &'a RynaContext, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Pattern> {
     let prev_input = input;
 
-    for m in ctx.macros.iter().filter(|i| i.m_type == NessaMacroType::Ndl) {            
+    for m in ctx.macros.iter().filter(|i| i.m_type == RynaMacroType::Rdl) {            
         if let Ok((new_input, args)) = m.pattern.extract(input, ctx, cache) {
             input = new_input;
 
             match m.generator.expand(&args, ctx) {
                 Ok(code) => {                    
                     let parsed_code = cut(
-                        |input| parse_ndl_pattern(input, true, true, ctx)
+                        |input| parse_rdl_pattern(input, true, true, ctx)
                     )(Span::new(&code));
 
                     match parsed_code {
                         Ok((rest, pattern)) if rest.trim().is_empty() => {
                             return match m.m_type {
-                                NessaMacroType::Ndl => Ok((input, pattern)),
+                                RynaMacroType::Rdl => Ok((input, pattern)),
                                 _ => unreachable!(),
                             }
                         },
@@ -219,30 +219,30 @@ fn custom_ndl_pattern_parser<'a>(ctx: &'a NessaContext, mut input: Span<'a>, cac
     return Err(verbose_error(prev_input, "Unable to parse"))
 }
 
-pub fn parse_ndl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &'a NessaContext) -> PResult<'a, Pattern> {
+pub fn parse_rdl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &'a RynaContext) -> PResult<'a, Pattern> {
     return alt((
-        |input| custom_ndl_pattern_parser(ctx, input, &RefCell::default()),
+        |input| custom_rdl_pattern_parser(ctx, input, &RefCell::default()),
         |i| parse_or(i, or, ctx),
         |i| parse_and(i, and, ctx),
         map(delimited(tag("["), separated_pair(satisfy(|c| c != '\"'), tag("-"), satisfy(|c| c != '\"')), tag("]")), |(a, b)| Pattern::Range(a, b)),
         map(string_parser, |s: String| Pattern::Str(s.to_string())),
         map(delimited(
             tuple((tag("Arg("), empty0)),
-            separated_pair(|i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
+            separated_pair(|i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
             tuple((empty0, tag(")")))
         ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
         map(tuple((
             opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap())),
-            delimited(tuple((tag("{"), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag("}")))),
+            delimited(tuple((tag("{"), empty0)), |i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag("}")))),
             opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap()))
         )), |(f, p, t)| Pattern::Repeat(Box::new(p), f, t)),
-        map(delimited(tuple((tag("["), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
-        delimited(tuple((tag("("), empty0)), |i| parse_ndl_pattern(i, true, true, ctx), tuple((empty0, tag(")")))),
+        map(delimited(tuple((tag("["), empty0)), |i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag("]")))), |p| Pattern::Optional(Box::new(p))),
+        delimited(tuple((tag("("), empty0)), |i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag(")")))),
         map(one_of("dlLaAsq"), Pattern::Symbol),
         value(Pattern::Identifier, tag("<ident>")),
         value(Pattern::Type, tag("<type>")),
         value(Pattern::Expr, tag("<expr>")),
-        value(Pattern::Ndl, tag("<ndl>"))
+        value(Pattern::Rdl, tag("<rdl>"))
     ))(text);
 }
 
@@ -258,18 +258,18 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::FromIterator;
     
-    use crate::context::{standard_ctx, NessaContext};
+    use crate::context::{standard_ctx, RynaContext};
     use crate::parser::{Span, PResult};
     use crate::patterns::Pattern;
 
-    use super::parse_ndl_pattern;
+    use super::parse_rdl_pattern;
 
     fn ok_result<T>(res: PResult<'_, T>) -> bool {
         res.is_ok() && res.unwrap().0.is_empty()
     }
 
-    fn parse_pattern(str: &str, ctx: &NessaContext) -> Result<Pattern, ()> {
-        parse_ndl_pattern(Span::new(str), true, true, ctx).map(|i| i.1).map_err(|_| ())
+    fn parse_pattern(str: &str, ctx: &RynaContext) -> Result<Pattern, ()> {
+        parse_rdl_pattern(Span::new(str), true, true, ctx).map(|i| i.1).map_err(|_| ())
     }
 
     #[test]
@@ -514,9 +514,9 @@ mod tests {
         
         assert_eq!(pattern, Pattern::Expr);
 
-        let pattern: Pattern = parse_pattern("<ndl>", &ctx).expect("Error while parsing pattern");
+        let pattern: Pattern = parse_pattern("<rdl>", &ctx).expect("Error while parsing pattern");
         
-        assert_eq!(pattern, Pattern::Ndl);
+        assert_eq!(pattern, Pattern::Rdl);
     }
 
     #[test]

@@ -1,7 +1,7 @@
-In the Nessa type system, **references** are the way the language has to make indirect value assotiations. They can be seen
+In the Ryna type system, **references** are the way the language has to make indirect value assotiations. They can be seen
 as analogous to *pointers* in languages such as C or C++, but are much safer, since you generally cannot access invalid data.
 
-There are two kinds of references in the Nessa type system: 
+There are two kinds of references in the Ryna type system: 
 
 * **Constant references:** they can be used to read the data that they point to, but you **cannot modify it** under any circumstances.
 * **Mutable references:** The same as constant ones, but you are allowed to modify or even replace the underlying data.

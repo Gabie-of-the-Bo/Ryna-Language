@@ -1,7 +1,7 @@
 [![Rust](https://github.com/Gabie-of-the-Bo/Ryna-Language/actions/workflows/rust.yml/badge.svg)](https://github.com/Gabie-of-the-Bo/Ryna-Language/actions/workflows/rust.yml) [![codecov](https://codecov.io/gh/Gabie-of-the-Bo/Ryna-Language/branch/develop/graph/badge.svg?token=WJA85OICZG)](https://codecov.io/gh/Gabie-of-the-Bo/Ryna-Language)
 [![Webpage](https://img.shields.io/badge/Webpage-online-green)](https://gabie-of-the-bo.github.io/Ryna-Language/)
-[![VSCode Extension](https://img.shields.io/badge/VSCode_extension-online-green)](https://marketplace.visualstudio.com/items?itemName=NessaLang.nessa-language-support)
-[![Crates.io Version](https://img.shields.io/crates/v/nessa-language)](https://crates.io/crates/nessa-language)
+[![VSCode Extension](https://img.shields.io/badge/VSCode_extension-online-green)](https://marketplace.visualstudio.com/items?itemName=RynaLanguage.ryna-language-support)
+[![Crates.io Version](https://img.shields.io/crates/v/ryna-language)](https://crates.io/crates/ryna-language)
 
 <p align="center">
   <a href="https://gabie-of-the-bo.github.io/Ryna-Language/">

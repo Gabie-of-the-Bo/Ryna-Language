@@ -184,13 +184,13 @@ These are some of the things you can do with Ryna:
 
 > If you want to showcase a project here, you can submit a pull request or open an issue :)
 
-## Chessa engine
+## RyChess engine
 
-[Chessa](https://github.com/Gabie-of-the-Bo/Chessa/) (pun intended) is a simple chess engine written in _Ryna_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
+[RyChess](https://github.com/Gabie-of-the-Bo/RyChess/) is a simple chess engine written in _Ryna_ in order to show how the language can be used in medium sized projects. Also, it is used internally as a benchmark when measuring optimizations.
 
-## Genessa
+## RyGenes
 
-[Genessa](https://github.com/Gabie-of-the-Bo/Genessa/) (again, pun intended) is a genetic algorithms library written in _Ryna_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
+[RyGenes](https://github.com/Gabie-of-the-Bo/RyGenes/) is a genetic algorithms library written in _Ryna_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
 
 # Contribute
 

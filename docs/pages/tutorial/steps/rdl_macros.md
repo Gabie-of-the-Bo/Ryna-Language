@@ -6,7 +6,7 @@ The final type of macro that we are going to look at is one that allows you to c
 A NDL macro can be created in Ryna using this syntax:
 
 ```
-syntax ndl macro_name from NDL_Pattern {
+syntax rdl macro_name from NDL_Pattern {
     [...]
 }
 ```
@@ -18,7 +18,7 @@ This would be an example that transforms a pattern into a series of that pattern
 escape the closing brace):
 
 ```
-syntax ndl comma_separated from "#" s Arg(<rdl>, inner) s "#" {
+syntax rdl comma_separated from "#" s Arg(<rdl>, inner) s "#" {
     $inner { ", " $inner \}
 }
 

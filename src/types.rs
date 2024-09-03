@@ -747,12 +747,18 @@ pub const BOOL_ID: usize = 3;
 pub const ARR_ID: usize = 4;
 pub const ARR_IT_ID: usize = 5;
 pub const FILE_ID: usize = 6;
+pub const PTR_ID: usize = 7;
+pub const LIB_ID: usize = 8;
+pub const LIB_FUNC_ID: usize = 9;
 
 pub const INT: Type = Type::Basic(INT_ID);
 pub const FLOAT: Type = Type::Basic(FLOAT_ID);
 pub const STR: Type = Type::Basic(STR_ID);
 pub const BOOL: Type = Type::Basic(BOOL_ID);
 pub const FILE: Type = Type::Basic(FILE_ID);
+pub const PTR: Type = Type::Basic(PTR_ID);
+pub const LIB: Type = Type::Basic(LIB_ID);
+pub const LIB_FUNC: Type = Type::Basic(LIB_FUNC_ID);
 
 #[macro_export]
 macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
@@ -783,6 +789,11 @@ pub fn standard_types(ctx: &mut RynaContext) {
     ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
 
     ctx.define_type(Location::none(), vec!(), "File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    
+    ctx.define_type(Location::none(), vec!(), "Pointer".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+
+    ctx.define_type(Location::none(), vec!(), "Library".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "LibraryFunction".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 }
 
 /*

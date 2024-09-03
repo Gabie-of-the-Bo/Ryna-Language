@@ -3,6 +3,7 @@ use std::io::Write;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use libloading::Library;
 use rand::Rng;
 use seq_macro::seq;
 use malachite::Integer;
@@ -1025,6 +1026,59 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     let idx = ctx.define_function("dec".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
+
+    let idx = ctx.define_function("load_library".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[STR], 
+        LIB,
+        |_, _, v, _| {
+            let path = v[0].get::<String>();
+            let lib = unsafe { Library::new(&path) };
+
+            match lib {
+                Ok(l) => {
+                    Ok(Object::new(RynaLibrary::new(path, l)))
+                },
+                Err(_) => Err(format!("Unable to load library at {path}")),
+            }
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("get_function".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[LIB.to_ref(), STR], 
+        LIB_FUNC,
+        |_, _, v, _| {
+            let lib = v[0].deref::<RynaLibrary>();
+            let name = v[1].get::<String>();
+
+            lib.get_function(name).map(Object::new)
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("call".into()).unwrap();
+
+    for i in 0..10 {
+        let mut args = vec!(LIB_FUNC.to_ref());
+        args.extend(std::iter::repeat(Type::Wildcard).take(i));
+
+        ctx.define_native_function_overload(
+            idx, 
+            0, 
+            &args, 
+            Type::Wildcard,
+            |_, _, v, _| {
+                let func = v[0].deref::<RynaLibraryFunction>();
+                func.call(&v[1..])
+            }
+        ).unwrap();
+    }
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {

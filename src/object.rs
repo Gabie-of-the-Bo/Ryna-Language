@@ -1,6 +1,7 @@
-use std::{cell::RefCell, fs::File, path::PathBuf};
+use std::{cell::RefCell, ffi::c_void, fs::File, path::PathBuf};
 
-use crate::{compilation::message_and_exit, context::RynaContext, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use crate::{compilation::message_and_exit, context::RynaContext, ffi::{FFIArgs, FFIReturn, FFIValue, RynaFFIFunction}, integer_ext::to_i64, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, LIB, LIB_FUNC, LIB_FUNC_ID, LIB_ID, PTR, PTR_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use libloading::{Library, Symbol};
 use malachite::Integer;
 use rclite::Rc;
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,17 @@ type DataBlock = Rc<MutCell<ObjectBlock>>;
     ============================================= │  IMPLEMENTATION  │ =============================================
                                                   ╘══════════════════╛
 */
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct RynaPointer {
+    pub ptr: *const c_void
+}
+
+impl RynaPointer {
+    pub fn new(ptr: *const c_void) -> RynaPointer {
+        RynaPointer { ptr }
+    }
+}
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct RynaArray {
@@ -113,6 +125,67 @@ impl RynaFile {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RynaLibrary {
+    pub path: PathBuf,
+    pub lib: Rc<Library>
+}
+
+impl PartialEq for RynaLibrary {
+    fn eq(&self, other: &Self) -> bool {
+        return self.path == other.path;
+    }
+}
+
+impl RynaLibrary {
+    pub fn new(path: &String, lib: Library) -> RynaLibrary {
+        RynaLibrary { 
+            path: PathBuf::from(path), 
+            lib: Rc::new(lib) 
+        }
+    }
+
+    pub fn get_function(&self, name: &String) -> Result<RynaLibraryFunction, String> {
+        let sym: Symbol<RynaFFIFunction> = unsafe { self.lib.get(name.as_bytes()).map_err(|_| format!("Unable to open symbol {name}"))? };
+
+        Ok(RynaLibraryFunction { 
+            path: format!("{}:{}", self.path.to_str().unwrap(), name), 
+            func: *sym
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RynaLibraryFunction {
+    pub path: String,
+    pub func: RynaFFIFunction
+}
+
+impl PartialEq for RynaLibraryFunction {
+    fn eq(&self, other: &Self) -> bool {
+        return self.path == other.path;
+    }
+}
+
+impl RynaLibraryFunction {
+    pub fn call(&self, args: &[Object]) -> Result<Object, String> {
+        let args_l = args.iter().map(Object::to_ffi).collect::<Result<Vec<_>, _>>()?;
+        let args_struct = FFIArgs::new(&args_l);
+        let mut out = FFIReturn::Void;
+        
+        unsafe { (self.func)(&args_struct, &mut out); }
+
+        match out {
+            FFIReturn::Value(v) => match v {
+                FFIValue::Int(i) => Ok(Object::new(Integer::from(i))),
+                FFIValue::Float(i) => Ok(Object::new(i)),
+                FFIValue::Pointer(p) => Ok(Object::new(RynaPointer::new(p))),
+            },
+            FFIReturn::Void => Err(format!("Function {} returned no value", self.path)),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct TypeInstance {
     pub id: usize,
@@ -140,7 +213,16 @@ pub enum ObjectBlock {
     Lambda(RynaLambda),
 
     #[serde(skip)]
+    Pointer(RynaPointer),
+
+    #[serde(skip)]
     File(RynaFile),
+
+    #[serde(skip)]
+    Library(RynaLibrary),
+
+    #[serde(skip)]
+    LibraryFunction(RynaLibraryFunction),
 
     Instance(TypeInstance),
 
@@ -170,7 +252,10 @@ impl ObjectBlock {
             ObjectBlock::Array(_) => ARR_ID,
             ObjectBlock::ArrayIter(_) => ARR_IT_ID,
             ObjectBlock::Lambda(_) => 0,
+            ObjectBlock::Pointer(_) => PTR_ID,
             ObjectBlock::File(_) => FILE_ID,
+            ObjectBlock::Library(_) => LIB_ID,
+            ObjectBlock::LibraryFunction(_) => LIB_FUNC_ID,
             ObjectBlock::Instance(i) => i.id,
             ObjectBlock::Ref(_) => 0,
             ObjectBlock::Mut(_) => 0,
@@ -189,7 +274,10 @@ impl ObjectBlock {
             ObjectBlock::Array(a) => ARR_OF!(*a.elem_type.clone()),
             ObjectBlock::ArrayIter(i) => ARR_IT_OF!(*i.it_type.clone()),
             ObjectBlock::Lambda(l) => Type::Function(l.args_type.clone(), l.ret_type.clone()),
+            ObjectBlock::Pointer(_) => PTR,
             ObjectBlock::File(_) => FILE,
+            ObjectBlock::Library(_) => LIB,
+            ObjectBlock::LibraryFunction(_) => LIB_FUNC,
             ObjectBlock::Instance(i) => if i.params.is_empty() { Type::Basic(i.id) } else { Type::Template(i.id, i.params.clone()) },
             ObjectBlock::Ref(r) => Type::Ref(Box::new(r.borrow().get_type())),
             ObjectBlock::Mut(r) => Type::MutRef(Box::new(r.borrow().get_type())),
@@ -272,7 +360,10 @@ impl ObjectBlock {
                 args_type: l.args_type.clone(), 
                 ret_type: l.ret_type.clone() 
             }),
+            ObjectBlock::Pointer(p) => ObjectBlock::Pointer(p.clone()),
             ObjectBlock::File(f) => ObjectBlock::File(f.clone()),
+            ObjectBlock::Library(l) => ObjectBlock::Library(l.clone()),
+            ObjectBlock::LibraryFunction(f) => ObjectBlock::LibraryFunction(f.clone()),
             ObjectBlock::Instance(i) => ObjectBlock::Instance(TypeInstance {
                 id: i.id, 
                 params: i.params.clone(), 
@@ -354,6 +445,20 @@ impl Object {
 
     pub fn is_moved(&self) -> bool {
         return self.inner.borrow().is_moved();
+    }
+
+    pub fn to_ffi(&self) -> Result<FFIValue, String> {
+        match self.inner.borrow() {
+            ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),
+            
+            ObjectBlock::Bool(v) => Ok(FFIValue::Int(if *v { 1 } else { 0 })),
+            ObjectBlock::Int(i) => Ok(FFIValue::Int(to_i64(&i))),
+            ObjectBlock::Float(i) => Ok(FFIValue::Float(*i)),
+            ObjectBlock::Str(s) => Ok(FFIValue::Pointer((s as *const String) as *const c_void)),
+            ObjectBlock::Pointer(p) => Ok(FFIValue::Pointer(p.ptr)),
+            
+            _ => Err(format!("Unable to tranfer object to FFI layer"))
+        }
     }
 
     /*
@@ -555,7 +660,10 @@ impl_ryna_data!(RynaArray, Array);
 impl_ryna_data!(RynaTuple, Tuple);
 impl_ryna_data!(RynaLambda, Lambda);
 impl_ryna_data!(RynaArrayIt, ArrayIter);
+impl_ryna_data!(RynaPointer, Pointer);
 impl_ryna_data!(RynaFile, File);
+impl_ryna_data!(RynaLibrary, Library);
+impl_ryna_data!(RynaLibraryFunction, LibraryFunction);
 
 /*
                                                   ╒═════════╕

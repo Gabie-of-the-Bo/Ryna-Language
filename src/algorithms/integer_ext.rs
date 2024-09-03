@@ -28,6 +28,10 @@ pub fn to_u64(n: &Integer) -> u64 {
     n.saturating_into()
 }
 
+pub fn to_i64(n: &Integer) -> i64 {
+    n.saturating_into()
+}
+
 pub fn to_u8(n: &Integer) -> u8 {
     n.saturating_into()
 }

@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 use crate::compilation::RynaError;
 use crate::context::RynaContext;
+use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::ITERABLE_ID;
 use crate::parser::Location;
 use crate::parser::RynaExpr;
@@ -268,6 +271,12 @@ impl RynaContext {
         let it_mut = Type::MutRef(Box::new(iterator_type.clone()));
 
         self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true, l)
+    }
+
+    pub fn implements_destroyable(&self, t: &Type) -> bool {
+        let dint_id = self.get_interface_id("Destroyable".into()).unwrap();
+
+        self.implements_interface(t, &InterfaceConstraint::new(dint_id, vec!()), &mut HashMap::new(), &mut HashMap::new())
     }
 
     pub fn infer_type(&self, expr: &RynaExpr) -> Result<Type, RynaError> {

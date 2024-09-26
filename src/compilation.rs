@@ -991,6 +991,7 @@ pub enum CompiledRynaExpr {
     RelativeJumpIfFalse(usize, bool),
     RelativeJumpIfTrue(usize, bool),
     Call(usize),
+    CallDestructor(usize),
     LambdaCall, LambdaCallRef,
     Return,
 
@@ -3295,7 +3296,12 @@ impl RynaContext{
                 let mut translated_opcode = CompiledRynaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
-                    res.push(RynaInstruction::from(CompiledRynaExpr::Call(pos)).set_loc(l));
+                    if *id == self.get_function_id("destroy".into()).unwrap() {
+                        res.push(RynaInstruction::from(CompiledRynaExpr::CallDestructor(pos)).set_loc(l));
+
+                    } else {
+                        res.push(RynaInstruction::from(CompiledRynaExpr::Call(pos)).set_loc(l));
+                    }
 
                 } else if let Some((mut opcode, _)) = self.cache.opcodes.functions.get_checked(&(*id, ov_id)) {
                     // TODO: add conversions and derefs if necessary 

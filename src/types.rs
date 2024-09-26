@@ -48,6 +48,32 @@ impl TypeTemplate {
     pub fn is_structural(&self) -> bool {
         self.alias.is_some()
     }
+
+    pub fn needs_destructor(&self, full_type: &Type, templates: &[Type], ctx: &RynaContext) -> bool {
+        match self.id {
+            INT_ID |
+            FLOAT_ID |
+            STR_ID |
+            BOOL_ID |
+            FILE_ID |
+            PTR_ID |
+            LIB_ID |
+            LIB_FUNC_ID => false,
+
+            _ => {
+                // The type must implement the destroyable interface
+                if ctx.implements_destroyable(full_type) {
+                    return true;
+                }
+
+                // Else, check if the attributes have destructors
+                let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
+                let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
+
+                sub_attrs.iter().any(|i| i.needs_destructor(ctx))
+            }
+        }
+    }
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
@@ -133,6 +159,32 @@ impl Type {
         match self {
             Type::Ref(t) | Type::MutRef(t) => t,
             _ => self
+        }
+    }
+
+    pub fn needs_destructor(&self, ctx: &RynaContext) -> bool {
+        match self {
+            Type::Empty |
+            Type::InferenceMarker |
+            Type::SelfType |
+            Type::Wildcard |
+            Type::TemplateParam(..) |
+            Type::TemplateParamStr(..) => false,
+
+            Type::Ref(t) |
+            Type::MutRef(t) => t.needs_destructor(ctx),
+
+            Type::Or(vec) |
+            Type::And(vec) => vec.iter().any(|i| i.needs_destructor(ctx)),
+
+            Type::Basic(id) => ctx.type_templates[*id].needs_destructor(self, &[], ctx),
+
+            Type::Template(ARR_ID, vec) |
+            Type::Template(ARR_IT_ID, vec) => vec.iter().any(|i| i.needs_destructor(ctx)),
+
+            Type::Template(id, vec) => ctx.type_templates[*id].needs_destructor(self, vec, ctx) || vec.iter().any(|i| i.needs_destructor(ctx)),
+
+            Type::Function(a, b) => a.needs_destructor(ctx) || b.needs_destructor(ctx),
         }
     }
 
@@ -804,7 +856,7 @@ pub fn standard_types(ctx: &mut RynaContext) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{types::*, context::standard_ctx};
+    use crate::{context::standard_ctx, types::*};
 
     #[test]
     fn basic_type_binding() {
@@ -1146,5 +1198,78 @@ mod tests {
         assert!(tuple_5.bindable_to(&list, &ctx));
         assert!(!tuple_6.bindable_to(&list, &ctx));
         assert!(!tuple_7.bindable_to(&list, &ctx));
+    }
+
+    #[test]
+    fn destructor_checking() {
+        let mut ctx = standard_ctx();
+
+        ctx.define_type(Location::none(), vec!(), "Test1".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test2".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        
+        let test_1_id = ctx.get_type_id("Test1".into()).unwrap();
+        let test_2_id = ctx.get_type_id("Test2".into()).unwrap();
+
+        let test_1 = Type::Basic(test_1_id);
+        let test_2 = Type::Basic(test_2_id);
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_2.clone(), vec!()).unwrap();
+
+        assert!(!test_1.needs_destructor(&ctx));
+        assert!(test_2.needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_1.clone()).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_2.clone()).needs_destructor(&ctx));
+
+        ctx.define_type(Location::none(), vec!(), "Test3".into(), vec!(), vec!(("".into(), test_1.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test4".into(), vec!(), vec!(("".into(), test_2.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test5".into(), vec!(), vec!(
+            ("".into(), test_1.clone()),
+            ("".into(), test_2.clone()),
+        ), None, vec!(), None).unwrap();
+
+        let test_3_id = ctx.get_type_id("Test3".into()).unwrap();
+        let test_4_id = ctx.get_type_id("Test4".into()).unwrap();
+        let test_5_id = ctx.get_type_id("Test5".into()).unwrap();
+
+        let test_3 = Type::Basic(test_3_id);
+        let test_4 = Type::Basic(test_4_id);
+        let test_5 = Type::Basic(test_5_id);
+
+        assert!(!test_3.needs_destructor(&ctx));
+        assert!(test_4.needs_destructor(&ctx));
+        assert!(test_5.needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_3.clone()).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_4).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_5.clone()).needs_destructor(&ctx));
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_3.clone(), vec!()).unwrap();
+
+        assert!(test_3.needs_destructor(&ctx));
+        assert!(ARR_OF!(test_3).needs_destructor(&ctx));
+
+        ctx.define_type(Location::none(), vec!(), "Test6".into(), vec!(), vec!(("".into(), test_5.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test7".into(), vec!("T".into(), "G".into()), vec!(
+            ("".into(), ARR_OF!(T_0)),
+            ("".into(), ARR_OF!(T_1))
+        ), None, vec!(), None).unwrap();
+
+        let test_6_id = ctx.get_type_id("Test6".into()).unwrap();
+        let test_7_id = ctx.get_type_id("Test7".into()).unwrap();
+
+        let test_6 = Type::Basic(test_6_id);
+
+        assert!(test_6.needs_destructor(&ctx));
+        assert!(!Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).needs_destructor(&ctx));
+        assert!(Type::Template(test_7_id, vec!(test_1.clone(), test_5.clone())).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_6).needs_destructor(&ctx));
+        assert!(!ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone()))).needs_destructor(&ctx));
+        assert!(ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_5.clone()))).needs_destructor(&ctx));
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).clone(), vec!()).unwrap();
+
+        assert!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).needs_destructor(&ctx));
+        assert!(!Type::Template(test_7_id, vec!(test_1.clone(), INT)).needs_destructor(&ctx));
+        assert!(ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone()))).needs_destructor(&ctx));
+        assert!(!ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), INT))).needs_destructor(&ctx));
     }
 } 

@@ -908,6 +908,11 @@ impl RynaContext {
 
             RynaExpr::FunctionCall(l, id, t, args) => {
                 self.inline_functions(args, offset);
+                
+                // Do not inline destructor calls
+                if *id == self.get_function_id("destroy".into()).unwrap() {
+                    return;
+                }
 
                 let arg_types = Type::And(args.iter().map(|i| self.infer_type(i).unwrap()).collect());
                 let templates = Type::And(t.clone());

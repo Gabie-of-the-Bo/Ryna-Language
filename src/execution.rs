@@ -575,6 +575,11 @@ impl RynaContext {
                 }),
 
                 Call(to) => ryna_instruction!("Call", { add_stack_frame!(*to as i32); }),
+                CallDestructor(to) => ryna_instruction!("CallDestructor", { 
+                    if stack.last().unwrap().deref_ref_count() <= 2 {
+                        add_stack_frame!(*to as i32); 
+                    }
+                }),
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 

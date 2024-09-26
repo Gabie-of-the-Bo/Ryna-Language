@@ -1080,6 +1080,8 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         ).unwrap();
     }
 
+    ctx.define_function("destroy".into()).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();

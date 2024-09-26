@@ -443,6 +443,13 @@ impl Object {
         Rc::strong_count(&self.inner)
     }
 
+    pub fn deref_ref_count(&self) -> usize {
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) | ObjectBlock::Ref(i) => Rc::strong_count(&i),
+            _ => unreachable!()
+        }
+    }
+
     pub fn is_moved(&self) -> bool {
         return self.inner.borrow().is_moved();
     }

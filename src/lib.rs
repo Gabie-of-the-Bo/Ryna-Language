@@ -333,6 +333,11 @@ mod integration {
     }
 
     #[test]
+    fn destructors() {
+        integration_test("test/destructors.ryna");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.ryna");
     }

@@ -136,6 +136,20 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
+    pub fn is_const_ref(&self) -> bool {
+        matches!(
+            self,
+            Type::Ref(_)
+        )
+    }
+
+    pub fn is_mut_ref(&self) -> bool {
+        matches!(
+            self,
+            Type::MutRef(_)
+        )
+    }
+
     pub fn is_ref(&self) -> bool {
         matches!(
             self,

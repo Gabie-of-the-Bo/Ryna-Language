@@ -1461,6 +1461,7 @@ fn compute_labels(program: &mut [RynaInstruction]) {
     for (idx, i) in program.iter_mut().enumerate() {
         match &mut i.instruction {
             CompiledRynaExpr::Lambda(to, _, _, _) |
+            CompiledRynaExpr::CallDestructor(to) |
             CompiledRynaExpr::Call(to) |
             CompiledRynaExpr::Jump(to) => {
                 if !labels.contains_key(to) {
@@ -1527,6 +1528,7 @@ fn reassign_labels(program: &mut [RynaInstruction]) {
         match &mut i.instruction {
             CompiledRynaExpr::Lambda(to, _, _, _) |
             CompiledRynaExpr::Call(to) |
+            CompiledRynaExpr::CallDestructor(to) |
             CompiledRynaExpr::Jump(to) => {
                 *to = positions[to];
             },

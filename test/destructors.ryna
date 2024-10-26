@@ -1,0 +1,27 @@
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    print("Destroying " + obj.name + "\n");
+}
+
+let t3 = Test("obj3");
+
+do {
+    let t1 = Test("obj1");
+    let t2 = Test("obj2");
+    let t4: @Test = t3;
+    let t5: &Test = t3.demut();
+    let t6: @@Test = t3.mut();
+    let t7: &@Test = t3.ref();
+    return 0;
+};
+
+if true {
+    let t4: @Test = t3;
+}
+
+print("DONE\n");

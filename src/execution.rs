@@ -578,10 +578,18 @@ impl RynaContext {
                 CallDestructor(to) => ryna_instruction!("CallDestructor", { 
                     if stack.last().unwrap().deref_ref_count() <= 2 {
                         add_stack_frame!(*to as i32); 
+                    
+                    } else {
+                        ip += 1;
                     }
                 }),
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+
+                DeleteVar(var_idx) => ryna_instruction!("DeleteVar", { 
+                    self.variables[*var_idx + offset] = Object::no_value();
+                    ip += 1;                    
+                }),
 
                 Return => ryna_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
@@ -977,21 +985,7 @@ mod tests {
         ), INT));
         assert_eq!(ctx.variables[6], Object::new(Integer::from(20)));
 
-        if let Type::Template(..) = ctx.variables[7].get_type() {
-            assert_eq!(ctx.variables[7], Object::arr(vec!(
-                Object::new(Integer::from(0)),
-                Object::new(Integer::from(1)),
-                Object::new(Integer::from(2)),
-                Object::new(Integer::from(3)),
-                Object::new(Integer::from(4)),
-                Object::new(Integer::from(5)),
-                Object::new(Integer::from(6)),
-                Object::new(Integer::from(7)),
-                Object::new(Integer::from(8)),
-            ), INT));
-            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
-
-        } else {
+        if let Type::Template(..) = ctx.variables[8].get_type() {
             assert_eq!(ctx.variables[8], Object::arr(vec!(
                 Object::new(Integer::from(0)),
                 Object::new(Integer::from(1)),
@@ -1003,7 +997,21 @@ mod tests {
                 Object::new(Integer::from(7)),
                 Object::new(Integer::from(8)),
             ), INT));
-            assert_eq!(ctx.variables[7], Object::new(Integer::from(16)));
+            assert_eq!(ctx.variables[9], Object::new(Integer::from(16)));
+
+        } else {
+            assert_eq!(ctx.variables[9], Object::arr(vec!(
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(1)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(3)),
+                Object::new(Integer::from(4)),
+                Object::new(Integer::from(5)),
+                Object::new(Integer::from(6)),
+                Object::new(Integer::from(7)),
+                Object::new(Integer::from(8)),
+            ), INT));
+            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
         }
 
         let mut ctx = standard_ctx();

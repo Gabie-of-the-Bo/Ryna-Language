@@ -1,3 +1,4 @@
+// No templates
 class Test {
     name: String;
 }
@@ -23,5 +24,29 @@ do {
 if true {
     let t4: @Test = t3;
 }
+
+// With template params
+class Test2<T> {
+    name: String;
+    inner: 'T;
+}
+
+fn<T> destroy(obj: &Test2<'T>) {
+    print("Destroying " + obj.name + "\n");
+}
+
+implement<T> Destroyable for Test2<'T>;
+
+let o3 = Test2<String>("obj6", "test");
+
+do {
+    let o1 = Test2<Int>("obj4", 5);
+    let o2 = Test2<Float>("obj5", 6.6);
+    let o4 = o3;
+    let o5 = o3.demut();
+    let o6 = o3.mut();
+    let o7 = o3.ref();
+    return 0;
+};
 
 print("DONE\n");

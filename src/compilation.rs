@@ -777,17 +777,38 @@ impl RynaContext {
 
         match &var_t {
             Type::MutRef(inner) => { 
-                RynaExpr::FunctionCall(Location::none(), destroy_idx, vec!(), vec!(
+                let t_args = match self.get_first_function_overload(destroy_idx, vec!(inner.clone().to_ref()), None, true, &Location::none()) {
+                    Ok((_, _, _, t)) => t,
+                    Err(_) => vec!(),
+                };
+
+                self.cache.usages.functions.add_new(destroy_idx, vec!(inner.clone().to_ref()), t_args.clone());
+
+                RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(
                     RynaExpr::FunctionCall(Location::none(), demut_idx, vec!(*inner.clone()), vec!(var))
                 ))
             }
 
             Type::Ref(_) => { 
-                RynaExpr::FunctionCall(Location::none(), destroy_idx, vec!(), vec!(var))
+                let t_args = match self.get_first_function_overload(destroy_idx, vec!(var_t.clone()), None, true, &Location::none()) {
+                    Ok((_, _, _, t)) => t,
+                    Err(_) => vec!(),
+                };
+
+                self.cache.usages.functions.add_new(destroy_idx, vec!(var_t.clone()), t_args.clone());
+
+                RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(var))
             }
 
             _ => {                
-                RynaExpr::FunctionCall(Location::none(), destroy_idx, vec!(), vec!(
+                let t_args = match self.get_first_function_overload(destroy_idx, vec!(var_t.clone().to_ref()), None, true, &Location::none()) {
+                    Ok((_, _, _, t)) => t,
+                    Err(_) => vec!(),
+                };
+
+                self.cache.usages.functions.add_new(destroy_idx, vec!(var_t.to_ref()), t_args.clone());
+
+                RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(
                     RynaExpr::FunctionCall(Location::none(), demut_idx, vec!(t.clone()), vec!(var))    
                 ))
             }

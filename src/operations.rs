@@ -208,6 +208,8 @@ pub const LT_BINOP_PREC: usize = 900;
 
 pub const DEFINE_BINOP_ID: usize = 20;
 
+pub const IDX_NARYOP_ID: usize = 1;
+
 pub fn standard_binary_operations(ctx: &mut RynaContext) {
     
     /*

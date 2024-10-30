@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use colored::Colorize;
+use rustc_hash::FxHashSet;
 use serde::{Serialize, Deserialize};
 use malachite::Integer;
 
@@ -71,6 +72,32 @@ impl TypeTemplate {
                 let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
 
                 sub_attrs.iter().any(|i| i.needs_destructor(ctx))
+            }
+        }
+    }
+
+    pub fn destructor_dependencies(&self, full_type: &Type, templates: &[Type], ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+        match self.id {
+            INT_ID |
+            FLOAT_ID |
+            STR_ID |
+            BOOL_ID |
+            FILE_ID |
+            PTR_ID |
+            LIB_ID |
+            LIB_FUNC_ID => { },
+
+            _ => {
+                // Add this type if it needs a destructor
+                if full_type.needs_destructor(ctx) {
+                    set.insert(full_type.clone());
+                }
+
+                // Else, add the attributes' dependencies
+                let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
+                let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
+
+                sub_attrs.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set));
             }
         }
     }
@@ -200,6 +227,46 @@ impl Type {
 
             Type::Function(a, b) => a.needs_destructor(ctx) || b.needs_destructor(ctx),
         }
+    }
+
+    pub fn destructor_dependencies_rec(&self, ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+        match self {
+            Type::Empty |
+            Type::InferenceMarker |
+            Type::SelfType |
+            Type::Wildcard |
+            Type::TemplateParam(..) |
+            Type::TemplateParamStr(..) => { },
+
+            Type::Ref(t) |
+            Type::MutRef(t) => t.destructor_dependencies_rec(ctx, set),
+
+            Type::Or(vec) |
+            Type::And(vec) => vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set)),
+
+            Type::Basic(id) => ctx.type_templates[*id].destructor_dependencies(self, &[], ctx, set),
+
+            Type::Template(ARR_IT_ID, vec) => vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set)),
+
+            Type::Template(id, vec) => {
+                ctx.type_templates[*id].destructor_dependencies(self, vec, ctx, set); 
+                vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set));
+            },
+
+            Type::Function(a, b) => {
+                a.destructor_dependencies_rec(ctx, set);
+                b.destructor_dependencies_rec(ctx, set);
+            },
+        }
+    }
+
+    pub fn destructor_dependencies(&self, ctx: &RynaContext) -> FxHashSet<Type> {
+        let mut res = FxHashSet::default();
+
+        self.destructor_dependencies_rec(ctx, &mut res);
+        res.remove(self);
+
+        res
     }
 
     pub fn get_name(&self, ctx: &RynaContext) -> String {
@@ -1212,6 +1279,54 @@ mod tests {
         assert!(tuple_5.bindable_to(&list, &ctx));
         assert!(!tuple_6.bindable_to(&list, &ctx));
         assert!(!tuple_7.bindable_to(&list, &ctx));
+    }
+
+    #[test]
+    fn destructor_dependencies() {
+        let mut ctx = standard_ctx();
+
+        ctx.define_type(Location::none(), vec!(), "Test1".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test2".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        
+        let test_1_id = ctx.get_type_id("Test1".into()).unwrap();
+        let test_2_id = ctx.get_type_id("Test2".into()).unwrap();
+
+        let test_1 = Type::Basic(test_1_id);
+        let test_2 = Type::Basic(test_2_id);
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_2.clone(), vec!()).unwrap();
+
+        assert!(!test_1.needs_destructor(&ctx));
+        assert!(test_2.needs_destructor(&ctx));
+        assert!(test_1.destructor_dependencies(&ctx).is_empty());
+        assert!(test_2.destructor_dependencies(&ctx).is_empty());
+
+        let arr_1 = ARR_OF!(test_1.clone());
+        let arr_2 = ARR_OF!(test_2.clone());
+
+        assert!(!arr_1.needs_destructor(&ctx));
+        assert!(arr_2.needs_destructor(&ctx));
+        assert!(arr_1.destructor_dependencies(&ctx).is_empty());
+        assert_eq!(
+            arr_2.destructor_dependencies(&ctx),
+            [
+                test_2.clone()
+            ].iter().cloned().collect::<FxHashSet<Type>>()
+        );
+
+        let arr_arr_1 = ARR_OF!(ARR_OF!(test_1.clone()));
+        let arr_arr_2 = ARR_OF!(ARR_OF!(test_2.clone()));
+
+        assert!(!arr_arr_1.needs_destructor(&ctx));
+        assert!(arr_arr_2.needs_destructor(&ctx));
+        assert!(arr_arr_1.destructor_dependencies(&ctx).is_empty());
+        assert_eq!(
+            arr_arr_2.destructor_dependencies(&ctx),
+            [
+                ARR_OF!(test_2.clone()),
+                test_2.clone()
+            ].iter().cloned().collect::<FxHashSet<Type>>()
+        );
     }
 
     #[test]

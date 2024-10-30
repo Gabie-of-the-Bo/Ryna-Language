@@ -547,6 +547,41 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         Ok(Object::empty())
     }).unwrap();
 
+    let idx = ctx.define_function("$drop_unsafe".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(
+        idx, 
+        0,
+        &[ARR_OF!(Type::Wildcard).to_ref(), INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let array = v[0].deref::<RynaArray>();
+            let idx = v[1].get::<Integer>();
+
+            if !is_valid_index(idx) {
+                return Err(format!("{} is not a valid index", idx));
+            
+            } else if array.elements.len() <= to_usize(idx) {
+                return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
+            }
+            
+            array.elements[to_usize(idx)] = Object::no_value();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("$drop_attr_unsafe".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard.to_ref(), INT], Type::Empty, |_, _, v, _| {
+        let obj = v[0].deref::<TypeInstance>();
+        let attr = v[1].get::<Integer>();
+
+        obj.attributes[to_usize(attr)] = Object::no_value();
+
+        Ok(Object::empty())
+    }).unwrap();
+
     let idx = ctx.define_function("move".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], T_0, EMPTY_FUNC).unwrap();

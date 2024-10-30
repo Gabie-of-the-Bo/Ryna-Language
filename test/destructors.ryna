@@ -49,4 +49,33 @@ do {
     return 0;
 };
 
+do {
+    let v1 = arr<Array<Test>>();
+    v1.push(arr<Test>());
+    v1[0].push(Test("obj10"));
+    return 0;
+};
+
+let a = arr<Array<Test2<Bool>>>();
+a.push(arr<Test2<Bool>>());
+a[0].push(Test2<Bool>("obj9", true));
+
+class Test3 {
+    inner1: Test;
+    inner2: Test2<Bool>;
+    inner3: Int;
+}
+
+let b = arr<Test3>();
+b.push(Test3(Test("obj11"), Test2<Bool>("obj12", false), 5));
+b.push(Test3(Test("obj13"), Test2<Bool>("obj14", false), 5));
+
+class Test4 {
+    inner1: Test3;
+    inner2: Int;
+}
+
+let c = arr<Test4>();
+c.push(Test4(Test3(Test("obj15"), Test2<Bool>("obj16", false), 5), 4));
+
 print("DONE\n");

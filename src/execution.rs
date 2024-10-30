@@ -930,7 +930,7 @@ mod tests {
             let array: Array<Int> = arr<Int>();
             array.push<Int>(5);
 
-            let iter: ArrayIterator<@Int> = array.iterator<Int>();
+            let iter: ArrayIterator<Int, @Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
             let elem: @Int = iter.next<Int>();
@@ -972,7 +972,7 @@ mod tests {
         ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(Object::new(Integer::from(5))), INT));
-        assert_eq!(ctx.variables[1], Object::arr_it(Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
+        assert_eq!(ctx.variables[1], Object::arr_it(INT, Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
         assert_eq!(ctx.variables[2], Object::new(false));
         assert_eq!(ctx.variables[3], Object::new(Integer::from(5)).get_mut());
         assert_eq!(ctx.variables[4], Object::new(true));

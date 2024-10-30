@@ -41,7 +41,8 @@ pub struct RynaTuple {
 pub struct RynaArrayIt {
     pub pos: usize,
     pub block: DataBlock,
-    pub it_type: Box<Type>
+    pub it_type: Box<Type>,
+    pub c_type: Box<Type>
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -272,7 +273,7 @@ impl ObjectBlock {
             ObjectBlock::Bool(_) => BOOL,
             ObjectBlock::Tuple(t) => Type::And(t.elem_types.clone()),
             ObjectBlock::Array(a) => ARR_OF!(*a.elem_type.clone()),
-            ObjectBlock::ArrayIter(i) => ARR_IT_OF!(*i.it_type.clone()),
+            ObjectBlock::ArrayIter(i) => ARR_IT_OF!(*i.c_type.clone(), *i.it_type.clone()),
             ObjectBlock::Lambda(l) => Type::Function(l.args_type.clone(), l.ret_type.clone()),
             ObjectBlock::Pointer(_) => PTR,
             ObjectBlock::File(_) => FILE,
@@ -352,7 +353,8 @@ impl ObjectBlock {
             ObjectBlock::ArrayIter(i) => ObjectBlock::ArrayIter(RynaArrayIt { 
                 pos: i.pos, 
                 block: i.block.clone(), 
-                it_type: i.it_type.clone() 
+                it_type: i.it_type.clone(), 
+                c_type: i.c_type.clone() 
             }),
             ObjectBlock::Lambda(l) => ObjectBlock::Lambda(RynaLambda { 
                 loc: l.loc, 
@@ -410,8 +412,8 @@ impl Object {
         ObjectBlock::Array(RynaArray { elements, elem_type: Box::new(elem_type) }).to_obj()
     }
 
-    pub fn arr_it(it_type: Type, block: DataBlock, pos: usize) -> Self {
-        ObjectBlock::ArrayIter(RynaArrayIt { pos, block, it_type: Box::new(it_type) }).to_obj()
+    pub fn arr_it(c_type: Type, it_type: Type, block: DataBlock, pos: usize) -> Self {
+        ObjectBlock::ArrayIter(RynaArrayIt { pos, block, c_type: Box::new(c_type), it_type: Box::new(it_type) }).to_obj()
     }
 
     pub fn lambda(loc: usize, captures: Vec<Object>, args_type: Type, ret_type: Type) -> Self {

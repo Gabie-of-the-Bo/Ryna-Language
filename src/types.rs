@@ -897,7 +897,7 @@ pub const LIB_FUNC: Type = Type::Basic(LIB_FUNC_ID);
 macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
 
 #[macro_export]
-macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t)) }; }
+macro_rules! ARR_IT_OF { ($t: expr, $t2: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t, $t2)) }; }
 
 pub const T_0: Type = Type::TemplateParam(0, vec!());
 pub const T_1: Type = Type::TemplateParam(1, vec!());
@@ -919,7 +919,7 @@ pub fn standard_types(ctx: &mut RynaContext) {
     )).unwrap();
 
     ctx.define_type(Location::none(), vec!(), "Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-    ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into(), "Elem".into()), vec!(), None, vec!(), None).unwrap();
 
     ctx.define_type(Location::none(), vec!(), "File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
     

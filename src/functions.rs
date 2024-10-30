@@ -252,9 +252,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0).to_mut()], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |t, _, v, _| {
             return Ok(Object::arr_it(
+                t[0].clone(),
                 Type::MutRef(Box::new(t[0].clone())), 
                 v[0].inner.borrow().dereference().clone(), 
                 0
@@ -266,9 +267,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0).to_ref()], 
-        ARR_IT_OF!(T_0.to_ref()), 
+        ARR_IT_OF!(T_0, T_0.to_ref()), 
         |t, _, v, _| {
             return Ok(Object::arr_it(
+                t[0].clone(),
                 Type::Ref(Box::new(t[0].clone())), 
                 v[0].inner.borrow().dereference().clone(), 
                 0
@@ -280,9 +282,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0)], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |t, _, v, _| {
             Ok(Object::arr_it(
+                t[0].clone(), 
                 Type::MutRef(Box::new(t[0].clone())), 
                 v[0].inner.clone(), 
                 0
@@ -293,16 +296,16 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_mut())], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        &[ARR_IT_OF!(T_0, T_0.to_mut())], 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |_, _, mut v, _| Ok(v.pop().unwrap())
     ).unwrap();
 
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_ref())], 
-        ARR_IT_OF!(T_0.to_ref()), 
+        &[ARR_IT_OF!(T_0, T_0.to_ref())], 
+        ARR_IT_OF!(T_0, T_0.to_ref()), 
         |_, _, mut v, _| Ok(v.pop().unwrap())
     ).unwrap();
 
@@ -311,7 +314,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
+        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0, T_0.to_mut())))], 
         T_0.to_mut(), 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -332,7 +335,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_ref())))], 
+        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0, T_0.to_ref())))], 
         T_0.to_ref(), 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -355,7 +358,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_mut()).to_mut()], 
+        &[ARR_IT_OF!(T_0, T_0.to_mut()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -367,7 +370,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_ref()).to_mut()], 
+        &[ARR_IT_OF!(T_0, T_0.to_ref()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();

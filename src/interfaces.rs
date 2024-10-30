@@ -118,12 +118,12 @@ pub fn standard_interfaces(ctx: &mut RynaContext) {
     ), vec!(), vec!(), vec!()).unwrap();
 
     // Implementations
-    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2), vec!(ARR_IT_OF!(T_2.to_mut()), T_2.to_mut())).unwrap();
-    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2).to_ref(), vec!(ARR_IT_OF!(T_2.to_ref()), T_2.to_ref())).unwrap();
-    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2).to_mut(), vec!(ARR_IT_OF!(T_2.to_mut()), T_2.to_mut())).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2), vec!(ARR_IT_OF!(T_2, T_2.to_mut()), T_2.to_mut())).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2).to_ref(), vec!(ARR_IT_OF!(T_2, T_2.to_ref()), T_2.to_ref())).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_OF!(T_2).to_mut(), vec!(ARR_IT_OF!(T_2, T_2.to_mut()), T_2.to_mut())).unwrap();
 
-    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_IT_OF!(T_2.to_mut()), vec!(ARR_IT_OF!(T_2.to_mut()), T_2.to_mut())).unwrap();
-    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_IT_OF!(T_2.to_ref()), vec!(ARR_IT_OF!(T_2.to_ref()), T_2.to_ref())).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_IT_OF!(T_2, T_2.to_mut()), vec!(ARR_IT_OF!(T_2, T_2.to_mut()), T_2.to_mut())).unwrap();
+    ctx.define_interface_impl("Iterable".into(), vec!("T".into()), ARR_IT_OF!(T_2, T_2.to_ref()), vec!(ARR_IT_OF!(T_2, T_2.to_ref()), T_2.to_ref())).unwrap();
 
     ctx.define_interface_impl("Printable".into(), vec!(), BOOL, vec!()).unwrap();
     ctx.define_interface_impl("Printable".into(), vec!(), INT, vec!()).unwrap();

@@ -15,6 +15,7 @@ use crate::ryna_error;
 use crate::object::Object;
 use crate::parser::Location;
 use crate::patterns::Pattern;
+use crate::ARR_OF;
 
 /*
                                                   ╒══════════════════╕
@@ -246,7 +247,10 @@ impl Type {
 
             Type::Basic(id) => ctx.type_templates[*id].destructor_dependencies(self, &[], ctx, set),
 
-            Type::Template(ARR_IT_ID, vec) => vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set)),
+            Type::Template(ARR_IT_ID, vec) => {
+                ctx.type_templates[ARR_IT_ID].destructor_dependencies(self, &vec, ctx, set);                 
+                ctx.type_templates[ARR_ID].destructor_dependencies(&ARR_OF!(vec[0].clone()), &[vec[0].clone()], ctx, set);                 
+            },
 
             Type::Template(id, vec) => {
                 ctx.type_templates[*id].destructor_dependencies(self, vec, ctx, set); 

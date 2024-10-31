@@ -379,6 +379,32 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         }
     ).unwrap();
 
+    let idx = ctx.define_function("$container".into()).unwrap();
+
+    ctx.define_native_function_overload( // this is safe, but non-accesible by normal means
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0, Type::Wildcard).to_mut()], 
+        ARR_OF!(T_0).to_ref(), 
+        |_, _, v, _| {
+            let iterator = v[0].deref::<RynaArrayIt>();
+
+            return Ok(iterator.get_container_ref());
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload( // this is safe, but non-accesible by normal means
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0, Type::Wildcard).to_ref()], 
+        ARR_OF!(T_0).to_ref(), 
+        |_, _, v, _| {
+            let iterator = v[0].deref::<RynaArrayIt>();
+
+            return Ok(iterator.get_container_ref());
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("panic".into()).unwrap();
 
     ctx.define_native_function_overload(

@@ -45,6 +45,14 @@ pub struct RynaArrayIt {
     pub c_type: Box<Type>
 }
 
+impl RynaArrayIt {
+    pub fn get_container_ref(&self) -> Object {
+        Object {
+            inner: self.block.clone()
+        }.get_ref()
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct RynaLambda {
     pub loc: usize,

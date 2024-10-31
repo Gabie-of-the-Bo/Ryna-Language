@@ -78,4 +78,13 @@ class Test4 {
 let c = arr<Test4>();
 c.push(Test4(Test3(Test("obj15"), Test2<Bool>("obj16", false), 5), 4));
 
+let v = arr<Test2<Bool>>();
+v.push(Test2<Bool>("obj17", true));
+v.push(Test2<Bool>("obj18", true));
+v.push(Test2<Bool>("obj19", true));
+
+for i in v {
+    print("Iteration...\n");
+}
+
 print("DONE\n");

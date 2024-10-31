@@ -30,6 +30,7 @@ use crate::object::Object;
 use crate::functions::*;
 use crate::operations::*;
 use crate::variable_map::VariableMap;
+use crate::ARR_IT_OF;
 use crate::ARR_OF;
 
 /*
@@ -2421,15 +2422,46 @@ impl RynaContext{
         Ok(body)
     }
 
+    fn generate_iterator_destructor(&self, c: &Type, it: &Type) -> Result<Vec<RynaExpr>, RynaError> {
+        use RynaExpr::*;
+
+        let destroy_idx = self.get_function_id("destroy".into()).unwrap();
+        let container_idx = self.get_function_id("$container".into()).unwrap();
+
+        let iterator = Variable(Location::none(), 0, "$it".into(), ARR_IT_OF!(c.clone(), it.clone()).to_ref());
+        let container = FunctionCall(Location::none(), container_idx, vec!(c.clone()), vec!(iterator));
+
+        let t_args = self.get_destructor_template_args(ARR_OF!(c.clone()));
+        let dtor = FunctionCall(Location::none(), destroy_idx, t_args, vec!(container));
+
+        // Add destructor dependencies
+        for t in ARR_IT_OF!(c.clone(), it.clone()).destructor_dependencies(self) {
+            let t_args = self.get_destructor_template_args(t.clone().to_ref());
+            self.cache.usages.functions.add_new(destroy_idx, vec!(t.to_ref()), t_args);
+        }
+
+        let body = vec!(
+            dtor,
+            Return(Location::none(), Box::new(Literal(Location::none(), Object::empty())))
+        );
+
+        Ok(body)
+    }
+
     pub fn generate_destructor_for_type(&self, t: &Type) -> Result<Vec<RynaExpr>, RynaError> {
         match t.deref_type() {
             Type::Template(ARR_ID, tm) => self.generate_array_destructor(&tm[0]),
-            Type::Template(ARR_IT_ID, tm) => todo!("Array iterator destructors"),
+            Type::Template(ARR_IT_ID, tm) => self.generate_iterator_destructor(&tm[0], &tm[1]),
 
             Type::Template(id, tm) => self.generate_type_destructor(*id, tm), 
             Type::Basic(id) => self.generate_type_destructor(*id, &vec!()),
 
-            _ => todo!()
+            _ => Err(
+                RynaError::compiler_error(
+                    format!("Unable to generate destructor for type {}", t.get_name(self)),
+                    &Location::none(), vec!()
+                )
+            )
         }
     }
 

@@ -330,6 +330,12 @@ impl RynaContext {
             },
 
             RynaExpr::NameReference(l, n) => {
+                if n == "destroy" {
+                    return Err(
+                        RynaError::compiler_error(format!("Function {} cannot be called directly", n.green()), l, vec!())
+                    );
+                }
+
                 let func = self.get_function_id(n.clone()).ok();
                 *expr = RynaExpr::QualifiedName(l.clone(), n.clone(), func);
             },

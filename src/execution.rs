@@ -576,7 +576,9 @@ impl RynaContext {
 
                 Call(to) => ryna_instruction!("Call", { add_stack_frame!(*to as i32); }),
                 CallDestructor(to) => ryna_instruction!("CallDestructor", { 
-                    if stack.last().unwrap().deref_ref_count() <= 2 {
+                    let elem = stack.last().unwrap();
+
+                    if !elem.is_moved() && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
                         add_stack_frame!(*to as i32); 
                     
                     } else {

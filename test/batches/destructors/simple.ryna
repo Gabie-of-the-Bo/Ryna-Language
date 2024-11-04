@@ -1,4 +1,4 @@
-/// obj3 obj2 obj1
+/// obj2 obj2 obj0 obj3 obj1
 
 class Test {
     name: String;
@@ -14,3 +14,9 @@ fn destroy(obj: &Test) {
 let o1 = Test("obj1");
 let o2 = Test("obj2");
 let o3 = Test("obj3");
+
+o1;
+o2.deref();
+o2.fwd<Test>();
+
+Test("obj0");

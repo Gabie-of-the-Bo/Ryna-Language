@@ -87,4 +87,8 @@ for i in v {
     print("Iteration...\n");
 }
 
+Test("obj_inl");
+v;
+c;
+
 print("DONE\n");

@@ -464,6 +464,13 @@ impl Object {
         return self.inner.borrow().is_moved();
     }
 
+    pub fn is_moved_deref(&self) -> bool {
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Mut(i) | ObjectBlock::Ref(i) => i.borrow().is_moved(),
+            _ => unreachable!()
+        }
+    }
+
     pub fn to_ffi(&self) -> Result<FFIValue, String> {
         match self.inner.borrow() {
             ObjectBlock::NoValue => message_and_exit("Accessing moved object".into()),

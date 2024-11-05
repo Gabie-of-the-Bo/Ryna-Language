@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 
 use clap::{Arg, Command, ArgAction};
 use colored::Colorize;
@@ -215,6 +215,17 @@ fn main() {
                 .help("Name of the library reprository that you want to install")
                 .required(true)
                 .index(2)
+            )
+        )
+        .subcommand(
+            Command::new("build")
+            .about("Execute the build script for a library")
+            .arg(
+                Arg::new("INPUT")
+                .help("Specifies the file you want to execute")
+                .required(false)
+                .default_value(".")
+                .index(1)
             )
         )
         .subcommand(
@@ -529,7 +540,7 @@ fn main() {
                 let has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", pack_name.green())).prompt().unwrap();
 
                 if has_build {
-                    if !execute_command(&config_yml.build) {
+                    if !execute_command(&config_yml.build, &module_path) {
                         println!("Build script failed. Cleaning up...");
 
                         match uninstall_repo(pack_name) {
@@ -549,6 +560,29 @@ fn main() {
             match uninstall_repo(pack_name) {
                 Ok(_) => {},
                 Err(err) => ryna_error!("{}", err),
+            }
+        }
+
+        Some(("build", run_args)) => {
+            // Check install script
+            let path = run_args.get_one::<String>("INPUT").expect("No input folder was provided");
+            let module_path = PathBuf::from(path);
+            let config_path = module_path.join(Path::new("ryna_config.yml"));
+
+            if !config_path.exists() {
+                ryna_error!("No project config file!");
+            }
+
+            let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+            let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
+
+            if !config_yml.build.is_empty() {
+                if !execute_command(&config_yml.build, &module_path) {
+                    ryna_error!("Build command failed for {}", config_yml.module_name.green());
+                }
+
+            } else {
+                ryna_error!("No build command was found");
             }
         }
 

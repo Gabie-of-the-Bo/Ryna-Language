@@ -1,9 +1,10 @@
-use std::io::{BufRead, BufReader};
+use std::{io::{BufRead, BufReader}, path::PathBuf};
 
 use subprocess::{Exec, Redirection};
 
-pub fn execute_command(command: &str) -> bool {
+pub fn execute_command(command: &str, module_path: &PathBuf) -> bool {
     let mut process = Exec::shell(command)
+        .cwd(module_path)
         .stdout(Redirection::Pipe)
         .stderr(Redirection::Merge)
         .popen()

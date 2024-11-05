@@ -68,9 +68,6 @@ pub mod precedence_cache;
 #[path = "structures/mut_cell.rs"]
 pub mod mut_cell;
 
-#[path = "structures/ffi.rs"]
-pub mod ffi;
-
 #[cfg(test)]
 mod integration {
     use std::fs::read_to_string;

@@ -1,9 +1,10 @@
 use std::{cell::RefCell, ffi::c_void, fs::File, path::PathBuf};
 
-use crate::{compilation::message_and_exit, context::RynaContext, ffi::{FFIArgs, FFIReturn, FFIValue, RynaFFIFunction}, integer_ext::to_i64, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, LIB, LIB_FUNC, LIB_FUNC_ID, LIB_ID, PTR, PTR_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
+use crate::{compilation::message_and_exit, context::RynaContext, integer_ext::to_i64, mut_cell::MutCell, types::{Type, ARR_ID, ARR_IT_ID, BOOL, BOOL_ID, FILE, FILE_ID, FLOAT, FLOAT_ID, INT, INT_ID, LIB, LIB_FUNC, LIB_FUNC_ID, LIB_ID, PTR, PTR_ID, STR, STR_ID}, ARR_IT_OF, ARR_OF};
 use libloading::{Library, Symbol};
 use malachite::Integer;
 use rclite::Rc;
+use rynaffi::{FFIArgs, FFIReturn, FFIValue, RynaFFIFunction};
 use serde::{Deserialize, Serialize};
 
 type DataBlock = Rc<MutCell<ObjectBlock>>;

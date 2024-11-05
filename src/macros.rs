@@ -248,6 +248,23 @@ impl RdlMacro {
     }
 }
 
+// Standard context
+fn escape_string(string: &str) -> String {
+    string.replace("\\", "\\\\")
+          .replace("\"", "\\\"")
+}
+
+pub fn define_module_path_macro(ctx: &mut RynaContext) {
+    ctx.macros.push(RynaMacro {
+        location: Location::none(),
+        annotations: vec!(),
+        name: "module_path".into(),
+        m_type: RynaMacroType::Expression,
+        pattern: Pattern::Str("$MODULE_PATH".into()),
+        generator: RdlMacro::Text(format!("\"{}\"", escape_string(&ctx.module_path))),
+    });
+}
+
 mod tests {
     #[allow(unused)] 
     use std::collections::HashMap;

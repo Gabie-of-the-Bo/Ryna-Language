@@ -17,6 +17,7 @@ use crate::context::{standard_ctx, RynaContext};
 use crate::docs::{generate_all_class_docs, generate_all_function_overload_docs, generate_all_interface_docs, generate_all_operation_docs, generate_all_syntax_docs};
 use crate::functions::define_macro_emit_fn;
 use crate::graph::DirectedGraph;
+use crate::macros::define_module_path_macro;
 use crate::{ryna_error, parser::*};
 use crate::regex_ext::replace_all_fallible;
 use crate::serialization::{CompiledRynaModule, ReducedRynaModule};
@@ -206,6 +207,8 @@ fn parse_ryna_module_with_config(path: &String, already_compiled: &mut HashMap<(
         ctx.optimize = optimize;
         ctx.module_path = path.clone();
         ctx.module_name = config_yml.module_name.clone().into();
+
+        define_module_path_macro(&mut ctx);
 
         if *is_macro {
             define_macro_emit_fn(&mut ctx, "emit".into());

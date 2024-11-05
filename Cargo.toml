@@ -57,6 +57,7 @@ mimalloc = { version = "0.1.41", default-features = false }
 rclite = "0.2.4"
 tabled = "0.15.0"
 libloading = "0.8.5"
+subprocess = "0.2.9"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

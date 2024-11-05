@@ -6,7 +6,7 @@ use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm}
 use regex::Regex;
 use glob::glob;
 
-use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, ryna_error, ryna_warning};
+use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, ryna_error, ryna_warning, shell::execute_command};
 use serde_yaml::{ from_str, to_string };
 
 #[derive(Clone)]
@@ -374,6 +374,7 @@ fn main() {
                 module_name: name.clone(),
                 hash: "".into(),
                 version,
+                build: String::new(),
                 module_paths: modules,
                 modules: HashMap::new(),
             };
@@ -511,6 +512,34 @@ fn main() {
             match install_repo(repo_url, pack_name) {
                 Ok(_) => {},
                 Err(err) => ryna_error!("{}", err),
+            }
+
+            // Check install script
+            let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
+            let config_path = module_path.join(Path::new("ryna_config.yml"));
+
+            if !config_path.exists() {
+                ryna_error!("No project config file!");
+            }
+
+            let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+            let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
+
+            if !config_yml.build.is_empty() {
+                let has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", pack_name.green())).prompt().unwrap();
+
+                if has_build {
+                    if !execute_command(&config_yml.build) {
+                        println!("Build script failed. Cleaning up...");
+
+                        match uninstall_repo(pack_name) {
+                            Ok(_) => {},
+                            Err(err) => ryna_error!("{}", err),
+                        }
+
+                        ryna_error!("Build command failed for {}", pack_name.green());
+                    }
+                }
             }
         }
 

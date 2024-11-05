@@ -57,6 +57,10 @@ pub struct RynaConfig {
     #[serde(default)]
     pub module_paths: Vec<String>,
 
+    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
+    pub build: String,
+
     pub modules: HashMap<String, ModuleInfo>
 }
 

@@ -50,6 +50,9 @@ pub mod profiling;
 #[path = "algorithms/formats.rs"]
 pub mod formats;
 
+#[path = "algorithms/shell.rs"]
+pub mod shell;
+
 #[path = "structures/graph.rs"]
 pub mod graph;
 

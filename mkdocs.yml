@@ -44,6 +44,10 @@ nav:
         - Syntax and usage: 'pages/tutorial/steps/annot.md'
         - Testing your modules: 'pages/tutorial/steps/annot_test.md'
         - Documenting your modules: 'pages/tutorial/steps/annot_docs.md'
+      - Other languages inside Ryna:
+        - Foreign Function Interface: 'pages/tutorial/steps/ffi.md'
+        - Destructors: 'pages/tutorial/steps/destructors.md'
+        - The Other Side - Rust: 'pages/tutorial/steps/rynaffi.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'

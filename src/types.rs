@@ -15,7 +15,6 @@ use crate::ryna_error;
 use crate::object::Object;
 use crate::parser::Location;
 use crate::patterns::Pattern;
-use crate::ARR_OF;
 
 /*
                                                   ╒══════════════════╕
@@ -51,7 +50,7 @@ impl TypeTemplate {
         self.alias.is_some()
     }
 
-    pub fn needs_destructor(&self, full_type: &Type, templates: &[Type], ctx: &RynaContext) -> bool {
+    pub fn needs_destructor(&self, templates: &[Type], ctx: &RynaContext) -> bool {
         match self.id {
             INT_ID |
             FLOAT_ID |
@@ -63,12 +62,7 @@ impl TypeTemplate {
             LIB_FUNC_ID => false,
 
             _ => {
-                // The type must implement the destroyable interface
-                if ctx.implements_destroyable(full_type) {
-                    return true;
-                }
-
-                // Else, check if the attributes have destructors
+                // Check if the attributes have destructors
                 let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
                 let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
 
@@ -77,7 +71,7 @@ impl TypeTemplate {
         }
     }
 
-    pub fn destructor_dependencies(&self, full_type: &Type, templates: &[Type], ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+    pub fn destructor_dependencies(&self, templates: &[Type], ctx: &RynaContext, set: &mut FxHashSet<Type>) {
         match self.id {
             INT_ID |
             FLOAT_ID |
@@ -89,11 +83,6 @@ impl TypeTemplate {
             LIB_FUNC_ID => { },
 
             _ => {
-                // Add this type if it needs a destructor
-                if full_type.needs_destructor(ctx) {
-                    set.insert(full_type.clone());
-                }
-
                 // Else, add the attributes' dependencies
                 let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
                 let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
@@ -204,7 +193,12 @@ impl Type {
         }
     }
 
-    pub fn needs_destructor(&self, ctx: &RynaContext) -> bool {
+    pub fn needs_destructor_rec(&self, ctx: &RynaContext, check_self: bool) -> bool {
+        // The type must implement the destroyable interface
+        if check_self && ctx.implements_destroyable(self) {
+            return true;
+        }
+
         match self {
             Type::Empty |
             Type::InferenceMarker |
@@ -214,23 +208,42 @@ impl Type {
             Type::TemplateParamStr(..) => false,
 
             Type::Ref(t) |
-            Type::MutRef(t) => t.needs_destructor(ctx),
+            Type::MutRef(t) => t.needs_destructor_rec(ctx, true),
 
             Type::Or(vec) |
-            Type::And(vec) => vec.iter().any(|i| i.needs_destructor(ctx)),
+            Type::And(vec) => vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
 
-            Type::Basic(id) => ctx.type_templates[*id].needs_destructor(self, &[], ctx),
+            Type::Basic(id) => ctx.type_templates[*id].needs_destructor(&[], ctx),
 
             Type::Template(ARR_ID, vec) |
-            Type::Template(ARR_IT_ID, vec) => vec.iter().any(|i| i.needs_destructor(ctx)),
+            Type::Template(ARR_IT_ID, vec) => vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
 
-            Type::Template(id, vec) => ctx.type_templates[*id].needs_destructor(self, vec, ctx) || vec.iter().any(|i| i.needs_destructor(ctx)),
+            Type::Template(id, vec) => ctx.type_templates[*id].needs_destructor(vec, ctx) || vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
 
-            Type::Function(a, b) => a.needs_destructor(ctx) || b.needs_destructor(ctx),
+            Type::Function(a, b) => a.needs_destructor_rec(ctx, true) || b.needs_destructor_rec(ctx, true),
         }
     }
 
+    pub fn needs_destructor(&self, ctx: &RynaContext) -> bool {
+        self.needs_destructor_rec(ctx, true)
+    }
+
+    // A type that needs a generated destructor cannot implement Destroyable
+    pub fn cannot_have_destructor(&self, ctx: &RynaContext) -> bool {
+        self.needs_destructor_rec(ctx, false)
+    }
+
+    // A type that implements Destroyable but it must not
+    pub fn has_invalid_destructor(&self, ctx: &RynaContext) -> bool {
+        self.cannot_have_destructor(ctx) && ctx.implements_destroyable(self)
+    }
+
     pub fn destructor_dependencies_rec(&self, ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+        // Add this type if it needs a destructor
+        if self.needs_destructor(ctx) {
+            set.insert(self.clone());
+        }
+
         match self {
             Type::Empty |
             Type::InferenceMarker |
@@ -245,15 +258,15 @@ impl Type {
             Type::Or(vec) |
             Type::And(vec) => vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set)),
 
-            Type::Basic(id) => ctx.type_templates[*id].destructor_dependencies(self, &[], ctx, set),
+            Type::Basic(id) => ctx.type_templates[*id].destructor_dependencies(&[], ctx, set),
 
             Type::Template(ARR_IT_ID, vec) => {
-                ctx.type_templates[ARR_IT_ID].destructor_dependencies(self, &vec, ctx, set);                 
-                ctx.type_templates[ARR_ID].destructor_dependencies(&ARR_OF!(vec[0].clone()), &[vec[0].clone()], ctx, set);                 
+                ctx.type_templates[ARR_IT_ID].destructor_dependencies(&vec, ctx, set);                 
+                ctx.type_templates[ARR_ID].destructor_dependencies(&[vec[0].clone()], ctx, set);                 
             },
 
             Type::Template(id, vec) => {
-                ctx.type_templates[*id].destructor_dependencies(self, vec, ctx, set); 
+                ctx.type_templates[*id].destructor_dependencies(vec, ctx, set); 
                 vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set));
             },
 
@@ -1350,8 +1363,12 @@ mod tests {
 
         assert!(!test_1.needs_destructor(&ctx));
         assert!(test_2.needs_destructor(&ctx));
+        assert!(!test_1.cannot_have_destructor(&ctx));
+        assert!(!test_2.cannot_have_destructor(&ctx));
         assert!(!ARR_OF!(test_1.clone()).needs_destructor(&ctx));
         assert!(ARR_OF!(test_2.clone()).needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_1.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_2.clone()).cannot_have_destructor(&ctx));
 
         ctx.define_type(Location::none(), vec!(), "Test3".into(), vec!(), vec!(("".into(), test_1.clone())), None, vec!(), None).unwrap();
         ctx.define_type(Location::none(), vec!(), "Test4".into(), vec!(), vec!(("".into(), test_2.clone())), None, vec!(), None).unwrap();
@@ -1371,9 +1388,13 @@ mod tests {
         assert!(!test_3.needs_destructor(&ctx));
         assert!(test_4.needs_destructor(&ctx));
         assert!(test_5.needs_destructor(&ctx));
+        assert!(test_5.cannot_have_destructor(&ctx));
         assert!(!ARR_OF!(test_3.clone()).needs_destructor(&ctx));
-        assert!(ARR_OF!(test_4).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_4.clone()).needs_destructor(&ctx));
         assert!(ARR_OF!(test_5.clone()).needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_3.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_4.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_5.clone()).cannot_have_destructor(&ctx));
 
         ctx.define_interface_impl("Destroyable".into(), vec!(), test_3.clone(), vec!()).unwrap();
 

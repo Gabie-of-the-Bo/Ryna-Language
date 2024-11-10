@@ -1116,6 +1116,18 @@ impl RynaContext {
                     self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
                     self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
 
+                    // Forbid custom destructors for types that need generated destructors
+                    if  *id == self.get_function_id("destroy".into()).unwrap() {
+                        let dtor_arg = arg_types[0].deref_type();
+
+                        if dtor_arg.has_invalid_destructor(self) {
+                            return Err(RynaError::compiler_error(
+                                format!("Type {} cannot implement Destroyable because it needs a compiler-generated destructor", dtor_arg.get_name(self)),
+                                l, vec!()
+                            ));
+                        }
+                    }
+
                     Ok(())
                 }
             },
@@ -1651,9 +1663,19 @@ impl RynaContext {
 
     pub fn interface_impl_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            RynaExpr::InterfaceImplementation(l, _, t, n, ts) => {
+            RynaExpr::InterfaceImplementation(l, tm, t, n, ts) => {
                 match self.get_interface_id(n.clone()) {
                     Ok(int_id) => {
+                        // Forbid custom destructors for types that need generated destructors
+                        if tm.len() == 0 && int_id == self.get_interface_id("Destroyable".into()).unwrap() {
+                            if t.has_invalid_destructor(self) {
+                                return Err(RynaError::compiler_error(
+                                    format!("Type {} cannot implement Destroyable because it needs a compiler-generated destructor", t.get_name(self)),
+                                    l, vec!()
+                                ));
+                            }
+                        }
+
                         let fns = &self.interfaces[int_id].fns;
                         let uns = &self.interfaces[int_id].uns;
                         let bin = &self.interfaces[int_id].bin;

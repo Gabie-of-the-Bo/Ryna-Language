@@ -1,0 +1,21 @@
+// Type Test2 cannot implement Destroyable
+
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    print("Test");
+}
+
+class Test2 {
+    inner: Test;
+}
+
+implement Destroyable for Test2;
+
+fn destroy(obj: &Test2) {
+    print("Test2");
+}

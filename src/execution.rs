@@ -575,8 +575,23 @@ impl RynaContext {
                 }),
 
                 Call(to) => ryna_instruction!("Call", { add_stack_frame!(*to as i32); }),
+                CallDestructor(to) => ryna_instruction!("CallDestructor", { 
+                    let elem = stack.last().unwrap();
+
+                    if !elem.is_moved() && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
+                        add_stack_frame!(*to as i32); 
+                    
+                    } else {
+                        ip += 1;
+                    }
+                }),
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+
+                DeleteVar(var_idx) => ryna_instruction!("DeleteVar", { 
+                    self.variables[*var_idx + offset] = Object::no_value();
+                    ip += 1;                    
+                }),
 
                 Return => ryna_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
@@ -917,7 +932,7 @@ mod tests {
             let array: Array<Int> = arr<Int>();
             array.push<Int>(5);
 
-            let iter: ArrayIterator<@Int> = array.iterator<Int>();
+            let iter: ArrayIterator<Int, @Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
             let elem: @Int = iter.next<Int>();
@@ -959,7 +974,7 @@ mod tests {
         ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(Object::new(Integer::from(5))), INT));
-        assert_eq!(ctx.variables[1], Object::arr_it(Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
+        assert_eq!(ctx.variables[1], Object::arr_it(INT, Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
         assert_eq!(ctx.variables[2], Object::new(false));
         assert_eq!(ctx.variables[3], Object::new(Integer::from(5)).get_mut());
         assert_eq!(ctx.variables[4], Object::new(true));
@@ -972,21 +987,7 @@ mod tests {
         ), INT));
         assert_eq!(ctx.variables[6], Object::new(Integer::from(20)));
 
-        if let Type::Template(..) = ctx.variables[7].get_type() {
-            assert_eq!(ctx.variables[7], Object::arr(vec!(
-                Object::new(Integer::from(0)),
-                Object::new(Integer::from(1)),
-                Object::new(Integer::from(2)),
-                Object::new(Integer::from(3)),
-                Object::new(Integer::from(4)),
-                Object::new(Integer::from(5)),
-                Object::new(Integer::from(6)),
-                Object::new(Integer::from(7)),
-                Object::new(Integer::from(8)),
-            ), INT));
-            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
-
-        } else {
+        if let Type::Template(..) = ctx.variables[8].get_type() {
             assert_eq!(ctx.variables[8], Object::arr(vec!(
                 Object::new(Integer::from(0)),
                 Object::new(Integer::from(1)),
@@ -998,7 +999,21 @@ mod tests {
                 Object::new(Integer::from(7)),
                 Object::new(Integer::from(8)),
             ), INT));
-            assert_eq!(ctx.variables[7], Object::new(Integer::from(16)));
+            assert_eq!(ctx.variables[9], Object::new(Integer::from(16)));
+
+        } else {
+            assert_eq!(ctx.variables[9], Object::arr(vec!(
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(1)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(3)),
+                Object::new(Integer::from(4)),
+                Object::new(Integer::from(5)),
+                Object::new(Integer::from(6)),
+                Object::new(Integer::from(7)),
+                Object::new(Integer::from(8)),
+            ), INT));
+            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
         }
 
         let mut ctx = standard_ctx();

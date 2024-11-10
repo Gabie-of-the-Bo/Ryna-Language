@@ -44,6 +44,10 @@ nav:
         - Syntax and usage: 'pages/tutorial/steps/annot.md'
         - Testing your modules: 'pages/tutorial/steps/annot_test.md'
         - Documenting your modules: 'pages/tutorial/steps/annot_docs.md'
+      - Other languages inside Ryna:
+        - Foreign Function Interface: 'pages/tutorial/steps/ffi.md'
+        - Destructors: 'pages/tutorial/steps/destructors.md'
+        - The Other Side - Rust: 'pages/tutorial/steps/rynaffi.md'
     - Learn by example:
       - Linked List using ADTs: 'pages/tutorial/examples/linked list.md'
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'
@@ -57,6 +61,7 @@ nav:
       - Arrays: 'pages/reference/functions/arrays.md'
       - Strings: 'pages/reference/functions/strings.md'
       - I/O: 'pages/reference/functions/io.md'
+      - FFI: 'pages/reference/functions/ffi.md'
       - Miscellaneous: 'pages/reference/functions/misc.md'
     - Operators and Operations:
       - Internal: 'pages/reference/operators/internal.md'
@@ -66,6 +71,7 @@ nav:
       - Arrays: 'pages/reference/operators/arrays.md'
     - Interfaces:
       - Iterable: 'pages/reference/interfaces/iterable.md'
+      - Destroyable: 'pages/reference/interfaces/destroyable.md'
       - Printable: 'pages/reference/interfaces/printable.md'
   - Contribute: 'pages/contribute.md'
 

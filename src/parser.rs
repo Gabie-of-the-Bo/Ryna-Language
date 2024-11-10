@@ -290,8 +290,8 @@ impl RynaExpr {
 
     pub fn is_expr(&self) -> bool {
         match self {
-            RynaExpr::QualifiedName(_, _, _) |
             RynaExpr::AttributeAssignment(_, _, _, _) |
+            RynaExpr::NameReference(_, _) |
             RynaExpr::CompiledVariableDefinition(_, _, _, _, _) |
             RynaExpr::CompiledVariableAssignment(_, _, _, _, _) |
             RynaExpr::Macro(_, _, _, _, _, _) |
@@ -308,27 +308,27 @@ impl RynaExpr {
             RynaExpr::PostfixOperationDefinition(_, _, _, _, _, _, _, _) |
             RynaExpr::BinaryOperationDefinition(_, _, _, _, _, _, _, _) |
             RynaExpr::NaryOperationDefinition(_, _, _, _, _, _, _, _) |
+            RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::If(_, _, _, _, _) |
             RynaExpr::While(_, _, _) |
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::For(_, _, _, _) |
+            RynaExpr::CompiledFor(_, _, _, _, _, _) |
             RynaExpr::Return(_, _) => false,
 
             RynaExpr::DoBlock(_, _, _) |
+            RynaExpr::QualifiedName(_, _, _) |
             RynaExpr::AttributeAccess(_, _, _) |
             RynaExpr::Variable(_, _, _, _) |
             RynaExpr::FunctionCall(_, _, _, _) |
-            RynaExpr::CompiledFor(_, _, _, _, _, _) |
             RynaExpr::CompiledLambda(_, _, _, _, _, _) |
             RynaExpr::Literal(_, _) |
             RynaExpr::Tuple(_, _) |
             RynaExpr::Lambda(_, _, _, _, _) |
-            RynaExpr::NameReference(_, _) |
             RynaExpr::UnaryOperation(_, _, _, _) |
             RynaExpr::BinaryOperation(_, _, _, _, _) |
-            RynaExpr::NaryOperation(_, _, _, _, _) |
-            RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) => true,
+            RynaExpr::NaryOperation(_, _, _, _, _)  => true,
         }
     }
 }

@@ -22,6 +22,7 @@ The **ryna_config.yml** file contains the following values:
 * **module_name**: the module's name.
 * **version**: the current module's version.
 * **hash**: an **automatically calculated** value that summarizes the contents of a module in order to check if recompilation is necessary.
+* **build**: a build script that will be executed when installing the library.
 * **module_paths**: a list of strings that contains every path where the interpreter should look for modules when executing this project. They can contain
   environment variables by using the format `${variable_name}`.
 * **modules**: a map where the keys are the names of the modules that can be used inside the module and the values are objects with the following keys and values:

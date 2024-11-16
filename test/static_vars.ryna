@@ -1,0 +1,7 @@
+let constant = 5;
+
+fn test() -> Int {
+    return *constant;
+}
+
+print(test());

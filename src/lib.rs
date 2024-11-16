@@ -358,6 +358,11 @@ mod integration {
     }
 
     #[test]
+    fn static_vars() {
+        integration_test("test/static_vars.ryna");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.ryna");
     }

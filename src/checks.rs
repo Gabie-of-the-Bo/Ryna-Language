@@ -87,8 +87,8 @@ impl RynaContext {
             (RynaExpr::InterfaceImplementation(..), _) |
             (RynaExpr::ClassDefinition(..), _) => Ok(()),
 
-            (RynaExpr::CompiledVariableDefinition(_, _, _, _, e), _) |
-            (RynaExpr::CompiledVariableAssignment(_, _, _, _, e), _) => self.return_check(e, &None),
+            (RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _), _) |
+            (RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _), _) => self.return_check(e, &None),
 
             (RynaExpr::Return(l, _), None) => {
                 Err(RynaError::compiler_error(
@@ -400,8 +400,8 @@ impl RynaContext {
                 self.ambiguity_check(b)
             }
 
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
@@ -461,8 +461,8 @@ impl RynaContext {
                 Err(RynaError::compiler_error("Continue statement is not allowed in this context".into(), l, vec!()))
             }
 
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) => {
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) => {
                 RynaContext::break_continue_check(e, allowed)
             }
 
@@ -622,8 +622,8 @@ impl RynaContext {
             RynaExpr::Variable(..) |
             RynaExpr::Literal(..) => Ok(()),
 
-            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e, _) => {
                 if t.has_self() {
                     return Err(RynaError::compiler_error(
                         format!("{} type found outside an interface", Type::SelfType.get_name(self)),
@@ -1026,8 +1026,8 @@ impl RynaContext {
                 Ok(())
             }
 
-            RynaExpr::CompiledVariableDefinition(l, _, n, t, e) |
-            RynaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
+            RynaExpr::CompiledVariableDefinition(l, _, n, t, e, _) |
+            RynaExpr::CompiledVariableAssignment(l, _, n, t, e, _) => {
                 self.check_type_well_formed(t, l)?;
                 self.type_check(e)?;
 
@@ -2007,7 +2007,7 @@ impl RynaContext {
             RynaExpr::Literal(..) |
             RynaExpr::CompiledLambda(..) => Ok(()),
 
-            RynaExpr::Variable(l, _, _, t) => self.no_template_check_type(t, l),
+            RynaExpr::Variable(l, _, _, t, _) => self.no_template_check_type(t, l),
 
             RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.no_template_check(a)?;
@@ -2018,8 +2018,8 @@ impl RynaContext {
                 self.no_template_check(e)
             }
 
-            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e, _) => {
                 self.no_template_check_type(t, l)?;
                 self.no_template_check(e)
             }

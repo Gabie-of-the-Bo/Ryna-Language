@@ -325,8 +325,8 @@ impl RynaContext {
         match expr {
             // Compile variable references
             RynaExpr::NameReference(l, n) if var_map.is_var_defined(n) => {
-                let (idx, t) = var_map.get_var(n).unwrap();
-                *expr = RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone());
+                let (d, (idx, t)) = var_map.get_var(n).unwrap();
+                *expr = RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone(), d == 0);
             },
 
             RynaExpr::NameReference(l, n) => {
@@ -344,9 +344,9 @@ impl RynaContext {
                 if var_map.is_var_defined(n) {
                     self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
 
-                    let (idx, t) = var_map.get_var(n).unwrap();
+                    let (d, (idx, t)) = var_map.get_var(n).unwrap();
 
-                    *expr = RynaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone());
+                    *expr = RynaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone(), d == 0);
                 
                 } else {
                     return Err(RynaError::compiler_error(format!("Variable with name {} is not defined", n.green()), l, vec!()));
@@ -367,25 +367,11 @@ impl RynaContext {
                     *t = self.infer_type(e)?;
                 }
 
-                var_map.define_var(n.clone(), idx, t.clone());
+                let d = var_map.define_var(n.clone(), idx, t.clone());
 
-                *expr = RynaExpr::CompiledVariableDefinition(l.clone(), idx, n.clone(), t.clone(), e.clone());
+                *expr = RynaExpr::CompiledVariableDefinition(l.clone(), idx, n.clone(), t.clone(), e.clone(), d == 0);
             },
-
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => {
-                self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
-            }
-
-            RynaExpr::CompiledVariableDefinition(l, id, n, t, e) => {
-                if var_map.is_var_defined_in_last_ctx(n) {
-                    return Err(RynaError::compiler_error(format!("Variable with name {} is already defined", n.green()), l, vec!()));
-                }
-
-                self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
-
-                var_map.define_var(n.clone(), *id, t.clone());
-            }
-
+            
             // Compile operations
             RynaExpr::UnaryOperation(l, id, t, e) => {
                 self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
@@ -621,11 +607,11 @@ impl RynaContext {
 
                         let idx = registers.pop().unwrap();
                         let var_name = format!("$temp_{idx}");
-                        var_map.define_var(var_name.clone(), idx, ret.clone());    
+                        let d = var_map.define_var(var_name.clone(), idx, ret.clone());    
 
                         // Add variable definition
                         let mut exprs = vec!(
-                            RynaExpr::CompiledVariableDefinition(Location::none(), idx, var_name.clone(), ret.clone(), e.clone())
+                            RynaExpr::CompiledVariableDefinition(Location::none(), idx, var_name.clone(), ret.clone(), e.clone(), d == 0)
                         );
 
                         // Add destructors
@@ -638,7 +624,7 @@ impl RynaContext {
                             exprs.push(
                                 RynaExpr::Return(
                                     Location::none(),
-                                    Box::new(RynaExpr::Variable(Location::none(), idx, var_name, ret.clone()))
+                                    Box::new(RynaExpr::Variable(Location::none(), idx, var_name, ret.clone(), d == 0))
                                 )
                             );
                         
@@ -649,7 +635,7 @@ impl RynaContext {
                                 RynaExpr::Return(
                                     Location::none(),
                                     Box::new(RynaExpr::FunctionCall(Location::none(), move_idx, vec!(ret.clone()), vec!(
-                                        RynaExpr::Variable(Location::none(), idx, var_name, ret.clone())
+                                        RynaExpr::Variable(Location::none(), idx, var_name, ret.clone(), d == 0)
                                     )))
                                 )
                             );
@@ -679,8 +665,8 @@ impl RynaContext {
                 // Compile lambda captures
                 for n in c {
                     if var_map.is_var_defined(n) {
-                        let (idx, t) = var_map.get_var(n).unwrap();
-                        captures.push((n.clone(), RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone())));
+                        let (_, (idx, t)) = var_map.get_var(n).unwrap();
+                        captures.push((n.clone(), RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone(), false)));
                         capture_args.push((n.clone(), t.clone()));
                     
                     } else {
@@ -804,7 +790,7 @@ impl RynaContext {
         let demut_idx = self.get_function_id("demut".into()).unwrap();
 
         let mut var_t = t.clone();
-        let mut var = RynaExpr::Variable(Location::none(), id, name.clone(), t.clone());
+        let mut var = RynaExpr::Variable(Location::none(), id, name.clone(), t.clone(), false);
 
         if let Some(inner_expr) = &expr {
             var = inner_expr.clone();
@@ -921,7 +907,7 @@ impl RynaContext {
         let demut_idx = self.get_function_id("demut".into()).unwrap();
 
         match expr {
-            RynaExpr::Variable(_, id, _, _) => Some(*id),
+            RynaExpr::Variable(_, id, _, _, _) => Some(*id),
             RynaExpr::FunctionCall(_, id, _, a) if *id == deref_idx || *id == demut_idx => {
                 self.get_destructor_variable(&a[0])
             },
@@ -1020,7 +1006,7 @@ impl RynaContext {
                     Location::none(), *id, vec!(), 
                     args.iter().enumerate()
                         .map(|(i, t)| {
-                            let v = RynaExpr::Variable(Location::none(), i, format!("arg_{i}"), t.clone());
+                            let v = RynaExpr::Variable(Location::none(), i, format!("arg_{i}"), t.clone(), false);
 
                             // Move if it is a direct value
                             if t.is_ref() {
@@ -1067,8 +1053,8 @@ impl RynaContext {
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::UnaryOperation(_, _, _, e) |
             RynaExpr::Return(_, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.transform_term(e),
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) => self.transform_term(e),
 
             RynaExpr::CompiledLambda(_, _, c, _, _, _) => {
                 for (_, e) in c {
@@ -1141,7 +1127,7 @@ impl RynaContext {
                 Ok(())
             },
             
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
@@ -1217,20 +1203,20 @@ pub enum CompiledRynaExpr {
 
     IdxMove, IdxRef, IdxMut, IdxMoveRef,
 
-    StoreIntVariable(usize, Integer),
-    StoreBoolVariable(usize, bool),
-    StoreFloatVariable(usize, f64),
-    StoreStringVariable(usize, String),
+    StoreIntVariable(usize, bool, Integer),
+    StoreBoolVariable(usize, bool, bool),
+    StoreFloatVariable(usize, bool, f64),
+    StoreStringVariable(usize, bool, String),
 
-    StoreVariable(usize),
-    GetVariable(usize),
-    CloneVariable(usize),
-    RefVariable(usize),
-    DerefVariable(usize),
-    CopyVariable(usize),
-    MoveVariable(usize),
+    StoreVariable(usize, bool),
+    GetVariable(usize, bool),
+    CloneVariable(usize, bool),
+    RefVariable(usize, bool),
+    DerefVariable(usize, bool),
+    CopyVariable(usize, bool),
+    MoveVariable(usize, bool),
     Assign,
-    AssignToVar(usize), AssignToVarDirect(usize),
+    AssignToVar(usize, bool), AssignToVarDirect(usize, bool),
     Drop,
 
     Jump(usize),
@@ -1239,7 +1225,7 @@ pub enum CompiledRynaExpr {
     RelativeJumpIfTrue(usize, bool),
     Call(usize),
     CallDestructor(usize),
-    DeleteVar(usize),
+    DeleteVar(usize, bool),
     LambdaCall, LambdaCallRef,
     Return,
 
@@ -1351,11 +1337,11 @@ impl CompiledRynaExpr {
             
             Tuple(to) => format!("{}({})", "Tuple".green(), to.to_string().blue()),
 
-            StoreVariable(to) => format!("{}({})", "StoreVariable".green(), to.to_string().blue()),
-            GetVariable(to) => format!("{}({})", "GetVariable".green(), to.to_string().blue()),
-            CopyVariable(to) => format!("{}({})", "CopyVariable".green(), to.to_string().blue()),
-            DerefVariable(to) => format!("{}({})", "DerefVariable".green(), to.to_string().blue()),
-            MoveVariable(to) => format!("{}({})", "MoveVariable".green(), to.to_string().blue()),
+            StoreVariable(to, g) => format!("{}({}, {})", "StoreVariable".green(), to.to_string().blue(), g.to_string().blue()),
+            GetVariable(to, g) => format!("{}({}, {})", "GetVariable".green(), to.to_string().blue(), g.to_string().blue()),
+            CopyVariable(to, g) => format!("{}({}, {})", "CopyVariable".green(), to.to_string().blue(), g.to_string().blue()),
+            DerefVariable(to, g) => format!("{}({}, {})", "DerefVariable".green(), to.to_string().blue(), g.to_string().blue()),
+            MoveVariable(to, g) => format!("{}({}, {})", "MoveVariable".green(), to.to_string().blue(), g.to_string().blue()),
 
             Call(to) => format!("{}({})", "Call".green(), to.to_string().blue()),
 
@@ -1507,8 +1493,8 @@ impl RynaContext{
 
             RynaExpr::Return(_, e) => self.get_inner_dep_graph_expr(e, parent, deps),
 
-            RynaExpr::CompiledVariableAssignment(_, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(_, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, t, e, _) => {
                 self.get_inner_dep_graph_expr(e, parent, deps);
 
                 for td in t.type_dependencies() {
@@ -2147,7 +2133,7 @@ impl RynaContext{
                 e.iter_mut().for_each(|i| RynaContext::subtitute_type_params_expr(i, templates))
             },
 
-            RynaExpr::Variable(_, _, _, t) => *t = t.sub_templates(templates),
+            RynaExpr::Variable(_, _, _, t, _) => *t = t.sub_templates(templates),
 
             RynaExpr::Lambda(_, _, args, r, lines) => {
                 for (_, tp) in args {
@@ -2166,8 +2152,8 @@ impl RynaContext{
             RynaExpr::Return(_, e) => RynaContext::subtitute_type_params_expr(e, templates),
 
             RynaExpr::VariableDefinition(_, _, t, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(_, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, t, e, _) => {
                 *t = t.sub_templates(templates);
 
                 RynaContext::subtitute_type_params_expr(e, templates);
@@ -2259,14 +2245,14 @@ impl RynaContext{
                     for (i, e) in c.iter().enumerate() {
                         if i == 0 {
                             self.lambda_code.push(RynaInstruction::new_with_type(
-                                CompiledRynaExpr::StoreVariable(i), 
+                                CompiledRynaExpr::StoreVariable(i, false), 
                                 "Lambda expression start".into(),
                                 self.infer_type(&e.1).unwrap()
                             ));
     
                         } else {
                             self.lambda_code.push(RynaInstruction::new_with_type(
-                                CompiledRynaExpr::StoreVariable(i), 
+                                CompiledRynaExpr::StoreVariable(i, false), 
                                 String::new(),
                                 self.infer_type(&e.1).unwrap()
                             ));
@@ -2275,7 +2261,7 @@ impl RynaContext{
     
                     for (i, arg) in a.iter().enumerate() {
                         self.lambda_code.push(RynaInstruction::new_with_type(
-                            CompiledRynaExpr::StoreVariable(i + c.len()), 
+                            CompiledRynaExpr::StoreVariable(i + c.len(), false), 
                             String::new(),
                             arg.1.clone()
                         ));
@@ -2287,8 +2273,8 @@ impl RynaContext{
                 Ok(())
             }
 
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
             RynaExpr::Return(_, e) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::UnaryOperation(_, _, _, e) => self.compile_lambda_expr(e, only_length),
@@ -2427,13 +2413,13 @@ impl RynaContext{
         let drop_idx = self.get_function_id("$drop_unsafe".into()).unwrap();
         let deref_idx = self.get_function_id("deref".into()).unwrap();
         
-        let container = Variable(Location::none(), 0, "$c".into(), ARR_OF!(tm.clone()).to_ref());
-        let index = Variable(Location::none(), 1, "$idx".into(), INT);
+        let container = Variable(Location::none(), 0, "$c".into(), ARR_OF!(tm.clone()).to_ref(), false);
+        let index = Variable(Location::none(), 1, "$idx".into(), INT, false);
         let deref_index = FunctionCall(Location::none(), deref_idx, vec!(INT), vec!(index.clone()));
 
         let body = vec!(
             // Init idx variable
-            CompiledVariableDefinition(Location::none(), 1, "$idx".into(), INT, Box::new(Literal(Location::none(), Object::new(Integer::from(0))))),
+            CompiledVariableDefinition(Location::none(), 1, "$idx".into(), INT, Box::new(Literal(Location::none(), Object::new(Integer::from(0)))), false),
 
             // While loop
             While(
@@ -2468,7 +2454,7 @@ impl RynaContext{
         let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
 
         let obj_type = Type::Template(id, templates.clone()).to_ref();
-        let obj = Variable(Location::none(), 0, "$obj".into(), obj_type.clone());
+        let obj = Variable(Location::none(), 0, "$obj".into(), obj_type.clone(), false);
 
         let mut body = vec!();
 
@@ -2500,7 +2486,7 @@ impl RynaContext{
         let destroy_idx = self.get_function_id("destroy".into()).unwrap();
         let container_idx = self.get_function_id("$container".into()).unwrap();
 
-        let iterator = Variable(Location::none(), 0, "$it".into(), ARR_IT_OF!(c.clone(), it.clone()).to_ref());
+        let iterator = Variable(Location::none(), 0, "$it".into(), ARR_IT_OF!(c.clone(), it.clone()).to_ref(), false);
         let container = FunctionCall(Location::none(), container_idx, vec!(c.clone()), vec!(iterator));
 
         let t_args = self.get_destructor_template_args(ARR_OF!(c.clone()));
@@ -2818,14 +2804,14 @@ impl RynaContext{
                                         );
 
                                         res.push(RynaInstruction::new_with_type(
-                                            CompiledRynaExpr::StoreVariable(i), 
+                                            CompiledRynaExpr::StoreVariable(i, false), 
                                             comment,
                                             arg.clone()
                                         ));
 
                                     } else {
                                         res.push(RynaInstruction::new_with_type(
-                                            CompiledRynaExpr::StoreVariable(i),
+                                            CompiledRynaExpr::StoreVariable(i, false),
                                             String::new(),
                                             arg.clone()
                                         ));
@@ -2861,7 +2847,7 @@ impl RynaContext{
                                 };
                                 
                                 res.push(RynaInstruction::new_with_type(
-                                    CompiledRynaExpr::StoreVariable(0), 
+                                    CompiledRynaExpr::StoreVariable(0, false), 
                                     comment,
                                     args[0].clone()
                                 ));
@@ -2889,13 +2875,13 @@ impl RynaContext{
                                 let comment = format!("op ({}) {} ({}) -> {}", t1.get_name(self), rep, t2.get_name(self), r.get_name(self));
 
                                 res.push(RynaInstruction::new_with_type(
-                                    CompiledRynaExpr::StoreVariable(0), 
+                                    CompiledRynaExpr::StoreVariable(0, false), 
                                     comment,
                                     args[0].clone()
                                 ));
 
                                 res.push(RynaInstruction::new_with_type(
-                                    CompiledRynaExpr::StoreVariable(1),
+                                    CompiledRynaExpr::StoreVariable(1, false),
                                     String::new(),
                                     args[1].clone()
                                 ));
@@ -2937,14 +2923,14 @@ impl RynaContext{
                                         );
     
                                         res.push(RynaInstruction::new_with_type(
-                                            CompiledRynaExpr::StoreVariable(i), 
+                                            CompiledRynaExpr::StoreVariable(i, false), 
                                             comment,
                                             arg.clone()
                                         ));
     
                                     } else {
                                         res.push(RynaInstruction::new_with_type(
-                                            CompiledRynaExpr::StoreVariable(i),
+                                            CompiledRynaExpr::StoreVariable(i, false),
                                             String::new(),
                                             arg.clone()
                                         ));
@@ -3055,7 +3041,7 @@ impl RynaContext{
                 Ok(self.compiled_form_size(a, false, root_counter)? + self.compiled_form_body_size(b, false)? + 1)
             },
 
-            Return(_, e) | CompiledVariableDefinition(_, _, _, _, e) | CompiledVariableAssignment(_, _, _, _, e) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
+            Return(_, e) | CompiledVariableDefinition(_, _, _, _, e, _) | CompiledVariableAssignment(_, _, _, _, e, _) => Ok(self.compiled_form_size(e, false, root_counter)? + 1),
             
             If(_, ih, ib, ei, e) => {
                 let needs_deref = self.infer_type(ih).unwrap().is_ref();
@@ -3323,16 +3309,16 @@ impl RynaContext{
                 Ok(res)
             }
 
-            RynaExpr::Variable(l, id, _, t) => {
+            RynaExpr::Variable(l, id, _, t, g) => {
                 let mut res = vec!(
                     if t.is_ref() {
                         RynaInstruction::new_with_type(
-                            CompiledRynaExpr::CloneVariable(*id), "".into(), t.clone()
+                            CompiledRynaExpr::CloneVariable(*id, *g), "".into(), t.clone()
                         ).set_loc(l)
     
                     } else {
                         RynaInstruction::new_with_type(
-                            CompiledRynaExpr::GetVariable(*id), "".into(), t.clone()
+                            CompiledRynaExpr::GetVariable(*id, *g), "".into(), t.clone()
                         ).set_loc(l)    
                     }
                 );
@@ -3353,10 +3339,10 @@ impl RynaContext{
                 Ok(res)
             }
 
-            RynaExpr::CompiledVariableDefinition(l, id, _, t, e) | RynaExpr::CompiledVariableAssignment(l, id, _, t, e) => {
+            RynaExpr::CompiledVariableDefinition(l, id, _, t, e, g) | RynaExpr::CompiledVariableAssignment(l, id, _, t, e, g) => {
                 let mut res = self.compiled_form_expr(e, false)?;
                 res.push(RynaInstruction::new_with_type(
-                    CompiledRynaExpr::StoreVariable(*id),
+                    CompiledRynaExpr::StoreVariable(*id, *g),
                     String::new(),
                     t.clone()
                 ).set_loc(l));
@@ -3630,10 +3616,10 @@ impl RynaContext{
                     }
 
                     // Store the iterator
-                    res.push(RynaInstruction::from(CompiledRynaExpr::StoreVariable(*it_var_id)).set_loc(l));
+                    res.push(RynaInstruction::from(CompiledRynaExpr::StoreVariable(*it_var_id, false)).set_loc(l));
 
                     // Check end of iterator
-                    res.push(RynaInstruction::from(CompiledRynaExpr::GetVariable(*it_var_id)).set_loc(l));
+                    res.push(RynaInstruction::from(CompiledRynaExpr::GetVariable(*it_var_id, false)).set_loc(l));
 
                     if consumed_native {
                         res.push(RynaInstruction::from(CompiledRynaExpr::NativeFunctionCall(IS_CONSUMED_FUNC_ID, consumed_ov_id, consumed_args)).set_loc(l));
@@ -3647,7 +3633,7 @@ impl RynaContext{
                     res.push(RynaInstruction::from(CompiledRynaExpr::RelativeJumpIfTrue(for_body_len + 5, false)));
 
                     // Get next value
-                    res.push(RynaInstruction::from(CompiledRynaExpr::GetVariable(*it_var_id)).set_loc(l));
+                    res.push(RynaInstruction::from(CompiledRynaExpr::GetVariable(*it_var_id, false)).set_loc(l));
 
                     if next_native {
                         res.push(RynaInstruction::from(CompiledRynaExpr::NativeFunctionCall(NEXT_FUNC_ID, next_ov_id, next_args)).set_loc(l));
@@ -3658,7 +3644,7 @@ impl RynaContext{
                     }
 
                     // Store next value
-                    res.push(RynaInstruction::from(CompiledRynaExpr::StoreVariable(*elem_var_id)).set_loc(l));
+                    res.push(RynaInstruction::from(CompiledRynaExpr::StoreVariable(*elem_var_id, false)).set_loc(l));
 
                     // Add for body
                     let beginning_jmp = CompiledRynaExpr::RelativeJump(-(for_body_len as i32 + 6));
@@ -3712,7 +3698,7 @@ impl RynaContext{
 
                         // Add variable drop
                         if let Some(var_idx) = self.get_destructor_variable(&a[0]) {
-                            res.push(RynaInstruction::from(CompiledRynaExpr::DeleteVar(var_idx)).set_loc(l));
+                            res.push(RynaInstruction::from(CompiledRynaExpr::DeleteVar(var_idx, false)).set_loc(l));
                         }
 
                     } else {

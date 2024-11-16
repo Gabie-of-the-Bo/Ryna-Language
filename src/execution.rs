@@ -154,6 +154,12 @@ impl RynaContext {
             }
         }
 
+        macro_rules! curr_offset {
+            ($cond: expr) => {
+                offset * (!$cond as usize) 
+            };
+        }
+
         macro_rules! unary_op {
             ($name: expr, $a: ident, $get_a: ident, $t: ty, $op: expr) => {
                 ryna_instruction!($name, {
@@ -438,63 +444,63 @@ impl RynaContext {
                 IdxMut => ryna_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
                 IdxMoveRef => ryna_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
-                StoreIntVariable(id, obj) => ryna_instruction!("StoreIntVariable", {
+                StoreIntVariable(id, g, obj) => ryna_instruction!("StoreIntVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreStringVariable(id, obj) => ryna_instruction!("StoreStringVariable", {
+                StoreStringVariable(id, g, obj) => ryna_instruction!("StoreStringVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreBoolVariable(id, obj) => ryna_instruction!("StoreBoolVariable", {
+                StoreBoolVariable(id, g, obj) => ryna_instruction!("StoreBoolVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
 
-                StoreFloatVariable(id, obj) => ryna_instruction!("StoreFloatVariable", {
+                StoreFloatVariable(id, g, obj) => ryna_instruction!("StoreFloatVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
                 
-                StoreVariable(id) => ryna_instruction!("StoreVariable", {
+                StoreVariable(id, g) => ryna_instruction!("StoreVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, tos!());
+                    store_variable!(*id + curr_offset!(g), tos!());
                     ip += 1;
                 }),
 
-                GetVariable(id) => ryna_instruction!("GetVariable", {
-                    stack.push(get_variable!(*id + offset).get_mut());
+                GetVariable(id, g) => ryna_instruction!("GetVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).get_mut());
                     ip += 1;
                 }),
 
-                CloneVariable(id) => ryna_instruction!("CloneVariable", {
-                    stack.push(get_variable!(*id + offset).clone());
+                CloneVariable(id, g) => ryna_instruction!("CloneVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).clone());
                     ip += 1;
                 }),
 
-                RefVariable(id) => ryna_instruction!("RefVariable", {
-                    stack.push(get_variable!(*id + offset).get_ref());
+                RefVariable(id, g) => ryna_instruction!("RefVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).get_ref());
                     ip += 1;
                 }),
 
-                DerefVariable(id) => ryna_instruction!("DerefVariable", {
-                    stack.push(get_variable!(*id + offset).deref_if_ref());
+                DerefVariable(id, g) => ryna_instruction!("DerefVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).deref_if_ref());
                     ip += 1;
                 }),
 
-                CopyVariable(id) => ryna_instruction!("CopyVariable", {
-                    stack.push(get_variable!(*id + offset).deref_deep_clone());
+                CopyVariable(id, g) => ryna_instruction!("CopyVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).deref_deep_clone());
                     ip += 1;
                 }),
 
-                MoveVariable(id) => ryna_instruction!("MoveVariable", {
-                    stack.push(get_variable!(*id + offset).move_contents_if_ref());
+                MoveVariable(id, g) => ryna_instruction!("MoveVariable", {
+                    stack.push(get_variable!(*id + curr_offset!(g)).move_contents_if_ref());
                     ip += 1;
                 }),
 
@@ -509,8 +515,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVar(id) => ryna_instruction!("AssignToVar", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVar(id, g) => ryna_instruction!("AssignToVar", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign_direct(value, self) {
@@ -520,8 +526,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVarDirect(id) => ryna_instruction!("AssignToVarDirect", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVarDirect(id, g) => ryna_instruction!("AssignToVarDirect", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign(value, self) {
@@ -588,8 +594,8 @@ impl RynaContext {
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 
-                DeleteVar(var_idx) => ryna_instruction!("DeleteVar", { 
-                    self.variables[*var_idx + offset] = Object::no_value();
+                DeleteVar(var_idx, g) => ryna_instruction!("DeleteVar", { 
+                    self.variables[*var_idx + curr_offset!(g)] = Object::no_value();
                     ip += 1;                    
                 }),
 

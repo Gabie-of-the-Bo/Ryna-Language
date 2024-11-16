@@ -339,7 +339,7 @@ impl RynaContext {
                 Ok(Type::And(args))
             },
 
-            RynaExpr::Variable(_, _, _, t) => {
+            RynaExpr::Variable(_, _, _, t, _) => {
                 match t {
                     Type::Ref(_) | Type::MutRef(_) => Ok(t.clone()),
                     t => Ok(Type::MutRef(Box::new(t.clone())))
@@ -449,8 +449,8 @@ impl RynaContext {
 
             RynaExpr::QualifiedName(l, _, _) |
             RynaExpr::AttributeAssignment(l, _, _, _) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, _, _) |
-            RynaExpr::CompiledVariableAssignment(l, _, _, _, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, _, _, _) |
+            RynaExpr::CompiledVariableAssignment(l, _, _, _, _, _) |
             RynaExpr::CompiledFor(l, _, _, _, _, _) |
             RynaExpr::Macro(l, _, _, _, _, _) |
             RynaExpr::Lambda(l, _, _, _, _) |

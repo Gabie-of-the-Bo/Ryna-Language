@@ -453,8 +453,6 @@ impl RynaContext {
                     }
                     
                 } else if t.is_empty() {
-                    println!("Expr: \n * {:?} \n * {:?} \n\n", a, b);
-
                     let arg_type_1 = self.infer_type(a)?;
                     let arg_type_2 = self.infer_type(b)?;
 

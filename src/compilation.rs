@@ -321,11 +321,11 @@ impl RynaContext {
         ╘══════════════════╛
     */
 
-    fn compile_expr_variables(&mut self, expr: &mut RynaExpr, registers: &mut Vec<usize>, var_map: &mut VariableMap, is_dtor: bool, needs_dtor: bool) -> Result<(), RynaError> {
+    fn compile_expr_variables(&mut self, expr: &mut RynaExpr, is_dtor: bool, needs_dtor: bool) -> Result<(), RynaError> {
         match expr {
             // Compile variable references
-            RynaExpr::NameReference(l, n) if var_map.is_var_defined(n) => {
-                let (d, (idx, t)) = var_map.get_var(n).unwrap();
+            RynaExpr::NameReference(l, n) if self.var_map.is_var_defined(n) => {
+                let (d, (idx, t)) = self.var_map.get_var(n).unwrap();
                 *expr = RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone(), d == 0);
             },
 
@@ -340,11 +340,11 @@ impl RynaContext {
                 *expr = RynaExpr::QualifiedName(l.clone(), n.clone(), func);
             },
 
-            RynaExpr::VariableAssignment(l, n, e) if var_map.is_var_defined(n) => {
-                if var_map.is_var_defined(n) {
-                    self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
+            RynaExpr::VariableAssignment(l, n, e) if self.var_map.is_var_defined(n) => {
+                if self.var_map.is_var_defined(n) {
+                    self.compile_expr_variables(e, is_dtor, false)?;
 
-                    let (d, (idx, t)) = var_map.get_var(n).unwrap();
+                    let (d, (idx, t)) = self.var_map.get_var(n).unwrap();
 
                     *expr = RynaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone(), d == 0);
                 
@@ -355,26 +355,26 @@ impl RynaContext {
 
             // Compile variable definitions
             RynaExpr::VariableDefinition(l, n, t, e) => {
-                if var_map.is_var_defined_in_last_ctx(n) {
+                if self.var_map.is_var_defined_in_last_ctx(n) {
                     return Err(RynaError::compiler_error(format!("Variable with name {} is already defined", n.green()), l, vec!()));
                 }
 
-                let idx = registers.pop().unwrap();
+                let idx = self.registers.pop().unwrap();
 
-                self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(e, is_dtor, false)?;
 
                 if let Type::InferenceMarker = t {
                     *t = self.infer_type(e)?;
                 }
 
-                let d = var_map.define_var(n.clone(), idx, t.clone());
+                let d = self.var_map.define_var(n.clone(), idx, t.clone());
 
                 *expr = RynaExpr::CompiledVariableDefinition(l.clone(), idx, n.clone(), t.clone(), e.clone(), d == 0);
             },
             
             // Compile operations
             RynaExpr::UnaryOperation(l, id, t, e) => {
-                self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(e, is_dtor, false)?;
 
                 if t.is_empty() {
                     let arg_type = self.infer_type(e)?;
@@ -390,11 +390,11 @@ impl RynaContext {
             }
 
             RynaExpr::BinaryOperation(l, id, t, a, b) => {
-                self.compile_expr_variables(a, registers, var_map, is_dtor, false)?;
-                self.compile_expr_variables(b, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(a, is_dtor, false)?;
+                self.compile_expr_variables(b, is_dtor, false)?;
 
                 let is_func = matches!(b.as_ref(), RynaExpr::FunctionCall(..));
-                let is_name = matches!(b.as_ref(), RynaExpr::QualifiedName(..));
+                let is_name = matches!(b.as_ref(), RynaExpr::QualifiedName(..) | RynaExpr::Variable(.., true));
                 let is_attr = matches!(a.as_ref(), RynaExpr::AttributeAccess(..));
                                 
                 // Attribute assignments
@@ -416,11 +416,11 @@ impl RynaContext {
                         *expr = RynaExpr::FunctionCall(l.clone(), *f_id, t.clone(), new_args);
     
                         // Recompile after transformation
-                        self.compile_expr_variables(expr, registers, var_map, is_dtor, false)?;
+                        self.compile_expr_variables(expr, is_dtor, false)?;
                     }
 
                 } else if *id == DOT_BINOP_ID && is_name {
-                    if let RynaExpr::QualifiedName(_, n, _) = b.as_ref() {
+                    if let RynaExpr::QualifiedName(_, n, _) | RynaExpr::Variable(_, _, n, _, true) = b.as_ref() {
                         let arg_type = self.infer_type(a)?;
                         let mut changed = false;
                         let l_cpy = l.clone();
@@ -453,6 +453,8 @@ impl RynaContext {
                     }
                     
                 } else if t.is_empty() {
+                    println!("Expr: \n * {:?} \n * {:?} \n\n", a, b);
+
                     let arg_type_1 = self.infer_type(a)?;
                     let arg_type_2 = self.infer_type(b)?;
 
@@ -467,10 +469,10 @@ impl RynaContext {
             }
             
             RynaExpr::NaryOperation(l, id, t, a, b) => {
-                self.compile_expr_variables(a, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(a, is_dtor, false)?;
 
                 for i in b.iter_mut() {
-                    self.compile_expr_variables(i, registers, var_map, is_dtor, false)?;
+                    self.compile_expr_variables(i, is_dtor, false)?;
                 }
 
                 let is_func = matches!(a.as_ref(), RynaExpr::QualifiedName(_, _, Some(_)));
@@ -480,7 +482,7 @@ impl RynaContext {
                         *expr = RynaExpr::FunctionCall(l.clone(), *id, t.clone(), b.clone());
     
                         // Recompile after transformation
-                        self.compile_expr_variables(expr, registers, var_map, is_dtor, false)?;
+                        self.compile_expr_variables(expr, is_dtor, false)?;
                     }
                 
                 } else if t.is_empty() {
@@ -500,18 +502,18 @@ impl RynaContext {
             RynaExpr::Tuple(_, args) => {
                 if args.len() == 1 {
                     *expr = args.pop().unwrap();
-                    self.compile_expr_variables(expr, registers, var_map, is_dtor, false)?;                    
+                    self.compile_expr_variables(expr, is_dtor, false)?;                    
                     
                 } else {
                     for i in args {
-                        self.compile_expr_variables(i, registers, var_map, is_dtor, false)?;                    
+                        self.compile_expr_variables(i, is_dtor, false)?;                    
                     }
                 }
             }
 
             RynaExpr::FunctionCall(l, id, t, args) => {
                 for i in args.iter_mut() {
-                    self.compile_expr_variables(i, registers, var_map, is_dtor, false)?;                    
+                    self.compile_expr_variables(i, is_dtor, false)?;                    
                 }
 
                 if t.is_empty() {
@@ -529,26 +531,26 @@ impl RynaContext {
 
             // Compile flow control
             RynaExpr::If(_, h, ib, ei, eb) => {
-                self.compile_expr_variables(h, registers, var_map, is_dtor, false)?;
-                self.compile_vars_and_infer_ctx(ib, registers, var_map, &vec!(), false, false)?;
+                self.compile_expr_variables(h, is_dtor, false)?;
+                self.compile_vars_and_infer_ctx(ib, &vec!(), false, false)?;
 
                 for (ei_h, ei_b) in ei {
-                    self.compile_expr_variables(ei_h, registers, var_map, is_dtor, false)?;
-                    self.compile_vars_and_infer_ctx(ei_b, registers, var_map, &vec!(), false, false)?;
+                    self.compile_expr_variables(ei_h, is_dtor, false)?;
+                    self.compile_vars_and_infer_ctx(ei_b, &vec!(), false, false)?;
                 }
 
                 if let Some(eb_inner) = eb {
-                    self.compile_vars_and_infer_ctx(eb_inner, registers, var_map, &vec!(), false, false)?;
+                    self.compile_vars_and_infer_ctx(eb_inner, &vec!(), false, false)?;
                 }
             }
 
             RynaExpr::While(_, c, b) => {
-                self.compile_expr_variables(c, registers, var_map, is_dtor, false)?;
-                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!(), false, false)?;
+                self.compile_expr_variables(c, is_dtor, false)?;
+                self.compile_vars_and_infer_ctx(b, &vec!(), false, false)?;
             }
 
             RynaExpr::For(l, i, c, b) => {
-                self.compile_expr_variables(c, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(c, is_dtor, false)?;
 
                 let container_type = self.infer_type(c)?;
 
@@ -562,8 +564,8 @@ impl RynaContext {
                 let (it_ov_id, iterator_type, _, it_args) = self.get_iterator_type(&container_type, l)?;
                 let (next_ov_id, element_type, _, next_args) = self.get_iterator_output_type(&iterator_type, l)?;
 
-                let iterator_idx = *registers.last().unwrap();
-                let element_idx = *registers.get(registers.len() - 2).unwrap();
+                let iterator_idx = *self.registers.last().unwrap();
+                let element_idx = *self.registers.get(self.registers.len() - 2).unwrap();
 
                 let it_mut = iterator_type.clone().to_mut();
 
@@ -578,23 +580,23 @@ impl RynaContext {
                 self.cache.overloads.functions.insert((IS_CONSUMED_FUNC_ID, vec!(it_mut.clone()), consumed_args.clone()), consumed_ov_id);
 
                 // Define iterator and container
-                let temp_idx = var_map.count_up();
-                var_map.define_var(format!("$it_{temp_idx}"), registers.pop().unwrap(), iterator_type.clone());    
+                let temp_idx = self.var_map.count_up();
+                self.var_map.define_var(format!("$it_{temp_idx}"), self.registers.pop().unwrap(), iterator_type.clone());    
 
                 // Add container
-                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!((i.clone(), element_type.clone())), false, false)?;
+                self.compile_vars_and_infer_ctx(b, &vec!((i.clone(), element_type.clone())), false, false)?;
 
                 *expr = RynaExpr::CompiledFor(l.clone(), iterator_idx, element_idx, i.clone(), c.clone(), b.clone());
             }
 
             RynaExpr::Return(_, e) => {
-                self.compile_expr_variables(e, registers, var_map, is_dtor, false)?;
+                self.compile_expr_variables(e, is_dtor, false)?;
                 
                 if !is_dtor {
                     // Get variables that need to be destroyed
                     let mut vars_dtor = vec!();
 
-                    var_map.for_each_until_base(|i, n, t| {
+                    self.var_map.for_each_until_base(|i, n, t| {
                         if t.needs_destructor(self) {
                             vars_dtor.push((i, n.clone(), t.clone()));
                         }
@@ -605,9 +607,9 @@ impl RynaContext {
                         // Define temporary variable
                         let ret = self.infer_type(e).unwrap();
 
-                        let idx = registers.pop().unwrap();
+                        let idx = self.registers.pop().unwrap();
                         let var_name = format!("$temp_{idx}");
-                        let d = var_map.define_var(var_name.clone(), idx, ret.clone());    
+                        let d = self.var_map.define_var(var_name.clone(), idx, ret.clone());    
 
                         // Add variable definition
                         let mut exprs = vec!(
@@ -650,7 +652,7 @@ impl RynaContext {
             }
 
             RynaExpr::DoBlock(_, b, r) => {
-                self.compile_vars_and_infer_ctx(b, registers, var_map, &vec!(), true, false)?;
+                self.compile_vars_and_infer_ctx(b, &vec!(), true, false)?;
 
                 // Infer further
                 if *r == Type::InferenceMarker {
@@ -664,8 +666,8 @@ impl RynaContext {
 
                 // Compile lambda captures
                 for n in c {
-                    if var_map.is_var_defined(n) {
-                        let (_, (idx, t)) = var_map.get_var(n).unwrap();
+                    if self.var_map.is_var_defined(n) {
+                        let (_, (idx, t)) = self.var_map.get_var(n).unwrap();
                         captures.push((n.clone(), RynaExpr::Variable(l.clone(), *idx, n.clone(), t.clone(), false)));
                         capture_args.push((n.clone(), t.clone()));
                     
@@ -674,7 +676,7 @@ impl RynaContext {
                     }
                 }
 
-                self.compile(b, &capture_args.iter().chain(a.iter()).cloned().collect(), false)?;
+                self.compile_isolated(b, &capture_args.iter().chain(a.iter()).cloned().collect(), false)?;
 
                 // Infer further
                 if *r == Type::InferenceMarker {
@@ -916,17 +918,17 @@ impl RynaContext {
         }
     }
     
-    fn compile_vars_and_infer_ctx(&mut self, body: &mut Vec<RynaExpr>, registers: &mut Vec<usize>, var_map: &mut VariableMap, args: &Vec<(String, Type)>, is_base: bool, is_dtor: bool) -> Result<usize, RynaError> {
-        var_map.add_context(is_base);
+    fn compile_vars_and_infer_ctx(&mut self, body: &mut Vec<RynaExpr>, args: &Vec<(String, Type)>, is_base: bool, is_dtor: bool) -> Result<usize, RynaError> {
+        self.var_map.add_context(is_base);
 
         for (n, t) in args {
-            let idx = registers.pop().unwrap();
-            var_map.define_var(n.clone(), idx, t.clone());
+            let idx = self.registers.pop().unwrap();
+            self.var_map.define_var(n.clone(), idx, t.clone());
         }
 
         // Compile each expression sequentially
         for e in body.iter_mut() {
-            self.compile_expr_variables(e, registers, var_map, is_dtor, true)?;
+            self.compile_expr_variables(e, is_dtor, true)?;
         }
 
         // Add destructors
@@ -936,7 +938,7 @@ impl RynaContext {
                 Some(RynaExpr::Return(..)) => { } // Do not modify return statements, those are handled differently
     
                 Some(_) => {
-                    var_map.for_each_last_ctx(|i, n, t| {
+                    self.var_map.for_each_last_ctx(|i, n, t| {
                         if t.needs_destructor(self) {
                             body.push(self.get_destructor_call(i, None, None, None, n, t));
                         }             
@@ -945,15 +947,20 @@ impl RynaContext {
             }
         }
 
-        // Free the registers inside the context
         let mut max_var = 0;
 
-        var_map.for_each_last_ctx(|i, _, _| {
-            registers.push(i);
-            max_var = max_var.max(i + 1); // Maximum register
-        });
-
-        var_map.remove_context();
+        // Free the registers inside the context
+        if self.var_map.depth() > 1 {
+            let mut freed_vars = vec!();
+    
+            self.var_map.for_each_last_ctx(|i, _, _| {
+                freed_vars.push(i);
+                max_var = max_var.max(i + 1); // Maximum register
+            });
+    
+            self.registers.append(&mut freed_vars);
+            self.var_map.remove_context();
+        }
 
         Ok(max_var)
     }
@@ -1150,16 +1157,42 @@ impl RynaContext {
     }
 
     pub fn compile_vars_and_infer(&mut self, body: &mut Vec<RynaExpr>, args: &Vec<(String, Type)>, is_dtor: bool) -> Result<usize, RynaError> {
-        self.compile_vars_and_infer_ctx(body, &mut (0..self.variables.len()).rev().collect(), &mut VariableMap::new(), args, true, is_dtor)
+        self.compile_vars_and_infer_ctx(body, args, true, is_dtor)
     }
 
     pub fn compile(&mut self, body: &mut Vec<RynaExpr>, args: &Vec<(String, Type)>, is_dtor: bool) -> Result<(), RynaError> {
+        // Backup registers
+        let registers_cpy = self.registers.clone();
+        self.reset_registers();
+
+        // First pass
         self.compile_vars_and_infer(body, args, is_dtor)?;
 
         // Second pass to transform some terms if needed
         for expr in body.iter_mut() {
             self.transform_term(expr)?;
         }
+
+        // Recover previous registers
+        self.registers = registers_cpy;
+
+        Ok(())
+    }
+
+    // Compile without access to globals
+    pub fn compile_isolated(&mut self, body: &mut Vec<RynaExpr>, args: &Vec<(String, Type)>, is_dtor: bool) -> Result<(), RynaError> {
+        // Backup globals
+        let var_map_cpy = self.var_map.clone();
+
+        // Create a variable map with an empty global context
+        self.var_map = VariableMap::new();
+        self.var_map.add_context(true);
+
+        // Compile normally
+        self.compile(body, args, is_dtor)?;
+
+        // Restore globals
+        self.var_map = var_map_cpy;
 
         Ok(())
     }
@@ -4718,6 +4751,19 @@ impl RynaContext{
         self.define_module_function_overloads(&lines)?;
 
         Ok(lines)
+    }
+
+    pub fn compile_globals(&mut self, lines: &mut Vec<RynaExpr>) -> Result<(), RynaError> {
+        for line in lines.iter_mut() {
+            match line {
+                RynaExpr::VariableDefinition(..) => self.compile_expr_variables(line, false, false)?,
+                _ => {}
+            }
+        }
+
+        self.reset_registers();
+        
+        Ok(())
     }
 
     pub fn precompile_module(&mut self, lines: &mut Vec<RynaExpr>) -> Result<(), RynaError> {        

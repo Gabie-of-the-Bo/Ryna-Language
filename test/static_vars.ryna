@@ -4,4 +4,20 @@ fn test() -> Int {
     return *constant;
 }
 
-print(test());
+if test() != constant {
+    panic("This should not happen");
+}
+
+constant = 10;
+
+fn<T> templated_test(arg: 'T) -> Int {
+    return *constant;
+}
+
+if templated_test<Int>(5) != constant {
+    panic("This should not happen");
+}
+
+if templated_test<String>("Test") != constant {
+    panic("This should not happen");
+}

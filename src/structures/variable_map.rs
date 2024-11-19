@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::types::Type;
 
+#[derive(Clone)]
 struct VariableContext {
     is_base: bool,
     names: FxHashMap<String, usize>,
@@ -34,6 +35,7 @@ impl VariableContext {
     }
 }
 
+#[derive(Clone)]
 pub struct VariableMap {
     counter: usize,
     contexts: Vec<VariableContext>
@@ -47,7 +49,11 @@ impl Default for VariableMap {
 
 impl VariableMap {
     pub fn new() -> Self {
-        VariableMap { contexts: vec!(VariableContext::new(true)), counter: 0 }
+        VariableMap { contexts: vec!(), counter: 0 }
+    }
+
+    pub fn depth(&self) -> usize {
+        self.contexts.len()
     }
 
     pub fn add_context(&mut self, is_base: bool) {

@@ -26,6 +26,7 @@ use crate::operations::*;
 use crate::object::*;
 use crate::functions::*;
 use crate::patterns::*;
+use crate::variable_map::VariableMap;
 
 /*
                                                   ╒══════════════════╕
@@ -49,6 +50,9 @@ pub struct RynaContext {
     pub macros: Vec<RynaMacro>,
 
     pub variables: Vec<Object>,
+
+    pub var_map: VariableMap,
+    pub registers: Vec<usize>,
 
     pub lambdas: usize,
     pub lambda_code_length: usize,
@@ -550,6 +554,10 @@ impl RynaContext {
 
         Ok(self.functions[id].overloads.len() - 1)
     }
+
+    pub fn reset_registers(&mut self) {
+        self.registers = (0..self.variables.len()).rev().collect();
+    }
 }
 
 /*
@@ -619,6 +627,8 @@ pub fn standard_ctx() -> RynaContext {
     }).collect();
 
     ctx.variables = vec!(Object::no_value(); 10000); // 10000 variables by default
+    ctx.var_map = VariableMap::new();
+    ctx.reset_registers();
 
     ctx
 }

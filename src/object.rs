@@ -191,7 +191,7 @@ impl RynaLibraryFunction {
                 FFIValue::Float(i) => Ok(Object::new(i)),
                 FFIValue::Pointer(p) => Ok(Object::new(RynaPointer::new(p))),
             },
-            FFIReturn::Void => Err(format!("Function {} returned no value", self.path)),
+            FFIReturn::Void => Ok(Object::empty()),
         }
     }
 }

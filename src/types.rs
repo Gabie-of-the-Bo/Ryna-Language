@@ -195,7 +195,7 @@ impl Type {
 
     pub fn needs_destructor_rec(&self, ctx: &RynaContext, check_self: bool) -> bool {
         // The type must implement the destroyable interface
-        if check_self && ctx.implements_destroyable(self) {
+        if *self.deref_type() != Type::Wildcard && check_self && ctx.implements_destroyable(self) {
             return true;
         }
 

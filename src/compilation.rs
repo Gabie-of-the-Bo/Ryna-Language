@@ -1507,6 +1507,9 @@ impl RynaContext{
             self.get_inner_dep_graph_expr(e, &(ImportType::Line(line_idx), 0), &mut res);
         }
 
+        self.reset_registers();
+        self.var_map = VariableMap::new();
+
         Ok(res)
     }
 

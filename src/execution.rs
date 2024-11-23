@@ -78,7 +78,7 @@ impl RynaContext {
                     if optimize {
                         ctx.optimize_instructions(&mut instr);
                     }
-               
+                    
                     if no_macro {
                         let ser_module = ctx.get_serializable_module(combined_hash, &instr);
 
@@ -584,7 +584,7 @@ impl RynaContext {
                 CallDestructor(to) => ryna_instruction!("CallDestructor", { 
                     let elem = stack.last().unwrap();
 
-                    if !elem.is_moved() && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
+                    if !elem.is_moved() && elem.ref_count() == 1 && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
                         add_stack_frame!(*to as i32); 
                     
                     } else {

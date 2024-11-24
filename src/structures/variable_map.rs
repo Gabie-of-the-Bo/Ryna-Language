@@ -99,6 +99,10 @@ impl VariableMap {
         None
     }
 
+    pub fn num_vars(&self) -> usize {
+        self.contexts.iter().map(|i| i.vars.len()).sum()
+    }
+
     pub fn for_each_last_ctx<T: FnMut(usize, &String, &Type)>(&self, mut f: T) {
         let last_ctx = self.contexts.last().unwrap();
 

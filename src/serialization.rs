@@ -226,6 +226,7 @@ impl ReducedRynaModule {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledRynaModule {
     pub hash: String,
+    num_globals: usize,
     type_templates: Vec<TypeTemplate>,
     interface_impls: Vec<InterfaceImpl>,
     instructions: Vec<CompiledRynaExpr>
@@ -243,6 +244,7 @@ impl RynaContext {
 
         return CompiledRynaModule {
             hash, 
+            num_globals: self.num_globals,
             type_templates: reduced_types, 
             interface_impls: self.interface_impls[*NUM_STD_INT_IMPL.lock().unwrap().borrow()..].to_vec(), 
             instructions: instructions.iter().map(|i| i.instruction.clone()).collect()
@@ -271,6 +273,7 @@ impl CompiledRynaModule {
     pub fn execute<const DEBUG: bool>(&mut self, program_input: &[String]) -> Result<ExecutionInfo, RynaError> {
         let mut ctx = standard_ctx();
 
+        ctx.num_globals = self.num_globals;
         ctx.type_templates.append(&mut self.type_templates);
         ctx.interface_impls.append(&mut self.interface_impls);
 

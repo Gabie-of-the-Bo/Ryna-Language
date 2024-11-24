@@ -1,4 +1,4 @@
-// Accessing moved object
+// Accessing absent global variable
 let n = 5;
 let m = move(n);
 

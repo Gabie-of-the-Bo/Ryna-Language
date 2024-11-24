@@ -4769,6 +4769,7 @@ impl RynaContext{
 
     pub fn precompile_module(&mut self, lines: &mut Vec<RynaExpr>) -> Result<(), RynaError> {        
         self.compile(lines, &vec!(), false)?;
+        self.compute_num_globals();
 
         // Generate automatic destructors
         self.generate_destructors(lines)?;

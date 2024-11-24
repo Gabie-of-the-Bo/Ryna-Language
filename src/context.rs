@@ -53,6 +53,7 @@ pub struct RynaContext {
 
     pub var_map: VariableMap,
     pub registers: Vec<usize>,
+    pub num_globals: usize,
 
     pub lambdas: usize,
     pub lambda_code_length: usize,
@@ -557,6 +558,10 @@ impl RynaContext {
 
     pub fn reset_registers(&mut self) {
         self.registers = (0..self.variables.len()).rev().collect();
+    }
+
+    pub fn compute_num_globals(&mut self) {
+        self.num_globals = self.var_map.num_vars();
     }
 }
 

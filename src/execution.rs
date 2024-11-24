@@ -17,7 +17,7 @@ use crate::types::Type;
 use crate::object::{RynaArray, RynaLambda, RynaTuple, Object, TypeInstance};
 use crate::context::RynaContext;
 use crate::operations::Operator;
-use crate::compilation::{CompiledRynaExpr, RynaError};
+use crate::compilation::{message_and_exit, CompiledRynaExpr, RynaError};
 
 /*
                                                   ╒══════════════════╕
@@ -270,6 +270,20 @@ impl RynaContext {
             }
         }
 
+        macro_rules! get_global_variable {
+            ($id: expr) => {
+                {
+                    let v = get_variable!($id);
+
+                    if v.is_moved() {
+                        message_and_exit("Accessing absent global variable".into());
+                    }
+
+                    v
+                }
+            }
+        }
+
         macro_rules! update_max_var {
             ($id: expr) => {
                 // SAFETY: this is safe because call_stack will never be empty
@@ -302,6 +316,7 @@ impl RynaContext {
         }
 
         call_stack.push((0, 0, -1));
+        update_max_var!(self.num_globals); // Ensure that the first registers are only for globals
 
         loop {
             match fetch_opcode!() {
@@ -474,33 +489,63 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                GetVariable(id, g) => ryna_instruction!("GetVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).get_mut());
+                GetVariable(id, false) => ryna_instruction!("GetVariable", {
+                    stack.push(get_variable!(*id + offset).get_mut());
                     ip += 1;
                 }),
 
-                CloneVariable(id, g) => ryna_instruction!("CloneVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).clone());
+                CloneVariable(id, false) => ryna_instruction!("CloneVariable", {
+                    stack.push(get_variable!(*id + offset).clone());
                     ip += 1;
                 }),
 
-                RefVariable(id, g) => ryna_instruction!("RefVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).get_ref());
+                RefVariable(id, false) => ryna_instruction!("RefVariable", {
+                    stack.push(get_variable!(*id + offset).get_ref());
                     ip += 1;
                 }),
 
-                DerefVariable(id, g) => ryna_instruction!("DerefVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).deref_if_ref());
+                DerefVariable(id, false) => ryna_instruction!("DerefVariable", {
+                    stack.push(get_variable!(*id + offset).deref_if_ref());
                     ip += 1;
                 }),
 
-                CopyVariable(id, g) => ryna_instruction!("CopyVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).deref_deep_clone());
+                CopyVariable(id, false) => ryna_instruction!("CopyVariable", {
+                    stack.push(get_variable!(*id + offset).deref_deep_clone());
                     ip += 1;
                 }),
 
-                MoveVariable(id, g) => ryna_instruction!("MoveVariable", {
-                    stack.push(get_variable!(*id + curr_offset!(g)).move_contents_if_ref());
+                MoveVariable(id, false) => ryna_instruction!("MoveVariable", {
+                    stack.push(get_variable!(*id + offset).move_contents_if_ref());
+                    ip += 1;
+                }),
+
+                GetVariable(id, true) => ryna_instruction!("GetVariable", {
+                    stack.push(get_global_variable!(*id).get_mut());
+                    ip += 1;
+                }),
+
+                CloneVariable(id, true) => ryna_instruction!("CloneVariable", {
+                    stack.push(get_global_variable!(*id).clone());
+                    ip += 1;
+                }),
+
+                RefVariable(id, true) => ryna_instruction!("RefVariable", {
+                    stack.push(get_global_variable!(*id).get_ref());
+                    ip += 1;
+                }),
+
+                DerefVariable(id, true) => ryna_instruction!("DerefVariable", {
+                    stack.push(get_global_variable!(*id).deref_if_ref());
+                    ip += 1;
+                }),
+
+                CopyVariable(id, true) => ryna_instruction!("CopyVariable", {
+                    stack.push(get_global_variable!(*id).deref_deep_clone());
+                    ip += 1;
+                }),
+
+                MoveVariable(id, true) => ryna_instruction!("MoveVariable", {
+                    stack.push(get_global_variable!(*id).move_contents_if_ref());
                     ip += 1;
                 }),
 

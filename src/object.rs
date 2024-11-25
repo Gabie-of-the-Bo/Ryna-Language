@@ -511,6 +511,17 @@ impl Object {
         res
     }
 
+    pub fn unsafe_move_contents(&self) -> Object {
+        let res = ObjectBlock::default().to_obj();
+
+        match &mut *self.inner.borrow_mut() {
+            ObjectBlock::Ref(i) => std::mem::swap(&mut *i.borrow_mut(), &mut *res.inner.borrow_mut()),
+            _ => unreachable!()
+        };
+
+        res
+    }
+
     pub fn swap_contents(&self, other: &Object) {
         match (&mut *self.inner.borrow_mut(), &mut *other.inner.borrow_mut()) {
             (ObjectBlock::Mut(a), ObjectBlock::Mut(b)) => std::mem::swap(&mut *a.borrow_mut(), &mut *b.borrow_mut()),
@@ -557,6 +568,15 @@ impl Object {
             ObjectBlock::Mut(i) => ObjectBlock::Ref(i.clone()).to_obj(),
 
             _ => ObjectBlock::Ref(self.inner.clone()).to_obj()
+        }
+    }
+
+    pub fn get_var(&self) -> Object {
+        return match self.inner.borrow() {
+            ObjectBlock::Ref(i) => ObjectBlock::Ref(i.clone()).to_obj(),
+            ObjectBlock::Mut(i) => ObjectBlock::Mut(i.clone()).to_obj(),
+
+            _ => ObjectBlock::Mut(self.inner.clone()).to_obj()
         }
     }
 

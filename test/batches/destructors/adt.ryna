@@ -1,0 +1,15 @@
+/// obj2 obj1
+
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    emit(obj.name.deref());
+    emit(" ");
+}
+
+let t1: Int | (Int, Test | Int, Int | Test, String | Test) = (0, Test("obj2"), Test("obj1"), "test");
+let t2: Int | (Int, Test | Int, Int | Test, String | Test) = 7;

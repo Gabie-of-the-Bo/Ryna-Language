@@ -490,7 +490,7 @@ impl RynaContext {
                 }),
 
                 GetVariable(id, false) => ryna_instruction!("GetVariable", {
-                    stack.push(get_variable!(*id + offset).get_mut());
+                    stack.push(get_variable!(*id + offset).get_var());
                     ip += 1;
                 }),
 
@@ -520,7 +520,7 @@ impl RynaContext {
                 }),
 
                 GetVariable(id, true) => ryna_instruction!("GetVariable", {
-                    stack.push(get_global_variable!(*id).get_mut());
+                    stack.push(get_global_variable!(*id).get_var());
                     ip += 1;
                 }),
 

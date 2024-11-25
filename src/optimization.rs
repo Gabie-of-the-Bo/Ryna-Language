@@ -916,7 +916,7 @@ impl RynaContext {
                 self.inline_functions(args, offset);
                 
                 // Do not inline destructor calls
-                if *id == self.get_function_id("destroy".into()).unwrap() {
+                if self.is_dtor_id(*id) {
                     return;
                 }
 

@@ -330,7 +330,7 @@ impl RynaContext {
             },
 
             RynaExpr::NameReference(l, n) => {
-                if n == "destroy" {
+                if n == "destroy" || n == "destroy_or" {
                     return Err(
                         RynaError::compiler_error(format!("Function {} cannot be called directly", n.green()), l, vec!())
                     );
@@ -687,8 +687,7 @@ impl RynaContext {
 
             RynaExpr::FunctionDefinition(l, _, idx, tm, a, r, b) => {
                 if tm.is_empty() {
-                    let destroy_idx = self.get_function_id("destroy".into()).unwrap();
-                    self.compile(b, a, *idx == destroy_idx)?;
+                    self.compile(b, a, self.is_dtor_id(*idx))?;
                 }
                     
                 if let Type::Empty = r {
@@ -775,8 +774,17 @@ impl RynaContext {
         Ok(())
     }
 
+    fn get_destructor_id(&self, t: &Type) -> usize {
+        if matches!(t.deref_type(), Type::Or(..)) {
+            self.get_function_id("destroy_or".into()).unwrap()
+
+        } else {
+            self.get_function_id("destroy".into()).unwrap()
+        }
+    }
+
     fn get_destructor_template_args(&self, t: Type) -> Vec<Type> {
-        let destroy_idx = self.get_function_id("destroy".into()).unwrap();
+        let destroy_idx = self.get_destructor_id(&t);
 
         match self.get_first_function_overload(destroy_idx, vec!(t), None, true, &Location::none()) {
             Ok((_, _, _, t)) => t,
@@ -784,8 +792,14 @@ impl RynaContext {
         }
     }
 
+    fn add_destructor_usage(&self, t: Type) {
+        let destroy_idx = self.get_destructor_id(&t);
+        let t_args = self.get_destructor_template_args(t.clone());
+        self.cache.usages.functions.add_new(destroy_idx, vec!(t), t_args);
+    }
+
     fn get_destructor_call(&self, id: usize, expr: Option<RynaExpr>, attr_id: Option<usize>, index: Option<RynaExpr>, name: &String, t: &Type) -> RynaExpr {
-        let destroy_idx = self.get_function_id("destroy".into()).unwrap();
+        let mut destroy_idx = self.get_function_id("destroy".into()).unwrap();
         let deref_idx = self.get_function_id("deref".into()).unwrap();
         let demut_idx = self.get_function_id("demut".into()).unwrap();
 
@@ -815,15 +829,18 @@ impl RynaContext {
             }
         }
 
+        if matches!(var_t.deref_type(), Type::Or(..)) {
+            destroy_idx = self.get_function_id("destroy_or".into()).unwrap()
+        }
+
         match &var_t {
             Type::MutRef(inner) => { 
                 let t_args = self.get_destructor_template_args(inner.clone().to_ref());
-                self.cache.usages.functions.add_new(destroy_idx, vec!(inner.clone().to_ref()), t_args.clone());
-
+                self.add_destructor_usage(inner.clone().to_ref());
+                
                 // Add destructor dependencies
                 for t in inner.destructor_dependencies(self) {
-                    let t_args = self.get_destructor_template_args(t.clone().to_ref());
-                    self.cache.usages.functions.add_new(destroy_idx, vec!(t.to_ref()), t_args);
+                    self.add_destructor_usage(t.clone().to_ref());
                 }
 
                 RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(
@@ -833,12 +850,11 @@ impl RynaContext {
 
             Type::Ref(inner) => { 
                 let t_args = self.get_destructor_template_args(var_t.clone());
-                self.cache.usages.functions.add_new(destroy_idx, vec!(var_t.clone()), t_args.clone());
+                self.add_destructor_usage(var_t.clone());
 
                 // Add destructor dependencies
                 for t in inner.destructor_dependencies(self) {
-                    let t_args = self.get_destructor_template_args(t.clone().to_ref());
-                    self.cache.usages.functions.add_new(destroy_idx, vec!(t.to_ref()), t_args);
+                    self.add_destructor_usage(t.clone().to_ref());
                 }
 
                 RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(var))
@@ -847,12 +863,11 @@ impl RynaContext {
             // This will never happen when expr is Some(...)
             _ => {                
                 let t_args = self.get_destructor_template_args(var_t.clone().to_ref());
-                self.cache.usages.functions.add_new(destroy_idx, vec!(var_t.clone().to_ref()), t_args.clone());
+                self.add_destructor_usage(var_t.clone().to_ref());
 
                 // Add destructor dependencies
                 for t in var_t.destructor_dependencies(self) {
-                    let t_args = self.get_destructor_template_args(t.clone().to_ref());
-                    self.cache.usages.functions.add_new(destroy_idx, vec!(t.to_ref()), t_args);
+                    self.add_destructor_usage(t.clone().to_ref());
                 }
 
                 RynaExpr::FunctionCall(Location::none(), destroy_idx, t_args, vec!(
@@ -1998,11 +2013,10 @@ impl RynaContext{
                             if !self.cache.templates.functions.contains(&key) {
                                 if !ov.is_empty() {
                                     let templates = ov.iter().cloned().enumerate().collect();
-                                    let destroy_idx = self.get_function_id("destroy".into()).unwrap();
 
                                     // Create new instance
                                     body.iter_mut().for_each(|i| RynaContext::subtitute_type_params_expr(i, &templates));
-                                    self.compile(&mut body, &a.iter().map(|(n, t)| (n.clone(), t.sub_templates(&templates))).collect(), *id == destroy_idx)?;    
+                                    self.compile(&mut body, &a.iter().map(|(n, t)| (n.clone(), t.sub_templates(&templates))).collect(), self.is_dtor_id(*id))?;    
     
                                     // Statically check the newly instantiated functions
                                     for line in &body {
@@ -2528,8 +2542,7 @@ impl RynaContext{
 
         // Add destructor dependencies
         for t in ARR_IT_OF!(c.clone(), it.clone()).destructor_dependencies(self) {
-            let t_args = self.get_destructor_template_args(t.clone().to_ref());
-            self.cache.usages.functions.add_new(destroy_idx, vec!(t.to_ref()), t_args);
+            self.add_destructor_usage(t.clone().to_ref());
         }
 
         let body = vec!(
@@ -2568,9 +2581,46 @@ impl RynaContext{
         Ok(body)
     }
 
+    fn generate_or_destructor(&self, elems: &Vec<Type>) -> Result<Vec<RynaExpr>, RynaError> {
+        use RynaExpr::*;
+
+        let is_idx = self.get_function_id("is".into()).unwrap();
+        let as_idx = self.get_function_id("$unsafe_as".into()).unwrap();
+
+        let or = Variable(Location::none(), 0, "$obj".into(), Type::Or(elems.clone()).to_ref(), false);
+
+        let mut body = vec!();
+
+        for t in elems.iter() {
+            if t.needs_destructor(self) {
+                let variant = t.deref_type().clone().to_ref();
+
+                let cond = FunctionCall(Location::none(), is_idx, vec!(variant.clone()), vec!(or.clone()));
+                let casted = FunctionCall(Location::none(), as_idx, vec!(variant), vec!(or.clone()));
+                let dtor = self.get_destructor_call(0, Some(casted), None, None, &"".into(), t);
+
+                body.push(If(
+                    Location::none(),
+                    Box::new(cond),
+                    vec!(
+                        dtor,
+                        Return(Location::none(), Box::new(Literal(Location::none(), Object::empty())))
+                    ),
+                    vec!(),
+                    None
+                ));
+            }
+        }
+
+        body.push(Return(Location::none(), Box::new(Literal(Location::none(), Object::empty()))));
+
+        Ok(body)
+    }
+
     pub fn generate_destructor_for_type(&self, t: &Type) -> Result<Vec<RynaExpr>, RynaError> {
         match t.deref_type() {
             Type::And(t) => self.generate_tuple_destructor(t),
+            Type::Or(t) => self.generate_or_destructor(t),
 
             Type::Template(ARR_ID, tm) => self.generate_array_destructor(&tm[0]),
             Type::Template(ARR_IT_ID, tm) => self.generate_iterator_destructor(&tm[0], &tm[1]),
@@ -2589,29 +2639,32 @@ impl RynaContext{
 
     pub fn generate_destructors(&mut self, lines: &mut Vec<RynaExpr>) -> Result<(), RynaError> {
         let destroy_id = self.get_function_id("destroy".into()).unwrap();
+        let destroy_or_id = self.get_function_id("destroy_or".into()).unwrap();
 
-        if let Some(usages) = self.cache.usages.functions.get_checked(&destroy_id) {
-            for (args, ov) in usages {
-                // If there is no overload, we need to generate it
-                if self.get_first_function_overload(destroy_id, args.clone(), Some(ov.clone()), true, &Location::none()).is_err() {
-                    let body = self.generate_destructor_for_type(&args[0])?;
-
-                    // Define function overload
-                    match self.define_function_overload(Location::none(), vec!(), destroy_id, ov.len(), &args, Type::Empty, None) {
-                        Ok(_) => { },
-                        Err(err) => return Err(RynaError::compiler_error(err, &Location::none(), vec!())),
+        for id in [destroy_id, destroy_or_id] {
+            if let Some(usages) = self.cache.usages.functions.get_checked(&id) {
+                for (args, ov) in usages {
+                    // If there is no overload, we need to generate it
+                    if self.get_first_function_overload(id, args.clone(), Some(ov.clone()), true, &Location::none()).is_err() {
+                        let body = self.generate_destructor_for_type(&args[0])?;
+    
+                        // Define function overload
+                        match self.define_function_overload(Location::none(), vec!(), id, ov.len(), &args, Type::Empty, None) {
+                            Ok(_) => { },
+                            Err(err) => return Err(RynaError::compiler_error(err, &Location::none(), vec!())),
+                        }
+    
+                        // Add line at the end
+                        lines.push(
+                            RynaExpr::FunctionDefinition(
+                                Location::none(), 
+                                vec!(), id, vec!(), 
+                                vec!(("$obj".into(), args[0].clone())), 
+                                Type::Empty,
+                                body
+                            )
+                        );
                     }
-
-                    // Add line at the end
-                    lines.push(
-                        RynaExpr::FunctionDefinition(
-                            Location::none(), 
-                            vec!(), destroy_id, vec!(), 
-                            vec!(("$obj".into(), args[0].clone())), 
-                            Type::Empty,
-                            body
-                        )
-                    );
                 }
             }
         }
@@ -3033,6 +3086,11 @@ impl RynaContext{
         Ok(res)
     }
 
+    pub fn is_dtor_id(&self, id: usize) -> bool {
+        id == self.get_function_id("destroy".into()).unwrap() ||
+        id == self.get_function_id("destroy_or".into()).unwrap()
+    }
+
     pub fn compiled_form_size(&self, expr: &RynaExpr, root: bool, root_counter: &mut usize) -> Result<usize, RynaError> {
         use RynaExpr::*;
 
@@ -3157,7 +3215,7 @@ impl RynaContext{
 
                 let mut dtor_offset = 0;
 
-                if *id == self.get_function_id("destroy".into()).unwrap() {
+                if self.is_dtor_id(*id) {
                     if let Some(_) = self.get_destructor_variable(&a[0]) {
                         dtor_offset += 1;
                     }
@@ -3757,7 +3815,7 @@ impl RynaContext{
                 let mut translated_opcode = CompiledRynaExpr::Halt; // Invalid opcode for now
 
                 if let Some(pos) = self.cache.locations.functions.get_checked(&(*id, args_types, t.clone())) {
-                    if *id == self.get_function_id("destroy".into()).unwrap() {
+                    if self.is_dtor_id(*id) {
                         res.push(RynaInstruction::from(CompiledRynaExpr::CallDestructor(pos)).set_loc(l));
 
                         // Add variable drop

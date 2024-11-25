@@ -569,6 +569,20 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         }
     ).unwrap();
 
+    let idx = ctx.define_function("$unsafe_as".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[Type::Wildcard], 
+        T_0, 
+        |_, _, mut v, _| {
+            let obj = v.pop().unwrap();
+
+            Ok(obj.unsafe_move_contents().get_ref())
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("drop".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 
@@ -1145,6 +1159,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     }
 
     ctx.define_function("destroy".into()).unwrap();
+    ctx.define_function("destroy_or".into()).unwrap();
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {

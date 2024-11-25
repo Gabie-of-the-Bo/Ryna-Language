@@ -1148,6 +1148,25 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
+        let idx = ctx.define_function(format!("$drop_{}_unsafe", I)).unwrap(); // this is unsafe and non-accesible by normal means
+
+        seq!(J in 2..10 {
+            let ts = Type::And((0..J).map(|i| Type::TemplateParam(i, vec!())).collect());
+
+            ctx.define_native_function_overload(
+                idx, 
+                J,
+                &[ts.to_ref()], 
+                Type::Empty, 
+                |_, _, v, _| {
+                    let tuple = v[0].deref::<RynaTuple>();
+                    tuple.elements[I] = Object::no_value();
+                                    
+                    Ok(Object::empty())
+                }
+            ).unwrap();            
+        });
+
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();
 
         seq!(J in 2..10 {

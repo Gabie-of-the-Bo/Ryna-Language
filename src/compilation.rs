@@ -2540,8 +2540,38 @@ impl RynaContext{
         Ok(body)
     }
 
+    fn generate_tuple_destructor(&self, elems: &Vec<Type>) -> Result<Vec<RynaExpr>, RynaError> {
+        use RynaExpr::*;
+
+        let tuple = Variable(Location::none(), 0, "$obj".into(), Type::And(elems.clone()).to_ref(), false);
+
+        let mut body = vec!();
+
+        for (i, t) in elems.iter().enumerate() {
+            if t.needs_destructor(self) {
+                let get_idx = self.get_function_id(format!("get_{i}")).unwrap();
+                let drop_idx = self.get_function_id(format!("$drop_{i}_unsafe")).unwrap();
+
+                let tuple_elem = FunctionCall(Location::none(), get_idx, elems.clone(), vec!(tuple.clone()));
+                let dtor = self.get_destructor_call(0, Some(tuple_elem), None, None, &"".into(), t);
+
+                body.push(dtor);
+
+                let drop = FunctionCall(Location::none(), drop_idx, elems.clone(), vec!(tuple.clone()));
+
+                body.push(drop);
+            }
+        }
+
+        body.push(Return(Location::none(), Box::new(Literal(Location::none(), Object::empty()))));
+
+        Ok(body)
+    }
+
     pub fn generate_destructor_for_type(&self, t: &Type) -> Result<Vec<RynaExpr>, RynaError> {
         match t.deref_type() {
+            Type::And(t) => self.generate_tuple_destructor(t),
+
             Type::Template(ARR_ID, tm) => self.generate_array_destructor(&tm[0]),
             Type::Template(ARR_IT_ID, tm) => self.generate_iterator_destructor(&tm[0], &tm[1]),
 

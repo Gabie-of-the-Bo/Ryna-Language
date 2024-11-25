@@ -293,8 +293,30 @@ impl Type {
             Type::InferenceMarker => "[Inferred]".into(),
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
-            Type::Ref(t) => format!("{}{}", "&".magenta(), t.get_name(ctx)),
-            Type::MutRef(t) => format!("{}{}", "@".magenta(), t.get_name(ctx)),
+            Type::Ref(t) => {
+                let needs_parens = matches!(**t, Type::Or(_) | Type::Function(..));
+
+                format!(
+                    "{}{}{}{}", 
+                    "&".magenta(), 
+                    if needs_parens { "(" } else { "" },
+                    t.get_name(ctx),
+                    if needs_parens { ")" } else { "" }
+                )
+            },
+
+            Type::MutRef(t) => {
+                let needs_parens = matches!(**t, Type::Or(_) | Type::Function(..));
+
+                format!(
+                    "{}{}{}{}", 
+                    "@".magenta(), 
+                    if needs_parens { "(" } else { "" },
+                    t.get_name(ctx),
+                    if needs_parens { ")" } else { "" }
+                )
+            },
+
             Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
 

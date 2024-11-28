@@ -89,7 +89,7 @@ impl VariableMap {
         self.contexts.last().unwrap().contains(name)
     }
 
-    pub fn get_var(&mut self, name: &String) -> Option<(usize, &(usize, Type))> {
+    pub fn get_var(&self, name: &String) -> Option<(usize, &(usize, Type))> {
         for (i, ctx) in self.contexts.iter().enumerate().rev() {
             if let Some(v) = ctx.get(name) {
                 return Some((i, v));

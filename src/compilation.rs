@@ -341,12 +341,23 @@ impl RynaContext {
             },
 
             RynaExpr::VariableAssignment(l, n, e) if self.var_map.is_var_defined(n) => {
+                let n_cpy = n.clone();
+                
                 if self.var_map.is_var_defined(n) {
                     self.compile_expr_variables(e, is_dtor, false)?;
-
+                    
                     let (d, (idx, t)) = self.var_map.get_var(n).unwrap();
 
                     *expr = RynaExpr::CompiledVariableAssignment(l.clone(), *idx, n.clone(), t.clone(), e.clone(), d == 0);
+
+                    // Destroy previous value
+                    if t.needs_destructor(&self) {
+                        *expr = RynaExpr::DoBlock(Location::none(), vec!(
+                            self.get_destructor_call(*idx, None, None, None, &n_cpy, &t),
+                            expr.clone(),
+                            RynaExpr::Return(Location::none(), Box::new(RynaExpr::Literal(Location::none(), Object::empty())))
+                        ), Type::Empty);
+                    }
                 
                 } else {
                     return Err(RynaError::compiler_error(format!("Variable with name {} is not defined", n.green()), l, vec!()));

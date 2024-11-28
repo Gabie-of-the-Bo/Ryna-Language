@@ -49,9 +49,9 @@ impl RynaContext {
     pub fn to_string(&self, expr: &RynaExpr) -> String  {
         match expr {
             RynaExpr::NameReference(_, n) |
-            RynaExpr::Variable(_, _, n, _) => n.clone().cyan().to_string(),
-            RynaExpr::CompiledVariableDefinition(_, _, n, t, e) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
-            RynaExpr::CompiledVariableAssignment(_, _, n, _, e) => format!("{} = {}", n.cyan(), self.to_string(e)),
+            RynaExpr::Variable(_, _, n, _, _) => n.clone().cyan().to_string(),
+            RynaExpr::CompiledVariableDefinition(_, _, n, t, e, _) => format!("let {}: {} = {}", n.cyan(), t.get_name(self), self.to_string(e)),
+            RynaExpr::CompiledVariableAssignment(_, _, n, _, e, _) => format!("{} = {}", n.cyan(), self.to_string(e)),
 
             RynaExpr::Literal(_, obj) => obj.to_debug_string().magenta().to_string(),
             RynaExpr::Tuple(_, args) => format!("({})", args.iter().map(|i| self.to_string(i)).collect::<Vec<_>>().join(", ")),

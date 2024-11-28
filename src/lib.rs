@@ -50,6 +50,9 @@ pub mod profiling;
 #[path = "algorithms/formats.rs"]
 pub mod formats;
 
+#[path = "algorithms/shell.rs"]
+pub mod shell;
+
 #[path = "structures/graph.rs"]
 pub mod graph;
 
@@ -71,6 +74,7 @@ mod integration {
     use crate::compilation::RynaError;
     use crate::context::standard_ctx;
     use crate::config::{precompile_ryna_module_with_config, compute_project_hash};
+    use crate::functions::define_macro_emit_fn;
     use glob::glob;
 
     fn integration_test(file_path: &str) {
@@ -123,10 +127,29 @@ mod integration {
             } else {
                 // Positive test
                 let mut ctx = standard_ctx();
+                define_macro_emit_fn(&mut ctx, "emit".into());
 
                 if let Err(err) = ctx.parse_and_execute_ryna_module(&file) {
                     err.emit();
-                }        
+                }
+
+                if file.starts_with("/// ") {
+                    let expected_msg = &file.lines().next().unwrap()[4..];
+
+                    let exp_chars = expected_msg.chars().collect::<Vec<_>>();
+                    let msg_chars = ctx.captured_output.borrow().chars().collect::<Vec<_>>();
+                    let mut exp_idx = 0;
+                    let mut msg_idx = 0;
+        
+                    while exp_idx < exp_chars.len() && msg_idx < msg_chars.len() {
+                        exp_idx += (msg_chars[msg_idx] == exp_chars[exp_idx]) as usize;
+                        msg_idx += 1;
+                    }
+        
+                    if exp_idx != exp_chars.len() {
+                        panic!("Captured output was different from expected:\n - Expected: {}\n - Got: {}", expected_msg, ctx.captured_output.borrow());
+                    }
+                }
             }
         }
     }
@@ -330,6 +353,16 @@ mod integration {
     }
 
     #[test]
+    fn destructors() {
+        integration_test("test/destructors.ryna");
+    }
+
+    #[test]
+    fn static_vars() {
+        integration_test("test/static_vars.ryna");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.ryna");
     }
@@ -347,6 +380,11 @@ mod integration {
     #[test]
     fn stack() {
         integration_test_batch("test/batches/stack/*.ryna");
+    }
+
+    #[test]
+    fn destructors_batch() {
+        integration_test_batch("test/batches/destructors/*.ryna");
     }
 
     #[test]

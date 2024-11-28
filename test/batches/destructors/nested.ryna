@@ -1,0 +1,39 @@
+/// obj3 obj4 obj3 obj4 obj0 obj5 obj1 obj2
+
+class Test {
+    name: String;
+}
+
+fn destroy(obj: &Test) {
+    emit(obj.name.deref());
+    emit(" ");
+}
+
+implement Destroyable for Test;
+
+class Test2<T> {
+    name: String;
+    inner: 'T;
+}
+
+fn<T> destroy(obj: &Test2<'T>) {
+    emit(obj.name.deref());
+    emit(" ");
+}
+
+implement<T> Destroyable for Test2<'T>;
+
+class Test3 {
+    a: Test;
+    b: Int;
+    c: Test2<Bool>;
+}
+
+let a = Test3(Test("obj1"), 5, Test2<Bool>("obj2", true));
+let b = Test3(Test("obj3"), 5, Test2<Bool>("obj4", true));
+
+fwd<&Test3>(b);
+cfwd<Test3>(b);
+move(b);
+
+Test3(Test("obj0"), 5, Test2<Bool>("obj5", true));

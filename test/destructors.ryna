@@ -1,0 +1,94 @@
+// No templates
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    print("Destroying " + obj.name + "\n");
+}
+
+let t3 = Test("obj3");
+
+do {
+    let t1 = Test("obj1");
+    let t2 = Test("obj2");
+    let t4: @Test = t3;
+    let t5: &Test = t3.demut();
+    let t6: @@Test = t3.mut();
+    let t7: &@Test = t3.ref();
+    return 0;
+};
+
+if true {
+    let t4: @Test = t3;
+}
+
+// With template params
+class Test2<T> {
+    name: String;
+    inner: 'T;
+}
+
+fn<T> destroy(obj: &Test2<'T>) {
+    print("Destroying " + obj.name + "\n");
+}
+
+implement<T> Destroyable for Test2<'T>;
+
+let o3 = Test2<String>("obj6", "test");
+
+do {
+    let o1 = Test2<Int>("obj4", 5);
+    let o2 = Test2<Float>("obj5", 6.6);
+    let o4 = o3;
+    let o5 = o3.demut();
+    let o6 = o3.mut();
+    let o7 = o3.ref();
+    return 0;
+};
+
+do {
+    let v1 = arr<Array<Test>>();
+    v1.push(arr<Test>());
+    v1[0].push(Test("obj10"));
+    return 0;
+};
+
+let a = arr<Array<Test2<Bool>>>();
+a.push(arr<Test2<Bool>>());
+a[0].push(Test2<Bool>("obj9", true));
+
+class Test3 {
+    inner1: Test;
+    inner2: Test2<Bool>;
+    inner3: Int;
+}
+
+let b = arr<Test3>();
+b.push(Test3(Test("obj11"), Test2<Bool>("obj12", false), 5));
+b.push(Test3(Test("obj13"), Test2<Bool>("obj14", false), 5));
+
+class Test4 {
+    inner1: Test3;
+    inner2: Int;
+}
+
+let c = arr<Test4>();
+c.push(Test4(Test3(Test("obj15"), Test2<Bool>("obj16", false), 5), 4));
+
+let v = arr<Test2<Bool>>();
+v.push(Test2<Bool>("obj17", true));
+v.push(Test2<Bool>("obj18", true));
+v.push(Test2<Bool>("obj19", true));
+
+for i in v {
+    print("Iteration...\n");
+}
+
+Test("obj_inl");
+v;
+c;
+
+print("DONE\n");

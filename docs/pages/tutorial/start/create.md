@@ -59,3 +59,13 @@ You can use the following args:
 | Long name | Short name | Description                       |
 | --------- | ---------- | --------------------------------- |
 | `modules` | `m`        | Extra modules path of the project |
+
+## Build scripts
+
+You can run the build script (useful when testing) by using this command:
+
+```
+ryna build <input_path>
+```
+
+Here `input_path` is the folder of the project that you want to run and defaults to the current folder.

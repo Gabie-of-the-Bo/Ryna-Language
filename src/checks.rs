@@ -87,8 +87,8 @@ impl RynaContext {
             (RynaExpr::InterfaceImplementation(..), _) |
             (RynaExpr::ClassDefinition(..), _) => Ok(()),
 
-            (RynaExpr::CompiledVariableDefinition(_, _, _, _, e), _) |
-            (RynaExpr::CompiledVariableAssignment(_, _, _, _, e), _) => self.return_check(e, &None),
+            (RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _), _) |
+            (RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _), _) => self.return_check(e, &None),
 
             (RynaExpr::Return(l, _), None) => {
                 Err(RynaError::compiler_error(
@@ -400,8 +400,8 @@ impl RynaContext {
                 self.ambiguity_check(b)
             }
 
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e) => {
                 self.ambiguity_check(e)?;
@@ -461,8 +461,8 @@ impl RynaContext {
                 Err(RynaError::compiler_error("Continue statement is not allowed in this context".into(), l, vec!()))
             }
 
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) => {
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) => {
                 RynaContext::break_continue_check(e, allowed)
             }
 
@@ -622,8 +622,8 @@ impl RynaContext {
             RynaExpr::Variable(..) |
             RynaExpr::Literal(..) => Ok(()),
 
-            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e, _) => {
                 if t.has_self() {
                     return Err(RynaError::compiler_error(
                         format!("{} type found outside an interface", Type::SelfType.get_name(self)),
@@ -1026,8 +1026,8 @@ impl RynaContext {
                 Ok(())
             }
 
-            RynaExpr::CompiledVariableDefinition(l, _, n, t, e) |
-            RynaExpr::CompiledVariableAssignment(l, _, n, t, e) => {
+            RynaExpr::CompiledVariableDefinition(l, _, n, t, e, _) |
+            RynaExpr::CompiledVariableAssignment(l, _, n, t, e, _) => {
                 self.check_type_well_formed(t, l)?;
                 self.type_check(e)?;
 
@@ -1115,6 +1115,18 @@ impl RynaContext {
                     // Update caches
                     self.cache.usages.functions.add_new(*id, arg_types.clone(), templates.clone());
                     self.cache.overloads.functions.insert((*id, arg_types.clone(), templates.clone()), ov_id);
+
+                    // Forbid custom destructors for types that need generated destructors
+                    if  *id == self.get_function_id("destroy".into()).unwrap() {
+                        let dtor_arg = arg_types[0].deref_type();
+
+                        if dtor_arg.has_invalid_destructor(self) {
+                            return Err(RynaError::compiler_error(
+                                format!("Type {} cannot implement Destroyable because it needs a compiler-generated destructor", dtor_arg.get_name(self)),
+                                l, vec!()
+                            ));
+                        }
+                    }
 
                     Ok(())
                 }
@@ -1651,9 +1663,19 @@ impl RynaContext {
 
     pub fn interface_impl_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         return match expr {
-            RynaExpr::InterfaceImplementation(l, _, t, n, ts) => {
+            RynaExpr::InterfaceImplementation(l, tm, t, n, ts) => {
                 match self.get_interface_id(n.clone()) {
                     Ok(int_id) => {
+                        // Forbid custom destructors for types that need generated destructors
+                        if tm.len() == 0 && int_id == self.get_interface_id("Destroyable".into()).unwrap() {
+                            if t.has_invalid_destructor(self) {
+                                return Err(RynaError::compiler_error(
+                                    format!("Type {} cannot implement Destroyable because it needs a compiler-generated destructor", t.get_name(self)),
+                                    l, vec!()
+                                ));
+                            }
+                        }
+
                         let fns = &self.interfaces[int_id].fns;
                         let uns = &self.interfaces[int_id].uns;
                         let bin = &self.interfaces[int_id].bin;
@@ -1985,7 +2007,7 @@ impl RynaContext {
             RynaExpr::Literal(..) |
             RynaExpr::CompiledLambda(..) => Ok(()),
 
-            RynaExpr::Variable(l, _, _, t) => self.no_template_check_type(t, l),
+            RynaExpr::Variable(l, _, _, t, _) => self.no_template_check_type(t, l),
 
             RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.no_template_check(a)?;
@@ -1996,8 +2018,8 @@ impl RynaContext {
                 self.no_template_check(e)
             }
 
-            RynaExpr::CompiledVariableAssignment(l, _, _, t, e) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, t, e) => {
+            RynaExpr::CompiledVariableAssignment(l, _, _, t, e, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, t, e, _) => {
                 self.no_template_check_type(t, l)?;
                 self.no_template_check(e)
             }

@@ -1,5 +1,5 @@
 class DoubleIterator<T> {
-    iter: ArrayIterator<@'T>;
+    iter: ArrayIterator<'T, @'T>;
 }
 
 fn<T> iterator(it: DoubleIterator<'T>) -> DoubleIterator<'T> {

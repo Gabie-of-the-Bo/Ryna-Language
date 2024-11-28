@@ -21,15 +21,15 @@ lazy_static! {
 impl RynaContext {
     pub fn count_usages_expr(expr: &RynaExpr, var_usages: &mut FxHashMap<usize, usize>, offset: usize) {
         match expr {
-            RynaExpr::Variable(_, id, _, _) => {
-                *var_usages.entry(*id).or_default() += offset;
+            RynaExpr::Variable(_, id, _, _, g) => {
+                *var_usages.entry(*id).or_default() += offset + (*g as usize); // Never move global variables
             },
 
             RynaExpr::UnaryOperation(_, _, _, e) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => RynaContext::count_usages_expr(e, var_usages, offset),
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) => RynaContext::count_usages_expr(e, var_usages, offset),
 
             RynaExpr::CompiledLambda(_, _, c, _, _, _) => {
                 for (_, e) in c {
@@ -115,8 +115,8 @@ impl RynaContext {
         match expr {
             RynaExpr::Return(_, e) |
             RynaExpr::AttributeAccess(_, e, _) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.insert_moves_expr(e, var_usages),
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) => self.insert_moves_expr(e, var_usages),
 
             RynaExpr::CompiledLambda(_, _, c, _, _, exprs) => {
                 let mut var_usages_lambda = FxHashMap::default();
@@ -146,7 +146,7 @@ impl RynaContext {
                 }
 
                 if *id == deref_id && exprs.len() == 1 {
-                    if let RynaExpr::Variable(_, var_id, _, var_type) = &exprs[0] {
+                    if let RynaExpr::Variable(_, var_id, _, var_type, _) = &exprs[0] {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *id = move_id;
 
@@ -163,7 +163,7 @@ impl RynaContext {
                 let move_id = self.get_function_id("move".into()).unwrap();
 
                 if *id == DEREF_UNOP_ID {
-                    if let RynaExpr::Variable(_, var_id, _, var_type) = &**e {
+                    if let RynaExpr::Variable(_, var_id, _, var_type, _) = &**e {
                         if *var_usages.entry(*var_id).or_default() == 1 && !var_type.is_ref() {
                             *expr = RynaExpr::FunctionCall(l.clone(), move_id, tm.clone(), vec!((**e).clone()));
 
@@ -214,7 +214,7 @@ impl RynaContext {
             
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
             RynaExpr::Macro(_, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
@@ -253,8 +253,8 @@ impl RynaContext {
             RynaExpr::UnaryOperation(_, _, _, e) |
             RynaExpr::Return(_, e) |
             RynaExpr::AttributeAccess(_, e, _) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.strength_reduction_expr(e),
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) => self.strength_reduction_expr(e),
 
             RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.strength_reduction_expr(a);
@@ -501,7 +501,7 @@ impl RynaContext {
             
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
             RynaExpr::Macro(_, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
@@ -527,12 +527,12 @@ impl RynaContext {
 
     pub fn max_variable(expr: &RynaExpr, offset: &mut usize) {
         match expr {
-            RynaExpr::Variable(_, id, _, _) => {
+            RynaExpr::Variable(_, id, _, _, _) => {
                 *offset = (*offset).max(*id);
             },
 
-            RynaExpr::CompiledVariableDefinition(_, id, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
+            RynaExpr::CompiledVariableDefinition(_, id, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, id, _, _, e, _) => {
                 *offset = (*offset).max(*id);
                 RynaContext::max_variable(e, offset)
             },
@@ -628,13 +628,18 @@ impl RynaContext {
 
     pub fn offset_variables(expr: &mut RynaExpr, offset: usize) {
         match expr {
-            RynaExpr::Variable(_, id, _, _) => {
-                *id += offset;
+            RynaExpr::Variable(_, id, _, _, g) => {
+                if !*g {
+                    *id += offset;                    
+                }
             },
 
-            RynaExpr::CompiledVariableDefinition(_, id, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, id, _, _, e) => {
-                *id += offset;
+            RynaExpr::CompiledVariableDefinition(_, id, _, _, e, g) |
+            RynaExpr::CompiledVariableAssignment(_, id, _, _, e, g) => {
+                if !*g {
+                    *id += offset;
+                }
+
                 RynaContext::offset_variables(e, offset)
             },
 
@@ -754,7 +759,8 @@ impl RynaContext {
                 idx + *var_offset + 1,
                 format!("__arg_{}__", idx + *var_offset + 1),
                 self.infer_type(&arg).unwrap(),
-                Box::new(arg)
+                Box::new(arg),
+                false
             ))
         }
 
@@ -775,8 +781,8 @@ impl RynaContext {
         match expr {
             RynaExpr::Return(_, e) |
             RynaExpr::AttributeAccess(_, e, _) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) => self.inline_functions_expr(e, offset),
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) => self.inline_functions_expr(e, offset),
 
             RynaExpr::AttributeAssignment(_, a, b, _) => {
                 self.inline_functions_expr(a, offset);
@@ -908,6 +914,11 @@ impl RynaContext {
 
             RynaExpr::FunctionCall(l, id, t, args) => {
                 self.inline_functions(args, offset);
+                
+                // Do not inline destructor calls
+                if self.is_dtor_id(*id) {
+                    return;
+                }
 
                 let arg_types = Type::And(args.iter().map(|i| self.infer_type(i).unwrap()).collect());
                 let templates = Type::And(t.clone());
@@ -965,7 +976,7 @@ impl RynaContext {
             
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
             RynaExpr::Macro(_, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
@@ -1014,7 +1025,7 @@ impl RynaContext {
 
         match expr {
             RynaExpr::Literal(..) => true,
-            RynaExpr::Variable(_, id, _, _) => *consts.get(id).unwrap_or(&false),
+            RynaExpr::Variable(_, id, _, _, g) => !g && *consts.get(id).unwrap_or(&false), // Assume globals are not constant
 
             RynaExpr::UnaryOperation(_, id, _, e) => {
                 CONST_UNOP_IDS.contains(id) && self.is_constant_expr(e, consts) && is_num!(e)
@@ -1039,7 +1050,7 @@ impl RynaContext {
     pub fn compute_constant_expr(expr: &RynaExpr, const_exprs: &FxHashMap<usize, RynaExpr>) -> Object {
         match expr {
             RynaExpr::Literal(_, obj) => obj.clone(),
-            RynaExpr::Variable(_, id, _, _) => RynaContext::compute_constant_expr(const_exprs.get(id).unwrap(), const_exprs),
+            RynaExpr::Variable(_, id, _, _, _) => RynaContext::compute_constant_expr(const_exprs.get(id).unwrap(), const_exprs),
 
             RynaExpr::UnaryOperation(_, id, _, e) => {
                 let inner = RynaContext::compute_constant_expr(e, const_exprs);
@@ -1125,13 +1136,13 @@ impl RynaContext {
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e)  => self.get_constants(e, consts, const_exprs),
             
-            RynaExpr::CompiledVariableDefinition(_, id, _, _, e) => { 
-                if self.is_constant_expr(e, consts) {
+            RynaExpr::CompiledVariableDefinition(_, id, _, _, e, g) => { 
+                if !g && self.is_constant_expr(e, consts) { // Globals are not constant
                     consts.insert(*id, true);
                     const_exprs.insert(*id, RynaExpr::Literal(Location::none(), RynaContext::compute_constant_expr(e, const_exprs)));    
                 }
             },
-            RynaExpr::CompiledVariableAssignment(_, id, _, _, _) => { consts.insert(*id, false); },
+            RynaExpr::CompiledVariableAssignment(_, id, _, _, _, _) => { consts.insert(*id, false); },
 
             RynaExpr::DoBlock(_, exprs, _) |
             RynaExpr::FunctionCall(_, _, _, exprs) |
@@ -1187,7 +1198,7 @@ impl RynaContext {
             },
             
             RynaExpr::CompiledLambda(_, _, _, _, _, _) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
@@ -1211,8 +1222,8 @@ impl RynaContext {
     
     fn sub_variables(&self, expr: &mut RynaExpr, assigned_exprs: &mut FxHashMap<usize, RynaExpr>) {
         match expr {
-            RynaExpr::Variable(l, id, _, _) => {
-                if assigned_exprs.contains_key(id) {
+            RynaExpr::Variable(l, id, _, _, g) => {
+                if !*g && assigned_exprs.contains_key(id) { // Do not subtitute globals
                     let mut_id = self.get_function_id("mut".into()).unwrap();
                     let const_expr = assigned_exprs[id].clone();
                     let t = self.infer_type(&const_expr).unwrap();
@@ -1224,8 +1235,8 @@ impl RynaContext {
                 }
             }
 
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e)  => self.sub_variables(e, assigned_exprs),
 
@@ -1331,7 +1342,7 @@ impl RynaContext {
 
     fn remove_assignments(&self, exprs: &mut Vec<RynaExpr>, assigned_exprs: &mut FxHashMap<usize, RynaExpr>) {
         fn filter_assignments(exprs: &mut Vec<RynaExpr>, assigned_exprs: &mut FxHashMap<usize, RynaExpr>) {
-            exprs.retain(|i| !matches!(i, RynaExpr::CompiledVariableDefinition(_, id, _, _, _) if assigned_exprs.contains_key(id)));
+            exprs.retain(|i| !matches!(i, RynaExpr::CompiledVariableDefinition(_, id, _, _, _, _) if assigned_exprs.contains_key(id)));
         }
 
         filter_assignments(exprs, assigned_exprs);
@@ -1343,8 +1354,8 @@ impl RynaContext {
 
     fn remove_assignments_expr(&self, expr: &mut RynaExpr, assigned_exprs: &mut FxHashMap<usize, RynaExpr>) {
         match expr {
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, e) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, e) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, e, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, e, _) |
             RynaExpr::UnaryOperation(_, _, _, e) |
             RynaExpr::AttributeAccess(_, e, _) |
             RynaExpr::Return(_, e)  => self.remove_assignments_expr(e, assigned_exprs),
@@ -1385,7 +1396,7 @@ impl RynaContext {
             },
 
             RynaExpr::CompiledLambda(_, _, _, _, _, _) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
@@ -1456,6 +1467,7 @@ fn compute_labels(program: &mut [RynaInstruction]) {
     for (idx, i) in program.iter_mut().enumerate() {
         match &mut i.instruction {
             CompiledRynaExpr::Lambda(to, _, _, _) |
+            CompiledRynaExpr::CallDestructor(to) |
             CompiledRynaExpr::Call(to) |
             CompiledRynaExpr::Jump(to) => {
                 if !labels.contains_key(to) {
@@ -1522,6 +1534,7 @@ fn reassign_labels(program: &mut [RynaInstruction]) {
         match &mut i.instruction {
             CompiledRynaExpr::Lambda(to, _, _, _) |
             CompiledRynaExpr::Call(to) |
+            CompiledRynaExpr::CallDestructor(to) |
             CompiledRynaExpr::Jump(to) => {
                 *to = positions[to];
             },
@@ -1619,20 +1632,20 @@ impl RynaContext {
                         change_first!(BinaryOperatorCallNoRet(*op_id, *ov_id, type_args.clone()));
                     }
 
-                    [Int(obj), StoreVariable(id)] => { change_second!(StoreIntVariable(*id, obj.clone())); },
-                    [Str(obj), StoreVariable(id)] => { change_second!(StoreStringVariable(*id, obj.clone())); },
-                    [Float(obj), StoreVariable(id)] => { change_second!(StoreFloatVariable(*id, *obj)); },
-                    [Bool(obj), StoreVariable(id)] => { change_second!(StoreBoolVariable(*id, *obj)); },
+                    [Int(obj), StoreVariable(id, g)] => { change_second!(StoreIntVariable(*id, *g, obj.clone())); },
+                    [Str(obj), StoreVariable(id, g)] => { change_second!(StoreStringVariable(*id, *g, obj.clone())); },
+                    [Float(obj), StoreVariable(id, g)] => { change_second!(StoreFloatVariable(*id, *g, *obj)); },
+                    [Bool(obj), StoreVariable(id, g)] => { change_second!(StoreBoolVariable(*id, *g, *obj)); },
 
-                    [GetVariable(id) | CloneVariable(id), Assign] if is_not_ref!(i) => { change_first!(AssignToVar(*id)); },
-                    [GetVariable(id) | CloneVariable(id), Assign] => { change_first!(AssignToVarDirect(*id)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Assign] if is_not_ref!(i) => { change_first!(AssignToVar(*id, *g)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Assign] => { change_first!(AssignToVarDirect(*id, *g)); },
 
-                    [GetVariable(id) | CloneVariable(id), Demut] => { change_first!(RefVariable(*id)); },
-                    [GetVariable(id) | CloneVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
-                    [RefVariable(id), Copy] => { change_first!(CopyVariable(*id)); },
-                    [GetVariable(id) | CloneVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
-                    [RefVariable(id), Deref] => { change_first!(DerefVariable(*id)); },
-                    [GetVariable(id) | CloneVariable(id), Move] => { change_first!(MoveVariable(*id)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Demut] => { change_first!(RefVariable(*id, *g)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Copy] => { change_first!(CopyVariable(*id, *g)); },
+                    [RefVariable(id, g), Copy] => { change_first!(CopyVariable(*id, *g)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Deref] => { change_first!(DerefVariable(*id, *g)); },
+                    [RefVariable(id, g), Deref] => { change_first!(DerefVariable(*id, *g)); },
+                    [GetVariable(id, g) | CloneVariable(id, g), Move] => { change_first!(MoveVariable(*id, *g)); },
                     
                     [AttributeMut(id), Demut] => { change_first!(AttributeRef(*id)); },
                     [AttributeMut(id), Copy] => { change_first!(AttributeCopy(*id)); },
@@ -1673,7 +1686,7 @@ impl RynaContext {
                     [Or, Not] => { change_first!(Nor); },
 
                     // Flow optimizations
-                    [StoreVariable(id_1), MoveVariable(id_2)] if id_1 == id_2 && is_not_ref!(i) => { remove_both!(); },
+                    [StoreVariable(id_1, g_1), MoveVariable(id_2, g_2)] if id_1 == id_2 && g_1 == g_2 && is_not_ref!(i) => { remove_both!(); },
 
                     _ => {}
                 }

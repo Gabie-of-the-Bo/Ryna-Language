@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use colored::Colorize;
+use rustc_hash::FxHashSet;
 use serde::{Serialize, Deserialize};
 use malachite::Integer;
 
@@ -47,6 +48,48 @@ impl TypeTemplate {
 
     pub fn is_structural(&self) -> bool {
         self.alias.is_some()
+    }
+
+    pub fn needs_destructor(&self, templates: &[Type], ctx: &RynaContext) -> bool {
+        match self.id {
+            INT_ID |
+            FLOAT_ID |
+            STR_ID |
+            BOOL_ID |
+            FILE_ID |
+            PTR_ID |
+            LIB_ID |
+            LIB_FUNC_ID => false,
+
+            _ => {
+                // Check if the attributes have destructors
+                let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
+                let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
+
+                sub_attrs.iter().any(|i| i.needs_destructor(ctx))
+            }
+        }
+    }
+
+    pub fn destructor_dependencies(&self, templates: &[Type], ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+        match self.id {
+            INT_ID |
+            FLOAT_ID |
+            STR_ID |
+            BOOL_ID |
+            FILE_ID |
+            PTR_ID |
+            LIB_ID |
+            LIB_FUNC_ID => { },
+
+            _ => {
+                // Else, add the attributes' dependencies
+                let subs = templates.iter().cloned().enumerate().collect::<HashMap<_, _>>();
+                let sub_attrs = self.attributes.iter().map(|t| t.1.sub_templates(&subs)).collect::<Vec<_>>();
+
+                sub_attrs.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set));
+            }
+        }
     }
 }
 
@@ -110,6 +153,20 @@ impl PartialEq for Type {
 impl Eq for Type {}
 
 impl Type {
+    pub fn is_const_ref(&self) -> bool {
+        matches!(
+            self,
+            Type::Ref(_)
+        )
+    }
+
+    pub fn is_mut_ref(&self) -> bool {
+        matches!(
+            self,
+            Type::MutRef(_)
+        )
+    }
+
     pub fn is_ref(&self) -> bool {
         matches!(
             self,
@@ -136,6 +193,99 @@ impl Type {
         }
     }
 
+    pub fn needs_destructor_rec(&self, ctx: &RynaContext, check_self: bool) -> bool {
+        // The type must implement the destroyable interface
+        if *self.deref_type() != Type::Wildcard && check_self && ctx.implements_destroyable(self) {
+            return true;
+        }
+
+        match self {
+            Type::Empty |
+            Type::InferenceMarker |
+            Type::SelfType |
+            Type::Wildcard |
+            Type::TemplateParam(..) |
+            Type::TemplateParamStr(..) => false,
+
+            Type::Ref(t) |
+            Type::MutRef(t) => t.needs_destructor_rec(ctx, true),
+
+            Type::Or(vec) |
+            Type::And(vec) => vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
+
+            Type::Basic(id) => ctx.type_templates[*id].needs_destructor(&[], ctx),
+
+            Type::Template(ARR_ID, vec) |
+            Type::Template(ARR_IT_ID, vec) => vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
+
+            Type::Template(id, vec) => ctx.type_templates[*id].needs_destructor(vec, ctx) || vec.iter().any(|i| i.needs_destructor_rec(ctx, true)),
+
+            Type::Function(a, b) => a.needs_destructor_rec(ctx, true) || b.needs_destructor_rec(ctx, true),
+        }
+    }
+
+    pub fn needs_destructor(&self, ctx: &RynaContext) -> bool {
+        self.needs_destructor_rec(ctx, true)
+    }
+
+    // A type that needs a generated destructor cannot implement Destroyable
+    pub fn cannot_have_destructor(&self, ctx: &RynaContext) -> bool {
+        self.needs_destructor_rec(ctx, false)
+    }
+
+    // A type that implements Destroyable but it must not
+    pub fn has_invalid_destructor(&self, ctx: &RynaContext) -> bool {
+        self.cannot_have_destructor(ctx) && ctx.implements_destroyable(self)
+    }
+
+    pub fn destructor_dependencies_rec(&self, ctx: &RynaContext, set: &mut FxHashSet<Type>) {
+        // Add this type if it needs a destructor
+        if self.needs_destructor(ctx) {
+            set.insert(self.clone());
+        }
+
+        match self {
+            Type::Empty |
+            Type::InferenceMarker |
+            Type::SelfType |
+            Type::Wildcard |
+            Type::TemplateParam(..) |
+            Type::TemplateParamStr(..) => { },
+
+            Type::Ref(t) |
+            Type::MutRef(t) => t.destructor_dependencies_rec(ctx, set),
+
+            Type::Or(vec) |
+            Type::And(vec) => vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set)),
+
+            Type::Basic(id) => ctx.type_templates[*id].destructor_dependencies(&[], ctx, set),
+
+            Type::Template(ARR_IT_ID, vec) => {
+                ctx.type_templates[ARR_IT_ID].destructor_dependencies(&vec, ctx, set);                 
+                ctx.type_templates[ARR_ID].destructor_dependencies(&[vec[0].clone()], ctx, set);                 
+            },
+
+            Type::Template(id, vec) => {
+                ctx.type_templates[*id].destructor_dependencies(vec, ctx, set); 
+                vec.iter().for_each(|i| i.destructor_dependencies_rec(ctx, set));
+            },
+
+            Type::Function(a, b) => {
+                a.destructor_dependencies_rec(ctx, set);
+                b.destructor_dependencies_rec(ctx, set);
+            },
+        }
+    }
+
+    pub fn destructor_dependencies(&self, ctx: &RynaContext) -> FxHashSet<Type> {
+        let mut res = FxHashSet::default();
+
+        self.destructor_dependencies_rec(ctx, &mut res);
+        res.remove(self);
+
+        res
+    }
+
     pub fn get_name(&self, ctx: &RynaContext) -> String {
         return match self {
             Type::Empty => "()".into(),
@@ -143,8 +293,30 @@ impl Type {
             Type::InferenceMarker => "[Inferred]".into(),
 
             Type::Basic(id) => ctx.type_templates[*id].name.clone().cyan().to_string(),
-            Type::Ref(t) => format!("{}{}", "&".magenta(), t.get_name(ctx)),
-            Type::MutRef(t) => format!("{}{}", "@".magenta(), t.get_name(ctx)),
+            Type::Ref(t) => {
+                let needs_parens = matches!(**t, Type::Or(_) | Type::Function(..));
+
+                format!(
+                    "{}{}{}{}", 
+                    "&".magenta(), 
+                    if needs_parens { "(" } else { "" },
+                    t.get_name(ctx),
+                    if needs_parens { ")" } else { "" }
+                )
+            },
+
+            Type::MutRef(t) => {
+                let needs_parens = matches!(**t, Type::Or(_) | Type::Function(..));
+
+                format!(
+                    "{}{}{}{}", 
+                    "@".magenta(), 
+                    if needs_parens { "(" } else { "" },
+                    t.get_name(ctx),
+                    if needs_parens { ")" } else { "" }
+                )
+            },
+
             Type::Or(v) => v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(" | "),
             Type::And(v) => format!("({})", v.iter().map(|i| i.get_name(ctx)).collect::<Vec<_>>().join(", ")),
 
@@ -747,18 +919,24 @@ pub const BOOL_ID: usize = 3;
 pub const ARR_ID: usize = 4;
 pub const ARR_IT_ID: usize = 5;
 pub const FILE_ID: usize = 6;
+pub const PTR_ID: usize = 7;
+pub const LIB_ID: usize = 8;
+pub const LIB_FUNC_ID: usize = 9;
 
 pub const INT: Type = Type::Basic(INT_ID);
 pub const FLOAT: Type = Type::Basic(FLOAT_ID);
 pub const STR: Type = Type::Basic(STR_ID);
 pub const BOOL: Type = Type::Basic(BOOL_ID);
 pub const FILE: Type = Type::Basic(FILE_ID);
+pub const PTR: Type = Type::Basic(PTR_ID);
+pub const LIB: Type = Type::Basic(LIB_ID);
+pub const LIB_FUNC: Type = Type::Basic(LIB_FUNC_ID);
 
 #[macro_export]
 macro_rules! ARR_OF { ($t: expr) => { Type::Template($crate::types::ARR_ID, vec!($t)) }; }
 
 #[macro_export]
-macro_rules! ARR_IT_OF { ($t: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t)) }; }
+macro_rules! ARR_IT_OF { ($t: expr, $t2: expr) => { Type::Template($crate::types::ARR_IT_ID, vec!($t, $t2)) }; }
 
 pub const T_0: Type = Type::TemplateParam(0, vec!());
 pub const T_1: Type = Type::TemplateParam(1, vec!());
@@ -780,9 +958,14 @@ pub fn standard_types(ctx: &mut RynaContext) {
     )).unwrap();
 
     ctx.define_type(Location::none(), vec!(), "Array".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
-    ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into()), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "ArrayIterator".into(), vec!("Inner".into(), "Elem".into()), vec!(), None, vec!(), None).unwrap();
 
     ctx.define_type(Location::none(), vec!(), "File".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    
+    ctx.define_type(Location::none(), vec!(), "Pointer".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+
+    ctx.define_type(Location::none(), vec!(), "Library".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+    ctx.define_type(Location::none(), vec!(), "LibraryFunction".into(), vec!(), vec!(), None, vec!(), None).unwrap();
 }
 
 /*
@@ -793,7 +976,7 @@ pub fn standard_types(ctx: &mut RynaContext) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{types::*, context::standard_ctx};
+    use crate::{context::standard_ctx, types::*};
 
     #[test]
     fn basic_type_binding() {
@@ -1135,5 +1318,134 @@ mod tests {
         assert!(tuple_5.bindable_to(&list, &ctx));
         assert!(!tuple_6.bindable_to(&list, &ctx));
         assert!(!tuple_7.bindable_to(&list, &ctx));
+    }
+
+    #[test]
+    fn destructor_dependencies() {
+        let mut ctx = standard_ctx();
+
+        ctx.define_type(Location::none(), vec!(), "Test1".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test2".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        
+        let test_1_id = ctx.get_type_id("Test1".into()).unwrap();
+        let test_2_id = ctx.get_type_id("Test2".into()).unwrap();
+
+        let test_1 = Type::Basic(test_1_id);
+        let test_2 = Type::Basic(test_2_id);
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_2.clone(), vec!()).unwrap();
+
+        assert!(!test_1.needs_destructor(&ctx));
+        assert!(test_2.needs_destructor(&ctx));
+        assert!(test_1.destructor_dependencies(&ctx).is_empty());
+        assert!(test_2.destructor_dependencies(&ctx).is_empty());
+
+        let arr_1 = ARR_OF!(test_1.clone());
+        let arr_2 = ARR_OF!(test_2.clone());
+
+        assert!(!arr_1.needs_destructor(&ctx));
+        assert!(arr_2.needs_destructor(&ctx));
+        assert!(arr_1.destructor_dependencies(&ctx).is_empty());
+        assert_eq!(
+            arr_2.destructor_dependencies(&ctx),
+            [
+                test_2.clone()
+            ].iter().cloned().collect::<FxHashSet<Type>>()
+        );
+
+        let arr_arr_1 = ARR_OF!(ARR_OF!(test_1.clone()));
+        let arr_arr_2 = ARR_OF!(ARR_OF!(test_2.clone()));
+
+        assert!(!arr_arr_1.needs_destructor(&ctx));
+        assert!(arr_arr_2.needs_destructor(&ctx));
+        assert!(arr_arr_1.destructor_dependencies(&ctx).is_empty());
+        assert_eq!(
+            arr_arr_2.destructor_dependencies(&ctx),
+            [
+                ARR_OF!(test_2.clone()),
+                test_2.clone()
+            ].iter().cloned().collect::<FxHashSet<Type>>()
+        );
+    }
+
+    #[test]
+    fn destructor_checking() {
+        let mut ctx = standard_ctx();
+
+        ctx.define_type(Location::none(), vec!(), "Test1".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test2".into(), vec!(), vec!(), None, vec!(), None).unwrap();
+        
+        let test_1_id = ctx.get_type_id("Test1".into()).unwrap();
+        let test_2_id = ctx.get_type_id("Test2".into()).unwrap();
+
+        let test_1 = Type::Basic(test_1_id);
+        let test_2 = Type::Basic(test_2_id);
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_2.clone(), vec!()).unwrap();
+
+        assert!(!test_1.needs_destructor(&ctx));
+        assert!(test_2.needs_destructor(&ctx));
+        assert!(!test_1.cannot_have_destructor(&ctx));
+        assert!(!test_2.cannot_have_destructor(&ctx));
+        assert!(!ARR_OF!(test_1.clone()).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_2.clone()).needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_1.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_2.clone()).cannot_have_destructor(&ctx));
+
+        ctx.define_type(Location::none(), vec!(), "Test3".into(), vec!(), vec!(("".into(), test_1.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test4".into(), vec!(), vec!(("".into(), test_2.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test5".into(), vec!(), vec!(
+            ("".into(), test_1.clone()),
+            ("".into(), test_2.clone()),
+        ), None, vec!(), None).unwrap();
+
+        let test_3_id = ctx.get_type_id("Test3".into()).unwrap();
+        let test_4_id = ctx.get_type_id("Test4".into()).unwrap();
+        let test_5_id = ctx.get_type_id("Test5".into()).unwrap();
+
+        let test_3 = Type::Basic(test_3_id);
+        let test_4 = Type::Basic(test_4_id);
+        let test_5 = Type::Basic(test_5_id);
+
+        assert!(!test_3.needs_destructor(&ctx));
+        assert!(test_4.needs_destructor(&ctx));
+        assert!(test_5.needs_destructor(&ctx));
+        assert!(test_5.cannot_have_destructor(&ctx));
+        assert!(!ARR_OF!(test_3.clone()).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_4.clone()).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_5.clone()).needs_destructor(&ctx));
+        assert!(!ARR_OF!(test_3.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_4.clone()).cannot_have_destructor(&ctx));
+        assert!(ARR_OF!(test_5.clone()).cannot_have_destructor(&ctx));
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), test_3.clone(), vec!()).unwrap();
+
+        assert!(test_3.needs_destructor(&ctx));
+        assert!(ARR_OF!(test_3).needs_destructor(&ctx));
+
+        ctx.define_type(Location::none(), vec!(), "Test6".into(), vec!(), vec!(("".into(), test_5.clone())), None, vec!(), None).unwrap();
+        ctx.define_type(Location::none(), vec!(), "Test7".into(), vec!("T".into(), "G".into()), vec!(
+            ("".into(), ARR_OF!(T_0)),
+            ("".into(), ARR_OF!(T_1))
+        ), None, vec!(), None).unwrap();
+
+        let test_6_id = ctx.get_type_id("Test6".into()).unwrap();
+        let test_7_id = ctx.get_type_id("Test7".into()).unwrap();
+
+        let test_6 = Type::Basic(test_6_id);
+
+        assert!(test_6.needs_destructor(&ctx));
+        assert!(!Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).needs_destructor(&ctx));
+        assert!(Type::Template(test_7_id, vec!(test_1.clone(), test_5.clone())).needs_destructor(&ctx));
+        assert!(ARR_OF!(test_6).needs_destructor(&ctx));
+        assert!(!ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone()))).needs_destructor(&ctx));
+        assert!(ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_5.clone()))).needs_destructor(&ctx));
+
+        ctx.define_interface_impl("Destroyable".into(), vec!(), Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).clone(), vec!()).unwrap();
+
+        assert!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone())).needs_destructor(&ctx));
+        assert!(!Type::Template(test_7_id, vec!(test_1.clone(), INT)).needs_destructor(&ctx));
+        assert!(ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), test_1.clone()))).needs_destructor(&ctx));
+        assert!(!ARR_OF!(Type::Template(test_7_id, vec!(test_1.clone(), INT))).needs_destructor(&ctx));
     }
 } 

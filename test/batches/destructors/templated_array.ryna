@@ -1,0 +1,18 @@
+/// obj1 obj2 obj3
+
+class Test2<T> {
+    name: String;
+    inner: 'T;
+}
+
+fn<T> destroy(obj: &Test2<'T>) {
+    emit(obj.name.deref());
+    emit(" ");
+}
+
+implement<T> Destroyable for Test2<'T>;
+
+let a = arr<Test2<String>>();
+a.push(Test2<String>("obj1", "test"));
+a.push(Test2<String>("obj2", "test"));
+a.push(Test2<String>("obj3", "test"));

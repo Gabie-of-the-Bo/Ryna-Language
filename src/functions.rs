@@ -3,6 +3,7 @@ use std::io::Write;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use libloading::Library;
 use rand::Rng;
 use seq_macro::seq;
 use malachite::Integer;
@@ -251,9 +252,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0).to_mut()], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |t, _, v, _| {
             return Ok(Object::arr_it(
+                t[0].clone(),
                 Type::MutRef(Box::new(t[0].clone())), 
                 v[0].inner.borrow().dereference().clone(), 
                 0
@@ -265,9 +267,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0).to_ref()], 
-        ARR_IT_OF!(T_0.to_ref()), 
+        ARR_IT_OF!(T_0, T_0.to_ref()), 
         |t, _, v, _| {
             return Ok(Object::arr_it(
+                t[0].clone(),
                 Type::Ref(Box::new(t[0].clone())), 
                 v[0].inner.borrow().dereference().clone(), 
                 0
@@ -279,9 +282,10 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         idx, 
         1,
         &[ARR_OF!(T_0)], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |t, _, v, _| {
             Ok(Object::arr_it(
+                t[0].clone(), 
                 Type::MutRef(Box::new(t[0].clone())), 
                 v[0].inner.clone(), 
                 0
@@ -292,16 +296,16 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_mut())], 
-        ARR_IT_OF!(T_0.to_mut()), 
+        &[ARR_IT_OF!(T_0, T_0.to_mut())], 
+        ARR_IT_OF!(T_0, T_0.to_mut()), 
         |_, _, mut v, _| Ok(v.pop().unwrap())
     ).unwrap();
 
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_ref())], 
-        ARR_IT_OF!(T_0.to_ref()), 
+        &[ARR_IT_OF!(T_0, T_0.to_ref())], 
+        ARR_IT_OF!(T_0, T_0.to_ref()), 
         |_, _, mut v, _| Ok(v.pop().unwrap())
     ).unwrap();
 
@@ -310,7 +314,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_mut())))], 
+        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0, T_0.to_mut())))], 
         T_0.to_mut(), 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -331,7 +335,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0.to_ref())))], 
+        &[Type::MutRef(Box::new(ARR_IT_OF!(T_0, T_0.to_ref())))], 
         T_0.to_ref(), 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -354,7 +358,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_mut()).to_mut()], 
+        &[ARR_IT_OF!(T_0, T_0.to_mut()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
@@ -366,12 +370,38 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     ctx.define_native_function_overload(
         idx, 
         1,
-        &[ARR_IT_OF!(T_0.to_ref()).to_mut()], 
+        &[ARR_IT_OF!(T_0, T_0.to_ref()).to_mut()], 
         BOOL, 
         |_, _, v, _| {
             let iterator = v[0].deref::<RynaArrayIt>();
 
             return Ok(Object::new(iterator.pos >= iterator.block.borrow().get_inner::<RynaArray>().elements.len()));
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("$container".into()).unwrap();
+
+    ctx.define_native_function_overload( // this is safe, but non-accesible by normal means
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0, Type::Wildcard).to_mut()], 
+        ARR_OF!(T_0).to_ref(), 
+        |_, _, v, _| {
+            let iterator = v[0].deref::<RynaArrayIt>();
+
+            return Ok(iterator.get_container_ref());
+        }
+    ).unwrap();
+
+    ctx.define_native_function_overload( // this is safe, but non-accesible by normal means
+        idx, 
+        1,
+        &[ARR_IT_OF!(T_0, Type::Wildcard).to_ref()], 
+        ARR_OF!(T_0).to_ref(), 
+        |_, _, v, _| {
+            let iterator = v[0].deref::<RynaArrayIt>();
+
+            return Ok(iterator.get_container_ref());
         }
     ).unwrap();
 
@@ -539,10 +569,59 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         }
     ).unwrap();
 
+    let idx = ctx.define_function("$unsafe_as".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[Type::Wildcard], 
+        T_0, 
+        |_, _, mut v, _| {
+            let obj = v.pop().unwrap();
+
+            Ok(obj.unsafe_move_contents().get_ref())
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("drop".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 
         v.pop().unwrap().drop_contents();
+        Ok(Object::empty())
+    }).unwrap();
+
+    let idx = ctx.define_function("$drop_unsafe".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(
+        idx, 
+        0,
+        &[ARR_OF!(Type::Wildcard).to_ref(), INT], 
+        Type::Empty, 
+        |_, _, v, _| {
+            let array = v[0].deref::<RynaArray>();
+            let idx = v[1].get::<Integer>();
+
+            if !is_valid_index(idx) {
+                return Err(format!("{} is not a valid index", idx));
+            
+            } else if array.elements.len() <= to_usize(idx) {
+                return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
+            }
+            
+            array.elements[to_usize(idx)] = Object::no_value();
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("$drop_attr_unsafe".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(idx, 0, &[Type::Wildcard.to_ref(), INT], Type::Empty, |_, _, v, _| {
+        let obj = v[0].deref::<TypeInstance>();
+        let attr = v[1].get::<Integer>();
+
+        obj.attributes[to_usize(attr)] = Object::no_value();
+
         Ok(Object::empty())
     }).unwrap();
 
@@ -1026,8 +1105,119 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
 
+    let idx = ctx.define_function("write_ptr_int".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, INT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<Integer>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut i64).offset(to_i64(offset) as isize), to_i64(value)) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("write_ptr_float".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, FLOAT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<f64>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut f64).offset(to_i64(offset) as isize), *value) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("load_library".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[STR], 
+        LIB,
+        |_, _, v, _| {
+            let path = v[0].get::<String>();
+            let lib = unsafe { Library::new(&path) };
+
+            match lib {
+                Ok(l) => {
+                    Ok(Object::new(RynaLibrary::new(path, l)))
+                },
+                Err(_) => Err(format!("Unable to load library at {path}")),
+            }
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("get_function".into()).unwrap();
+
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[LIB.to_ref(), STR], 
+        LIB_FUNC,
+        |_, _, v, _| {
+            let lib = v[0].deref::<RynaLibrary>();
+            let name = v[1].get::<String>();
+
+            lib.get_function(name).map(Object::new)
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("call".into()).unwrap();
+
+    for i in 0..20 {
+        let mut args = vec!(LIB_FUNC.to_ref());
+        args.extend(std::iter::repeat(Type::Wildcard).take(i));
+
+        ctx.define_native_function_overload(
+            idx, 
+            0, 
+            &args, 
+            Type::Wildcard,
+            |_, _, v, _| {
+                let func = v[0].deref::<RynaLibraryFunction>();
+                func.call(&v[1..])
+            }
+        ).unwrap();
+    }
+
+    ctx.define_function("destroy".into()).unwrap();
+    ctx.define_function("destroy_or".into()).unwrap();
+
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
+        let idx = ctx.define_function(format!("$drop_{}_unsafe", I)).unwrap(); // this is unsafe and non-accesible by normal means
+
+        seq!(J in 2..10 {
+            let ts = Type::And((0..J).map(|i| Type::TemplateParam(i, vec!())).collect());
+
+            ctx.define_native_function_overload(
+                idx, 
+                J,
+                &[ts.to_ref()], 
+                Type::Empty, 
+                |_, _, v, _| {
+                    let tuple = v[0].deref::<RynaTuple>();
+                    tuple.elements[I] = Object::no_value();
+                                    
+                    Ok(Object::empty())
+                }
+            ).unwrap();            
+        });
+
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();
 
         seq!(J in 2..10 {

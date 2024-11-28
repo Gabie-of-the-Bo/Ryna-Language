@@ -12,7 +12,8 @@ ryna install <REPO_URL> <PACK_NAME>
 ```
 
 This will clone the repository inside the configured modules folder. We assume that you have already executed `ryna setup` 
-before and completed the wizard.
+before and completed the wizard. If the library contains a build script, you will be asked if you want to run it automatically. Please, be aware
+that you should only execute build scripts from **trusted sources**, since they may contain arbitrary commands.
 
 ## Uninstalling *library packs*
 

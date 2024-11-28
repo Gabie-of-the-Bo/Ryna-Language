@@ -86,3 +86,13 @@ fn<T> count(array: &Array<'T>, elem: &'T) -> Int {
     return res.deref();
 }
 ```
+
+As a final touch, note that functions and operations can access **global variables**:
+
+```
+let global_var = 5;
+
+fn double_global() -> Int {
+    return global_var * 2;
+}
+```

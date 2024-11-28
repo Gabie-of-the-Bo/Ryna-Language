@@ -222,3 +222,43 @@
         </tr>
     </tbody>
 </table>
+
+### write_ptr_int
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>write_ptr_int(ptr: Pointer, offset: Int, value: Int)</code> </td>
+            <td rowspan="1" style="width: 40%;">
+                Writes an int (64 bits) to <code>ptr</code> with offset <code>value</code> (1 is 64 bits). Take into account that this function is <b>unsafe</b>
+                and assumes that you allocated the memory using a native function
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+### write_ptr_float
+
+<table>
+    <thead>
+        <tr>
+            <th>Overload</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan="1"> <code>write_ptr_float(ptr: Pointer, offset: Int, value: Float)</code> </td>
+            <td rowspan="1" style="width: 40%;">
+                Writes a double (64 bits) to <code>ptr</code> with offset <code>value</code> (1 is 64 bits). Take into account that this function is <b>unsafe</b>
+                and assumes that you allocated the memory using a native function
+            </td>
+        </tr>
+    </tbody>
+</table>

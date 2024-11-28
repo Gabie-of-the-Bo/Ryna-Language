@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use colored::Colorize;
 
 use crate::compilation::RynaError;
 use crate::context::RynaContext;
+use crate::interfaces::InterfaceConstraint;
 use crate::interfaces::ITERABLE_ID;
 use crate::parser::Location;
 use crate::parser::RynaExpr;
@@ -270,6 +273,12 @@ impl RynaContext {
         self.get_first_function_overload(NEXT_FUNC_ID, vec!(it_mut.clone()), None, true, l)
     }
 
+    pub fn implements_destroyable(&self, t: &Type) -> bool {
+        let dint_id = self.get_interface_id("Destroyable".into()).unwrap();
+
+        self.implements_interface(t, &InterfaceConstraint::new(dint_id, vec!()), &mut HashMap::new(), &mut HashMap::new())
+    }
+
     pub fn infer_type(&self, expr: &RynaExpr) -> Result<Type, RynaError> {
         return match expr {
             RynaExpr::Literal(_, obj) => Ok(obj.get_type()),
@@ -330,7 +339,7 @@ impl RynaContext {
                 Ok(Type::And(args))
             },
 
-            RynaExpr::Variable(_, _, _, t) => {
+            RynaExpr::Variable(_, _, _, t, _) => {
                 match t {
                     Type::Ref(_) | Type::MutRef(_) => Ok(t.clone()),
                     t => Ok(Type::MutRef(Box::new(t.clone())))
@@ -440,8 +449,8 @@ impl RynaContext {
 
             RynaExpr::QualifiedName(l, _, _) |
             RynaExpr::AttributeAssignment(l, _, _, _) |
-            RynaExpr::CompiledVariableDefinition(l, _, _, _, _) |
-            RynaExpr::CompiledVariableAssignment(l, _, _, _, _) |
+            RynaExpr::CompiledVariableDefinition(l, _, _, _, _, _) |
+            RynaExpr::CompiledVariableAssignment(l, _, _, _, _, _) |
             RynaExpr::CompiledFor(l, _, _, _, _, _) |
             RynaExpr::Macro(l, _, _, _, _, _) |
             RynaExpr::Lambda(l, _, _, _, _) |

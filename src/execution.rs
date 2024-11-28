@@ -17,7 +17,7 @@ use crate::types::Type;
 use crate::object::{RynaArray, RynaLambda, RynaTuple, Object, TypeInstance};
 use crate::context::RynaContext;
 use crate::operations::Operator;
-use crate::compilation::{CompiledRynaExpr, RynaError};
+use crate::compilation::{message_and_exit, CompiledRynaExpr, RynaError};
 
 /*
                                                   ╒══════════════════╕
@@ -78,7 +78,7 @@ impl RynaContext {
                     if optimize {
                         ctx.optimize_instructions(&mut instr);
                     }
-               
+                    
                     if no_macro {
                         let ser_module = ctx.get_serializable_module(combined_hash, &instr);
 
@@ -152,6 +152,12 @@ impl RynaContext {
             () => {
                 unsafe { program.get_unchecked(ip as usize) }
             }
+        }
+
+        macro_rules! curr_offset {
+            ($cond: expr) => {
+                offset * (!$cond as usize) 
+            };
         }
 
         macro_rules! unary_op {
@@ -264,6 +270,20 @@ impl RynaContext {
             }
         }
 
+        macro_rules! get_global_variable {
+            ($id: expr) => {
+                {
+                    let v = get_variable!($id);
+
+                    if v.is_moved() {
+                        message_and_exit("Accessing absent global variable".into());
+                    }
+
+                    v
+                }
+            }
+        }
+
         macro_rules! update_max_var {
             ($id: expr) => {
                 // SAFETY: this is safe because call_stack will never be empty
@@ -296,6 +316,7 @@ impl RynaContext {
         }
 
         call_stack.push((0, 0, -1));
+        update_max_var!(self.num_globals); // Ensure that the first registers are only for globals
 
         loop {
             match fetch_opcode!() {
@@ -438,63 +459,93 @@ impl RynaContext {
                 IdxMut => ryna_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
                 IdxMoveRef => ryna_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
-                StoreIntVariable(id, obj) => ryna_instruction!("StoreIntVariable", {
+                StoreIntVariable(id, g, obj) => ryna_instruction!("StoreIntVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreStringVariable(id, obj) => ryna_instruction!("StoreStringVariable", {
+                StoreStringVariable(id, g, obj) => ryna_instruction!("StoreStringVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreBoolVariable(id, obj) => ryna_instruction!("StoreBoolVariable", {
+                StoreBoolVariable(id, g, obj) => ryna_instruction!("StoreBoolVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
 
-                StoreFloatVariable(id, obj) => ryna_instruction!("StoreFloatVariable", {
+                StoreFloatVariable(id, g, obj) => ryna_instruction!("StoreFloatVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
                 
-                StoreVariable(id) => ryna_instruction!("StoreVariable", {
+                StoreVariable(id, g) => ryna_instruction!("StoreVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, tos!());
+                    store_variable!(*id + curr_offset!(g), tos!());
                     ip += 1;
                 }),
 
-                GetVariable(id) => ryna_instruction!("GetVariable", {
-                    stack.push(get_variable!(*id + offset).get_mut());
+                GetVariable(id, false) => ryna_instruction!("GetVariable", {
+                    stack.push(get_variable!(*id + offset).get_var());
                     ip += 1;
                 }),
 
-                CloneVariable(id) => ryna_instruction!("CloneVariable", {
+                CloneVariable(id, false) => ryna_instruction!("CloneVariable", {
                     stack.push(get_variable!(*id + offset).clone());
                     ip += 1;
                 }),
 
-                RefVariable(id) => ryna_instruction!("RefVariable", {
+                RefVariable(id, false) => ryna_instruction!("RefVariable", {
                     stack.push(get_variable!(*id + offset).get_ref());
                     ip += 1;
                 }),
 
-                DerefVariable(id) => ryna_instruction!("DerefVariable", {
+                DerefVariable(id, false) => ryna_instruction!("DerefVariable", {
                     stack.push(get_variable!(*id + offset).deref_if_ref());
                     ip += 1;
                 }),
 
-                CopyVariable(id) => ryna_instruction!("CopyVariable", {
+                CopyVariable(id, false) => ryna_instruction!("CopyVariable", {
                     stack.push(get_variable!(*id + offset).deref_deep_clone());
                     ip += 1;
                 }),
 
-                MoveVariable(id) => ryna_instruction!("MoveVariable", {
+                MoveVariable(id, false) => ryna_instruction!("MoveVariable", {
                     stack.push(get_variable!(*id + offset).move_contents_if_ref());
+                    ip += 1;
+                }),
+
+                GetVariable(id, true) => ryna_instruction!("GetVariable", {
+                    stack.push(get_global_variable!(*id).get_var());
+                    ip += 1;
+                }),
+
+                CloneVariable(id, true) => ryna_instruction!("CloneVariable", {
+                    stack.push(get_global_variable!(*id).clone());
+                    ip += 1;
+                }),
+
+                RefVariable(id, true) => ryna_instruction!("RefVariable", {
+                    stack.push(get_global_variable!(*id).get_ref());
+                    ip += 1;
+                }),
+
+                DerefVariable(id, true) => ryna_instruction!("DerefVariable", {
+                    stack.push(get_global_variable!(*id).deref_if_ref());
+                    ip += 1;
+                }),
+
+                CopyVariable(id, true) => ryna_instruction!("CopyVariable", {
+                    stack.push(get_global_variable!(*id).deref_deep_clone());
+                    ip += 1;
+                }),
+
+                MoveVariable(id, true) => ryna_instruction!("MoveVariable", {
+                    stack.push(get_global_variable!(*id).move_contents_if_ref());
                     ip += 1;
                 }),
 
@@ -509,8 +560,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVar(id) => ryna_instruction!("AssignToVar", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVar(id, g) => ryna_instruction!("AssignToVar", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign_direct(value, self) {
@@ -520,8 +571,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVarDirect(id) => ryna_instruction!("AssignToVarDirect", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVarDirect(id, g) => ryna_instruction!("AssignToVarDirect", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign(value, self) {
@@ -575,8 +626,23 @@ impl RynaContext {
                 }),
 
                 Call(to) => ryna_instruction!("Call", { add_stack_frame!(*to as i32); }),
+                CallDestructor(to) => ryna_instruction!("CallDestructor", { 
+                    let elem = stack.last().unwrap();
+
+                    if !elem.is_moved() && elem.ref_count() == 1 && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
+                        add_stack_frame!(*to as i32); 
+                    
+                    } else {
+                        ip += 1;
+                    }
+                }),
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
+
+                DeleteVar(var_idx, g) => ryna_instruction!("DeleteVar", { 
+                    self.variables[*var_idx + curr_offset!(g)] = Object::no_value();
+                    ip += 1;                    
+                }),
 
                 Return => ryna_instruction!("Return", {
                     let (prev_ip, prev_offset, _) = call_stack.pop().unwrap();
@@ -917,7 +983,7 @@ mod tests {
             let array: Array<Int> = arr<Int>();
             array.push<Int>(5);
 
-            let iter: ArrayIterator<@Int> = array.iterator<Int>();
+            let iter: ArrayIterator<Int, @Int> = array.iterator<Int>();
             let ended_1: Bool = iter.is_consumed();
             
             let elem: @Int = iter.next<Int>();
@@ -959,7 +1025,7 @@ mod tests {
         ctx.parse_and_execute_ryna_module(&code_str).unwrap();
 
         assert_eq!(ctx.variables[0], Object::arr(vec!(Object::new(Integer::from(5))), INT));
-        assert_eq!(ctx.variables[1], Object::arr_it(Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
+        assert_eq!(ctx.variables[1], Object::arr_it(INT, Type::MutRef(Box::new(INT)), ctx.variables[0].inner.clone(), 1));
         assert_eq!(ctx.variables[2], Object::new(false));
         assert_eq!(ctx.variables[3], Object::new(Integer::from(5)).get_mut());
         assert_eq!(ctx.variables[4], Object::new(true));
@@ -972,21 +1038,7 @@ mod tests {
         ), INT));
         assert_eq!(ctx.variables[6], Object::new(Integer::from(20)));
 
-        if let Type::Template(..) = ctx.variables[7].get_type() {
-            assert_eq!(ctx.variables[7], Object::arr(vec!(
-                Object::new(Integer::from(0)),
-                Object::new(Integer::from(1)),
-                Object::new(Integer::from(2)),
-                Object::new(Integer::from(3)),
-                Object::new(Integer::from(4)),
-                Object::new(Integer::from(5)),
-                Object::new(Integer::from(6)),
-                Object::new(Integer::from(7)),
-                Object::new(Integer::from(8)),
-            ), INT));
-            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
-
-        } else {
+        if let Type::Template(..) = ctx.variables[8].get_type() {
             assert_eq!(ctx.variables[8], Object::arr(vec!(
                 Object::new(Integer::from(0)),
                 Object::new(Integer::from(1)),
@@ -998,7 +1050,21 @@ mod tests {
                 Object::new(Integer::from(7)),
                 Object::new(Integer::from(8)),
             ), INT));
-            assert_eq!(ctx.variables[7], Object::new(Integer::from(16)));
+            assert_eq!(ctx.variables[9], Object::new(Integer::from(16)));
+
+        } else {
+            assert_eq!(ctx.variables[9], Object::arr(vec!(
+                Object::new(Integer::from(0)),
+                Object::new(Integer::from(1)),
+                Object::new(Integer::from(2)),
+                Object::new(Integer::from(3)),
+                Object::new(Integer::from(4)),
+                Object::new(Integer::from(5)),
+                Object::new(Integer::from(6)),
+                Object::new(Integer::from(7)),
+                Object::new(Integer::from(8)),
+            ), INT));
+            assert_eq!(ctx.variables[8], Object::new(Integer::from(16)));
         }
 
         let mut ctx = standard_ctx();

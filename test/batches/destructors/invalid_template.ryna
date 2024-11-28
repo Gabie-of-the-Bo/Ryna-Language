@@ -1,0 +1,24 @@
+// Type Test2<Bool> cannot implement Destroyable
+
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    print("Test");
+}
+
+class Test2<T> {
+    inner: Test;
+    obj: 'T;
+}
+
+implement<T> Destroyable for Test2<'T>;
+
+fn<T> destroy(obj: &Test2<'T>) {
+    print("Test2");
+}
+
+let obj = Test2<Bool>(Test("obj"), true);

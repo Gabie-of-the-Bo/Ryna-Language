@@ -1105,6 +1105,42 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
 
+    let idx = ctx.define_function("write_ptr_int".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, INT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<Integer>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut i64).offset(to_i64(offset) as isize), to_i64(value)) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("write_ptr_float".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, FLOAT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<f64>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut f64).offset(to_i64(offset) as isize), *value) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("load_library".into()).unwrap();
 
     ctx.define_native_function_overload(

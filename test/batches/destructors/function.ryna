@@ -1,0 +1,20 @@
+/// obj2 obj1
+
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    emit("Destroying " + obj.name + "\n");
+}
+
+fn test(obj: &Test) {
+    print("Test");
+}
+
+let obj1 = Test("obj1");
+let obj2 = Test("obj2");
+
+test(obj1.demut());

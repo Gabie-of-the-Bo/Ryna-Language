@@ -17,7 +17,7 @@ use crate::types::Type;
 use crate::object::{RynaArray, RynaLambda, RynaTuple, Object, TypeInstance};
 use crate::context::RynaContext;
 use crate::operations::Operator;
-use crate::compilation::{CompiledRynaExpr, RynaError};
+use crate::compilation::{message_and_exit, CompiledRynaExpr, RynaError};
 
 /*
                                                   ╒══════════════════╕
@@ -78,7 +78,7 @@ impl RynaContext {
                     if optimize {
                         ctx.optimize_instructions(&mut instr);
                     }
-               
+                    
                     if no_macro {
                         let ser_module = ctx.get_serializable_module(combined_hash, &instr);
 
@@ -152,6 +152,12 @@ impl RynaContext {
             () => {
                 unsafe { program.get_unchecked(ip as usize) }
             }
+        }
+
+        macro_rules! curr_offset {
+            ($cond: expr) => {
+                offset * (!$cond as usize) 
+            };
         }
 
         macro_rules! unary_op {
@@ -264,6 +270,20 @@ impl RynaContext {
             }
         }
 
+        macro_rules! get_global_variable {
+            ($id: expr) => {
+                {
+                    let v = get_variable!($id);
+
+                    if v.is_moved() {
+                        message_and_exit("Accessing absent global variable".into());
+                    }
+
+                    v
+                }
+            }
+        }
+
         macro_rules! update_max_var {
             ($id: expr) => {
                 // SAFETY: this is safe because call_stack will never be empty
@@ -296,6 +316,7 @@ impl RynaContext {
         }
 
         call_stack.push((0, 0, -1));
+        update_max_var!(self.num_globals); // Ensure that the first registers are only for globals
 
         loop {
             match fetch_opcode!() {
@@ -438,63 +459,93 @@ impl RynaContext {
                 IdxMut => ryna_instruction!("IdxMut", { idx_op!(deref, get_mut_nostack); }),
                 IdxMoveRef => ryna_instruction!("IdxMoveRef", { idx_op!(deref, move_contents_if_ref); }),
 
-                StoreIntVariable(id, obj) => ryna_instruction!("StoreIntVariable", {
+                StoreIntVariable(id, g, obj) => ryna_instruction!("StoreIntVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreStringVariable(id, obj) => ryna_instruction!("StoreStringVariable", {
+                StoreStringVariable(id, g, obj) => ryna_instruction!("StoreStringVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(obj.clone()));
+                    store_variable!(*id + curr_offset!(g), Object::new(obj.clone()));
                     ip += 1;
                 }),
 
-                StoreBoolVariable(id, obj) => ryna_instruction!("StoreBoolVariable", {
+                StoreBoolVariable(id, g, obj) => ryna_instruction!("StoreBoolVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
 
-                StoreFloatVariable(id, obj) => ryna_instruction!("StoreFloatVariable", {
+                StoreFloatVariable(id, g, obj) => ryna_instruction!("StoreFloatVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, Object::new(*obj));
+                    store_variable!(*id + curr_offset!(g), Object::new(*obj));
                     ip += 1;
                 }),
                 
-                StoreVariable(id) => ryna_instruction!("StoreVariable", {
+                StoreVariable(id, g) => ryna_instruction!("StoreVariable", {
                     update_max_var!(*id);
-                    store_variable!(*id + offset, tos!());
+                    store_variable!(*id + curr_offset!(g), tos!());
                     ip += 1;
                 }),
 
-                GetVariable(id) => ryna_instruction!("GetVariable", {
-                    stack.push(get_variable!(*id + offset).get_mut());
+                GetVariable(id, false) => ryna_instruction!("GetVariable", {
+                    stack.push(get_variable!(*id + offset).get_var());
                     ip += 1;
                 }),
 
-                CloneVariable(id) => ryna_instruction!("CloneVariable", {
+                CloneVariable(id, false) => ryna_instruction!("CloneVariable", {
                     stack.push(get_variable!(*id + offset).clone());
                     ip += 1;
                 }),
 
-                RefVariable(id) => ryna_instruction!("RefVariable", {
+                RefVariable(id, false) => ryna_instruction!("RefVariable", {
                     stack.push(get_variable!(*id + offset).get_ref());
                     ip += 1;
                 }),
 
-                DerefVariable(id) => ryna_instruction!("DerefVariable", {
+                DerefVariable(id, false) => ryna_instruction!("DerefVariable", {
                     stack.push(get_variable!(*id + offset).deref_if_ref());
                     ip += 1;
                 }),
 
-                CopyVariable(id) => ryna_instruction!("CopyVariable", {
+                CopyVariable(id, false) => ryna_instruction!("CopyVariable", {
                     stack.push(get_variable!(*id + offset).deref_deep_clone());
                     ip += 1;
                 }),
 
-                MoveVariable(id) => ryna_instruction!("MoveVariable", {
+                MoveVariable(id, false) => ryna_instruction!("MoveVariable", {
                     stack.push(get_variable!(*id + offset).move_contents_if_ref());
+                    ip += 1;
+                }),
+
+                GetVariable(id, true) => ryna_instruction!("GetVariable", {
+                    stack.push(get_global_variable!(*id).get_var());
+                    ip += 1;
+                }),
+
+                CloneVariable(id, true) => ryna_instruction!("CloneVariable", {
+                    stack.push(get_global_variable!(*id).clone());
+                    ip += 1;
+                }),
+
+                RefVariable(id, true) => ryna_instruction!("RefVariable", {
+                    stack.push(get_global_variable!(*id).get_ref());
+                    ip += 1;
+                }),
+
+                DerefVariable(id, true) => ryna_instruction!("DerefVariable", {
+                    stack.push(get_global_variable!(*id).deref_if_ref());
+                    ip += 1;
+                }),
+
+                CopyVariable(id, true) => ryna_instruction!("CopyVariable", {
+                    stack.push(get_global_variable!(*id).deref_deep_clone());
+                    ip += 1;
+                }),
+
+                MoveVariable(id, true) => ryna_instruction!("MoveVariable", {
+                    stack.push(get_global_variable!(*id).move_contents_if_ref());
                     ip += 1;
                 }),
 
@@ -509,8 +560,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVar(id) => ryna_instruction!("AssignToVar", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVar(id, g) => ryna_instruction!("AssignToVar", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign_direct(value, self) {
@@ -520,8 +571,8 @@ impl RynaContext {
                     ip += 1;
                 }),
 
-                AssignToVarDirect(id) => ryna_instruction!("AssignToVarDirect", {
-                    let var = &get_variable!(*id + offset);
+                AssignToVarDirect(id, g) => ryna_instruction!("AssignToVarDirect", {
+                    let var = &get_variable!(*id + curr_offset!(g));
                     let value = tos!();
 
                     if let Err(msg) = var.assign(value, self) {
@@ -578,7 +629,7 @@ impl RynaContext {
                 CallDestructor(to) => ryna_instruction!("CallDestructor", { 
                     let elem = stack.last().unwrap();
 
-                    if !elem.is_moved() && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
+                    if !elem.is_moved() && elem.ref_count() == 1 && !elem.is_moved_deref() && elem.deref_ref_count() <= 2 {
                         add_stack_frame!(*to as i32); 
                     
                     } else {
@@ -588,8 +639,8 @@ impl RynaContext {
                 LambdaCall => ryna_instruction!("LambdaCall", { lambda_call!(get); }),
                 LambdaCallRef => ryna_instruction!("LambdaCallRef", { lambda_call!(deref); }),
 
-                DeleteVar(var_idx) => ryna_instruction!("DeleteVar", { 
-                    self.variables[*var_idx + offset] = Object::no_value();
+                DeleteVar(var_idx, g) => ryna_instruction!("DeleteVar", { 
+                    self.variables[*var_idx + curr_offset!(g)] = Object::no_value();
                     ip += 1;                    
                 }),
 

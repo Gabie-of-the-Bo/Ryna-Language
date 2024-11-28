@@ -195,9 +195,9 @@ pub fn many_separated0<
 pub enum RynaExpr {
     // Compiled
     QualifiedName(Location, String, Option<usize>), // In this order, function id, attribute name
-    Variable(Location, usize, String, Type),
-    CompiledVariableDefinition(Location, usize, String, Type, Box<RynaExpr>),
-    CompiledVariableAssignment(Location, usize, String, Type, Box<RynaExpr>),
+    Variable(Location, usize, String, Type, bool),
+    CompiledVariableDefinition(Location, usize, String, Type, Box<RynaExpr>, bool),
+    CompiledVariableAssignment(Location, usize, String, Type, Box<RynaExpr>, bool),
     FunctionCall(Location, usize, Vec<Type>, Vec<RynaExpr>),
     CompiledFor(Location, usize, usize, String, Box<RynaExpr>, Vec<RynaExpr>),
     DoBlock(Location, Vec<RynaExpr>, Type),
@@ -263,12 +263,12 @@ impl RynaExpr {
             RynaExpr::VariableDefinition(_, _, _, _) |
             RynaExpr::VariableAssignment(_, _, _) |
             RynaExpr::QualifiedName(_, _, _) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, _) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, _, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, _, _) |
             RynaExpr::DoBlock(_, _, _) |
             RynaExpr::AttributeAccess(_, _, _) |
             RynaExpr::AttributeAssignment(_, _, _, _) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::FunctionCall(_, _, _, _) |
             RynaExpr::CompiledFor(_, _, _, _, _, _) |
             RynaExpr::CompiledLambda(_, _, _, _, _, _) |
@@ -292,8 +292,8 @@ impl RynaExpr {
         match self {
             RynaExpr::AttributeAssignment(_, _, _, _) |
             RynaExpr::NameReference(_, _) |
-            RynaExpr::CompiledVariableDefinition(_, _, _, _, _) |
-            RynaExpr::CompiledVariableAssignment(_, _, _, _, _) |
+            RynaExpr::CompiledVariableDefinition(_, _, _, _, _, _) |
+            RynaExpr::CompiledVariableAssignment(_, _, _, _, _, _) |
             RynaExpr::Macro(_, _, _, _, _, _) |
             RynaExpr::VariableDefinition(_, _, _, _) |
             RynaExpr::VariableAssignment(_, _, _) |
@@ -320,7 +320,7 @@ impl RynaExpr {
             RynaExpr::DoBlock(_, _, _) |
             RynaExpr::QualifiedName(_, _, _) |
             RynaExpr::AttributeAccess(_, _, _) |
-            RynaExpr::Variable(_, _, _, _) |
+            RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::FunctionCall(_, _, _, _) |
             RynaExpr::CompiledLambda(_, _, _, _, _, _) |
             RynaExpr::Literal(_, _) |

@@ -192,6 +192,10 @@ These are some of the things you can do with Ryna:
 
 [RyGenes](https://github.com/Gabie-of-the-Bo/RyGenes/) is a genetic algorithms library written in _Ryna_. It allows creating custom crossover and mutation functions and includes examples such as the _N-Queens_ problem.
 
+## Rynd
+
+[Rynd](https://github.com/Gabie-of-the-Bo/Rynd/) is a multidimensional array library with native bindings provided by the great [ndarray](https://crates.io/crates/ndarray) Rust crate.
+
 # Contribute
 
 You can contribute to the project by opening issues when you find a bug in the interpreter or when you happen to have a suggestion on how to improve either the language or the documentation. All contributions, big or small, are welcome :)

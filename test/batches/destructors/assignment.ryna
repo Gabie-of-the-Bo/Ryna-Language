@@ -1,0 +1,16 @@
+/// obj1 obj2 obj3
+
+class Test {
+    name: String;
+}
+
+implement Destroyable for Test;
+
+fn destroy(obj: &Test) {
+    emit(obj.name.deref());
+    emit(" ");
+}
+
+let obj = Test("obj1");
+obj = Test("obj2");
+obj = Test("obj3");

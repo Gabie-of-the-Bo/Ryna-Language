@@ -527,10 +527,11 @@ fn main() {
 
             // Check install script
             let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
-            let config_path = module_path.join(Path::new("ryna_config.yml"));
+            let config_path = module_path.join(Path::new("ryna_deps.yml"));
 
             if !config_path.exists() {
-                ryna_error!("No project config file!");
+                ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed multiple libraries at once?)");
+                return;
             }
 
             let config = fs::read_to_string(&config_path).expect("Unable to read config file");

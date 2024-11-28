@@ -569,6 +569,20 @@ pub fn standard_functions(ctx: &mut RynaContext) {
         }
     ).unwrap();
 
+    let idx = ctx.define_function("$unsafe_as".into()).unwrap(); // this is unsafe and non-accesible by normal means
+
+    ctx.define_native_function_overload(
+        idx, 
+        1,
+        &[Type::Wildcard], 
+        T_0, 
+        |_, _, mut v, _| {
+            let obj = v.pop().unwrap();
+
+            Ok(obj.unsafe_move_contents().get_ref())
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("drop".into()).unwrap();
 
     ctx.define_native_function_overload(idx, 1, &[T_0.to_mut()], Type::Empty, |_, _, mut v, _| { 
@@ -1091,6 +1105,42 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     ctx.define_native_function_overload(idx, 0, &[INT.to_mut()], Type::Empty, EMPTY_FUNC).unwrap();
 
+    let idx = ctx.define_function("write_ptr_int".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, INT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<Integer>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut i64).offset(to_i64(offset) as isize), to_i64(value)) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
+    let idx = ctx.define_function("write_ptr_float".into()).unwrap();
+    
+    ctx.define_native_function_overload(
+        idx, 
+        0, 
+        &[PTR, INT, FLOAT], 
+        Type::Empty,
+        |_, _, v, _| {
+            let ptr = v[0].get::<RynaPointer>();
+            let offset = v[1].get::<Integer>();
+            let value = v[2].get::<f64>();
+
+            unsafe { std::ptr::write((ptr.ptr as *mut f64).offset(to_i64(offset) as isize), *value) };
+
+            Ok(Object::empty())
+        }
+    ).unwrap();
+
     let idx = ctx.define_function("load_library".into()).unwrap();
 
     ctx.define_native_function_overload(
@@ -1128,7 +1178,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     let idx = ctx.define_function("call".into()).unwrap();
 
-    for i in 0..10 {
+    for i in 0..20 {
         let mut args = vec!(LIB_FUNC.to_ref());
         args.extend(std::iter::repeat(Type::Wildcard).take(i));
 
@@ -1145,9 +1195,29 @@ pub fn standard_functions(ctx: &mut RynaContext) {
     }
 
     ctx.define_function("destroy".into()).unwrap();
+    ctx.define_function("destroy_or".into()).unwrap();
 
     // Max tuple size is 10 for now
     seq!(I in 0..10 {
+        let idx = ctx.define_function(format!("$drop_{}_unsafe", I)).unwrap(); // this is unsafe and non-accesible by normal means
+
+        seq!(J in 2..10 {
+            let ts = Type::And((0..J).map(|i| Type::TemplateParam(i, vec!())).collect());
+
+            ctx.define_native_function_overload(
+                idx, 
+                J,
+                &[ts.to_ref()], 
+                Type::Empty, 
+                |_, _, v, _| {
+                    let tuple = v[0].deref::<RynaTuple>();
+                    tuple.elements[I] = Object::no_value();
+                                    
+                    Ok(Object::empty())
+                }
+            ).unwrap();            
+        });
+
         let idx = ctx.define_function(format!("get_{}", I)).unwrap();
 
         seq!(J in 2..10 {

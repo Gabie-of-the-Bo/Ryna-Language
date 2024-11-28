@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::types::Type;
 
+#[derive(Clone)]
 struct VariableContext {
     is_base: bool,
     names: FxHashMap<String, usize>,
@@ -34,6 +35,7 @@ impl VariableContext {
     }
 }
 
+#[derive(Clone)]
 pub struct VariableMap {
     counter: usize,
     contexts: Vec<VariableContext>
@@ -47,7 +49,11 @@ impl Default for VariableMap {
 
 impl VariableMap {
     pub fn new() -> Self {
-        VariableMap { contexts: vec!(VariableContext::new(true)), counter: 0 }
+        VariableMap { contexts: vec!(), counter: 0 }
+    }
+
+    pub fn depth(&self) -> usize {
+        self.contexts.len()
     }
 
     pub fn add_context(&mut self, is_base: bool) {
@@ -58,8 +64,10 @@ impl VariableMap {
         self.contexts.pop().unwrap();
     }
 
-    pub fn define_var(&mut self, name: String, idx: usize, t: Type) {
+    pub fn define_var(&mut self, name: String, idx: usize, t: Type) -> usize {
         self.contexts.last_mut().unwrap().define_var(name, idx, t);
+
+        self.contexts.len() - 1 // Will never underflow, otherwise it would panic in the previous line
     }
 
     pub fn count_up(&mut self) -> usize {
@@ -81,14 +89,18 @@ impl VariableMap {
         self.contexts.last().unwrap().contains(name)
     }
 
-    pub fn get_var(&mut self, name: &String) -> Option<&(usize, Type)> {
-        for ctx in self.contexts.iter().rev() {
+    pub fn get_var(&self, name: &String) -> Option<(usize, &(usize, Type))> {
+        for (i, ctx) in self.contexts.iter().enumerate().rev() {
             if let Some(v) = ctx.get(name) {
-                return Some(v);
+                return Some((i, v));
             }
         }
 
         None
+    }
+
+    pub fn num_vars(&self) -> usize {
+        self.contexts.iter().map(|i| i.vars.len()).sum()
     }
 
     pub fn for_each_last_ctx<T: FnMut(usize, &String, &Type)>(&self, mut f: T) {

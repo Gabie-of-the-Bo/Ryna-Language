@@ -91,6 +91,9 @@ let example_2 = 3 + 6;          // Here the Int type is inferred
 let example_3 = "Test";         // A String type is inferred
 ```
 
+Any variable defined in the global context (top level of the code) will be accessible from functions, but note that they must be defined
+**before** being called.
+
 ### Assignment
 
 When you have already defined a variable, you can replace its value by using the `=` operator: 

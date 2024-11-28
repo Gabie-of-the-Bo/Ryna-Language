@@ -1142,7 +1142,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
 
     let idx = ctx.define_function("call".into()).unwrap();
 
-    for i in 0..10 {
+    for i in 0..20 {
         let mut args = vec!(LIB_FUNC.to_ref());
         args.extend(std::iter::repeat(Type::Wildcard).take(i));
 

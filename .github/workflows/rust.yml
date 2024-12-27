@@ -7,7 +7,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Setup | Checkout
@@ -17,6 +17,9 @@ jobs:
       with:
         toolchain: stable
         components: clippy
+
+    - name: Setup openssl
+      run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.22_amd64.deb && sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb
 
     - name: Build ryna binaries
       run: cargo build --profile release-debug

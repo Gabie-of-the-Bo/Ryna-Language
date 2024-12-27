@@ -340,7 +340,7 @@ impl RynaContext {
                 *expr = RynaExpr::QualifiedName(l.clone(), n.clone(), func);
             },
 
-            RynaExpr::VariableAssignment(l, n, e) if self.var_map.is_var_defined(n) => {
+            RynaExpr::VariableAssignment(l, n, e) => {
                 let n_cpy = n.clone();
                 
                 if self.var_map.is_var_defined(n) {

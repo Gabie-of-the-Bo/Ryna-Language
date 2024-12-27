@@ -1697,6 +1697,8 @@ impl RynaContext {
                 ))
             ),
             |(l, (an, (n, t, mut a, mut r), _, mut b))| {
+                RynaContext::check_forbidden_fn_names(&n);
+
                 let u_t = t.unwrap_or_default();
 
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));

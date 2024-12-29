@@ -740,13 +740,16 @@ impl RynaContext {
         return map(
             delimited(
                 tag("("),
-                separated_list1(
-                    tuple((empty0, tag(","), empty0)), 
-                    |input| self.type_parser(input)
-                ),
+                tuple((
+                    separated_list1(
+                        tuple((empty0, tag(","), empty0)), 
+                        |input| self.type_parser(input)
+                    ),
+                    delimited(empty0, opt(tag(",")), empty0)
+                )),
                 tag(")")
             ),
-            |t| if t.len() > 1 { Type::And(t) } else { t[0].clone() }
+            |(t, c)| if c.is_some() || t.len() > 1 { Type::And(t) } else { t[0].clone() }
         )(input);
     }
 

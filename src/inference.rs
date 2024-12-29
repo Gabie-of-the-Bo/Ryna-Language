@@ -315,7 +315,7 @@ impl RynaContext {
             }
 
             RynaExpr::CompiledLambda(_, _, _, a, r, _) => Ok(
-                if a.len() == 1 {
+                if a.len() == 1 && !matches!(a[0].1, Type::And(..)) {
                     Type::Function(
                         Box::new(a[0].1.clone()),
                         Box::new(r.clone())

@@ -3392,7 +3392,7 @@ impl RynaContext{
                 res.push(RynaInstruction::from(CompiledRynaExpr::Lambda(
                     *self.lambda_positions.get(i).unwrap(),
                     c.len(),
-                    if a.len() == 1 {
+                    if a.len() == 1 && !matches!(a[0].1, Type::And(..)) {
                         a[0].1.clone()
 
                     } else {

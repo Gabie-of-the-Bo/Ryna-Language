@@ -1,0 +1,498 @@
+{#-
+This file was automatically generated - do not edit
+-#}
+{% extends "main.html" %}
+{% block tabs %}
+{{ super() }}
+<style>
+    .md-header {
+        position: initial
+    }
+
+    .md-main__inner {
+        margin: 0
+    }
+
+    @media screen and (min-width: 600px) {
+        .md-sidebar--primary {
+            display: none !important;
+        }
+
+        .md-sidebar--secondary {
+            display: none !important;
+        }
+    }
+
+    @media only screen and (max-width: 600px) {
+        h1 {
+            margin: auto !important;
+            margin-top: 0.5em !important;
+            margin-bottom: 0.25em !important;
+            
+            width: fit-content;
+
+            color: white !important;
+            font-size: 2em !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        h1 {
+            margin: auto !important;
+            margin-top: 0.5em !important;
+            margin-bottom: 0.25em !important;
+            
+            width: fit-content;
+
+            color: white !important;
+            font-size: 3em !important;
+        }
+    }
+
+    .md-content, .upper, .lower {
+        width: 100%;
+    }
+
+    .upper {
+        display: grid;
+
+        background: linear-gradient(
+            180deg,
+            var(--md-primary-fg-color),
+            var(--md-primary-fg-color--light)
+        );
+    }
+
+    .lower {
+        height: 5vh;
+        background: var(--md-primary-fg-color--light);
+        margin-top: -1px;
+        z-index: -1;
+    }
+
+    .md-main__inner {
+        display: contents;
+        padding: 0;
+        margin: 0;
+    }
+
+    .md-content__inner {
+        display: flex;
+        flex-direction: column;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .md-content__inner:before {
+        height: 0;
+    }
+
+    pre > code {
+        width: 90%;
+    }
+    
+    .upper h2 {
+        margin: auto !important;
+
+        margin-top: 0.25em !important;
+        margin-bottom: 1.5em !important;
+        
+        width: fit-content;
+        color: white !important;
+        font-size: 1.5em !important;
+    }
+
+    .code-example-background {
+        display: grid;
+        grid-template-rows: 1fr;
+        grid-template-columns: 1fr;
+
+        min-height: 40vh;
+
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 1em;
+
+        align-self: center;
+        justify-self: center;
+        align-items: center;
+    }
+
+    .code-example {
+        display: grid;
+
+        align-self: center;
+        justify-self: center;
+        align-items: center;
+
+        transition-property: opacity;
+        transition-duration: 1s;
+    }
+
+    @media only screen and (max-width: 600px) {
+        .code-desc > h2 {
+            margin-top: 1em !important;
+        }
+
+        .md-typeset pre {
+            display: grid !important;
+            justify-items: center;
+        }
+
+        .code-example-background {
+            width: 90%;
+            overflow-x: auto;
+        }
+
+        .code-example {
+            width: 90%;
+            grid-template-rows: 1fr 1fr;        
+        }
+        
+        .code-example.hidden {
+            height: 0 !important;
+            overflow: hidden !important;
+            grid-area: 3 / 1 !important;
+        }
+
+        .code-example.shown {
+            height: inherit !important;
+            overflow: inherit !important;
+            grid-area: 3 / 1 !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        .code-example-background {
+            width: 75%;
+            overflow-x: auto;
+        }
+
+        .code-example {
+            width: 90%;
+            grid-template-columns: 1fr 1fr;        
+        }
+
+        .code-example.hidden {
+            height: 0 !important;
+            overflow: hidden !important;
+            grid-area: 1 / 3 !important;
+        }
+
+        .code-example.shown {
+            height: inherit !important;
+            overflow: inherit !important;
+            grid-area: 1 / 3 !important;
+        }
+    }
+
+    .code-desc {
+        width: 90%;
+        color: white !important;
+        font-size: 1em !important;
+        align-self: center;
+        justify-self: center;
+    }
+
+    .code-desc > p {
+        font-size: 13pt;
+    }
+
+    .code-desc > h2 {
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+        text-decoration-thickness: 1pt;
+        font-size: 22pt !important;
+    }
+
+    #write-bar {
+        display: inline;
+        margin-left: -.15em;
+    }
+
+    @media only screen and (max-width: 600px) {
+        .quick-links {
+            color: var(--md-primary-fg-color) !important;
+            display: grid;
+            grid-template-rows: 1fr 1fr 1fr;
+            justify-items: center;
+
+            margin-top: 0.5em;
+
+            user-select: none;
+        }
+
+        .quick-link {
+            width: 90%;
+        }
+
+        .quick-link svg {
+            width: 50% !important;
+        }
+    }
+
+    @media only screen and (min-width: 600px) {
+        .quick-links {
+            color: var(--md-primary-fg-color) !important;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            justify-items: center;
+
+            margin-top: 0.5em;
+
+            user-select: none;
+        }
+    }
+
+    .quick-links h2 {
+        font-weight: bold;
+        font-size: 20pt !important;
+    }
+
+    .quick-link {
+        display: grid;
+        grid-template-columns: 1fr 3fr;
+        align-items: center;
+        margin-bottom: 0.5em;
+    }
+
+    .quick-link svg {
+        width: 35%;
+        justify-self: center;
+        margin-right: 1em;
+        cursor: pointer;
+    }
+
+    .quick-link > div {
+        justify-self: left;
+        margin-left: 1em;
+        cursor: pointer;
+    }
+
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="upper">
+
+    <h1><span id="write-title">A New Take on Extensibility</span> <span id="write-bar">|</span></h1>
+    <h2>Try Ryna now!</h2>
+
+    <div class="code-example-background">
+        <div class="code-example">
+            <div class="code-desc">
+                <h2>Strong Typing</h2>
+                <p>
+                    You can specify concrete types to avoid typing errors that are common in dynamic languages. The type system is terse and
+                    allows you use funtional patterns such as <i>Algebraic Data Types</i> with ease.
+                 </p>
+            </div>
+            <pre>
+                <code>class Nil {}
+type Tree&lt;T&gt; = Nil | ('T, Tree&lt;'T&gt;, Tree&lt;'T&gt;);
+
+let t: Tree&lt;Int&gt; = (
+    3, 
+    (
+        1, 
+        Nil(), 
+        Nil()
+    ), 
+    (2, Nil(), Nil())
+);
+                </code>
+            </pre>
+        </div>
+    
+        <div class="code-example">
+            <div class="code-desc">
+                <h2>Extensible Syntax</h2>
+                <p>
+                    Ryna allows you to redefine parts of the syntax in order to create comprehensible libraries and custom meta modules
+                    that modify the behaviour of the language. <i>NDL</i> lets you use a <i>BNF</i>-like language to easily define
+                    syntax patterns.
+                 </p>
+            </div>
+            <pre>
+                <code>{% raw %}syntax array_initialization from "<" Arg(<type>, type) ">[" 
+            [{Arg(<expr>, elems) "," [s]} Arg(<expr>, elems)] "]" {
+    let res = arr<$type>();
+
+    @elems.i {
+        res.push($elems.i);
+    }
+    
+    return move(res);
+}
+
+// Now we can use this syntax
+let arr = <Int>[1, 2, 3, 4];{% endraw %}
+                </code>
+            </pre>
+        </div>
+
+        <div class="code-example">
+            <div class="code-desc">
+                <h2>Scientific Computing</h2>
+                <p>
+                    Use built-in arbitrary length integers to construct mathematical algorithms. Other common types such as
+                    64 bit floating point numbers and booleans are also supported natively by the language. 
+                 </p>
+            </div>
+            <pre>
+                <code>fn gcd(a: Int, b: Int) -> Int {
+    while b != 0 {
+        let r = a % b;
+        a := *b;
+        b := move(r);
+    }
+
+    return *a;
+}
+
+let res = gcd(5, 10);
+                </code>
+            </pre>
+        </div>
+    </div>
+    
+    </div>
+<div class="lower">
+</div>
+
+<div class="quick-links">
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/tutorial/start/install/')" class="fa-solid fa-book"></i>
+        <div onclick="gotoPage('pages/tutorial/start/install/')">
+            <h2>Getting Started</h2>
+            <p>Install the interpreter and learn about the language</p>    
+        </div>
+    </div>
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/tutorial/examples/linked%20list/')" class="fa-solid fa-code"></i>
+        <div onclick="gotoPage('pages/tutorial/examples/linked%20list/')">
+            <h2>Examples</h2>
+            <p>See some examples of what you can do with Ryna</p>    
+        </div>
+    </div>
+    <div class="quick-link">
+        <i onclick="gotoPage('pages/contribute/')" class="fa-solid fa-list-check"></i>
+        <div onclick="gotoPage('pages/contribute/')">
+            <h2>Contribute</h2>
+            <p>Want to share your thoughts or propose a feature?</p>    
+        </div>
+    </div>
+</div>
+
+<script>
+    function gotoPage(path) {
+        const base = 'https://gabie-of-the-bo.github.io/Ryna-Language/';
+
+        window.location = base + '/' + path;
+    }
+
+    var carouselItems = document.getElementsByClassName('code-example');
+    var carouselIdx = 0;
+    const caouselTime = 10000;
+
+    let colcc = 2;
+
+    function hide(elem) {
+        elem.classList.remove('shown');
+        elem.classList.add('hidden');
+    }
+
+    function show(elem) {
+        elem.classList.add('shown');
+        elem.classList.remove('hidden');
+    }
+
+    for (let item of carouselItems) {
+        hide(item)
+        item.style.opacity = 0;
+    }
+
+    show(carouselItems[carouselIdx])
+    carouselItems[carouselIdx].style.opacity = 1;
+
+    function advanceCarousel() {
+        carouselItems[carouselIdx].style.opacity = 0;
+
+        setTimeout(
+            _ => {
+                hide(carouselItems[carouselIdx])
+
+                carouselIdx = (carouselIdx + 1) % carouselItems.length;
+
+                show(carouselItems[carouselIdx])
+                carouselItems[carouselIdx].style.opacity = 1;
+
+                setTimeout(_ => { advanceCarousel() }, caouselTime);                
+            }, 
+            1000
+        );
+    }
+
+    setTimeout(_ => { advanceCarousel() }, caouselTime);
+
+    // Write bar
+    setInterval(() => {
+        let elem = document.getElementById('write-bar');
+
+        elem.style.opacity = 1 - elem.style.opacity;
+    }, 500);
+
+    // Words
+    let words = ['Extensibility', 'Typing', 'Security']
+    let wordIdx = 0;
+    const wordTime = 5000;
+
+    function deleteWord() {
+        let wordLen = words[wordIdx].length - 1;
+        let deleted = 0
+
+        deleteLetters(deleted, wordLen);
+    }
+
+    function deleteLetters(deleted, wordLen) {
+        setTimeout(_ => {
+            let title = document.getElementById('write-title');
+            title.innerHTML = title.innerHTML.slice(0, title.innerHTML.length - 1);
+
+            if (deleted < wordLen) {
+                deleteLetters(deleted + 1, wordLen);
+            
+            } else {
+                wordIdx = (wordIdx + 1) % words.length;
+                writeWord()
+            }
+        }, Math.random() * 25 + 75);
+    }
+
+    function writeWord() {
+        let wordLen = words[wordIdx].length - 1;
+        let written = 0
+
+        writeLetters(written, wordLen);
+    }
+
+    function writeLetters(written, wordLen) {
+        setTimeout(_ => {
+            let title = document.getElementById('write-title');
+            title.innerHTML = title.innerHTML + words[wordIdx][written];
+
+            if (written < wordLen) {
+                writeLetters(written + 1, wordLen);
+            
+            } else {
+                setTimeout(_ => { deleteWord() }, wordTime);
+            }
+        }, Math.random() * 25 + 75);
+    }
+
+    setTimeout(_ => { deleteWord() }, wordTime);
+</script>
+
+{% endblock %}
+{% block footer %}
+{% include "partials/footer.html" %}
+{% endblock %}

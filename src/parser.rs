@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use malachite::num::conversion::string::options::FromSciStringOptions;
 use malachite::num::conversion::traits::FromSciString;
+use nom::multi::many1;
 use nom::AsChar;
 use nom::bytes::complete::{tag, take_till, take_until};
 use nom::combinator::{cut, map_opt};
@@ -739,13 +740,16 @@ impl RynaContext {
         return map(
             delimited(
                 tag("("),
-                separated_list1(
-                    tuple((empty0, tag(","), empty0)), 
-                    |input| self.type_parser(input)
-                ),
+                tuple((
+                    separated_list1(
+                        tuple((empty0, tag(","), empty0)), 
+                        |input| self.type_parser(input)
+                    ),
+                    delimited(empty0, opt(tag(",")), empty0)
+                )),
                 tag(")")
             ),
-            |t| if t.len() > 1 { Type::And(t) } else { t[0].clone() }
+            |(t, c)| if c.is_some() || t.len() > 1 { Type::And(t) } else { t[0].clone() }
         )(input);
     }
 
@@ -1298,37 +1302,50 @@ impl RynaContext {
         let (input, a) = self.ryna_expr_parser_wrapper(input, &mut checked_cpy, cache)?;
 
         map(
-            self.located(
-                tuple((
-                    empty0,
-                    opt(
-                        map(
-                            tuple((
-                                tag("<"),
-                                empty0,
-                                separated_list1(
-                                    tuple((empty0, tag(","), empty0)), 
-                                    |input| self.type_parser(input)
-                                ),
-                                empty0,
-                                tag(">"),
-                                empty0,
-                            )),
-                            |(_, _, t, _, _, _)| t
-                        )
+            many1(
+                terminated(
+                    self.located(
+                        tuple((
+                            empty0,
+                            opt(
+                                map(
+                                    tuple((
+                                        tag("<"),
+                                        empty0,
+                                        separated_list1(
+                                            tuple((empty0, tag(","), empty0)), 
+                                            |input| self.type_parser(input)
+                                        ),
+                                        empty0,
+                                        tag(">"),
+                                        empty0,
+                                    )),
+                                    |(_, _, t, _, _, _)| t
+                                )
+                            ),
+                            tag(open),
+                            empty0,
+                            separated_list0(
+                                tuple((empty0, tag(","), empty0)),
+                                |input| self.ryna_expr_parser_wrapper(input, &mut FxHashSet::default(), cache)
+                            ),
+                            empty0,
+                            opt(tuple((tag(","), empty0))),
+                            tag(close)
+                        ))
                     ),
-                    tag(open),
-                    empty0,
-                    separated_list0(
-                        tuple((empty0, tag(","), empty0)),
-                        |input| self.ryna_expr_parser_wrapper(input, &mut FxHashSet::default(), cache)
-                    ),
-                    empty0,
-                    opt(tuple((tag(","), empty0))),
-                    tag(close)
-                ))
+                    empty0
+                )
             ),
-            move |(l, (_, t, _, _, b, _, _, _))| RynaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(a.clone()), b)
+            move |v| {
+                let mut res = a.clone();
+
+                for (l, (_, t, _, _, b, _, _, _)) in v {
+                    res = RynaExpr::NaryOperation(l, id, t.unwrap_or_default(), Box::new(res), b);
+                }
+
+                res
+            }
         )(input)
     }
 
@@ -1697,6 +1714,8 @@ impl RynaContext {
                 ))
             ),
             |(l, (an, (n, t, mut a, mut r), _, mut b))| {
+                RynaContext::check_forbidden_fn_names(&n);
+
                 let u_t = t.unwrap_or_default();
 
                 a.iter_mut().for_each(|(_, i)| i.compile_templates(&u_t));

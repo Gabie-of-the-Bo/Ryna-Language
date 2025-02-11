@@ -650,7 +650,8 @@ impl RynaContext {
                     let l = call_stack[idx].2.max(0) as usize;
 
                     // Clear context variables
-                    self.variables[offset..(offset + l)].fill(Object::no_value());
+                    let num_vars = self.variables.len();
+                    self.variables[offset..(offset + l).min(num_vars)].fill(Object::no_value());
 
                     ip = prev_ip;
                     offset = prev_offset;

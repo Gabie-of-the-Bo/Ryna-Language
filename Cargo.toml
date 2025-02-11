@@ -6,7 +6,7 @@ categories = ["command-line-utilities", "compilers"]
 documentation = "https://gabie-of-the-bo.github.io/Ryna-Language/"
 homepage = "https://gabie-of-the-bo.github.io/Ryna-Language/"
 repository = "https://github.com/Gabie-of-the-Bo/Ryna-Language"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Javier Castillo <javier.castillo.dev@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -51,9 +51,9 @@ regex = "1.10.0"
 directories = "5.0.1"
 lazy_static = "1.4.0"
 git2 = "0.18.2"
-malachite = { version = "0.4.5", features = ["enable_serde", "random"] }
+malachite = { version = "0.4.22", features = ["enable_serde", "random"] }
 derive_builder = "0.20.0"
-mimalloc = { version = "0.1.41", default-features = false }
+mimalloc = { version = "0.1.43", default-features = false }
 rclite = "0.2.4"
 tabled = "0.15.0"
 libloading = "0.8.5"

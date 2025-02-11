@@ -7,7 +7,7 @@ use crate::annotations::Annotation;
 use crate::compilation::RynaError;
 use crate::context::RynaContext;
 use crate::formats::{check_class_name, check_fn_name, check_interface_name, check_template_name};
-use crate::located_ryna_warning;
+use crate::{located_ryna_warning, ryna_error};
 use crate::parser::{RynaExpr, Location};
 use crate::operations::Operator;
 use crate::types::{Type, BOOL};
@@ -20,6 +20,16 @@ use crate::patterns::Pattern;
 */
 
 impl RynaContext {
+    pub fn check_forbidden_fn_names(name: &String) {
+        let forbidden_names = ["move", "fwd", "cfwd", "demut", "deref", "ref", "mut", "as", "is", "swap"];
+
+        for i in forbidden_names {
+            if i == name {
+                ryna_error!("Defining function overloads for {} is forbidden", i.green());
+            }
+        } 
+    }
+
     pub fn ensured_return_check(expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
             RynaExpr::PrefixOperationDefinition(l, _, _, _, _, _, _, body) |

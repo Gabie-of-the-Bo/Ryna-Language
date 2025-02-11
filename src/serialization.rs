@@ -11,7 +11,7 @@ pub struct ReducedRynaModule {
     pub hash: String,
 
     pub code: Vec<RynaExpr>,
-    pub source: Vec<String>,
+    pub source: Vec<(String, usize)>,
     pub imports: ImportMap,
     pub inner_dependencies: InnerDepGraph,
 

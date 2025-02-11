@@ -88,7 +88,7 @@ pub struct RynaModule {
     pub hash: String,
     pub ctx: RynaContext,
     pub code: Vec<RynaExpr>,
-    pub source: Vec<String>, 
+    pub source: Vec<(String, usize)>, 
     pub imports: ImportMap,
     pub inner_dependencies: InnerDepGraph
 }
@@ -99,7 +99,7 @@ impl RynaModule {
         hash: String,
         ctx: RynaContext,
         code: Vec<RynaExpr>,
-        source: Vec<String>, 
+        source: Vec<(String, usize)>, 
         imports: ImportMap,
         inner_dependencies: InnerDepGraph
     ) -> RynaModule {

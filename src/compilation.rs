@@ -340,7 +340,7 @@ impl RynaContext {
                 *expr = RynaExpr::QualifiedName(l.clone(), n.clone(), func);
             },
 
-            RynaExpr::VariableAssignment(l, n, e) if self.var_map.is_var_defined(n) => {
+            RynaExpr::VariableAssignment(l, n, e) => {
                 let n_cpy = n.clone();
                 
                 if self.var_map.is_var_defined(n) {
@@ -3392,7 +3392,7 @@ impl RynaContext{
                 res.push(RynaInstruction::from(CompiledRynaExpr::Lambda(
                     *self.lambda_positions.get(i).unwrap(),
                     c.len(),
-                    if a.len() == 1 {
+                    if a.len() == 1 && !matches!(a[0].1, Type::And(..)) {
                         a[0].1.clone()
 
                     } else {
@@ -4478,15 +4478,15 @@ impl RynaContext{
     pub fn import_code(
         &mut self, 
         code: &[RynaExpr], 
-        source: &Vec<String>, 
+        source: &Vec<(String, usize)>, 
         ctx: &RynaContext, 
         imports: &Imports
-    ) -> Result<(Vec<RynaExpr>, Vec<String>), RynaError> {
+    ) -> Result<(Vec<RynaExpr>, Vec<(String, usize)>), RynaError> {
         let mut res = vec!();
         let mut new_source = vec!();
         let mut id_mapper = IdMapper::default();
 
-        for (line_idx, (line, module)) in code.iter().zip(source).enumerate() {
+        for (line, (module, module_line)) in code.iter().zip(source) {
             match line {
                 RynaExpr::Macro(_, _, n, _, p, _) => {
                     if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
@@ -4504,7 +4504,7 @@ impl RynaContext{
                         let mapped_expr = RynaExpr::InterfaceImplementation(l.clone(), t.clone(), mapped_type, n.clone(), mapped_args);
 
                         res.push(mapped_expr);
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 }
 
@@ -4558,7 +4558,7 @@ impl RynaContext{
                         let mapped_expr = RynaExpr::InterfaceDefinition(l.clone(), an.clone(), n.clone(), t.clone(), mapped_fns, mapped_uns, mapped_bin, mapped_nary);
 
                         res.push(mapped_expr);
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 }
 
@@ -4571,7 +4571,7 @@ impl RynaContext{
                         self.define_module_class(mapped_expr.clone())?;
                         
                         res.push(mapped_expr);
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 }
 
@@ -4598,7 +4598,7 @@ impl RynaContext{
 
                         // Add the mapped function to the list of new expressions
                         res.push(RynaExpr::FunctionDefinition(l.clone(), an.clone(), fn_id, t.clone(), mapped_args.clone(), mapped_return, mapped_body));
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 }
 
@@ -4642,7 +4642,7 @@ impl RynaContext{
                             res.push(RynaExpr::PostfixOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), arg.clone(), mapped_arg_t, mapped_return, mapped_body));
                         }
 
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 },
 
@@ -4669,7 +4669,7 @@ impl RynaContext{
 
                         // Add the mapped function to the list of new expressions
                         res.push(RynaExpr::BinaryOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), mapped_arg1, mapped_arg2, mapped_return, mapped_body));
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 },
 
@@ -4698,17 +4698,17 @@ impl RynaContext{
 
                         // Add the mapped function to the list of new expressions
                         res.push(RynaExpr::NaryOperationDefinition(l.clone(), an.clone(), op_id, t.clone(), mapped_arg, mapped_args, mapped_return, mapped_body));
-                        new_source.push(module.clone());
+                        new_source.push((module.clone(), *module_line));
                     }
                 },
 
                 expr => {
-                    if needs_line_import(module, line_idx, &mut self.cache.imports.lines) {
+                    if needs_line_import(module, *module_line, &mut self.cache.imports.lines) {
                         let mut mapped_expr = expr.clone();
                         self.map_ryna_expression(&mut mapped_expr, ctx, &mut id_mapper)?;
     
                         res.push(mapped_expr);
-                        new_source.push(module.clone());    
+                        new_source.push((module.clone(), *module_line));    
                     }
                 }
             }
@@ -4815,7 +4815,7 @@ impl RynaContext{
         name: &str,
         code: &String, 
         modules: &HashMap<String, &RynaModule>
-    ) -> Result<(Vec<RynaExpr>, Vec<String>), RynaError> {
+    ) -> Result<(Vec<RynaExpr>, Vec<(String, usize)>), RynaError> {
         let mut res = vec!();
         let mut source = vec!();
         let mut imports = ryna_module_imports_parser(Span::new(code), self.module_name.clone()).unwrap().1; // TODO: should cache this
@@ -4833,7 +4833,7 @@ impl RynaContext{
         }
 
         let mut main_code = self.parse_without_precompiling(code)?;
-        source.extend(std::iter::repeat(name.to_owned()).take(main_code.len()));
+        source.extend(std::iter::repeat(name.to_owned()).take(main_code.len()).enumerate().map(|(a, b)| (b, a)));
         res.append(&mut main_code);
 
         Ok((res, source))

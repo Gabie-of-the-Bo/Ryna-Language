@@ -1682,7 +1682,7 @@ impl RynaContext {
                     [Gteqi, Not] => { change_first!(Lti); },
                     [Gteqf, Not] => { change_first!(Ltf); },
 
-                    [Or, And] => { change_first!(Nand); },
+                    [And, Not] => { change_first!(Nand); },
                     [Or, Not] => { change_first!(Nor); },
 
                     // Flow optimizations

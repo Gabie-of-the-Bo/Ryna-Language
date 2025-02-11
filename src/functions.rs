@@ -1031,7 +1031,7 @@ pub fn standard_functions(ctx: &mut RynaContext) {
             if !is_valid_index(idx) {
                 return Err(format!("{} is not a valid index", idx));
             
-            } else if array.elements.len() <= to_usize(idx) {
+            } else if array.elements.len() < to_usize(idx) {
                 return Err(format!("{} is higher than the length of the array ({})", idx, array.elements.len()));
             }
             

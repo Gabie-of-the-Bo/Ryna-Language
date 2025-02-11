@@ -363,6 +363,11 @@ mod integration {
     }
 
     #[test]
+    fn lambdas() {
+        integration_test("test/lambdas.ryna");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.ryna");
     }

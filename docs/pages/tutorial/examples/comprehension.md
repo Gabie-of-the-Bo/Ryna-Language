@@ -21,7 +21,7 @@ This is problematic for us because Ryna is a strongly typed language. We will ha
 [expr for elem: ElemType in container]
 ```
 
-This can be expressed in *NDL* like this:
+This can be expressed in *RDL* like this:
 
 ```
 "[" 

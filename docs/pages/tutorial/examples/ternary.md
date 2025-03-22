@@ -17,7 +17,7 @@ sometimes. This can easily be fixed by using delimiters:
 { condition ? if_true : if_false }
 ```
 
-We can represent this syntax using the following *NDL* pattern:
+We can represent this syntax using the following *RDL* pattern:
 
 ```
 "{" 

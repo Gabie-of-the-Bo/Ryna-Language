@@ -6,7 +6,7 @@ you want to encapsulate multiple lines of code inside a single statement. For th
 A block macro can be created in Ryna using this syntax:
 
 ```
-syntax block macro_name from NDL_Pattern {
+syntax block macro_name from RDL_Pattern {
     [...]
 }
 ```

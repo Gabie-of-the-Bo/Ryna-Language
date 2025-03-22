@@ -6,7 +6,7 @@ For this purpose, you can use the second type of macro that Ryna has: **expressi
 An expression macro can be created in Ryna using this syntax:
 
 ```
-syntax expr macro_name from NDL_Pattern {
+syntax expr macro_name from RDL_Pattern {
     [...]
 }
 ```

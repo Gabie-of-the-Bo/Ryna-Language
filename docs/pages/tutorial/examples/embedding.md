@@ -28,7 +28,7 @@ Finally, the instructions do the following when executed:
 
 ## Matching the language
 
-Since the language is so simple, the NDL pattern that matches a program is the following:
+Since the language is so simple, the RDL pattern that matches a program is the following:
 
 ```
 1{"+" | "-" | "<" | ">" | "[" | "]" | "." | ","}
@@ -45,7 +45,7 @@ BF {
 }
 ```
 
-For this, we have to use the following NDL pattern:
+For this, we have to use the following RDL pattern:
 
 ```
 "BF" [s] "{" Arg(1{s | "+" | "-" | "." | "<" | ">" | "[" | "]"}, code) "}"

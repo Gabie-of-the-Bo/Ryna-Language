@@ -1,17 +1,17 @@
-The final type of macro that we are going to look at is one that allows you to create custom NDL patterns. These are called
-**NDL macros** and work like this: 
+The final type of macro that we are going to look at is one that allows you to create custom RDL patterns. These are called
+**RDL macros** and work like this: 
 
 ## Syntax
 
-A NDL macro can be created in Ryna using this syntax:
+A RDL macro can be created in Ryna using this syntax:
 
 ```
-syntax rdl macro_name from NDL_Pattern {
+syntax rdl macro_name from RDL_Pattern {
     [...]
 }
 ```
 
-This macro would have to create a string that can be parsed as an NDL pattern. This syntax can then be used safely inside any
+This macro would have to create a string that can be parsed as an RDL pattern. This syntax can then be used safely inside any
 implicit class syntax or macro.
 
 This would be an example that transforms a pattern into a series of that pattern separated by commas (again, note that we need to

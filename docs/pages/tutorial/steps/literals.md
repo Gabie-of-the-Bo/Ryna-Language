@@ -7,7 +7,7 @@ The firt part of this is the syntax of basic types. Not all of them have types, 
 basic building blocks for more compplicated literals. Here is a table with the basic types that do have a syntax:
 
 
-| Type     | NDL Pattern           | Regex        |
+| Type     | RDL Pattern           | Regex        |
 | -------- | --------------------- | ------------ |
 | `Int`    | `["-"] 1{d}`          | `-?\d+`      |
 | `Float`  | `["-"] 1{d} "." 1{d}` | `-?\d+\.\d+` |
@@ -44,8 +44,8 @@ class Dice {
 let d = 5D20; // Throw a 20 sided dice 5 times 
 ```
 
-Here the `Arg` NDL marker tells the interpreter that the syntax of a `Dice` consist on an integer (the `rolls`) followed
-by a `D` and, finally, another integer (the `sides`). After this, the class `Dice` can also be parsed inside an NDL pattern.
+Here the `Arg` RDL marker tells the interpreter that the syntax of a `Dice` consist on an integer (the `rolls`) followed
+by a `D` and, finally, another integer (the `sides`). After this, the class `Dice` can also be parsed inside an RDL pattern.
 Now let's take a look at a different use case: an **integer array**:
 
 ```

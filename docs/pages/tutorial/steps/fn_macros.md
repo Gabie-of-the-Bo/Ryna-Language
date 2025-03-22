@@ -8,12 +8,12 @@ Let's take a look at how they work by diving into the first kind of macros Ryna 
 A function macro can be created in Ryna using this syntax:
 
 ```
-syntax macro_name from NDL_Pattern {
+syntax macro_name from RDL_Pattern {
     [...]
 }
 
 // This is also allowed
-syntax fn macro_name from NDL_Pattern {
+syntax fn macro_name from RDL_Pattern {
     [...]
 }
 ```

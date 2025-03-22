@@ -1,14 +1,14 @@
 Before we dive into the syntax extension mechanics that Ryna has, we have to take a look at a sublanguage called 
-**Ryna Definition Language** (called *NDL* for short). This sublanguage can be embedded in some parts of your Ryna projects
+**Ryna Definition Language** (called *RDL* for short). This sublanguage can be embedded in some parts of your Ryna projects
 in order to extend the language. Let's see how it works.
 
 ## Almost *regex*
 
-*NDL* is, as the title suggests, almost a flavour of regexes, but more expressive. This bump in expressiveness comes from
+*RDL* is, as the title suggests, almost a flavour of regexes, but more expressive. This bump in expressiveness comes from
 its interlinkage with the Ryna parser, which contains many complex routines that **cannot** be expressed in terms of 
 regular expressions. 
 
-The basic idea is simple, a **pattern** in NDL is a sequence of other **subpatterns** that have to match a string of characters
+The basic idea is simple, a **pattern** in RDL is a sequence of other **subpatterns** that have to match a string of characters
 in sequence. Some of these patters modify the "flow" of the matching, but it is more or less the same as a regex. For example, the
 pattern `d` matches a digit and the pattern `'hello'` matches the text "hello", but you can also have **repeated** matches and **optional** ones.
 
@@ -16,7 +16,7 @@ pattern `d` matches a digit and the pattern `'hello'` matches the text "hello", 
 
 > ***Note:*** this list will probably be expanded in the future due to new patterns
 
-The following patterns are defined in the current version on *NDL*:
+The following patterns are defined in the current version on *RDL*:
 
 | Name             | Syntax              | Description                                       |
 | ---------------- | ------------------- | ------------------------------------------------- |
@@ -33,18 +33,18 @@ The following patterns are defined in the current version on *NDL*:
 | And              | `pattern1 pattern2` | Matches `pattern1`, then matches `pattern2`       |
 | Repeat           | `min{pattern}max`   | Matches `pattern`, between `min` and `max` times  |
 
-Also, *NDL* has support for some *high level patterns* that make use of complex parsing routines. These are the patterns supported as of now:
+Also, *RDL* has support for some *high level patterns* that make use of complex parsing routines. These are the patterns supported as of now:
 
 | Name       | Syntax    | Description           |
 | ---------- | --------- | --------------------- |
 | Identifier | `<ident>` | Matches an identifier |
 | Type       | `<type>`  | Matches a type        |
 | Expression | `<expr>`  | Matches an expression |
-| NDL        | `<rdl>`   | Matches a NDL pattern |
+| RDL        | `<rdl>`   | Matches a RDL pattern |
 
 ## Examples
 
-Here are some examples that may help you to visualize how *NDL* works:
+Here are some examples that may help you to visualize how *RDL* works:
 
 ```
 // Integer syntax

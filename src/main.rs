@@ -2,80 +2,14 @@ use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 
 use clap::{Arg, Command, ArgAction};
 use colored::Colorize;
-use inquire::{Text, required, validator::StringValidator, Autocomplete, Confirm};
-use regex::Regex;
+use inquire::{Text, required, Confirm};
 use glob::glob;
 
-use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, git::{install_prelude, install_repo, uninstall_repo}, ryna_error, ryna_warning, shell::execute_command};
+use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, dependencies::{get_library_index, index_topological_order, select_lib_version, OptionsAutocompleter, RegexValidator, MIN_SEMVER, SEMVER_REGEX}, git::{install_prelude, install_repo, uninstall_repo, update_library_index}, ryna_error, ryna_warning, shell::execute_command};
 use serde_yaml::{ from_str, to_string };
-
-#[derive(Clone)]
-struct RegexValidator<'a> {
-    regex: Regex,
-    message: &'a str
-}
-
-impl<'a> StringValidator for RegexValidator<'a> {
-    fn validate(&self, input: &str) -> Result<inquire::validator::Validation, inquire::CustomUserError> {
-        if self.regex.is_match(input) {
-            return Ok(inquire::validator::Validation::Valid);
-        }
-
-        Ok(inquire::validator::Validation::Invalid(self.message.into()))
-    }
-}
-
-impl<'a> RegexValidator<'a> {
-    pub fn new(regex: &str, message: &'a str) -> Self {
-        RegexValidator {
-            regex: Regex::new(regex).unwrap(), 
-            message
-        }
-    }
-}
-
-#[derive(Clone)]
-struct OptionsAutocompleter {
-    options: HashSet<String>
-}
-
-impl Autocomplete for OptionsAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, inquire::CustomUserError> {
-        return Ok(self.options.iter().filter(|i| i.starts_with(input)).cloned().collect());
-    }
-
-    fn get_completion(
-        &mut self,
-        input: &str,
-        _highlighted_suggestion: Option<String>,
-    ) -> Result<inquire::autocompletion::Replacement, inquire::CustomUserError> {
-        let matches = self.options.iter().filter(|i| i.starts_with(input)).cloned().collect::<Vec<_>>();
-
-        if matches.is_empty() {
-            return Ok(inquire::autocompletion::Replacement::None);
-        }
-
-        let min_length = matches.iter().map(String::len).min().unwrap();
-        let mut max_common = input.to_string();
-
-        // Get maximum common start
-        for i in input.len()..min_length {
-            let substrs = matches.iter().map(|j| j[..=i].to_string()).collect::<HashSet<_>>();
-
-            if substrs.len() > 1 {
-                break;
-            }
-
-            max_common = substrs.into_iter().next().unwrap().to_string();
-        }
-
-        Ok(inquire::autocompletion::Replacement::Some(max_common))
-    }
-}
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
 const DEFAULT_GITIGNORE: &str = "ryna_cache\nryna_config.yml";
-const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
 const PATH_REGEX: &str = r"^((([a-zA-Z0-9_ -]+)|(\.\.)|([A-Z]:(\/|\\)))(\/|\\)?)+$";
 
 fn main() {
@@ -205,16 +139,32 @@ fn main() {
             Command::new("install")
             .about("Install a library pack from a git repository")
             .arg(
-                Arg::new("REPOSITORY")
-                .help("Specifies the file you want to execute")
+                Arg::new("NAME")
+                .help("Name of the library reprository that you want to install")
                 .required(true)
                 .index(1)
             )
             .arg(
-                Arg::new("NAME")
-                .help("Name of the library reprository that you want to install")
-                .required(true)
-                .index(2)
+                Arg::new("repository")
+                .help("Repository URL")
+                .required(false)
+                .long("repository")
+                .short('r')
+            )
+            .arg(
+                Arg::new("version")
+                .help("Library version to install")
+                .required(false)
+                .long("version")
+                .short('v')
+            )
+            .arg(
+                Arg::new("execute-build")
+                .help("Execute build scripts by default")
+                .long("execute-build")
+                .short('b')
+                .action(ArgAction::SetTrue)
+                .default_value("false")
             )
         )
         .subcommand(
@@ -331,7 +281,7 @@ fn main() {
 
             } else {
                 version = Text::new("Initial version:")
-                    .with_default("0.1.0")
+                    .with_default(MIN_SEMVER)
                     .with_validator(required!("Initial version must not be empty"))
                     .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
                     .with_help_message("Versions can be changed later and must follow SemVer")
@@ -517,51 +467,133 @@ fn main() {
         }
 
         Some(("install", run_args)) => {
-            let repo_url = run_args.get_one::<String>("REPOSITORY").expect("No repository URL was provided");
             let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+            let lib_version = run_args.get_one::<String>("version");
+            let execute_build = run_args.get_one::<bool>("execute-build").expect("No build script config");
 
-            match install_repo(repo_url, pack_name) {
-                Ok(_) => {},
-                Err(err) => ryna_error!("{}", err),
-            }
+            let mut libs_to_install = vec!();
 
-            // Check install script
-            let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
-            let config_path = module_path.join(Path::new("ryna_deps.yml"));
+            match run_args.get_one::<String>("repository") {
+                Some(url) => {
+                    let (selected_version, branch_name) = select_lib_version(url, pack_name, lib_version);
 
-            if !config_path.exists() {
-                ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed multiple libraries at once?)");
-                return;
-            }
+                    libs_to_install.push((
+                        pack_name.clone(),
+                        url.clone(),
+                        selected_version.clone(),
+                        branch_name.clone()
+                    ));    
+                },
 
-            let config = fs::read_to_string(&config_path).expect("Unable to read config file");
-            let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
-
-            if !config_yml.build.is_empty() {
-                let has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", pack_name.green())).prompt().unwrap();
-
-                if has_build {
-                    if !execute_command(&config_yml.build, &module_path) {
-                        println!("Build script failed. Cleaning up...");
-
-                        match uninstall_repo(pack_name) {
-                            Ok(_) => {},
-                            Err(err) => ryna_error!("{}", err),
-                        }
-
-                        ryna_error!("Build command failed for {}", pack_name.green());
+                None => {
+                    println!("{}", "\nUpdating library index...".bold());
+                    
+                    if let Err(err) = update_library_index() {
+                        ryna_error!("{}", err);
                     }
+                    
+                    match get_library_index() {
+                        Ok(index) => {
+                            if !index.contains_key(pack_name) {
+                                ryna_error!("Library index does not contain {}", pack_name.green());
+                            }
+
+                            let lib = index.get(pack_name).unwrap();
+                            let (selected_version, branch_name) = select_lib_version(&lib.repository, pack_name, lib_version);
+
+                            println!(" - Resolving dependency tree...");
+
+                            libs_to_install.push((
+                                pack_name.clone(),
+                                lib.repository.clone(),
+                                selected_version.clone(),
+                                branch_name.clone()
+                            ));
+
+                            index_topological_order(&index, &mut libs_to_install);
+
+                            if libs_to_install.len() > 1 {
+                                for (pack_name, _, version, _) in &libs_to_install[..libs_to_install.len() - 1] {
+                                    println!("   * Dependency: {} {}", pack_name.green(), format!("v{}", version).cyan());
+                                }
+                            }
+
+                            println!(" - Done!");
+                        },
+
+                        Err(err) => ryna_error!("{}", err),
+                    }
+                },
+            };
+
+            println!("{}", "\nInstalling dependencies...".bold());
+
+            for (pack_name, repo_url, version, branch) in libs_to_install {
+                // Check already installed libs
+                let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(&pack_name).join(format!("v{}", version));
+
+                if module_path.exists() {
+                    println!(" - Skipping {} {} (already installed)", pack_name.green(), format!("v{}", version).cyan());
+                    continue;
+
+                } else {
+                    println!(" - Installing {} {}...", pack_name.green(), format!("v{}", version).cyan());
                 }
+
+                // Install repository
+                match install_repo(&repo_url, &pack_name, &version, &branch) {
+                    Ok(_) => {},
+                    Err(err) => ryna_error!("{}", err),
+                }
+    
+                // Check install script
+                let config_path = module_path.join(Path::new("ryna_deps.yml"));
+    
+                if !config_path.exists() {
+                    ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed multiple libraries at once?)");
+                    continue;
+                }
+    
+                let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+                let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
+    
+                if !config_yml.build.is_empty() {
+                    let mut has_build = *execute_build;
+                    
+                    if !has_build {
+                        has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", pack_name.green())).prompt().unwrap();
+                        println!();
+                    }
+    
+                    if has_build {
+                        if !execute_command(&config_yml.build, &module_path) {
+                            println!("Build script failed. Cleaning up...");
+    
+                            match uninstall_repo(&pack_name) {
+                                Ok(_) => {},
+                                Err(err) => ryna_error!("{}", err),
+                            }
+    
+                            ryna_error!("Build command failed for {}", pack_name.green());
+                        }
+                    }
+                }   
             }
+
+            println!(" - Done!");
         }
 
         Some(("uninstall", run_args)) => {
             let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
 
+            println!("Uninstalling {}...", pack_name.green());
+
             match uninstall_repo(pack_name) {
                 Ok(_) => {},
                 Err(err) => ryna_error!("{}", err),
             }
+
+            println!("Done!");
         }
 
         Some(("build", run_args)) => {

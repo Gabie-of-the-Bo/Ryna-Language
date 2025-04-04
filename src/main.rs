@@ -5,7 +5,7 @@ use colored::Colorize;
 use inquire::{Text, required, Confirm};
 use glob::glob;
 
-use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, dependencies::{get_library_index, index_topological_order, select_lib_version, OptionsAutocompleter, RegexValidator, MIN_SEMVER, SEMVER_REGEX}, git::{install_prelude, install_repo, uninstall_repo, update_library_index}, ryna_error, ryna_warning, shell::execute_command};
+use ryna::{config::{generate_docs, ModuleInfo, RynaConfig, CONFIG}, context::*, dependencies::{get_lib_versions, get_library_index, index_topological_order, select_lib_version, select_uninstall_version, OptionsAutocompleter, RegexValidator, MIN_SEMVER, SEMVER_REGEX}, git::{install_prelude, install_repo, uninstall_repo, update_library_index}, ryna_error, ryna_warning, shell::execute_command};
 use serde_yaml::{ from_str, to_string };
 
 const DEFAULT_CODE: &str = "print(\"Hello, world!\");";
@@ -140,7 +140,7 @@ fn main() {
             .about("Install a library pack from a git repository")
             .arg(
                 Arg::new("NAME")
-                .help("Name of the library reprository that you want to install")
+                .help("Name of the library that you want to install")
                 .required(true)
                 .index(1)
             )
@@ -168,6 +168,24 @@ fn main() {
             )
         )
         .subcommand(
+            Command::new("search")
+            .about("Look for a library in the Ryna Library Index")
+            .arg(
+                Arg::new("NAME")
+                .help("Name of the library that you want to install")
+                .required(true)
+                .index(1)
+            )
+            .arg(
+                Arg::new("versions")
+                .help("Fetch available versions")
+                .long("versions")
+                .short('v')
+                .action(ArgAction::SetTrue)
+                .default_value("false")
+            )
+        )
+        .subcommand(
             Command::new("build")
             .about("Execute the build script for a library")
             .arg(
@@ -183,7 +201,7 @@ fn main() {
             .about("Uninstall a library pack")
             .arg(
                 Arg::new("NAME")
-                .help("Name of the library reprository that you want to install")
+                .help("Name of the library that you want to install")
                 .required(true)
                 .index(1)
             )
@@ -569,7 +587,7 @@ fn main() {
                         if !execute_command(&config_yml.build, &module_path) {
                             println!("Build script failed. Cleaning up...");
     
-                            match uninstall_repo(&pack_name) {
+                            match uninstall_repo(&pack_name, &version) {
                                 Ok(_) => {},
                                 Err(err) => ryna_error!("{}", err),
                             }
@@ -586,14 +604,59 @@ fn main() {
         Some(("uninstall", run_args)) => {
             let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
 
-            println!("Uninstalling {}...", pack_name.green());
+            println!("\n{}", format!("Uninstalling {}...", pack_name.green()).bold());
 
-            match uninstall_repo(pack_name) {
+            let version = match select_uninstall_version(pack_name) {
+                Ok(p) => p,
+                Err(err) => ryna_error!("{}", err),
+            };
+
+            match uninstall_repo(pack_name, &version) {
                 Ok(_) => {},
                 Err(err) => ryna_error!("{}", err),
             }
 
-            println!("Done!");
+            println!(" - Done!");
+        }
+
+        Some(("search", run_args)) => {
+            let pack_name = run_args.get_one::<String>("NAME").expect("No pack name was provided");
+            let versions = run_args.get_one::<bool>("versions").expect("No versions param provided");
+
+            println!("{}", "\nUpdating library index...".bold());
+            
+            if let Err(err) = update_library_index() {
+                ryna_error!("{}", err);
+            }
+            
+            let index = match get_library_index() {
+                Ok(i) => i,
+                Err(err) => ryna_error!("{}", err),
+            };
+
+            println!(" - Done!");
+
+            let matches = index.iter().filter(|(i, _)| i.contains(pack_name)).collect::<Vec<_>>();
+
+            println!("{}", "\nMatches found:".bold());
+            
+            for (name, info) in matches {
+                println!(" - {}", name.green());
+                
+                if *versions {
+                    match get_lib_versions(&info.repository) {
+                        Ok(available_versions) => {
+                            for v in available_versions {
+                                println!("   * {}", format!("v{}", v.0).cyan());
+                            }                                    
+                        },
+
+                        Err(err) => {
+                            println!("   * Unable to fetch versions: {}", err);
+                        },
+                    }
+                }
+            }
         }
 
         Some(("build", run_args)) => {

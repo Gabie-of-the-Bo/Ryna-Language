@@ -6,6 +6,7 @@ use rustc_hash::FxHashMap;
 use regex::Regex;
 use serde::Deserialize;
 use semver::Version;
+use glob::glob;
 
 use crate::{config::CONFIG, git::get_branch_names, ryna_error};
 
@@ -138,7 +139,6 @@ pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<&
                 v = Text::new("Select a version to install:")
                     .with_validator(required!("Module version must not be empty"))
                     .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
-                    .with_help_message("Versions can be changed later and must follow SemVer")
                     .with_autocomplete(OptionsAutocompleter {
                         options: available_versions.keys().cloned().collect()
                     })
@@ -159,6 +159,41 @@ pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<&
     };
 
     (selected_version.clone(), available_versions.get(&selected_version).unwrap().clone())
+}
+
+pub fn select_uninstall_version(pack_name: &str) -> Result<String, String> {
+    let modules_path = &CONFIG.write().unwrap().modules_path;
+
+    let installed_versions = glob(format!("{modules_path}/{pack_name}/*").as_str())
+        .expect("Error while reading module path")
+        .flatten()
+        .map(|version_folder| {
+            version_folder.file_name().and_then(|i| i.to_str()).unwrap()[1..].to_string()
+        })
+        .collect::<Vec<_>>();
+
+    if installed_versions.is_empty() {
+        return Err(format!("Pack \"{}\" is not installed", pack_name));
+    }
+
+    let version_to_uninstall;
+    
+    if installed_versions.len() > 1 {
+        version_to_uninstall = Text::new("Select a version to uninstall:")
+            .with_validator(required!("Module version must not be empty"))
+            .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
+            .with_autocomplete(OptionsAutocompleter {
+                options: installed_versions.iter().cloned().collect()
+            })
+            .prompt().unwrap();
+
+    } else {                
+        version_to_uninstall = installed_versions.iter().next().unwrap().clone();
+
+        println!(" - Only one version found in repository: {}", format!("v{}", version_to_uninstall).cyan());
+    }
+
+    Ok(version_to_uninstall)
 }
 
 pub fn get_library_index() -> Result<FxHashMap<String, LibraryItem>, String> {

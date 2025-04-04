@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+use colored::Colorize;
 use git2::{build::RepoBuilder, Direction, Cred, FetchOptions, RemoteCallbacks, Repository};
 use regex::Regex;
 use tempfile::TempDir;
@@ -58,17 +59,23 @@ pub fn install_repo(repo_url: &str, pack_name: &str, version: &str, branch: &str
     }
 }
 
-pub fn uninstall_repo(pack_name: &str) -> Result<(), String> {
+pub fn uninstall_repo(pack_name: &str, version: &str) -> Result<(), String> {
     let name_regex = Regex::new(NAME_REGEX).unwrap();
 
     if !name_regex.is_match(pack_name) {
         return Err("Pack name contains invalid characters".to_string());
     }
 
-    let path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
+    let library_path = Path::new(&CONFIG.write().unwrap().modules_path).join(pack_name);
+
+    if !library_path.exists() {
+        return Err(format!("Pack \"{}\" is not installed", pack_name));
+    }
+
+    let path = library_path.join(format!("v{}", version));
 
     if !path.exists() {
-        return Err(format!("Pack \"{}\" is not installed", pack_name));
+        return Err(format!("Version {} for {} is not installed", version.cyan(), pack_name.green()));
     }
 
     // Sanity check
@@ -78,7 +85,13 @@ pub fn uninstall_repo(pack_name: &str) -> Result<(), String> {
         return Err(format!("Pack \"{}\" is not a git repository (maybe your configuration is wrong?)", pack_name));
     }
 
-    std::fs::remove_dir_all(path).unwrap();
+    std::fs::remove_dir_all(&path).unwrap();
+
+    // Check if it is empty
+    if fs::read_dir(&library_path).unwrap().next().is_none() {
+        println!(" - No more versions of {} installed, cleaning folder...", pack_name.green());
+        std::fs::remove_dir_all(&library_path).unwrap();
+    }
 
     Ok(())
 }

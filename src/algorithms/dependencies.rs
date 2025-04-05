@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 
 use colored::Colorize;
-use inquire::{required, validator::StringValidator, Autocomplete, Text};
+use inquire::{required, validator::StringValidator, Autocomplete, Confirm, Text};
 use rustc_hash::FxHashMap;
 use regex::Regex;
 use serde::Deserialize;
@@ -9,7 +9,7 @@ use semver::Version;
 use glob::glob;
 use serde_yaml::from_str;
 
-use crate::{config::{RynaConfig, CONFIG}, git::get_branch_names, ryna_error};
+use crate::{config::{RynaConfig, CONFIG}, git::{get_branch_names, install_repo, uninstall_repo, update_library_index}, ryna_error, ryna_warning, shell::execute_command};
 
 pub const MIN_SEMVER: &str = "0.1.0";
 pub const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
@@ -118,7 +118,7 @@ pub fn get_latest_lib_version(repo_url: &str) -> Result<(String, String), String
     Ok((latest.0.clone(), latest.1.clone()))
 }
 
-pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<&String>) -> (String, String) {
+pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<String>) -> (String, String) {
     let available_versions = match get_lib_versions(&repo_url) {
         Ok(vs) => vs,
         Err(err) => ryna_error!("{}", err)
@@ -126,7 +126,7 @@ pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<&
 
     let selected_version = match lib_version {
         Some(v) => {
-            if !available_versions.contains_key(v) {
+            if !available_versions.contains_key(&v) {
                 ryna_error!("Version v{} is not available for library {}", format!("v{}", v).cyan(), pack_name.green());
             }
 
@@ -296,4 +296,133 @@ pub fn generate_config_yml(module_path: &PathBuf, extra_modules: &Option<String>
     fs::write(module_path.join(Path::new("ryna_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
 
     Ok(())
+}
+
+pub fn install_library(library_name: &str, repository: Option<String>, version: Option<String>, execute_build: bool) {
+    let mut libs_to_install: Vec<(String, String, String, String)> = vec!();
+
+    match &repository {
+        Some(url) => {
+            let (selected_version, branch_name) = select_lib_version(url, library_name, version);
+
+            libs_to_install.push((
+                library_name.into(),
+                url.clone(),
+                selected_version.clone(),
+                branch_name.clone()
+            ));    
+        },
+
+        None => {
+            println!("{}", "\nUpdating library index...".bold());
+            
+            if let Err(err) = update_library_index() {
+                ryna_error!("{}", err);
+            }
+            
+            match get_library_index() {
+                Ok(index) => {
+                    if !index.contains_key(library_name) {
+                        ryna_error!("Library index does not contain {}", library_name.green());
+                    }
+
+                    let lib = index.get(library_name).unwrap();
+                    let (selected_version, branch_name) = select_lib_version(&lib.repository, library_name, version);
+
+                    println!(" - Resolving dependency tree...");
+
+                    libs_to_install.push((
+                        library_name.into(),
+                        lib.repository.clone(),
+                        selected_version.clone(),
+                        branch_name.clone()
+                    ));
+
+                    index_topological_order(&index, &mut libs_to_install);
+
+                    if libs_to_install.len() > 1 {
+                        for (library_name, _, version, _) in &libs_to_install[..libs_to_install.len() - 1] {
+                            println!("   * Dependency: {} {}", library_name.green(), format!("v{}", version).cyan());
+                        }
+                    }
+
+                    println!(" - Done!");
+                },
+
+                Err(err) => ryna_error!("{}", err),
+            }
+        },
+    };
+
+    println!("{}", "\nInstalling dependencies...".bold());
+
+    for (library_name, repo_url, version, branch) in libs_to_install {
+        // Check already installed libs
+        let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(&library_name).join(format!("v{}", version));
+
+        if module_path.exists() {
+            println!(" - Skipping {} {} (already installed)", library_name.green(), format!("v{}", version).cyan());
+            continue;
+
+        } else {
+            println!(" - Installing {} {}...", library_name.green(), format!("v{}", version).cyan());
+        }
+
+        // Install repository
+        match install_repo(&repo_url, &library_name, &version, &branch) {
+            Ok(_) => {},
+            Err(err) => ryna_error!("{}", err),
+        }
+
+        // Check install script
+        let config_path = module_path.join(Path::new("ryna_deps.yml"));
+
+        if !config_path.exists() {
+            ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed a wrong repository?)");
+            continue;
+        
+        } else {
+            if let Err(err) = generate_config_yml(&module_path, &None) {
+                ryna_error!("{}", err);
+            }
+        }
+
+        let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+        let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
+
+        if !config_yml.build.is_empty() {
+            let mut has_build = execute_build;
+            
+            if !has_build {
+                has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", library_name.green())).prompt().unwrap();
+                println!();
+            }
+
+            if has_build {
+                if !execute_command(&config_yml.build, &module_path) {
+                    println!("Build script failed. Cleaning up...");
+
+                    match uninstall_repo(&library_name, &version) {
+                        Ok(_) => {},
+                        Err(err) => ryna_error!("{}", err),
+                    }
+
+                    ryna_error!("Build command failed for {}", library_name.green());
+                }
+            }
+        }   
+    }
+
+    println!(" - Done!");
+}
+
+pub fn install_prelude() {
+    const PRELUDE_URL: &str = "https://github.com/Gabie-of-the-Bo/Ryna-prelude.git";
+
+    let (latest_version, _) = match get_latest_lib_version(PRELUDE_URL) {
+        Ok(r) => r,
+        Err(err) => ryna_error!("{}", err),
+    };
+
+    install_library("prelude", None, Some(latest_version), false);
 }

@@ -5,7 +5,7 @@ use git2::{build::RepoBuilder, Direction, Cred, FetchOptions, RemoteCallbacks, R
 use regex::Regex;
 use tempfile::TempDir;
 
-use crate::{config::CONFIG, dependencies::get_latest_lib_version};
+use crate::config::CONFIG;
 
 const NAME_REGEX: &str = r"^[a-zA-Z0-9_ -]+$";
 
@@ -151,16 +151,4 @@ pub fn update_library_index() -> Result<(), String> {
             },
         }
     }
-}
-
-/*
-    Standard libraries
-*/
-
-pub fn install_prelude() -> Result<(), String> {
-    const PRELUDE_URL: &str = "https://github.com/Gabie-of-the-Bo/Ryna-prelude.git";
-
-    let (latest_version, latest_branch) = get_latest_lib_version(PRELUDE_URL)?;
-
-    install_repo(PRELUDE_URL, "prelude", &latest_version, &latest_branch)
 }

@@ -59,6 +59,8 @@ tabled = "0.15.0"
 libloading = "0.8.5"
 subprocess = "0.2.9"
 ryna-ffi = "0.1.0"
+tempfile = "3.19.1"
+semver = "1.0.26"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

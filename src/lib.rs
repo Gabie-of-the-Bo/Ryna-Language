@@ -44,6 +44,9 @@ pub mod integer_ext;
 #[path = "algorithms/git.rs"]
 pub mod git;
 
+#[path = "algorithms/dependencies.rs"]
+pub mod dependencies;
+
 #[path = "algorithms/profiling.rs"]
 pub mod profiling;
 

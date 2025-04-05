@@ -1,0 +1,428 @@
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
+
+use colored::Colorize;
+use inquire::{required, validator::StringValidator, Autocomplete, Confirm, Text};
+use rustc_hash::FxHashMap;
+use regex::Regex;
+use serde::Deserialize;
+use semver::Version;
+use glob::glob;
+use serde_yaml::from_str;
+
+use crate::{config::{RynaConfig, CONFIG}, git::{get_branch_names, install_repo, uninstall_repo, update_library_index}, ryna_error, ryna_warning, shell::execute_command};
+
+pub const MIN_SEMVER: &str = "0.1.0";
+pub const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
+
+#[derive(Clone)]
+pub struct RegexValidator<'a> {
+    regex: Regex,
+    message: &'a str
+}
+
+impl<'a> StringValidator for RegexValidator<'a> {
+    fn validate(&self, input: &str) -> Result<inquire::validator::Validation, inquire::CustomUserError> {
+        if self.regex.is_match(input) {
+            return Ok(inquire::validator::Validation::Valid);
+        }
+
+        Ok(inquire::validator::Validation::Invalid(self.message.into()))
+    }
+}
+
+impl<'a> RegexValidator<'a> {
+    pub fn new(regex: &str, message: &'a str) -> Self {
+        RegexValidator {
+            regex: Regex::new(regex).unwrap(), 
+            message
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct OptionsAutocompleter {
+    pub options: HashSet<String>
+}
+
+impl Autocomplete for OptionsAutocompleter {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, inquire::CustomUserError> {
+        return Ok(self.options.iter().filter(|i| i.starts_with(input)).cloned().collect());
+    }
+
+    fn get_completion(
+        &mut self,
+        input: &str,
+        _highlighted_suggestion: Option<String>,
+    ) -> Result<inquire::autocompletion::Replacement, inquire::CustomUserError> {
+        let matches = self.options.iter().filter(|i| i.starts_with(input)).cloned().collect::<Vec<_>>();
+
+        if matches.is_empty() {
+            return Ok(inquire::autocompletion::Replacement::None);
+        }
+
+        let min_length = matches.iter().map(String::len).min().unwrap();
+        let mut max_common = input.to_string();
+
+        // Get maximum common start
+        for i in input.len()..min_length {
+            let substrs = matches.iter().map(|j| j[..=i].to_string()).collect::<HashSet<_>>();
+
+            if substrs.len() > 1 {
+                break;
+            }
+
+            max_common = substrs.into_iter().next().unwrap().to_string();
+        }
+
+        Ok(inquire::autocompletion::Replacement::Some(max_common))
+    }
+}
+
+#[derive(Clone, Deserialize)]
+pub struct LibraryItem {
+    pub repository: String,
+    pub dependencies: FxHashMap<String, FxHashMap<String, String>> // Version: {Library: Version}
+}
+
+pub fn get_lib_versions(repo_url: &str) -> Result<FxHashMap<String, String>, String> {
+    let branches = get_branch_names(repo_url)?;
+    let mut res = FxHashMap::default();
+
+    if branches.len() == 1 {
+        res.insert(MIN_SEMVER.into(), branches.first().unwrap().clone());
+    
+    } else {
+        let semver = Regex::new(SEMVER_REGEX).unwrap();
+
+        for b in branches {
+            if b.starts_with("v") && semver.is_match(&b[1..]) {
+                res.insert(b[1..].into(), b.clone());
+            }
+        }
+    }
+
+    if res.is_empty() {
+        return Err(format!("No valid version branches found in {}", repo_url));
+    }
+
+    Ok(res)
+}
+
+pub fn get_latest_lib_version(repo_url: &str) -> Result<(String, String), String> {
+    let mut versions = get_lib_versions(repo_url)?.into_iter().collect::<Vec<_>>();
+
+    versions.sort_by_key(|i| Version::parse(&i.0).unwrap());
+
+    let latest = versions.last().unwrap();
+
+    Ok((latest.0.clone(), latest.1.clone()))
+}
+
+pub fn select_lib_version(repo_url: &str, pack_name: &str, lib_version: Option<String>) -> (String, String) {
+    let available_versions = match get_lib_versions(&repo_url) {
+        Ok(vs) => vs,
+        Err(err) => ryna_error!("{}", err)
+    };
+
+    let selected_version = match lib_version {
+        Some(v) => {
+            if !available_versions.contains_key(&v) {
+                ryna_error!("Version v{} is not available for library {}", format!("v{}", v).cyan(), pack_name.green());
+            }
+
+            v.clone()
+        },
+
+        None => {
+            let v;
+            
+            if available_versions.len() > 1 {
+                v = Text::new("Select a version to install:")
+                    .with_validator(required!("Module version must not be empty"))
+                    .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
+                    .with_autocomplete(OptionsAutocompleter {
+                        options: available_versions.keys().cloned().collect()
+                    })
+                    .prompt().unwrap();
+            
+            } else {                
+                v = available_versions.iter().next().unwrap().0.clone();
+                
+                println!(" - Only one version found in repository: {}", format!("v{}", v).cyan());
+            }
+
+            if !available_versions.contains_key(&v) {
+                ryna_error!("Version v{} is not available for library {}", format!("v{}", v).cyan(), pack_name.green());
+            }
+
+            v.clone()
+        }
+    };
+
+    (selected_version.clone(), available_versions.get(&selected_version).unwrap().clone())
+}
+
+pub fn select_uninstall_version(pack_name: &str) -> Result<String, String> {
+    let modules_path = &CONFIG.write().unwrap().modules_path;
+
+    let installed_versions = glob(format!("{modules_path}/{pack_name}/*").as_str())
+        .expect("Error while reading module path")
+        .flatten()
+        .map(|version_folder| {
+            version_folder.file_name().and_then(|i| i.to_str()).unwrap()[1..].to_string()
+        })
+        .collect::<Vec<_>>();
+
+    if installed_versions.is_empty() {
+        return Err(format!("Pack \"{}\" is not installed", pack_name));
+    }
+
+    let version_to_uninstall;
+    
+    if installed_versions.len() > 1 {
+        version_to_uninstall = Text::new("Select a version to uninstall:")
+            .with_validator(required!("Module version must not be empty"))
+            .with_validator(RegexValidator::new(SEMVER_REGEX, "Version does not follow SemVer"))
+            .with_autocomplete(OptionsAutocompleter {
+                options: installed_versions.iter().cloned().collect()
+            })
+            .prompt().unwrap();
+
+    } else {                
+        version_to_uninstall = installed_versions.iter().next().unwrap().clone();
+
+        println!(" - Only one version found in repository: {}", format!("v{}", version_to_uninstall).cyan());
+    }
+
+    Ok(version_to_uninstall)
+}
+
+pub fn get_library_index() -> Result<FxHashMap<String, LibraryItem>, String> {
+    let path = Path::new(&CONFIG.write().unwrap().modules_path).join(".index").join("index.yml");
+
+    let index_file = match std::fs::read_to_string(&path) {
+        Ok(f) => f,
+        Err(_) => return Err("Unable to read index file".into()),
+    };
+
+    match serde_yaml::from_str(&index_file) {
+        Ok(res) => Ok(res),
+        Err(_) => return Err("Malformed index file".into()),
+    } 
+}
+
+pub fn index_topological_order(index: &FxHashMap<String, LibraryItem>, libs: &mut Vec<(String, String, String, String)>) {
+    let mut stack = vec!(libs.get(0).unwrap().clone());
+    let mut seen = [(stack[0].0.clone(), stack[0].2.clone())].iter().cloned().collect::<HashSet<_>>();
+
+    while !stack.is_empty() {
+        let mut new_items = vec!();
+
+        for (name, _, version, _) in &stack {
+            if let Some(lib) = index.get(name) {
+                if let Some(dep) = lib.dependencies.get(&format!("v{}", version)) {                    
+                    for (dep_name, dep_version) in dep {
+                        if !seen.contains(&(dep_name.clone(), dep_version[1..].into())) {
+                            let repository = &index.get(dep_name).unwrap().repository;
+                            let versions = get_lib_versions(repository).unwrap();
+    
+                            seen.insert((dep_name.clone(), dep_version[1..].into()));
+
+                            new_items.push((
+                                dep_name.clone(),
+                                repository.clone(),
+                                dep_version[1..].into(),
+                                versions.get(dep_version[1..].into()).unwrap().clone()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        libs.extend(new_items.iter().cloned());
+        stack = new_items;
+    }
+
+    libs.reverse();
+}
+
+pub fn generate_config_yml(module_path: &PathBuf, extra_modules: &Option<String>) -> Result<(), String> {
+    let deps_path = module_path.join(Path::new("ryna_deps.yml"));
+
+    if !deps_path.exists() {
+        return Err(format!("No project requirements file!"));
+    }
+
+    let deps = fs::read_to_string(&deps_path).expect("Unable to read requirements file");
+    let mut deps_yml: RynaConfig = from_str(&deps).expect("Unable to parse requirements file");
+
+    if !CONFIG.read().unwrap().modules_path.is_empty() {
+        deps_yml.module_paths.push(CONFIG.read().unwrap().modules_path.clone());
+    
+    } else {
+        return Err(format!("Default modules path was not found! Try executing ryna setup"));    
+    }
+
+    if let Some(m) = extra_modules {
+        deps_yml.module_paths.push(m.clone());
+    }
+
+    let mut module_versions = HashMap::<String, HashSet<_>>::new();
+    let mut paths = HashMap::new();
+
+    for path in &deps_yml.module_paths {
+        for f in glob(format!("{}/**/ryna_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+            let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
+            let config_yml_f: RynaConfig = from_str(&config_f).expect("Unable to parse config file");
+            module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
+
+            paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
+        }    
+    }
+
+    for module in deps_yml.modules.iter_mut() {
+        if !module_versions.contains_key(module.0) {
+            return Err(format!("Module {} not found!", module.0.green()));    
+        }
+        
+        if !module_versions.get(module.0).unwrap().contains(&module.1.version) {
+            return Err(format!("Version {} for module {} not found!", format!("v{}", module.1.version).cyan(), module.0.green()));    
+        }
+
+        module.1.path = paths.get(&(module.0.clone(), module.1.version.clone())).unwrap().clone();
+    }
+
+    fs::write(module_path.join(Path::new("ryna_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
+
+    Ok(())
+}
+
+pub fn install_library(library_name: &str, repository: Option<String>, version: Option<String>, execute_build: bool) {
+    let mut libs_to_install: Vec<(String, String, String, String)> = vec!();
+
+    match &repository {
+        Some(url) => {
+            let (selected_version, branch_name) = select_lib_version(url, library_name, version);
+
+            libs_to_install.push((
+                library_name.into(),
+                url.clone(),
+                selected_version.clone(),
+                branch_name.clone()
+            ));    
+        },
+
+        None => {
+            println!("{}", "\nUpdating library index...".bold());
+            
+            if let Err(err) = update_library_index() {
+                ryna_error!("{}", err);
+            }
+            
+            match get_library_index() {
+                Ok(index) => {
+                    if !index.contains_key(library_name) {
+                        ryna_error!("Library index does not contain {}", library_name.green());
+                    }
+
+                    let lib = index.get(library_name).unwrap();
+                    let (selected_version, branch_name) = select_lib_version(&lib.repository, library_name, version);
+
+                    println!(" - Resolving dependency tree...");
+
+                    libs_to_install.push((
+                        library_name.into(),
+                        lib.repository.clone(),
+                        selected_version.clone(),
+                        branch_name.clone()
+                    ));
+
+                    index_topological_order(&index, &mut libs_to_install);
+
+                    if libs_to_install.len() > 1 {
+                        for (library_name, _, version, _) in &libs_to_install[..libs_to_install.len() - 1] {
+                            println!("   * Dependency: {} {}", library_name.green(), format!("v{}", version).cyan());
+                        }
+                    }
+
+                    println!(" - Done!");
+                },
+
+                Err(err) => ryna_error!("{}", err),
+            }
+        },
+    };
+
+    println!("{}", "\nInstalling dependencies...".bold());
+
+    for (library_name, repo_url, version, branch) in libs_to_install {
+        // Check already installed libs
+        let module_path = Path::new(&CONFIG.write().unwrap().modules_path).join(&library_name).join(format!("v{}", version));
+
+        if module_path.exists() {
+            println!(" - Skipping {} {} (already installed)", library_name.green(), format!("v{}", version).cyan());
+            continue;
+
+        } else {
+            println!(" - Installing {} {}...", library_name.green(), format!("v{}", version).cyan());
+        }
+
+        // Install repository
+        match install_repo(&repo_url, &library_name, &version, &branch) {
+            Ok(_) => {},
+            Err(err) => ryna_error!("{}", err),
+        }
+
+        // Check install script
+        let config_path = module_path.join(Path::new("ryna_deps.yml"));
+
+        if !config_path.exists() {
+            ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed a wrong repository?)");
+            continue;
+        
+        } else {
+            if let Err(err) = generate_config_yml(&module_path, &None) {
+                ryna_error!("{}", err);
+            }
+        }
+
+        let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+        let config_yml: RynaConfig = from_str(&config).expect("Unable to parse config file");
+
+        if !config_yml.build.is_empty() {
+            let mut has_build = execute_build;
+            
+            if !has_build {
+                has_build = Confirm::new(&format!("Build script for {} was detected. Do you want to execute it?", library_name.green())).prompt().unwrap();
+                println!();
+            }
+
+            if has_build {
+                if !execute_command(&config_yml.build, &module_path) {
+                    println!("Build script failed. Cleaning up...");
+
+                    match uninstall_repo(&library_name, &version) {
+                        Ok(_) => {},
+                        Err(err) => ryna_error!("{}", err),
+                    }
+
+                    ryna_error!("Build command failed for {}", library_name.green());
+                }
+            }
+        }   
+    }
+
+    println!(" - Done!");
+}
+
+pub fn install_prelude() {
+    const PRELUDE_URL: &str = "https://github.com/Gabie-of-the-Bo/Ryna-prelude.git";
+
+    let (latest_version, _) = match get_latest_lib_version(PRELUDE_URL) {
+        Ok(r) => r,
+        Err(err) => ryna_error!("{}", err),
+    };
+
+    install_library("prelude", None, Some(latest_version), false);
+}

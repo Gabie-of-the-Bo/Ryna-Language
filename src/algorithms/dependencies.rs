@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::Path};
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 
 use colored::Colorize;
 use inquire::{required, validator::StringValidator, Autocomplete, Text};
@@ -7,8 +7,9 @@ use regex::Regex;
 use serde::Deserialize;
 use semver::Version;
 use glob::glob;
+use serde_yaml::from_str;
 
-use crate::{config::CONFIG, git::get_branch_names, ryna_error};
+use crate::{config::{RynaConfig, CONFIG}, git::get_branch_names, ryna_error};
 
 pub const MIN_SEMVER: &str = "0.1.0";
 pub const SEMVER_REGEX: &str = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$";
@@ -244,4 +245,55 @@ pub fn index_topological_order(index: &FxHashMap<String, LibraryItem>, libs: &mu
     }
 
     libs.reverse();
+}
+
+pub fn generate_config_yml(module_path: &PathBuf, extra_modules: &Option<String>) -> Result<(), String> {
+    let deps_path = module_path.join(Path::new("ryna_deps.yml"));
+
+    if !deps_path.exists() {
+        return Err(format!("No project requirements file!"));
+    }
+
+    let deps = fs::read_to_string(&deps_path).expect("Unable to read requirements file");
+    let mut deps_yml: RynaConfig = from_str(&deps).expect("Unable to parse requirements file");
+
+    if !CONFIG.read().unwrap().modules_path.is_empty() {
+        deps_yml.module_paths.push(CONFIG.read().unwrap().modules_path.clone());
+    
+    } else {
+        return Err(format!("Default modules path was not found! Try executing ryna setup"));    
+    }
+
+    if let Some(m) = extra_modules {
+        deps_yml.module_paths.push(m.clone());
+    }
+
+    let mut module_versions = HashMap::<String, HashSet<_>>::new();
+    let mut paths = HashMap::new();
+
+    for path in &deps_yml.module_paths {
+        for f in glob(format!("{}/**/ryna_config.yml", path).as_str()).expect("Error while reading module path").flatten() {
+            let config_f = fs::read_to_string(f.clone()).expect("Unable to read config file");
+            let config_yml_f: RynaConfig = from_str(&config_f).expect("Unable to parse config file");
+            module_versions.entry(config_yml_f.module_name.clone()).or_default().insert(config_yml_f.version.clone());
+
+            paths.insert((config_yml_f.module_name, config_yml_f.version), f.parent().unwrap().to_str().unwrap().to_string());
+        }    
+    }
+
+    for module in deps_yml.modules.iter_mut() {
+        if !module_versions.contains_key(module.0) {
+            return Err(format!("Module {} not found!", module.0.green()));    
+        }
+        
+        if !module_versions.get(module.0).unwrap().contains(&module.1.version) {
+            return Err(format!("Version {} for module {} not found!", format!("v{}", module.1.version).cyan(), module.0.green()));    
+        }
+
+        module.1.path = paths.get(&(module.0.clone(), module.1.version.clone())).unwrap().clone();
+    }
+
+    fs::write(module_path.join(Path::new("ryna_config.yml")), serde_yaml::to_string(&deps_yml).unwrap()).expect("Unable to write configuration file");
+
+    Ok(())
 }

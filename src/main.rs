@@ -568,7 +568,7 @@ fn main() {
                 let config_path = module_path.join(Path::new("ryna_deps.yml"));
     
                 if !config_path.exists() {
-                    ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed multiple libraries at once?)");
+                    ryna_warning!("Could not find ryna_deps.yml at the root of the library (perhaps you installed a wrong repository?)");
                     continue;
                 
                 } else {

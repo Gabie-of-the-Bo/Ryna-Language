@@ -28,7 +28,7 @@ jobs:
       run: mkdir -p ${{ github.workspace }}/ryna-libs && cargo run --profile release-debug -- setup -m "${{ github.workspace }}/ryna-libs"
 
     - name: Run prelude tests
-      run: cd ryna-libs/prelude/ && cd * && ryna run -o -t
+      run: cargo run --profile release-debug -- run ryna-libs/prelude/* -o -t
 
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1

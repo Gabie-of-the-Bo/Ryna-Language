@@ -27,6 +27,7 @@ pub struct RynaMacro {
     pub name: String,
     pub m_type: RynaMacroType,
     pub pattern: Pattern,
+    pub intermediate: bool,
     pub generator: RdlMacro
 }
 
@@ -261,6 +262,7 @@ pub fn define_module_path_macro(ctx: &mut RynaContext) {
         name: "module_path".into(),
         m_type: RynaMacroType::Expression,
         pattern: Pattern::Str("$MODULE_PATH".into()),
+        intermediate: false,
         generator: RdlMacro::Text(format!("\"{}\"", escape_string(&ctx.module_path))),
     });
 }

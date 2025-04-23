@@ -371,6 +371,11 @@ mod integration {
     }
 
     #[test]
+    fn json() {
+        integration_test("test/json.ryna");
+    }
+
+    #[test]
     fn moving() {
         integration_test_batch("test/batches/moving/*.ryna");
     }

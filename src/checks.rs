@@ -1642,7 +1642,7 @@ impl RynaContext {
 
     pub fn macro_check(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            RynaExpr::Macro(l, _, n, _, p, b) => {
+            RynaExpr::Macro(l, _, n, _, _, p, b) => {
                 let pattern_args = p.get_markers();
                 let macro_args = b.get_markers();
                 
@@ -2299,7 +2299,7 @@ impl RynaContext {
 
     pub fn annotation_checks(&self, expr: &RynaExpr) -> Result<(), RynaError> {
         match expr {
-            RynaExpr::Macro(l, an, _, _, _, _) => {
+            RynaExpr::Macro(l, an, _, _, _, _, _) => {
                 for a in an {
                     let res = match a.name.as_str() {
                         "test" => Err(format!("Macros cannot have the {} annotation", "test".cyan())),

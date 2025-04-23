@@ -1,0 +1,45 @@
+// We use this to allow inline array definitions
+syntax array_initialization from "<" [s] Arg(<type>, type) [s] ">" [s] "[" [s] [{Arg(<expr>, elems) "," [s]} [Arg(<expr>, elems)]] [s] "]" {
+    let res = arr<$type>();
+
+    @elems.i {
+        res.push($elems.i);
+    }
+    
+    return move(res);
+}
+
+// Generic JSON class
+class Json {
+    elem: *;
+}
+
+// Json values (marked as intermediate)
+syntax int expr json_num from Arg(["-"] 1{d}, digits) {
+    Json($digits)
+}
+
+syntax int expr json_float from Arg(["-"] 1{d} "." 1{d}, digits) {
+    Json($digits)
+}
+
+syntax int expr json_str from Arg("\"" 1{l} "\"", string) {
+    Json($string)
+}
+
+syntax int expr json_array from "[" [s] [{Macro(json_value, elems) "," [s]} Macro(json_value, elems)] [s] "]" {
+    Json(<Json>[@elems.i {$elems.i,}])
+}
+
+// Intermediate aggregator syntax (be careful with the order)
+syntax int expr json_value from Macro(json_float, value) | Macro(json_num, value) | Macro(json_str, value) | Macro(json_array, value) {
+    $value
+}
+
+// Final syntax with prefix
+syntax expr json from "JSON" s Macro(json_value, value) {
+    $value
+}
+
+// Usage
+let v = JSON [1, -3, 2.5, ["test"]];

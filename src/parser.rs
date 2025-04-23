@@ -210,7 +210,7 @@ pub enum RynaExpr {
     CompiledLambda(Location, usize, Vec<(String, RynaExpr)>, Vec<(String, Type)>, Type, Vec<RynaExpr>),
 
     // Macro
-    Macro(Location, Vec<Annotation>, String, RynaMacroType, Pattern, RdlMacro),
+    Macro(Location, Vec<Annotation>, String, bool, RynaMacroType, Pattern, RdlMacro),
 
     // Uncompiled
     Literal(Location, Object),
@@ -247,7 +247,7 @@ pub enum RynaExpr {
 impl RynaExpr {
     pub fn is_definition(&self) -> bool {
         match self {
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
             RynaExpr::BinaryOperatorDefinition(_, _, _, _) |
@@ -295,7 +295,7 @@ impl RynaExpr {
             RynaExpr::NameReference(_, _) |
             RynaExpr::CompiledVariableDefinition(_, _, _, _, _, _) |
             RynaExpr::CompiledVariableAssignment(_, _, _, _, _, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::VariableDefinition(_, _, _, _) |
             RynaExpr::VariableAssignment(_, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
@@ -1038,7 +1038,7 @@ impl RynaContext {
     }
     
     fn custom_syntax_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, RynaExpr> {
-        for m in self.macros.iter().filter(|i| i.m_type != RynaMacroType::Block) {
+        for m in self.macros.iter().filter(|i| i.m_type != RynaMacroType::Block && !i.intermediate) {
             if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 let span = &input[..input.len() - new_input.len()];
                 let loc = Location::new(input.location_line() as usize, input.get_column(), span.to_string(), self.module_name.clone());
@@ -1136,7 +1136,7 @@ impl RynaContext {
     fn custom_syntax_block_parser<'a>(&'a self, mut input: Span<'a>, cache: &PCache<'a>) -> PResult<'a, Vec<RynaExpr>> {
         let prev_input = input;
 
-        for m in self.macros.iter().filter(|i| i.m_type == RynaMacroType::Block) {            
+        for m in self.macros.iter().filter(|i| i.m_type == RynaMacroType::Block && !i.intermediate) {            
             if let Ok((new_input, args)) = m.pattern.extract(input, self, cache) {
                 input = new_input;
 
@@ -1455,11 +1455,12 @@ impl RynaContext {
         )(input);
     }
 
-    fn macro_header_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (RynaMacroType, String, Pattern)> {
+    fn macro_header_parser<'a>(&'a self, input: Span<'a>) -> PResult<'a, (bool, RynaMacroType, String, Pattern)> {
         map(
             tuple((
                 tag("syntax"),
                 empty1,
+                opt(terminated(tag("int"), empty1)),
                 opt(alt((
                     map(terminated(tag("fn"), empty1), |_| RynaMacroType::Function),
                     map(terminated(tag("expr"), empty1), |_| RynaMacroType::Expression),
@@ -1473,7 +1474,7 @@ impl RynaContext {
                 cut(|input| parse_rdl_pattern(input, true, true, self)),
                 empty0
             )),
-            |(_, _, t, n, _, _, _, p, _)| (t.unwrap_or(RynaMacroType::Function), n, p)
+            |(_, _, i, t, n, _, _, _, p, _)| (i.is_some(), t.unwrap_or(RynaMacroType::Function), n, p)
         )(input)
     }
 
@@ -1528,7 +1529,7 @@ impl RynaContext {
                     cut(|input| self.macro_body_parser(input)),
                 ))
             ),
-            |(l, (an, (t, n, p), _, m))| RynaExpr::Macro(l, an, n, t, p, m)
+            |(l, (an, (i, t, n, p), _, m))| RynaExpr::Macro(l, an, n, i, t, p, m)
         )(input);
     }
     

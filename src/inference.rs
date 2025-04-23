@@ -452,7 +452,7 @@ impl RynaContext {
             RynaExpr::CompiledVariableDefinition(l, _, _, _, _, _) |
             RynaExpr::CompiledVariableAssignment(l, _, _, _, _, _) |
             RynaExpr::CompiledFor(l, _, _, _, _, _) |
-            RynaExpr::Macro(l, _, _, _, _, _) |
+            RynaExpr::Macro(l, _, _, _, _, _, _) |
             RynaExpr::Lambda(l, _, _, _, _) |
             RynaExpr::NameReference(l, _) |
             RynaExpr::VariableDefinition(l, _, _, _) |

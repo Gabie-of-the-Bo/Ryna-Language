@@ -1,11 +1,11 @@
 use std::{cell::RefCell, collections::{ HashMap, HashSet }};
 
 use nom::{
-    branch::alt, bytes::complete::{tag, take_while1}, character::complete::{one_of, satisfy}, combinator::{cut, map, opt, value}, error::{VerboseError, VerboseErrorKind}, multi::separated_list1, sequence::{delimited, separated_pair, tuple}
+    branch::alt, bytes::complete::{tag, take_while1}, character::complete::{one_of, satisfy}, combinator::{cut, map, map_opt, opt, value}, error::{VerboseError, VerboseErrorKind}, multi::separated_list1, sequence::{delimited, separated_pair, tuple}
 };
 use serde::{Serialize, Deserialize};
 
-use crate::{context::RynaContext, macros::RynaMacroType, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, PCache, PResult, Span}};
+use crate::{compilation::RynaError, context::RynaContext, macros::RynaMacroType, parser::{empty0, empty1, identifier_parser, string_parser, verbose_error, Location, PCache, PResult, Span}, ryna_error};
 
 /*
                                                   ╒══════════════════╕
@@ -28,6 +28,7 @@ pub enum Pattern{
     Type,
     Expr,
     Rdl,
+    Macro(String, String, Option<usize>),
 
     // Combination patterns
     Or(Vec<Pattern>),
@@ -39,7 +40,7 @@ pub enum Pattern{
 impl Pattern {
     pub fn get_markers(&self) -> HashSet<String> {
         return match self {
-            Pattern::Arg(_, n) => vec!(n.clone()).into_iter().collect(),
+            Pattern::Arg(_, n) | Pattern::Macro(_, n, _) => vec!(n.clone()).into_iter().collect(),
             Pattern::Or(p) |
             Pattern::And(p) => p.iter().flat_map(Pattern::get_markers).collect(),
             Pattern::Repeat(p, _, _) |
@@ -70,6 +71,28 @@ impl Pattern {
             Pattern::Type => value(HashMap::new(), |input| ctx.type_parser(input))(text),
             Pattern::Expr => value(HashMap::new(), |input| ctx.ryna_expr_parser(input, cache))(text),
             Pattern::Rdl => value(HashMap::new(), |input| parse_rdl_pattern(input, true, true, ctx))(text),
+            Pattern::Macro(_, name, Some(idx)) => {
+                let m = &ctx.macros[*idx];
+
+                let (input, args) = m.pattern.extract(text, ctx, cache)?;
+
+                let code = match m.generator.expand(&args, ctx) {
+                    Ok(c) => c,
+                    Err(_) => {
+                        return Err(nom::Err::Failure(VerboseError { errors: vec!((
+                            input, 
+                            VerboseErrorKind::Context("Error while parsing expanded code")
+                        )) }));
+                    },
+                };
+
+                let mut res = HashMap::new();
+                res.insert(name.into(), vec!(code));
+
+                Ok((input, res))
+            }
+
+            Pattern::Macro(..) => ryna_error!("Attempting to execute uncompiled RDL macro pattern"),
 
             Pattern::Str(s) => value(HashMap::new(), tag(s.as_str()))(text),
 
@@ -148,6 +171,41 @@ impl Pattern {
                 Ok((i, o))
             }
         };
+    }
+
+    pub fn compile_macros(&mut self, ctx: &RynaContext, l: &Location) -> Result<(), RynaError> {
+        match self {
+            Pattern::Macro(name, _, idx) if idx.is_none() => {
+                match ctx.macros.iter().enumerate().find(|(_, i)| i.name == *name) {
+                    Some((macro_idx, _)) => {
+                        *idx = Some(macro_idx);
+                        
+                        Ok(())
+                    },
+
+                    None => Err(RynaError::compiler_error(
+                        format!("Macro with name \"{}\" is not defined", name),
+                        l,
+                        vec!()
+                    )),
+                }
+            },
+
+            Pattern::Arg(pattern, _) |
+            Pattern::Optional(pattern) |
+            Pattern::Repeat(pattern, _, _) => pattern.compile_macros(ctx, l),
+
+            Pattern::Or(patterns) |
+            Pattern::And(patterns) => {
+                for p in patterns {
+                    p.compile_macros(ctx, l)?;
+                }
+
+                Ok(())
+            }
+
+            _ => Ok(())
+        }
     }
 }
 
@@ -231,6 +289,11 @@ pub fn parse_rdl_pattern<'a>(text: Span<'a>, or: bool, and: bool, ctx: &'a RynaC
             separated_pair(|i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag(","), empty0)), take_while1(|c| c != ')')),
             tuple((empty0, tag(")")))
         ), |(p, n)| Pattern::Arg(Box::new(p), n.to_string())),
+        map_opt(delimited(
+            tuple((tag("Macro("), empty0)),
+            separated_pair(identifier_parser, tuple((empty0, tag(","), empty0)), identifier_parser),
+            tuple((empty0, tag(")")))
+        ), |(macro_name, name)| Some(Pattern::Macro(macro_name, name, None))),
         map(tuple((
             opt(map(take_while1(|c: char| c.is_ascii_digit()), |s: Span<'a>| s.parse::<usize>().unwrap())),
             delimited(tuple((tag("{"), empty0)), |i| parse_rdl_pattern(i, true, true, ctx), tuple((empty0, tag("}")))),

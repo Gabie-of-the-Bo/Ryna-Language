@@ -42,4 +42,4 @@ syntax expr json from "JSON" s Macro(json_value, value) {
 }
 
 // Usage
-let v = JSON [1, -3, 2.5, ["test"]];
+let v = JSON [1, -3, 2.5, "test"];

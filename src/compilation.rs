@@ -1162,7 +1162,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -3876,7 +3876,7 @@ impl RynaContext{
     }
 
     pub fn define_module_macro(&mut self, definition: RynaExpr, defined_macros: &mut FxHashSet<Location>) -> Result<bool, RynaError> {
-        if let RynaExpr::Macro(l, an, n, t, p, m) = definition {
+        if let RynaExpr::Macro(l, an, n, i, t, p, m) = definition {
             if !defined_macros.contains(&l) {
                 if self.macros.iter().any(|i| i.name == n) {
                     return Err(RynaError::compiler_error(format!("Syntax with name '{n}' is already defined"), &l, vec!()));
@@ -3888,6 +3888,7 @@ impl RynaContext{
                     name: n,
                     m_type: t,
                     pattern: p,
+                    intermediate: i,
                     generator: m,
                 });
 
@@ -4011,6 +4012,16 @@ impl RynaContext{
                 changed |= self.define_module_macro(i, &mut defined_macros)?;
             }
         }
+
+        let mut macros_cpy = self.macros.clone();
+
+        for m in macros_cpy.iter_mut() {
+            if let Err(err) = m.pattern.compile_macros(self, &m.location) {
+                return Err(RynaError::from(err).in_module(self.module_name.clone()));
+            }
+        }
+
+        self.macros = macros_cpy;
 
         Ok(())
     }
@@ -4488,7 +4499,7 @@ impl RynaContext{
 
         for (line, (module, module_line)) in code.iter().zip(source) {
             match line {
-                RynaExpr::Macro(_, _, n, _, p, _) => {
+                RynaExpr::Macro(_, _, n, _, _, p, _) => {
                     if needs_import(module, ImportType::Syntax, n, imports, &mut self.cache.imports.macros, (n.clone(), p.clone())) {
                         self.define_module_macro(line.clone(), &mut FxHashSet::default()).map(|_| ())?;
                     }

@@ -93,7 +93,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -216,7 +216,7 @@ impl RynaContext {
             RynaExpr::Continue(_) |
             RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -503,7 +503,7 @@ impl RynaContext {
             RynaExpr::Continue(_) |
             RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -608,7 +608,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -723,7 +723,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -978,7 +978,7 @@ impl RynaContext {
             RynaExpr::Continue(_) |
             RynaExpr::Variable(_, _, _, _, _) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -1202,7 +1202,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -1322,7 +1322,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |
@@ -1400,7 +1400,7 @@ impl RynaContext {
             RynaExpr::Break(_) |
             RynaExpr::Continue(_) |
             RynaExpr::Literal(_, _) |
-            RynaExpr::Macro(_, _, _, _, _, _) |
+            RynaExpr::Macro(_, _, _, _, _, _, _) |
             RynaExpr::FunctionDefinition(_, _, _, _, _, _, _) |
             RynaExpr::PrefixOperatorDefinition(_, _, _) |
             RynaExpr::PostfixOperatorDefinition(_, _, _) |

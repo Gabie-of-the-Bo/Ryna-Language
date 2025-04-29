@@ -60,6 +60,9 @@ You can use the following args:
 | --------- | ---------- | --------------------------------- |
 | `modules` | `m`        | Extra modules path of the project |
 
+When using the `ryna install` command, the corresponding **ryna_deps.yml** found in the root of the library will be automatically imported.
+If no such file is found, the repository is probably invalid.
+
 ## Build scripts
 
 You can run the build script (useful when testing) by using this command:

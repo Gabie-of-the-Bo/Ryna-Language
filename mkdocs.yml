@@ -39,6 +39,7 @@ nav:
         - Block Macros: 'pages/tutorial/steps/block_macros.md'
         - RDL Macros: 'pages/tutorial/steps/rdl_macros.md'
         - Macro Code Execution: 'pages/tutorial/steps/code_macros.md'
+        - Recursive Macros: 'pages/tutorial/steps/recursive_macros.md'
       - Importing Modules: 'pages/tutorial/steps/imports.md'
       - Annotations:
         - Syntax and usage: 'pages/tutorial/steps/annot.md'
@@ -53,6 +54,7 @@ nav:
       - Serialization Interface: 'pages/tutorial/examples/serialization.md'
       - Building a Ternary Operator: 'pages/tutorial/examples/ternary.md'
       - List Comprehension Syntax: 'pages/tutorial/examples/comprehension.md'
+      - JSON Syntax: 'pages/tutorial/examples/json.md'
       - Embedding a Language: 'pages/tutorial/examples/embedding.md'
   - Reference:
     - Funtions:

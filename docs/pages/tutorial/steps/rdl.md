@@ -32,6 +32,8 @@ The following patterns are defined in the current version on *RDL*:
 | Or               | `pattern1 | pattern2` | Matches `pattern1` if possible, else matches `pattern2` |
 | And              | `pattern1 pattern2` | Matches `pattern1`, then matches `pattern2`       |
 | Repeat           | `min{pattern}max`   | Matches `pattern`, between `min` and `max` times  |
+| Argument      | `Arg(pattern, name)`   | Matches `pattern`, and stores the matched text in the `name` key (see next sections)  |
+| Macro      | `Macro(macro, name)`   | Matches RDL pattern with name `macro`, and stores the **emited** text in the `name` key (see next sections). Useful for recursive syntaxes  |
 
 Also, *RDL* has support for some *high level patterns* that make use of complex parsing routines. These are the patterns supported as of now:
 
